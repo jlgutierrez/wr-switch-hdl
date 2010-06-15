@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-CO-HT
 -- Created    : 2009-06-16
--- Last update: 2009-06-28
+-- Last update: 2010-06-11
 -- Platform   : 
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -69,7 +69,7 @@ architecture SYN of generic_async_fifo_2stage is
   signal sub_wire0  : std_logic;
   signal sub_wire1  : std_logic;
   signal sub_wire2  : std_logic_vector (g_width-1 downto 0);
-  signal words_used : std_logic_vector(log2(g_depth-1) downto 0);
+  signal words_used : std_logic_vector(log2(g_depth)-1 downto 0);
 
   component dcfifo
     generic (
@@ -96,7 +96,7 @@ architecture SYN of generic_async_fifo_2stage is
       q       : out std_logic_vector (g_width-1 downto 0);
       wrreq   : in  std_logic;
       data    : in  std_logic_vector (g_width-1 downto 0);
-      rdusedw : out std_logic_vector (log2(g_depth-1) downto 0)
+      rdusedw : out std_logic_vector (log2(g_depth)-1 downto 0)
       );
   end component;
 
@@ -114,7 +114,7 @@ begin
       lpm_showahead          => "OFF",
       lpm_type               => "dcfifo",
       lpm_width              => g_width,
-      lpm_widthu             => log2(g_width) + 1,
+      lpm_widthu             => log2(g_depth),
       overflow_checking      => "OFF",
       rdsync_delaypipe       => 4,
       underflow_checking     => "OFF",
