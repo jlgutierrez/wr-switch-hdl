@@ -82,6 +82,15 @@ package platform_specific is
       q_o   : out std_logic_vector(g_width_out-1 downto 0));
   end component;
 
+  component generic_clock_mux3
+    port (
+      clk_sel_i : in  std_logic_vector(1 downto 0);
+      inclk0_i  : in  std_logic;
+      inclk1_i  : in  std_logic;
+      inclk2_i  : in  std_logic;
+      outclk_o  : out std_logic);
+  end component;
+
 end platform_specific;
 
 -------------------------------------------------------------------------------
