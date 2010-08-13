@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-CO-HT
 -- Created    : 2009-06-16
--- Last update: 2010-06-11
+-- Last update: 2010-08-11
 -- Platform   : 
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ architecture SYN of generic_async_fifo_2stage is
       q       : out std_logic_vector (g_width-1 downto 0);
       wrreq   : in  std_logic;
       data    : in  std_logic_vector (g_width-1 downto 0);
-      rdusedw : out std_logic_vector (log2(g_depth)-1 downto 0)
+      wrusedw : out std_logic_vector (log2(g_depth)-1 downto 0)
       );
   end component;
 
@@ -107,7 +107,7 @@ begin
 
 
 
-  dcfifo_component : dcfifo
+  dcfifo_component : dcfifo             -- 3stage
     generic map (
       intended_device_family => "Cyclone III",
       lpm_numwords           => g_depth,
@@ -115,12 +115,12 @@ begin
       lpm_type               => "dcfifo",
       lpm_width              => g_width,
       lpm_widthu             => log2(g_depth),
-      overflow_checking      => "OFF",
-      rdsync_delaypipe       => 4,
-      underflow_checking     => "OFF",
+      overflow_checking      => "ON",
+      rdsync_delaypipe       => 5,
+      underflow_checking     => "ON",
       use_eab                => "ON",
-      write_aclr_synch       => "OFF",
-      wrsync_delaypipe       => 4
+      write_aclr_synch       => "ON",
+      wrsync_delaypipe       => 5
       )
     port map (
       wrclk   => wr_clk_i,
@@ -132,7 +132,7 @@ begin
       rdempty => sub_wire0,
       wrfull  => sub_wire1,
       q       => sub_wire2,
-      rdusedw => words_used
+      wrusedw => words_used
       );
 
   almost_full_check : process (wr_clk_i, clear_i)
@@ -140,7 +140,7 @@ begin
     if clear_i = '1' then               -- asynchronous reset (active low)
       almost_full_o <= '0';
     elsif wr_clk_i'event and wr_clk_i = '1' then  -- rising clock edge
-      if words_used(words_used'left downto words_used'left - g_almostfull_bit_threshold + 1) = c_mask_value then
+      if words_used(words_used'HIGH downto words_used'HIGH - g_almostfull_bit_threshold + 1) = c_mask_value then
         almost_full_o <= '1';
       else
         almost_full_o <= '0';

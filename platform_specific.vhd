@@ -30,6 +30,23 @@ package platform_specific is
       almost_full_o : out std_logic);
   end component;
 
+  component generic_sync_fifo
+    generic (
+      g_width      : natural;
+      g_depth      : natural;
+      g_depth_log2 : natural);
+    port (
+      clk_i    : in  std_logic;
+      clear_i  : in  std_logic := '0';
+      wr_req_i : in  std_logic;
+      d_i      : in  std_logic_vector (g_width-1 downto 0);
+      rd_req_i : in  std_logic;
+      q_o      : out std_logic_vector (g_width-1 downto 0);
+      empty_o  : out std_logic;
+      full_o   : out std_logic;
+      usedw_o  : out std_logic_vector(g_depth_log2-1 downto 0));
+  end component;
+  
   component generic_ssram_dualport
     generic (
       g_width     : natural;
