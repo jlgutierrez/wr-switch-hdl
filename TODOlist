@@ -1,0 +1,2 @@
+- synchronize local *platform_specific.vhd* and *generic_ssram_dualport_singleclock.vhd* with main (in hdl/latform/altera)
+- fix swc_packet_mem_read_pump.vhd
