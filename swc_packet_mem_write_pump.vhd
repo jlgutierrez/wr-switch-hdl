@@ -46,6 +46,7 @@
 -- Date        Version  Author   Description
 -- 2010-04-08  1.0      twlostow Created
 -- 2010-10-12  1.1      mlipinsk comments added !!!!!
+-- 2010-10-18  1.1      mlipinsk clearing register
 -------------------------------------------------------------------------------
 
 
@@ -79,11 +80,11 @@ entity swc_packet_mem_write_pump is
     -- HI indicates that current page is done, and that the parent entity must
     -- select another page in following clock cycles (c_swc_packet_mem_multiply
     -- 2) if it wants to write more data into the memory
-    
-    -- ML: BUG : it's assigned directly to the output, that sucks, it should be
-    --           done through register, I presume
     pgend_o  : out std_logic;
 
+    -- it indicates the start of a package, it need to be high when writing the
+    -- first data of the new package
+    pckstart_i: in std_logic;
 -------------------------------------------------------------------------------
 -- data channel interface
 -------------------------------------------------------------------------------
@@ -109,6 +110,22 @@ entity swc_packet_mem_write_pump is
     -- of words clocked into the pump is less than c_swc_packet_mem_multiply.
     flush_i : in  std_logic;
 
+-------------------------------------------------------------------------------
+-- Linked List of page addresses (LL SRAM) interface 
+-------------------------------------------------------------------------------
+
+    -- address in LL SRAM which corresponds to the page address
+    ll_addr_o : out std_logic_vector(c_swc_page_addr_width -1 downto 0);
+
+    -- data output for LL SRAM - it is the address of the next page or 0xF...F
+    -- if this is the last page of the package
+    ll_data_o    : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+
+    -- request to write to Linked List, should be high until
+    -- ll_wr_done_i indicates successfull write
+    ll_wr_req_o   : out std_logic;
+
+    ll_wr_done_i  : in std_logic;
 -------------------------------------------------------------------------------
 -- shared memory (FB SRAM) interface 
 -- The access is multiplexed with other pumps. Each pump has a one-cycle-timeslot
@@ -169,12 +186,51 @@ architecture rtl of swc_packet_mem_write_pump is
   
   -- we all love VHDL :)
   signal allones : std_logic_vector(63 downto 0);
+  signal zeros : std_logic_vector(63 downto 0);  
 
+  -- HI indicates that current page is done, and that the parent entity must
+  -- select another page in following clock cycles (c_swc_packet_mem_multiply
+  -- 2) if it wants to write more data into the memory
+  signal pgend  : std_logic;
+  
+  -- start of package
+  signal pckstart : std_logic;
+  
+  -- for the first page of the packet, to indicate the output should be written
+  -- signal start_output_page_addr : std_logic;
+  
+  signal pgreq_reg : std_logic;
+  
+  --=================================================================================
+  
+  -- address in LL SRAM which corresponds to the page address
+  signal current_page_addr_int : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+
+  signal previous_page_addr_int : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+
+  -- internal
+  signal ll_write_addr  : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  
+  -- internal
+  signal ll_write_data  : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  
+  -- indicatest that the next address shall be writtent to
+  -- Linked List SRAM
+  signal ll_wr_req  : std_logic;
+  
+
+  signal ll_wr_done_reg : std_logic;
+  
+  
+  
+  type t_state is (IDLE, WR_NEXT, WR_EOP);
+  signal state       : t_state;
     
 begin  -- rtl
 
   -- VHDL sucks...
   allones <= (others => '1');
+  zeros   <= (others => '0');
 
   -- page is full, it means that when the 'in_reg' becomes full, it will be written 
   -- to the last address (word) of the page (indicated by pgaddr_i) in FB SRAM.
@@ -185,6 +241,7 @@ begin  -- rtl
   -- will be written to the last word of the current page.
   write_on_sync <= cntr_full and drdy_i;
   
+  
   process(clk_i, rst_n_i)
   begin
     if rising_edge (clk_i) then
@@ -194,8 +251,8 @@ begin  -- rtl
         we_int   <= '0';
         mem_addr <= (others => '0');
         flush_reg <= '0';
-        pgend_o   <= '1';
-
+        pgend     <= '0';
+        pckstart    <= '0';
         -- reset the memory input register
         for i in 0 to c_swc_packet_mem_multiply-1 loop
           in_reg(i) <= (others => '0');
@@ -208,7 +265,8 @@ begin  -- rtl
         -- in the next 'time slot' for this pump, the 'in_reg' (although
         -- not fully filled in) will be written to FB SRAM.
         
-        if(flush_i = '1' and cntr /= to_unsigned(0, cntr'length)) then
+--        if(flush_i = '1' and cntr /= to_unsigned(0, cntr'length)) then
+        if(flush_i = '1' ) then
           flush_reg <= '1';
           -- imitating the 'in_reg' full, for simpliciy 
           reg_full  <= '1';
@@ -218,13 +276,21 @@ begin  -- rtl
         -- if in the 'time slot' (indicated by sync_i HIGH) reserved for this pump, 
         -- the 'in_reg' is full, or there is other reason for that, write 'in_reg' 
         -- content to FB SRAM
+
+        
         if(sync_i = '1' and (write_on_sync = '1'  or reg_full = '1' or flush_reg = '1')) then
           we_int    <= '1'; -- here: write enable
           cntr      <= (others => '0');
-          flush_reg <= '0';
-          reg_full <= '0';
+  
+          -- ml: bugfix        
+          --if(flush_i = '0') then
+            flush_reg <= '0';
+            reg_full <= '0';
+          --end if;
+         
         else
-          we_int <= '0';
+          we_int            <='0';
+          
         end if;
 
         -- page request stuff
@@ -238,19 +304,25 @@ begin  -- rtl
           --  * internal page address
           mem_addr(c_swc_page_offset_width-1 downto 0)                           <= (others => '0');
           
-          -- TODO: it seems to be BUG          
-          pgend_o                                                                <= '0';
+
+          
+          pgend                                                                  <= '0';
           
         -- after writting to FB SRAM, increase the (internal) address in the given page.
         elsif(we_int = '1') then
           mem_addr(c_swc_page_offset_width-1 downto 0) <= std_logic_vector(unsigned(mem_addr(c_swc_page_offset_width-1 downto 0)) + 1);
           
+          -- ml: bugfix        
+          if(flush_i = '1') then
+            flush_reg <= '1';
+            reg_full  <= '1';
+          end if;
+          
           -- we are approaching the end of current page. Inform the host entity some
           -- cycles in advance.
           if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0)) then
-          
-            -- TODO: it seems to be BUG
-            pgend_o <= '1'; 
+             pgend   <= '1';
+
           end if;
           
         end if;
@@ -259,9 +331,33 @@ begin  -- rtl
         -- writting data (ctrl + data) into 'in_reg', once the reg is full,
         -- its content will be written to FB SRAM in the time slot reserved
         -- for this pump
+        
         if(drdy_i = '1') then
+        
+          if( cntr = 0 and pckstart_i = '1') then
+            pckstart <= '1';
+          end if;
+              
+          
+          -- Added by ML: without this, the old data stayed in register
+          -- until it was overwriten, this could cause problems if 'flush' is used,
+          -- in such case old dat would be written to memory in the not-overwriten-words
+-------------------------------------------------------------------------------------    
+-- here problem with synthesization
+--          for i in to_integer(cntr) to c_swc_packet_mem_multiply-1 loop
+--            in_reg(i) <= (others => '0');
+--          end loop;  
+-- replaced by this
+          for i in 0 to c_swc_packet_mem_multiply-1 loop
+            if(i >= to_integer(cntr)) then 
+              in_reg(i) <= (others => '0');
+            end if;
+          end loop;
+-------------------------------------------------------------------------------------        
           in_reg(to_integer(cntr)) <= d_i;
 
+
+                
           -- wrap around the 'in_reg' indicating that the reg is full to the host
           -- entity
           if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
@@ -271,17 +367,127 @@ begin  -- rtl
             cntr <= cntr + 1;
           end if;
         end if;
-
+        
+        if(ll_wr_done_i = '1') then 
+          pckstart <= '0';
+        end if;
       end if;
     end if;
   end process;
 
+
+
+  pg : process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+
+         current_page_addr_int    <= (others => '0');
+         previous_page_addr_int   <= (others => '0');
+         
+      else
+        
+        if(pgreq_i = '1') then
+          current_page_addr_int   <= pgaddr_i;
+        end if;
+        
+        if(ll_wr_done_i = '1') then
+          previous_page_addr_int  <= current_page_addr_int;
+        end if;
+        
+      end if;
+    end if;
+  end process;
+
+
+
+
+
+  fsm : process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+
+        state             <= IDLE;
+        ll_write_data     <=(others =>'0');
+        ll_write_addr     <=(others =>'0'); 
+        ll_wr_req         <='0';
+        
+      else
+
+        -- main finite state machine
+        case state is
+
+
+          when IDLE =>
+            
+            -- normal case: load new page within the package (not the
+            -- beginning of the package)
+            if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '0')) then
+              state          <= WR_NEXT;
+              ll_write_data  <= pgaddr_i;
+              ll_write_addr  <= previous_page_addr_int;
+              ll_wr_req      <= '1';
+            end if;
+ 
+            -- first package, page provided at the same time as pckstart_i strobe
+            -- so we remember the address from input
+            if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '1')) then
+              state          <= WR_EOP;
+              ll_write_data  <= (others =>'1');
+              ll_write_addr  <= pgaddr_i;
+              ll_wr_req      <= '1';
+            end if;
+
+            -- page provided not in the first cycle of the new package
+            if((pgreq_i = '1') and (pckstart = '1') and (pckstart_i = '0')) then
+              state          <= WR_EOP;
+              ll_write_data  <= (others =>'1');
+              ll_write_addr  <= pgaddr_i;
+              ll_wr_req      <= '1';
+            end if;
+
+          when WR_NEXT =>
+            if (ll_wr_done_i = '1') then
+              state          <= WR_EOP;
+              ll_write_data  <= (others =>'1');
+              ll_write_addr  <= current_page_addr_int;
+              ll_wr_req      <= '1';
+            end if;
+
+            
+          when WR_EOP =>
+            if (ll_wr_done_i = '1') then
+              state          <= IDLE;
+              ll_write_data  <= (others =>'0');
+              ll_write_addr  <= (others =>'0');
+              ll_wr_req      <= '0';
+            end if;
+  
+          when others =>
+          
+            state             <= IDLE;
+            
+        end case;
+        
+
+      end if;
+    end if;
+    
+  end process;
+
+
   we_o   <= we_int;
   full_o <= (reg_full or cntr_full) and (not sync_i) ;
   addr_o <= mem_addr;
-
+  pgend_o <= pgend;
+  
   gen_q1 : for i in 0 to c_swc_packet_mem_multiply-1 generate
     q_o(c_swc_pump_width * (i+1) - 1 downto c_swc_pump_width * i) <= in_reg(i);
   end generate gen_q1;
+  
+  ll_addr_o     <= ll_write_addr;
+  ll_data_o        <= ll_write_data;
+  ll_wr_req_o <= ll_wr_req;
 
 end rtl;

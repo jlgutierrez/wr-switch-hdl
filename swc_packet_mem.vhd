@@ -79,6 +79,9 @@ entity swc_packet_mem is
     -- indicates that a port X wants to write page address of the "write" access
     wr_pagereq_i  : in  std_logic_vector(c_swc_num_ports-1 downto 0);
     
+    -- indicates the beginning of the package
+    wr_pckstart_i : in  std_logic_vector(c_swc_num_ports-1 downto 0);
+       
     -- array of pages' addresses to which ports want to write
     wr_pageaddr_i : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
     
@@ -116,19 +119,41 @@ entity swc_packet_mem is
     -- is being pumped out currently), after ~c_swc_packet_mem_multiply cycles 
     -- from the rising edge of this signal this page will finish 
     rd_pageend_o  : out std_logic_vector(c_swc_num_ports -1 downto 0);
+    
+    -- end of the package, new package start-page-address needs to be provided
+    -- the best if it is before the last page's word is read 
+    rd_pckend_o : out  std_logic_vector(c_swc_num_ports-1 downto 0);
 
     -- data ready to be read
     rd_drdy_o : out std_logic_vector(c_swc_num_ports -1 downto 0);
     
     -- request next word (ctrl + data) from the pump
-    rd_dreq_i : in  std_logic_vector(c_swc_num_ports -1 downto 0);
+    rd_dreq_i      : in  std_logic_vector(c_swc_num_ports -1 downto 0);
+    
+    rd_sync_read_i : in std_logic_vector(c_swc_num_ports -1 downto 0);
     
     -- data read from the shared memory
     rd_data_o : out std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
     
     -- control data read from the shared memory
-    rd_ctrl_o : out std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0)
+    rd_ctrl_o : out std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
+    
+    
+--    pa_free_o              : out  std_logic_vector(c_swc_num_ports -1 downto 0);
+--    pa_free_done_i         : in   std_logic_vector(c_swc_num_ports -1 downto 0);
+--    pa_free_pgaddr_o       : out  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
+    
+    write_o               : out  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    write_done_i          : in   std_logic_vector(c_swc_num_ports - 1 downto 0);
+    write_addr_o          : out  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
+    write_data_o          : out  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
+    
+    read_pump_read_o      : out  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    read_pump_read_done_i : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    read_pump_addr_o      : out  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
 
+    data_i                : in   std_logic_vector(c_swc_page_addr_width - 1 downto 0)
+    
     );
 end swc_packet_mem;
 
@@ -149,14 +174,16 @@ architecture rtl of swc_packet_mem is
   end component;
 
   --  
-  subtype t_pump_data_in is std_logic_vector(c_swc_pump_width-1 downto 0);
-  subtype t_pump_data_out is std_logic_vector(c_swc_packet_mem_multiply * c_swc_pump_width-1 downto 0);
-  subtype t_pump_addr is std_logic_vector(c_swc_packet_mem_addr_width - 1 downto 0);
+  subtype t_pump_data_in        is std_logic_vector(c_swc_pump_width-1                             downto 0);
+  subtype t_pump_data_out       is std_logic_vector(c_swc_packet_mem_multiply * c_swc_pump_width-1 downto 0);
+  subtype t_pump_addr           is std_logic_vector(c_swc_packet_mem_addr_width - 1                downto 0);
+  subtype t_pump_page_addr      is std_logic_vector(c_swc_page_addr_width - 1                      downto 0);
 
-  type t_pump_addr_array is array (c_swc_packet_mem_multiply - 1 downto 0) of t_pump_addr;
-  type t_pump_data_in_array is array (c_swc_packet_mem_multiply - 1 downto 0) of t_pump_data_in;
-  type t_pump_data_out_array is array (c_swc_packet_mem_multiply - 1 downto 0) of t_pump_data_out;
-  
+  type t_pump_addr_array           is array (c_swc_packet_mem_multiply - 1 downto 0) of t_pump_addr;
+  type t_pump_data_in_array        is array (c_swc_packet_mem_multiply - 1 downto 0) of t_pump_data_in;
+  type t_pump_data_out_array       is array (c_swc_packet_mem_multiply - 1 downto 0) of t_pump_data_out;
+  type t_pump_page_addr_array      is array (c_swc_packet_mem_multiply - 1 downto 0) of t_pump_page_addr;
+
   ---------------------------------------------------------------------------
   ------------------ arrays consisting of data from all pumps ---------------
   ---------------------------------------------------------------------------  
@@ -181,6 +208,15 @@ architecture rtl of swc_packet_mem is
   -- *Signal inputed to mux*
   signal wr_pump_we       : std_logic_vector(c_swc_num_ports-1 downto 0);
 
+  -- indicates address of the next page in the packet, it is written to
+  -- a linked list of addresses
+  signal wr_pump_ll_data_out    :t_pump_page_addr_array;
+
+  signal wr_pump_ll_addr_out :t_pump_page_addr_array;
+  
+  signal wr_pump_ll_wr_req_out : std_logic_vector(c_swc_num_ports-1 downto 0);  
+  
+  signal wr_pump_ll_wr_req_done_in : std_logic_vector(c_swc_num_ports-1 downto 0);  
   ---------------------------------------------------------------------------
   ---------------------- direct input to FB SRAM (muxed)---------------------
   ---------------------------------------------------------------------------
@@ -194,7 +230,20 @@ architecture rtl of swc_packet_mem is
   -- write enable
   signal ram_we_muxed      : std_logic;
 
+  
+  ---------------------------------------------------------------------------
+  ---------------------- direct input to Linked List (muxed) ----------------
+  ---------------------------------------------------------------------------
 
+  signal ll_write_i               : std_logic_vector(c_swc_num_ports - 1 downto 0); 
+  signal ll_write_done_o          : std_logic_vector(c_swc_num_ports - 1 downto 0); 
+  signal ll_write_addr_i          : std_logic_vector(c_swc_page_addr_width * c_swc_num_ports - 1 downto 0); 
+  signal ll_write_data_i          : std_logic_vector(c_swc_page_addr_width * c_swc_num_ports - 1 downto 0); 
+      
+  signal ll_read_pump_read_i      : std_logic_vector(c_swc_num_ports - 1 downto 0); 
+  signal ll_read_pump_read_done_o : std_logic_vector(c_swc_num_ports - 1 downto 0); 
+  signal ll_read_pump_addr_i      : std_logic_vector(c_swc_page_addr_width * c_swc_num_ports - 1 downto 0); 
+   
   ---------------------------------------------------------------------------
   ------------ input to all pumps which is demuxed from FB SRAM -------------
   ---------------------------------------------------------------------------
@@ -205,8 +254,14 @@ architecture rtl of swc_packet_mem is
   signal rd_pump_data_in  : t_pump_data_out_array;
   
   -- array of outputs from the pumps to the ports
+  
   signal rd_pump_data_out : t_pump_data_in_array;
-
+  
+  
+  signal rd_pump_ll_addr_out        : t_pump_page_addr_array;
+  signal rd_pump_ll_rd_req_out      : std_logic_vector(c_swc_num_ports-1 downto 0); 
+  signal rd_pump_ll_rd_req_done_in  : std_logic_vector(c_swc_num_ports-1 downto 0); 
+  
   ---------------------------------------------------------------------------
   ------------------------- direct output from FB SRAM ----------------------
   ---------------------------------------------------------------------------  
@@ -216,6 +271,14 @@ architecture rtl of swc_packet_mem is
   
   -- read address muxed from the array of addresses from all the pumps
   signal ram_rd_addr_muxed : std_logic_vector(c_swc_packet_mem_addr_width-1 downto 0);
+
+  ---------------------------------------------------------------------------
+  ------------------------- direct output from Linked List ------------------
+  ---------------------------------------------------------------------------  
+
+  signal llist_rd_data : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  
+  signal llist_rd_addr_muxed : std_logic_vector(c_swc_page_addr_width-1 downto 0);
 
   ---------------------------------------------------------------------------
   ------------------------- synchronization of pumps ------------------------
@@ -285,8 +348,13 @@ begin  -- rtl
   -- producing pump output data
   merge_ctrl_data_wr : for i in 0 to c_swc_num_ports-1 generate
     wr_pump_data_in(i) <= wr_ctrl_i(i * c_swc_ctrl_width + c_swc_ctrl_width - 1 downto i * c_swc_ctrl_width)
-                          & wr_data_i(i * c_swc_data_width + c_swc_data_width - 1 downto i * c_swc_data_width);
+                         & wr_data_i(i * c_swc_data_width + c_swc_data_width - 1 downto i * c_swc_data_width);
   end generate merge_ctrl_data_wr;
+
+
+  ------------------------------------------------------------------------------------------------------------
+  -------------------------------------   mutiport memory modul   --------------------------------------------
+  ------------------------------------------------------------------------------------------------------------ 
 
   -- write pump: it saves c_swc_packet_mem_multiply words (ctrl + data) into an input register (regardless 
   -- of the above synch and time slot). As soon as the reg is full (or flush req), it is written to 
@@ -295,19 +363,28 @@ begin  -- rtl
   gen_write_pumps : for i in 0 to c_swc_num_ports-1 generate
     WRPUMP : swc_packet_mem_write_pump
       port map (
-        clk_i    => clk_i,
-        rst_n_i  => rst_n_i,
-        pgaddr_i => wr_pageaddr_i(c_swc_page_addr_width * i + c_swc_page_addr_width - 1 downto c_swc_page_addr_width * i),
-        pgreq_i  => wr_pagereq_i(i),
-        pgend_o  => wr_pageend_o(i),
-        drdy_i   => wr_drdy_i(i),
-        full_o   => wr_full_o(i),
-        flush_i  => wr_flush_i(i),
-        sync_i   => sync_sreg(i),
-        d_i      => wr_pump_data_in(i),
-        q_o      => wr_pump_data_out(i),
-        addr_o   => wr_pump_addr_out(i),
-        we_o     => wr_pump_we(i));
+        clk_i               => clk_i,
+        rst_n_i             => rst_n_i,
+        pgaddr_i            => wr_pageaddr_i(c_swc_page_addr_width * i + c_swc_page_addr_width - 1 downto c_swc_page_addr_width * i),
+        pgreq_i             => wr_pagereq_i(i),
+        pckstart_i          => wr_pckstart_i(i),
+        pgend_o             => wr_pageend_o(i),
+        drdy_i              => wr_drdy_i(i),
+        full_o              => wr_full_o(i),
+        flush_i             => wr_flush_i(i),
+        ll_addr_o           => wr_pump_ll_addr_out(i),
+        ll_data_o           => wr_pump_ll_data_out(i),
+        ll_wr_req_o         => wr_pump_ll_wr_req_out(i),
+        ll_wr_done_i        => wr_pump_ll_wr_req_done_in(i),
+
+--        current_page_addr_o => wr_pump_current_page_addr_out(i),
+--        next_page_addr_o    => wr_pump_next_page_addr_out(i),
+--        next_page_addr_we_o => wr_pump_next_page_addr_we_out(i),
+        sync_i              => sync_sreg(i),
+        d_i                 => wr_pump_data_in(i),
+        q_o                 => wr_pump_data_out(i),
+        addr_o              => wr_pump_addr_out(i),
+        we_o                => wr_pump_we(i));
 
   end generate gen_write_pumps;
 
@@ -342,6 +419,8 @@ begin  -- rtl
 
 
 
+
+
   -- read pump: it reads c_swc_packet_mem_multiply words (ctrl + data) from FB SRAM and makes it
   -- available to be read by port (word by wrod, word=ctrl+data). Reading of output register can be 
   -- done regardless of the synch and time slot. As soon as the reg is empty and more reading is 
@@ -352,17 +431,30 @@ begin  -- rtl
   gen_read_pumps : for i in 0 to c_swc_num_ports-1 generate
     RDPUMP : swc_packet_mem_read_pump
       port map (
-        clk_i    => clk_i,
-        rst_n_i  => rst_n_i,
-        pgreq_i  => rd_pagereq_i(i),
-        pgaddr_i => rd_pageaddr_i(c_swc_page_addr_width * i + c_swc_page_addr_width - 1 downto c_swc_page_addr_width * i),
-        pgend_o  => rd_pageend_o(i),
-        drdy_o   => rd_drdy_o(i),
-        dreq_i   => rd_dreq_i(i),
-        d_o      => rd_pump_data_out(i),
-        sync_i   => sync_sreg_rd(i),
-        addr_o   => rd_pump_addr_out(i),
-        q_i      => ram_rd_data);
+        clk_i               => clk_i,
+        rst_n_i             => rst_n_i,
+        pgreq_i             => rd_pagereq_i(i),
+        pgaddr_i            => rd_pageaddr_i(c_swc_page_addr_width * i + c_swc_page_addr_width - 1 downto c_swc_page_addr_width * i),
+        pckend_o            => rd_pckend_o(i),
+        pgend_o             => rd_pageend_o(i),
+        drdy_o              => rd_drdy_o(i),
+        dreq_i              => rd_dreq_i(i),
+        sync_read_i         => rd_sync_read_i(i),
+        ll_read_addr_o      => rd_pump_ll_addr_out(i),
+        ll_read_data_i      => llist_rd_data,
+        ll_read_req_o       => rd_pump_ll_rd_req_out(i),
+        ll_read_valid_data_i=> rd_pump_ll_rd_req_done_in(i),
+        
+--        free_o              => pa_free_o(i),
+--        free_done_i         => pa_free_done_i(i),
+--        free_pgaddr_o       => pa_free_pgaddr_o((i + 1)*c_swc_page_addr_width -1 downto i * c_swc_page_addr_width), 
+        
+--        current_page_addr_o => rd_pump_current_page_addr_out(i),
+--        next_page_addr_i    => llist_rd_data,
+        d_o                 => rd_pump_data_out(i),
+        sync_i              => sync_sreg_rd(i),
+        addr_o              => rd_pump_addr_out(i),
+        q_i                 => ram_rd_data);
 
   end generate gen_read_pumps;
 
@@ -383,6 +475,107 @@ begin  -- rtl
     end if;
   end process;
 
+  ------------------------------------------------------------------------------------------------------------
+  -------------------------------------     linkded list modul    --------------------------------------------
+  ------------------------------------------------------------------------------------------------------------ 
+
+--  llist_write_mux : process(sync_cntr,wr_pump_next_page_addr_we_out , wr_pump_current_page_addr_out, wr_pump_next_page_addr_out)
+--  begin
+--    if(sync_cntr < c_swc_num_ports) then
+--      llist_we_muxed      <= wr_pump_next_page_addr_we_out(sync_cntr);
+--      llist_wr_addr_muxed <= wr_pump_current_page_addr_out(sync_cntr);
+--      llist_wr_data_muxed <= wr_pump_next_page_addr_out(sync_cntr);
+--    else
+--      llist_we_muxed      <= '0';
+--      llist_wr_data_muxed <= (others => '0');
+--      llist_wr_addr_muxed <= (others => '0');
+--    end if;
+--  end process;
+--
+--  -- muxing read address
+--  llist_read_mux : process(sync_cntr_rd, wr_pump_current_page_addr_out)
+--  begin
+--    if(sync_cntr_rd < c_swc_num_ports) then
+--      llist_rd_addr_muxed <= rd_pump_current_page_addr_out(sync_cntr_rd);
+--    else
+--      llist_rd_addr_muxed <= (others => '0');
+--    end if;
+--  end process;
+--
+--  -- The most important part, the shared memory
+--  PAGE_INDEX_LINKED_LIST : generic_ssram_dualport_singleclock
+--    generic map (
+--      g_width     => c_swc_page_addr_width,
+--      g_addr_bits => c_swc_page_addr_width,
+--      g_size      => c_swc_packet_mem_size / c_swc_packet_mem_multiply)
+--    port map (
+--      clk_i     => clk_i,
+--      rd_addr_i => llist_rd_addr_muxed,
+--      wr_addr_i => llist_wr_addr_muxed,
+--      data_i    => llist_wr_data_muxed, 
+--      wr_en_i   => llist_we_muxed ,
+--      q_o       => llist_rd_data);
+
+
+  linked_list_data : for i in 0 to c_swc_num_ports-1 generate
+    ll_write_addr_i    (i* c_swc_page_addr_width + c_swc_page_addr_width - 1 downto i * c_swc_page_addr_width) <= wr_pump_ll_addr_out(i);
+    ll_write_data_i    (i* c_swc_page_addr_width + c_swc_page_addr_width - 1 downto i * c_swc_page_addr_width) <= wr_pump_ll_data_out(i);
+    ll_read_pump_addr_i(i* c_swc_page_addr_width + c_swc_page_addr_width - 1 downto i * c_swc_page_addr_width) <= rd_pump_ll_addr_out(i);
+  end generate linked_list_data;
+
+  ll_read_pump_read_i       <= rd_pump_ll_rd_req_out;
+  rd_pump_ll_rd_req_done_in <= ll_read_pump_read_done_o;
+  
+  ll_write_i                <= wr_pump_ll_wr_req_out;
+  wr_pump_ll_wr_req_done_in <= ll_write_done_o;
+  
+--  LINKED_LIST : swc_multiport_linked_list
+--    port map (
+--      rst_n_i               => rst_n_i,
+--      clk_i                 => clk_i,
+--      
+--      -- IF with write pump
+--      write_i               => ll_write_i,
+--      write_done_o          => ll_write_done_o,
+--      write_addr_i          => ll_write_addr_i,
+--      write_data_i          => ll_write_data_i,
+--      
+--      -- IF with page allocator      
+--      free_i                => (others =>'0'),
+--      free_done_o           =>  open,
+--      free_addr_i           => (others =>'0'),
+--
+--      -- IF with read pump      
+--      read_pump_read_i      => ll_read_pump_read_i,
+--      read_pump_read_done_o => ll_read_pump_read_done_o,
+--      read_pump_addr_i      => ll_read_pump_addr_i,
+--
+--      -- IF with Lost Pck Dealloc (LPD)     
+--      free_pck_read_i       => (others =>'0'),
+--      free_pck_read_done_o  =>  open,
+--      free_pck_addr_i       => (others =>'0'),
+--
+--      -- output data for all reads
+--      data_o                => llist_rd_data
+--      );
+
+   -------------------------------------------------
+   -- Interface with Linked List
+   -- [a bit strange naming due to the fact that
+   -- the LL module was initialy inside packet_mem]
+   ------------------------------------------------
+   write_o               <= ll_write_i;
+   write_addr_o          <= ll_write_addr_i;
+   write_data_o          <= ll_write_data_i;
+   
+   read_pump_read_o      <= ll_read_pump_read_i;
+   read_pump_addr_o      <= ll_read_pump_addr_i;
+
+   -- output data for all reads
+   
+   ll_read_pump_read_done_o <= read_pump_read_done_i;
+   ll_write_done_o          <= write_done_i;
+   llist_rd_data            <= data_i ;
 
 
 end rtl;

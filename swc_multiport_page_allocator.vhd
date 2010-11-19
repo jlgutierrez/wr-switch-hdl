@@ -30,19 +30,28 @@ use work.swc_swcore_pkg.all;
 
 entity swc_multiport_page_allocator is
   port (
-    rst_n_i : in std_logic;
-    clk_i   : in std_logic;
+    rst_n_i           : in std_logic;
+    clk_i             : in std_logic;
 
-    alloc_i      : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
-    free_i       : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
-    alloc_done_o : out std_logic_vector(c_swc_num_ports - 1 downto 0);
-    free_done_o  : out std_logic_vector(c_swc_num_ports - 1 downto 0);
+    alloc_i           : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    free_i            : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    force_free_i      : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    set_usecnt_i      : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    
+    alloc_done_o      : out std_logic_vector(c_swc_num_ports - 1 downto 0);
+    free_done_o       : out std_logic_vector(c_swc_num_ports - 1 downto 0);
+    force_free_done_o : out std_logic_vector(c_swc_num_ports - 1 downto 0);
+    set_usecnt_done_o : out std_logic_vector(c_swc_num_ports - 1 downto 0);
 
-    pgaddr_free_i  : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
-    usecnt_i       : in  std_logic_vector(c_swc_num_ports * c_swc_usecount_width - 1 downto 0);
-    pgaddr_alloc_o : out std_logic_vector(c_swc_page_addr_width-1 downto 0);
 
-    nomem_o : out std_logic
+    pgaddr_free_i       : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
+    pgaddr_force_free_i : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
+    pgaddr_usecnt_i     : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
+    
+    usecnt_i          : in  std_logic_vector(c_swc_num_ports * c_swc_usecount_width - 1 downto 0);
+    pgaddr_alloc_o    : out std_logic_vector(c_swc_page_addr_width-1 downto 0);
+
+    nomem_o           : out std_logic
     );
 
 end swc_multiport_page_allocator;
@@ -51,9 +60,16 @@ architecture syn of swc_multiport_page_allocator is
 
   signal pg_alloc      : std_logic;
   signal pg_free       : std_logic;
+  signal pg_force_free : std_logic;
+  signal pg_set_usecnt : std_logic;
   signal pg_usecnt     : std_logic_vector(c_swc_usecount_width-1 downto 0);
   signal pg_addr_alloc : std_logic_vector(c_swc_page_addr_width -1 downto 0);
-  signal pg_addr_free  : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+  
+  signal pg_addr_free        : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+  signal pg_addr_force_free  : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+  signal pg_addr_usecnt      : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+  signal pg_addr  : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+  
   signal pg_addr_valid : std_logic;
   signal pg_idle       : std_logic;
   signal pg_done       : std_logic;
@@ -64,14 +80,14 @@ architecture syn of swc_multiport_page_allocator is
   -- the address of the bit :
   -- * representing alloc request - is even [i*2]
   -- * representing free  request - is odd  [i*2 + 1]
-  signal request_vec   : std_logic_vector(c_swc_num_ports*2-1 downto 0);
+  signal request_vec   : std_logic_vector(c_swc_num_ports*4-1 downto 0);
   
   -- address of the request which has been granted access 
   -- to page alloation core. the LSB bit indicates the kind of
   -- operation:
   -- * '0' - even address, so alloc operation
   -- * '1' - odd  address, so free  operation
-  signal request_grant : std_logic_vector(4 downto 0);
+  signal request_grant : std_logic_vector(5 downto 0);
 
   -- used to indicate to the RR arbiter to start
   -- processing next request,
@@ -89,12 +105,14 @@ architecture syn of swc_multiport_page_allocator is
   -- ??
   signal af_prev             : std_logic;
 
+
+  -- OR of two different free_i signals, they are functionally exclusive
+  -- which means that it's not possible for them to be high simultaneously
+  signal any_free_i          : std_logic;
   -- indicates that an alloc has been performed successfully for the 
   -- given port. Used to prevent considering the currently process
   -- port for request to RR arbiter
   signal alloc_done_feedback : std_logic_vector(c_swc_num_ports-1 downto 0);
-  
-
   signal alloc_done          : std_logic_vector(c_swc_num_ports-1 downto 0);
 
   -- indicates that an free has been performed successfully for the 
@@ -102,8 +120,20 @@ architecture syn of swc_multiport_page_allocator is
   -- port for request to RR arbiter
   signal free_done_feedback  : std_logic_vector(c_swc_num_ports-1 downto 0);
   signal free_done           : std_logic_vector(c_swc_num_ports-1 downto 0);
+
+
+
+  signal force_free_done_feedback  : std_logic_vector(c_swc_num_ports-1 downto 0);
+  signal force_free_done           : std_logic_vector(c_swc_num_ports-1 downto 0);
+
+
+  signal set_usecnt_done_feedback  : std_logic_vector(c_swc_num_ports-1 downto 0);
+  signal set_usecnt_done           : std_logic_vector(c_swc_num_ports-1 downto 0);
+
   
 begin  -- syn
+
+
 
 
   -- one allocator/deallocator for all ports
@@ -117,8 +147,10 @@ begin  -- syn
       rst_n_i        => rst_n_i,
       alloc_i        => pg_alloc,
       free_i         => pg_free,
+      force_free_i   => pg_force_free,
+      set_usecnt_i   => pg_set_usecnt,
       usecnt_i       => pg_usecnt,
-      pgaddr_i       => pg_addr_free,
+      pgaddr_i       => pg_addr,--pg_addr_free,
       pgaddr_o       => pg_addr_alloc,
       pgaddr_valid_o => pg_addr_valid,
       idle_o         => pg_idle,
@@ -130,8 +162,10 @@ begin  -- syn
   -- and 'free' requests on odd addresses. The condition prevents
   -- considertion of actually processed port for the request to arbiter
   gen_request_vec : for i in 0 to c_swc_num_ports - 1 generate
-    request_vec(2 * i)     <= alloc_i(i) and (not (alloc_done_feedback(i) or alloc_done(i)));
-    request_vec(2 * i + 1) <= free_i(i) and (not (free_done_feedback(i) or free_done(i)));
+    request_vec(4 * i + 0) <= alloc_i(i)      and (not (alloc_done_feedback(i)      or alloc_done(i)));
+    request_vec(4 * i + 1) <= free_i(i)       and (not (free_done_feedback(i)       or free_done(i)));
+    request_vec(4 * i + 2) <= set_usecnt_i(i) and (not (set_usecnt_done_feedback(i) or set_usecnt_done(i)));
+    request_vec(4 * i + 3) <= force_free_i(i) and (not (force_free_done_feedback(i) or force_free_done(i)));
   end generate gen_request_vec;
 
   -- Round Robin arbiter, quite specific for the usage, since it has the "next" 
@@ -139,8 +173,8 @@ begin  -- syn
   -- unnecessary delays
   ARB : swc_rr_arbiter
     generic map (
-      g_num_ports      => c_swc_num_ports * 2,
-      g_num_ports_log2 => 5)
+      g_num_ports      => c_swc_num_ports * 4,
+      g_num_ports_log2 => 6)
     port map (
       clk_i         => clk_i,
       rst_n_i       => rst_n_i,
@@ -150,16 +184,15 @@ begin  -- syn
       grant_valid_o => request_grant_valid);
 
   -- port number to which request has been granted.
-  in_sel <= to_integer(unsigned(request_grant(request_grant'length-1 downto 1)));
+  in_sel <= to_integer(unsigned(request_grant(request_grant'length-1 downto 2)));
 
   -- if the granted request has even address (LSB = '0'), it means that
   -- the request was of 'alloc' type
-  pg_alloc <= not request_grant(0) and request_grant_valid;
-
-  -- if the granted request has odd address (LSB = '1'), it means that
-  -- the request was of 'free' type
-  pg_free  <= request_grant(0) and request_grant_valid;
-
+  pg_alloc       <= '1' when ((request_grant(1 downto 0) = b"00") and request_grant_valid='1') else '0';
+  pg_free        <= '1' when ((request_grant(1 downto 0) = b"01") and request_grant_valid='1') else '0';
+  pg_set_usecnt  <= '1' when ((request_grant(1 downto 0) = b"10") and request_grant_valid='1') else '0';
+  pg_force_free  <= '1' when ((request_grant(1 downto 0) = b"11") and request_grant_valid='1') else '0';
+   
   -- This is special to prevent unnecessary delays.
   -- The allocator indicates that the arbiter may start
   -- processing next request as in 2 cycles, net allocator 
@@ -170,7 +203,17 @@ begin  -- syn
   pgaddr_alloc_o <= pg_addr_alloc;
 
   -- Getting the address of the page we want to free
-  pg_addr_free <= pgaddr_free_i(in_sel * c_swc_page_addr_width + c_swc_page_addr_width - 1 downto in_sel * c_swc_page_addr_width);
+  pg_addr_free       <= pgaddr_free_i      (in_sel * c_swc_page_addr_width + c_swc_page_addr_width - 1 downto in_sel * c_swc_page_addr_width);
+  pg_addr_force_free <= pgaddr_force_free_i(in_sel * c_swc_page_addr_width + c_swc_page_addr_width - 1 downto in_sel * c_swc_page_addr_width);
+  pg_addr_usecnt     <= pgaddr_usecnt_i    (in_sel * c_swc_page_addr_width + c_swc_page_addr_width - 1 downto in_sel * c_swc_page_addr_width);
+  ---
+ 
+  
+  
+  pg_addr            <= pg_addr_force_free when (pg_force_free = '1') else 
+                        pg_addr_free       when (pg_free       = '1') else
+                        pg_addr_usecnt     when (pg_set_usecnt = '1') else
+                        (others => '0');
   
   -- getting the ouser count which should be assigned to freshly allocated page
   pg_usecnt    <= usecnt_i(in_sel * c_swc_usecount_width + c_swc_usecount_width - 1 downto in_sel * c_swc_usecount_width);
@@ -179,30 +222,61 @@ begin  -- syn
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        alloc_done_feedback <= (others => '0');
-        free_done_feedback  <= (others => '0');
+        alloc_done_feedback       <= (others => '0');
+        free_done_feedback        <= (others => '0');
+        set_usecnt_done_feedback  <= (others => '0');
+        force_free_done_feedback  <= (others => '0');
       else
 
         -- recognizing on which port the allocation/deallocation/freeing process
         -- is about to finish. It's solely for request vector composition purpose
         for i in 0 to c_swc_num_ports-1 loop
           if(pg_done = '1' and (in_sel = i)) then
-            alloc_done_feedback(i) <= not request_grant(0);
-            free_done_feedback(i)  <= request_grant(0);
+          
+            if(request_grant(1 downto 0) = b"00") then
+               alloc_done_feedback(i)      <= '1';
+            else
+               alloc_done_feedback(i)      <= '0';
+            end if;
+
+            if(request_grant(1 downto 0) = b"01") then
+               free_done_feedback(i)       <= '1';
+            else
+               free_done_feedback(i)       <= '0';
+            end if;
+
+            if(request_grant(1 downto 0) = b"10") then
+               set_usecnt_done_feedback(i) <= '1';
+            else
+               set_usecnt_done_feedback(i) <= '0';
+            end if;
+
+            if(request_grant(1 downto 0) = b"11") then
+               force_free_done_feedback(i) <= '1';
+            else
+               force_free_done_feedback(i) <= '0';
+            end if;
+
           else
-            alloc_done_feedback(i) <= '0';
-            free_done_feedback(i)  <= '0';
+            alloc_done_feedback(i)       <= '0';
+            free_done_feedback(i)        <= '0';
+            set_usecnt_done_feedback(i)  <= '0';
+            force_free_done_feedback(i)  <= '0';
           end if;
         end loop;  -- i
 
-        alloc_done <= alloc_done_feedback;
-        free_done  <= free_done_feedback;
+        alloc_done      <= alloc_done_feedback;
+        free_done       <= free_done_feedback;
+        set_usecnt_done <= set_usecnt_done_feedback;
+        force_free_done <= force_free_done_feedback;
       end if;
     end if;
   end process;
 
-  alloc_done_o <= alloc_done;
-  free_done_o  <= free_done;
-
+  alloc_done_o      <= alloc_done;
+  free_done_o       <= free_done;
+  set_usecnt_done_o <= set_usecnt_done;
+  force_free_done_o <= force_free_done;
+  nomem_o           <= pg_nomem;
   
 end syn;

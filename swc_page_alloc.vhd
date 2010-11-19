@@ -104,10 +104,27 @@ entity swc_page_allocator is
                                         -- pgaddr_o and is valid when
                                         -- pgaddr_valid_o is HI..
 
-    free_i : in std_logic;  -- free strobe (active HI), releases the page
-    -- at address pgaddr_i if it's current
-    -- use count is equal to 1, otherwise
-    -- decreases the use count
+    free_i : in std_logic;              -- free strobe (active HI), releases the page
+                                        -- at address pgaddr_i if it's current
+                                        -- use count is equal to 1, otherwise
+                                        -- decreases the use count
+
+    
+  
+    force_free_i : in std_logic;          -- free strobe (active HI), releases the page
+                                        -- at address pgaddr_i regardless of the user 
+                                        -- count of the page
+                                        -- it is used in case a package is corrupted
+                                        -- and what have already been
+                                        -- saved, needs to be released
+
+
+    set_usecnt_i : in std_logic;        -- enables to set user count to already
+                                        -- alocated page, used in the case of the
+                                        -- address of the first page of a package,
+                                        -- we need to allocate this page in advance
+                                        -- not knowing the user count, so the user count
+                                        -- needs to be set to already allocated page
 
     -- "Use count" value for the page to be allocated. If the page is to be
     -- used by multiple output queues, each of them will attempt to free it.
@@ -151,7 +168,10 @@ architecture syn of swc_page_allocator is
   constant c_l1_bitmap_size     : integer := g_num_pages/32;
   constant c_l1_bitmap_addrbits : integer := g_page_addr_bits - 5;
 
-  type t_state is (IDLE, ALLOC_LOOKUP_L1, ALLOC_LOOKUP_L0_UPDATE, FREE_CHECK_USECNT, FREE_RELEASE_PAGE, FREE_DECREASE_UCNT);
+  type t_state is (IDLE, ALLOC_LOOKUP_L1, ALLOC_LOOKUP_L0_UPDATE, 
+                   FREE_CHECK_USECNT, FREE_RELEASE_PAGE, FREE_DECREASE_UCNT, 
+                   SET_UCNT--, FORCE_FREE_RELEASE_PAGE
+                   );
 
   -- this represents high part of the page address (bit mapping)
   signal l1_bitmap     : std_logic_vector(c_l1_bitmap_size-1 downto 0);
@@ -252,13 +272,13 @@ begin  -- syn
         idle_o            <= '1';
         state             <= IDLE;
         usecnt_mem_wr     <= '0';
-        usecnt_mem_rdaddr <= (others => '0');
+        --usecnt_mem_rdaddr <= (others => '0');
         usecnt_mem_wraddr <= (others => '0');
         free_blocks       <= to_unsigned(g_num_pages, free_blocks'length);
         done_o            <= '0';
-        l0_wr_addr <= (others => '0');
-        l0_rd_addr <= (others => '0');
-        l0_wr_data <= (others => '0');
+        l0_wr_addr        <= (others => '0');
+        l0_rd_addr        <= (others => '0');
+        l0_wr_data        <= (others => '0');
         
       else
 
@@ -274,6 +294,9 @@ begin  -- syn
             pgaddr_valid_o <= '0';
             usecnt_mem_wr  <= '0';
             
+            
+            --usecnt_mem_rdaddr <= pgaddr_i;
+            usecnt_mem_wraddr <= pgaddr_i;
 
             -- check if we have any free blocks and drive the nomem_o line.
             if(free_blocks = 0) then
@@ -302,13 +325,41 @@ begin  -- syn
               -- decoding of provided code into low and high part
               l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
               l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
-              usecnt_mem_rdaddr <= pgaddr_i;
+              --usecnt_mem_rdaddr <= pgaddr_i;
               usecnt_mem_wraddr <= pgaddr_i;
               done_o <= '1';            -- assert the done signal early enough
                                         -- so the multiport allocator will also
                                         -- take 3 cycles per request
             end if;
+             
+             if(force_free_i = '1') then
+             
+               idle_o            <= '0';
+               state             <= FREE_RELEASE_PAGE;
+               -- decoding of provided code into low and high part
+               l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+               l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+               --usecnt_mem_rdaddr <= pgaddr_i;
+               usecnt_mem_wraddr <= pgaddr_i;
+               done_o <= '1';            -- assert the done signal early enough
+                                         -- so the multiport allocator will also
+                                         -- take 3 cycles per request
+             end if;
 
+             if(set_usecnt_i = '1') then
+             
+               idle_o            <= '0';
+               state             <= SET_UCNT;
+               usecnt_mem_wrdata <= usecnt_i;
+               usecnt_mem_wraddr <= pgaddr_i;
+               done_o <= '1';            -- assert the done signal early enough
+                                         -- so the multiport allocator will also
+                                         -- take 3 cycles per request
+             end if;
+             
+             
+             
+             
           when ALLOC_LOOKUP_L1 =>
             
             -- wait until read from L0 bitmap memory is complete
@@ -341,36 +392,57 @@ begin  -- syn
             usecnt_mem_wraddr <= l1_first_free & l0_first_free;
             usecnt_mem_wrdata <= usecnt_i;
             usecnt_mem_wr     <= '1';
-
-            pgaddr_valid_o <= '1';
-            free_blocks    <= free_blocks-1;
-
-            state <= IDLE;
+            pgaddr_valid_o    <= '1';
+            free_blocks       <= free_blocks-1;
+            state             <= IDLE;
              --    done_o <= '0';
 
           when FREE_CHECK_USECNT =>
             -- use count = 1 - release the page
-            --    done_o <= '1';
+
             done_o <= '0';
+
+            -- last user, free page
             if(usecnt_mem_rddata = std_logic_vector(to_unsigned(1, usecnt_mem_rddata'length))) then
               state <= FREE_RELEASE_PAGE;
+              
+            -- attempte to free empty page
+            elsif(usecnt_mem_rddata = std_logic_vector(to_unsigned(0, usecnt_mem_rddata'length))) then
+              state <= IDLE;
+              
+            -- there are still users, 
             else
               state <= FREE_DECREASE_UCNT;
             end if;
 
           when FREE_RELEASE_PAGE =>
-            l0_wr_data  <= l0_rd_data or f_onehot_decode(pgaddr_i(4 downto 0));
-            l0_wr       <= '1';
-            l1_bitmap   <= l1_bitmap or f_onehot_decode(pgaddr_i(g_page_addr_bits-1 downto 5));
-            free_blocks <= free_blocks+ 1;
-            state       <= IDLE;
-            --   done_o <= '0';
+            l0_wr_data        <= l0_rd_data or f_onehot_decode(pgaddr_i(4 downto 0));
+            l0_wr             <= '1';
+            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_i(g_page_addr_bits-1 downto 5));
+            free_blocks       <= free_blocks+ 1;
+            usecnt_mem_wrdata <= (others =>'0');
+            usecnt_mem_wr     <= '1';
+            state             <= IDLE;
+            done_o            <= '0';
             
           when FREE_DECREASE_UCNT =>
-            --     done_o <= '0';
+
             usecnt_mem_wrdata <= std_logic_vector(unsigned(usecnt_mem_rddata) - 1);
             usecnt_mem_wr     <= '1';
             state             <= IDLE;
+
+            
+          when SET_UCNT =>  
+            
+            usecnt_mem_wrdata <= usecnt_i;
+            usecnt_mem_wr     <= '1';
+            state             <= IDLE;
+            done_o            <= '0';
+  
+          
+          when others =>
+            state             <= IDLE;
+            done_o            <= '0';
             
         end case;
         
@@ -380,6 +452,9 @@ begin  -- syn
     
   end process;
 
-
+  -- IMPORTANT :
+  -- we need to set the usercnt read address as early as possible
+  -- so that the data is available at the end of the first stata after IDLE
+  usecnt_mem_rdaddr <= pgaddr_i;
 
 end syn;

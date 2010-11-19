@@ -60,6 +60,9 @@ entity swc_packet_mem_read_pump is
     -- Next page address input (from page allocator)
     pgaddr_i : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
     
+    -- end of package
+    pckend_o : out std_logic;
+    
     -- HI indicates that current page is done, and that the parent entity must
     -- select another page in following clock cycles (c_swc_packet_mem_multiply
     -- 2) if it wants to write more data into the memory
@@ -74,6 +77,27 @@ entity swc_packet_mem_read_pump is
     -- data request (request next word)
     dreq_i : in  std_logic;
     
+    -- used to synchronize first read attempt with synch, 
+    -- in other words, it tells the read_pump that this is the
+    -- first attempt to read, and the data that is now availabel (some rubbish)
+    -- is not interesting for us, so itm (reg_out) does not need to be read to 
+    -- the end
+    -- to be HIGH during first cycle of dreq_i HIGH (and also most often preq_i)
+    sync_read_i : in std_logic;
+    
+    -- address in LL SRAM which corresponds to the page address
+    --current_page_addr_o : out std_logic_vector(c_swc_page_addr_width -1 downto 0);
+    ll_read_addr_o : out std_logic_vector(c_swc_page_addr_width -1 downto 0);
+
+    -- data output for LL SRAM - it is the address of the next page or 0xF...F
+    -- if this is the last page of the package
+    --next_page_addr_i    : in std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ll_read_data_i    : in std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    
+    ll_read_req_o : out std_logic;
+    
+    ll_read_valid_data_i : in std_logic;
+   
     -- the data we want: one word= ctrl+data
     d_o    : out std_logic_vector(c_swc_pump_width - 1 downto 0);
 
@@ -82,6 +106,12 @@ entity swc_packet_mem_read_pump is
     
     -- address in FB SRAM from which the FB SRAM word ( c_swc_packet_mem_multiply 
     -- of words=ctrl+data) is to be read in the pump's time slot
+    --------------
+    -- IMPORTANT :
+    --------------
+    -- this address output needs to be multiplexed so that it is 'visible' by
+    -- FBSRAM during the pump's time slot (sync_i is HIGH). It means that 
+    -- the timeslot for reading addr_o by multiplexer is one cycle before sync_i !!!
     addr_o : out std_logic_vector(c_swc_packet_mem_addr_width - 1 downto 0);
     
     -- data read from FB SRAM 
@@ -116,6 +146,7 @@ architecture syn of swc_packet_mem_read_pump is
   
   -- ... we love VHDL ...
   signal allones       : std_logic_vector(63 downto 0);
+  signal zeros         : std_logic_vector(63 downto 0);
   
   -- for the condition needed to increase page-internal address
   signal advance_addr  : std_logic;
@@ -125,18 +156,42 @@ architecture syn of swc_packet_mem_read_pump is
   
   -- seems not used ....
   signal nothing_read : std_logic;
+  
+  -- HI indicates that current page is done, and that the parent entity must
+  -- select another page in following clock cycles (c_swc_packet_mem_multiply
+  -- 2) if it wants to write more data into the memory
+  signal pgend        : std_logic;
+  
+  -- page end
+  signal pckend : std_logic;
+  
+  signal current_page_addr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
 
+  signal next_page_addr    : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  
+  signal ll_read_req       : std_logic;
+
+  signal reading_pck       : std_logic;  
+  
+
+  signal read_valid    : std_logic;
+  
+  signal pgreq_d0      : std_logic;
 begin  -- syn
 
   allones <= (others => '1');
-
+  zeros <= (others => '0');
+  
   -- last word from out_reg read
   cntr_full    <= '1' when cntr = to_unsigned(c_swc_packet_mem_multiply-1, cntr'length)                 else '0';
   
   -- reading new FB SRAM word is needed. it happens in the pump's time slot only if :
   -- * out_reg is empty (used in case there is no request to read data from the pump ????)
   -- * the last word from the out_reg has been read and there host entity wants more !!!)
-  load_out_reg <= '1' when sync_i = '1' and (reg_not_empty = '0' or (cntr_full = '1' and dreq_i = '1')) else '0';
+--  load_out_reg <= '1' when sync_i = '1' and (reg_not_empty = '0' or (cntr_full = '1' and dreq_i = '1')) else '0';
+  load_out_reg <= '1' when (sync_i = '1' and (reg_not_empty = '0' or (cntr_full = '1' and dreq_i = '1')) and pgreq_d0 = '0' and pgreq_i = '0') else '0';
+
+
 
   process (clk_i, rst_n_i)
   begin
@@ -144,9 +199,12 @@ begin  -- syn
       if(rst_n_i = '0') then
         sync_d1 <= '0';
         sync_d0 <= '0';
+        pgreq_d0<= '0';
       else
         sync_d1 <= sync_d0;
         sync_d0 <= sync_i;
+        
+        pgreq_d0<= pgreq_i;
       end if;
     end if;
   end process;
@@ -156,18 +214,34 @@ begin  -- syn
 
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        cntr          <= (others => '0');
-        reg_not_empty <= '0';
-        mem_addr      <= (others => '0');
-        advance_addr  <= '0';
-        nothing_read <= '0';
+        cntr              <= (others => '0');
+        reg_not_empty     <= '0';
+        mem_addr          <= (others => '0');
+        advance_addr      <= '0';
+        nothing_read      <= '0';
+        pgend             <= '0';
+        pckend            <= '0';
+        current_page_addr <= (others => '0');
+        next_page_addr    <= (others => '0');
+        ll_read_req       <= '0';
+        reading_pck       <= '0';
+        read_valid        <= '0';
       else
 
         if(pgreq_i = '1') then
           -- writing FB SRAM web address which consists of page address and page-internal address
           mem_addr(c_swc_packet_mem_addr_width-1 downto c_swc_page_offset_width) <= pgaddr_i;
           mem_addr(c_swc_page_offset_width-1 downto 0)                           <= (others => '0');
-          pgend_o                                                                <= '0';
+          pgend                                                                  <= '0';
+          current_page_addr <= pgaddr_i;
+          pckend            <='0';
+          reading_pck       <='1';
+          
+          -----------------------------
+          reg_not_empty     <= '0'; -- added by ML
+          -----------------------------
+          
+          --ll_read_req       <= '1';
         elsif(sync_d1 = '1' and advance_addr = '1') then
           -- incrementing address inside the same page 
           mem_addr(c_swc_page_offset_width-1 downto 0) <= std_logic_vector(unsigned(mem_addr(c_swc_page_offset_width-1 downto 0)) + 1);
@@ -176,15 +250,38 @@ begin  -- syn
           -- cycles in advance.
           advance_addr <= '0';
           if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0)) then
-            pgend_o <= '1';
+            
+            if(next_page_addr = allones(c_swc_page_addr_width - 1 downto 0)) then
+              pckend <= '1';
+              reading_pck <= '0';
+            else
+              mem_addr(c_swc_packet_mem_addr_width-1 downto c_swc_page_offset_width) <= next_page_addr;
+              mem_addr(c_swc_page_offset_width-1 downto 0)                           <= (others => '0');
+            end if;
+            pgend <= '1';
+          end if;
+          
+          if(mem_addr(c_swc_page_offset_width-1 downto 0) = zeros(c_swc_page_offset_width-1 downto 0)) then
+            current_page_addr <= mem_addr(c_swc_packet_mem_addr_width-1 downto c_swc_page_offset_width);
+            pgend <= '0';
+            
+            -- start requesting next address
+            if(reading_pck = '1') then
+              ll_read_req  <= '1';
+            end if;
+            
           end if;
         end if;
 
         -- we want to read next FB SRAM word and laod it into out_reg (this s our
         -- time slot
-        if(load_out_reg = '1') then
+        if(load_out_reg = '1' and pckend = '0') then
           reg_not_empty <= '1';
           advance_addr  <= '1';
+          
+
+--          next_page_addr <= next_page_addr_i;
+
 
           for i in 0 to c_swc_packet_mem_multiply-1 loop
             -- reading the word and putting it into out_reg array
@@ -200,7 +297,15 @@ begin  -- syn
 
         -- request for the next word from out_reg, increment the counter
         if(dreq_i = '1' and reg_not_empty = '1') then
-          cntr <= cntr + 1;
+        
+          if(sync_read_i = '1') then
+            reg_not_empty <= '0';
+            cntr <= (others=>'0');
+          else
+            cntr <= cntr + 1;  
+          end if;
+        
+          
          
           -- we don't load new stuff from the FB SRAM, so 
           -- this is normal situation, this means that
@@ -214,14 +319,35 @@ begin  -- syn
             out_reg(c_swc_packet_mem_multiply-1) <= (others => 'X');
           end if;
         end if;
+        
+        if(ll_read_valid_data_i = '1' ) then
+          next_page_addr <= ll_read_data_i;
+          ll_read_req  <= '0';
+        end if;
+        
+
+        if(dreq_i = '1' and reg_not_empty = '1' and load_out_reg = '0') then  
+          read_valid <= '1';
+        elsif(load_out_reg = '1' and pckend = '0') then 
+          read_valid <= '1';
+        else
+          read_valid <= '0';
+        end if;
+ 
+        
       end if;
     end if;
 
   end process;
 
 
-  drdy_o <= reg_not_empty;
-  addr_o <= mem_addr;
-  d_o    <= out_reg (0);
+  drdy_o              <= reg_not_empty and read_valid;
+  addr_o              <= mem_addr;
+  d_o                 <= out_reg (0);
+  pgend_o             <= pgend;
+  pckend_o            <= pckend;
+  ll_read_addr_o      <= current_page_addr; -- current_page_addr_o <= current_page_addr;
+  ll_read_req_o       <= ll_read_req;
+
   
 end syn;

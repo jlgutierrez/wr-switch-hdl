@@ -6,7 +6,7 @@ entity swc_block_allocator is
   generic (
     g_num_blocks      : integer := 2048;
     g_log2_num_blocks : integer := 13;
-    g_usecount_bits   : integer := 4;
+    g_usecount_bits   : integer := 4
     );
 
   port (
@@ -18,8 +18,8 @@ entity swc_block_allocator is
     alloc_rq_i        : in  std_logic;
     alloc_size_i      : in  std_logic_vector (7 downto 0);
     alloc_done_o      : out std_logic;
-    alloc_nomem_o: out std_logic;
-    alloc_use_count_i : in  std_logic(g_usecount_bits-1 downto 0);
+    alloc_nomem_o : out std_logic;
+    alloc_use_count_i : in  std_logic_vector(g_usecount_bits-1 downto 0);
     alloc_addr_o      : out std_logic_vector (g_log2_num_blocks-1 downto 0);
 
     free_rq_i   : in  std_logic;
