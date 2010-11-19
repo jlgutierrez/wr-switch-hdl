@@ -10,7 +10,7 @@ module main;
    parameter c_swc_packet_mem_size 	= 65536;
    parameter c_swc_packet_mem_multiply 	= 16;
    parameter c_swc_data_width 		= 16;
-   parameter c_swc_ctrl_width 		= 16;
+   parameter c_swc_ctrl_width 		= 4; //16;
    parameter c_swc_page_size 		= 64;
 
 
@@ -26,32 +26,37 @@ module main;
    reg rst 				= 0;
 
 
-   reg [c_swc_packet_mem_multiply - 1 : 0] sync = 1;
-   
+   reg  [c_swc_packet_mem_multiply - 1 : 0]               sync = 1;
  
-   reg [c_swc_num_ports-1 : 0] wr_pagereq =0;
-   wire [c_swc_num_ports-1 : 0] wr_pageend;
-   reg [c_swc_num_ports * c_swc_page_addr_width - 1 : 0] wr_pageaddr =0;
-
-   reg [c_swc_num_ports-1 : 0] rd_pagereq =0;
-   wire [c_swc_num_ports-1 : 0] rd_pageend;
-   reg [c_swc_num_ports * c_swc_page_addr_width - 1 : 0] rd_pageaddr =0;
-
+   reg  [c_swc_num_ports-1 : 0]                           wr_pagereq =0;
+   reg  [c_swc_num_ports-1 : 0]                           wr_pckstart =0;
    
-   reg [c_swc_num_ports * c_swc_ctrl_width - 1 : 0] wr_ctrl = 0;
-   reg [c_swc_num_ports * c_swc_data_width - 1 : 0] wr_data = 0;
-   
-   reg [c_swc_num_ports-1 : 0] wr_drdy  =0;
-   
-   wire [c_swc_num_ports-1 : 0] wr_full  ;
-   reg [c_swc_num_ports-1 : 0] wr_flush  =0;
+   wire [c_swc_num_ports-1 : 0]                           wr_pageend;
+   reg  [c_swc_num_ports * c_swc_page_addr_width - 1 : 0] wr_pageaddr =0;
 
-   reg [c_swc_num_ports-1 : 0] rd_dreq =0;
-   wire [c_swc_num_ports-1 : 0] rd_drdy;
-   wire [c_swc_num_ports * c_swc_ctrl_width - 1 : 0] rd_ctrl;
-   wire [c_swc_num_ports * c_swc_data_width - 1 : 0] rd_data;
+   reg  [c_swc_num_ports-1 : 0]                           rd_pagereq =0;
 
    
+   wire [c_swc_num_ports-1 : 0]                           rd_pageend;
+   reg  [c_swc_num_ports * c_swc_page_addr_width - 1 : 0] rd_pageaddr =0;
+
+   
+   reg  [c_swc_num_ports * c_swc_ctrl_width - 1 : 0]      wr_ctrl = 0;
+   reg  [c_swc_num_ports * c_swc_data_width - 1 : 0]      wr_data = 0;
+   
+   reg  [c_swc_num_ports-1 : 0]                           wr_drdy  =0;
+   
+   wire [c_swc_num_ports-1 : 0]                           wr_full  ;
+   reg  [c_swc_num_ports-1 : 0]                           wr_flush  =0;
+
+   reg  [c_swc_num_ports-1 : 0]                           rd_dreq =0;
+   wire [c_swc_num_ports-1 : 0]                           rd_drdy;
+   reg  [c_swc_num_ports-1 : 0]                           rd_sync_read =0;
+   wire [c_swc_num_ports * c_swc_ctrl_width - 1 : 0]      rd_ctrl;
+   wire [c_swc_num_ports * c_swc_data_width - 1 : 0]      rd_data;
+   
+   wire [c_swc_num_ports-1 : 0]                           rd_pckend;
+   wire [c_swc_num_ports-1 : 0]                           rd_page_end;
 
   
    swc_packet_mem DUT(
@@ -61,19 +66,25 @@ module main;
 
 	.wr_pagereq_i  (wr_pagereq),
 	.wr_pageaddr_i (wr_pageaddr),
- 	.wr_pageend_o (wr_pageend),
+	.wr_pckstart_i (wr_pckstart),
+ 	.wr_pageend_o  (wr_pageend),
 
-	.wr_ctrl_i (wr_ctrl),
-	.wr_data_i (wr_data),
+	.wr_ctrl_i     (wr_ctrl),
+	.wr_data_i     (wr_data),
 
-	.wr_drdy_i (wr_drdy),
-	.wr_full_o (wr_full),
-	.wr_flush_i (wr_flush),
-
-	.rd_dreq_i (rd_dreq),
- 	.rd_drdy_o (rd_drdy),
-	.rd_data_o (rd_data),
-	.rd_ctrl_o (rd_ctrl)
+	.wr_drdy_i     (wr_drdy),
+	.wr_full_o     (wr_full),
+	.wr_flush_i    (wr_flush),
+  
+  .rd_pagereq_i  (rd_pagereq),
+  .rd_pageaddr_i (rd_pageaddr),
+  .rd_pageend_o  (rd_page_end),
+  .rd_pckend_o   (rd_pckend), 
+	.rd_dreq_i     (rd_dreq),
+ 	.rd_sync_read_i(rd_sync_read),
+ 	.rd_drdy_o     (rd_drdy),
+	.rd_data_o     (rd_data),
+	.rd_ctrl_o     (rd_ctrl)
     );
    
    
@@ -140,6 +151,7 @@ task pktmem_write;
       begin : rd_body
 	 integer k,n;
 	 
+	 
 	 for (n=0;n<count;n=n+1) begin
 	  //  $display("read n=%d", n);
 	    
@@ -152,7 +164,12 @@ task pktmem_write;
 	   `array_copy(ctrl[k], c_swc_ctrl_width-1, 0, rd_ctrl, c_swc_ctrl_width * channel);
 
 	    $display("read data %x", data[k]);
+	    
+      if(n==0) rd_sync_read<=1;
+	    
 	    `wait_cycles(1);
+      
+      rd_sync_read<=0;
 	    
 	 end
       end
@@ -183,11 +200,25 @@ task pktmem_write;
       
       
       $display("ML: writing ......");
-      for (i=3;i<62;i=i+1) pktmem_write(0, i, 'hffff);
+      wr_pageaddr <= 4;
+      wr_pckstart[0] <=1;
+      wr_pagereq[0]  <= 1;
+      for (i=3;i<200;i=i+1) begin
+        
+         if(wr_pageend[0] & !wr_pagereq[0]) begin
+           wr_pagereq[0]  <= 1;
+           wr_pageaddr <= wr_pageaddr + 1;
+         end
+         
+         pktmem_write(0, i, 'hffff);
+         
+         wr_pckstart[0] <= 0;
+         wr_pagereq[0] <= 0;
+      end
       
-      for (i=3;i<62;i=i+1) pktmem_write(1, i, 'hffff);
+      //for (i=3;i<62;i=i+1) pktmem_write(1, i, 'hffff);
       
-      for (i=3;i<62;i=i+1) pktmem_write(i%16, i, 'hffff);
+      //for (i=3;i<62;i=i+1) pktmem_write(i%16, i, 'hffff);
       
       $display("ML: flusing writing ......");
       pktmem_write_flush(0);
@@ -198,7 +229,13 @@ task pktmem_write;
       `wait_cycles(100);
       
       $display("ML: reading ......");
-      pktmem_read(0, 60, cbuf, dbuf, 0);    
+      
+      rd_pageaddr <= 4;
+      rd_pagereq   <= 11'b11111111111;
+      `wait_cycles(1);
+      rd_pagereq   <=0;
+            
+      pktmem_read(0, 60, dbuf,cbuf, 0);    
    end
 	 
    endmodule // main
