@@ -85,7 +85,6 @@ architecture syn of swc_pck_transfer_arbiter is
      -- signals outputed from Pck Transfer Input (PTI)
      -- before MUX !!!!
      ---------------------------------------------------------------------------
---     signal pto_transfer_pck  : std_logic_vector(c_swc_num_ports - 1 downto 0);
      signal pto_pageaddr      : t_pageaddr_array;
      signal pto_output_mask   : t_mask_array;
      signal pto_read_mask     : t_mask_array;
@@ -101,24 +100,6 @@ architecture syn of swc_pck_transfer_arbiter is
      signal pti_pageaddr            : t_pageaddr_array;
      signal pti_prio                : t_prio_array;
      signal pti_pck_size      : t_pck_size_array;     
-     
-     
-     
---     signal rd_pageaddr  : t_pageaddr;
----     signal rd_prio      : t_prio;
---     signal rd_mask      : t_mask;
-
-     
-     
---     signal transfer_pck : std_logic;
---     signal transfer_ack : std_logic;
---     signal pageaddr     : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
---     signal prio         : std_logic_vector(c_swc_prio_width - 1 downto 0);
---     signal read_mask    : std_logic_vector(c_swc_num_ports - 1 downto 0); 
---     signal output_mask  : std_logic_vector(c_swc_num_ports - 1 downto 0); 
---     signal transfer_data_valid : std_logic;
-     
-     
      signal sync_sreg    : std_logic_vector(c_swc_num_ports - 1 downto 0);
      signal sync_cntr    : integer range 0 to c_swc_num_ports - 1;
      signal sync_cntr_ack : integer range 0 to c_swc_num_ports-1;
@@ -159,75 +140,23 @@ begin --arch
 
 
 
-
+  -- multiplex mask from input to output
   multimux_out : process(sync_cntr,pto_output_mask,pto_pageaddr,pto_prio)
   begin 
   
+     for i in 0 to c_swc_num_ports - 1 loop  
+       pti_transfer_data_valid(i) <= pto_output_mask((sync_cntr + i) mod c_swc_num_ports)(i);
+       pti_pageaddr           (i) <= pto_pageaddr   ((sync_cntr + i) mod c_swc_num_ports);
+       pti_prio               (i) <= pto_prio       ((sync_cntr + i) mod c_swc_num_ports);
+       pti_pck_size           (i) <= pto_pck_size   ((sync_cntr + i) mod c_swc_num_ports);
+     end loop;
         
-           pti_transfer_data_valid(0) <= pto_output_mask((sync_cntr + 0) mod c_swc_num_ports)(0);
-           pti_pageaddr           (0) <= pto_pageaddr   ((sync_cntr + 0) mod c_swc_num_ports);
-           pti_prio               (0) <= pto_prio       ((sync_cntr + 0) mod c_swc_num_ports);
-           pti_pck_size           (0) <= pto_pck_size   ((sync_cntr + 0) mod c_swc_num_ports);
-
-           pti_transfer_data_valid(1) <= pto_output_mask((sync_cntr + 1) mod c_swc_num_ports)(1);
-           pti_pageaddr           (1) <= pto_pageaddr   ((sync_cntr + 1) mod c_swc_num_ports);
-           pti_prio               (1) <= pto_prio       ((sync_cntr + 1) mod c_swc_num_ports);
-           pti_pck_size           (1) <= pto_pck_size   ((sync_cntr + 1) mod c_swc_num_ports);
-
-           pti_transfer_data_valid(2) <= pto_output_mask((sync_cntr + 2) mod c_swc_num_ports)(2);
-           pti_pageaddr           (2) <= pto_pageaddr   ((sync_cntr + 2) mod c_swc_num_ports);
-           pti_prio               (2) <= pto_prio       ((sync_cntr + 2) mod c_swc_num_ports);
-           pti_pck_size           (2) <= pto_pck_size   ((sync_cntr + 2) mod c_swc_num_ports);
-           
-           pti_transfer_data_valid(3) <= pto_output_mask((sync_cntr + 3) mod c_swc_num_ports)(3);
-           pti_pageaddr           (3) <= pto_pageaddr   ((sync_cntr + 3) mod c_swc_num_ports);
-           pti_prio               (3) <= pto_prio       ((sync_cntr + 3) mod c_swc_num_ports);
-           pti_pck_size           (3) <= pto_pck_size   ((sync_cntr + 3) mod c_swc_num_ports);
-
-           pti_transfer_data_valid(4) <= pto_output_mask((sync_cntr + 4) mod c_swc_num_ports)(4);
-           pti_pageaddr           (4) <= pto_pageaddr   ((sync_cntr + 4) mod c_swc_num_ports);
-           pti_prio               (4) <= pto_prio       ((sync_cntr + 4) mod c_swc_num_ports);
-           pti_pck_size           (4) <= pto_pck_size   ((sync_cntr + 4) mod c_swc_num_ports);
-
-           pti_transfer_data_valid(5) <= pto_output_mask((sync_cntr + 5) mod c_swc_num_ports)(5);
-           pti_pageaddr           (5) <= pto_pageaddr   ((sync_cntr + 5) mod c_swc_num_ports);
-           pti_prio               (5) <= pto_prio       ((sync_cntr + 5) mod c_swc_num_ports);
-           pti_pck_size           (5) <= pto_pck_size   ((sync_cntr + 5) mod c_swc_num_ports);
-
-           pti_transfer_data_valid(6) <= pto_output_mask((sync_cntr + 6) mod c_swc_num_ports)(6);
-           pti_pageaddr           (6) <= pto_pageaddr   ((sync_cntr + 6) mod c_swc_num_ports);
-           pti_prio               (6) <= pto_prio       ((sync_cntr + 6) mod c_swc_num_ports);
-           pti_pck_size           (6) <= pto_pck_size   ((sync_cntr + 6) mod c_swc_num_ports);          
-          
-           pti_transfer_data_valid(7) <= pto_output_mask((sync_cntr + 7) mod c_swc_num_ports)(7);
-           pti_pageaddr           (7) <= pto_pageaddr   ((sync_cntr + 7) mod c_swc_num_ports);
-           pti_prio               (7) <= pto_prio       ((sync_cntr + 7) mod c_swc_num_ports);
-           pti_pck_size           (7) <= pto_pck_size   ((sync_cntr + 7) mod c_swc_num_ports);
-
-           pti_transfer_data_valid(8) <= pto_output_mask((sync_cntr + 8) mod c_swc_num_ports)(8);
-           pti_pageaddr           (8) <= pto_pageaddr   ((sync_cntr + 8) mod c_swc_num_ports);
-           pti_prio               (8) <= pto_prio       ((sync_cntr + 8) mod c_swc_num_ports);
-           pti_pck_size           (8) <= pto_pck_size   ((sync_cntr + 8) mod c_swc_num_ports);
-
-           pti_transfer_data_valid(9) <= pto_output_mask((sync_cntr + 9) mod c_swc_num_ports)(9);
-           pti_pageaddr           (9) <= pto_pageaddr   ((sync_cntr + 9) mod c_swc_num_ports);
-           pti_prio               (9) <= pto_prio       ((sync_cntr + 9) mod c_swc_num_ports);
-           pti_pck_size           (9) <= pto_pck_size   ((sync_cntr + 9) mod c_swc_num_ports);
-
-
-           pti_transfer_data_valid(10) <= pto_output_mask((sync_cntr + 10) mod c_swc_num_ports)(10);
-           pti_pageaddr           (10) <= pto_pageaddr   ((sync_cntr + 10) mod c_swc_num_ports);
-           pti_prio               (10) <= pto_prio       ((sync_cntr + 10) mod c_swc_num_ports);
-           pti_pck_size           (10) <= pto_pck_size   ((sync_cntr + 10) mod c_swc_num_ports);
-
   end process;
-     
-     
---    multimux_in : process(sync_cntr_ack,pti_transfer_data_ack,pto_read_mask)
---    begin
+
       
-   test : process (clk_i, rst_n_i)
-   begin
+  -- we get ack from output ports and translate it into masks' bits in input ports
+  multidemux_in : process (clk_i, rst_n_i)
+  begin
      if rising_edge(clk_i) then
        if(rst_n_i = '0') then
        
@@ -238,116 +167,29 @@ begin --arch
        else
 
 
-         pto_read_mask((sync_cntr_ack + 0)  mod c_swc_num_ports)(0)                                  <= pti_transfer_data_ack(0);  
-         pto_read_mask((sync_cntr_ack + 0)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (0 + 1)) <= (others => '0');  
-         
-         pto_read_mask((sync_cntr_ack + 1)  mod c_swc_num_ports)((1 - 1))                            <=  '0';  
-         pto_read_mask((sync_cntr_ack + 1)  mod c_swc_num_ports)( 1)                                 <= pti_transfer_data_ack(1);  
-         pto_read_mask((sync_cntr_ack + 1)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (1 + 1)) <= (others => '0');  
-
-         pto_read_mask((sync_cntr_ack + 2)  mod c_swc_num_ports)((2 - 1) downto 0)                   <=  (others => '0'); 
-         pto_read_mask((sync_cntr_ack + 2)  mod c_swc_num_ports)( 2)                                 <=  pti_transfer_data_ack(2);  
-         pto_read_mask((sync_cntr_ack + 2)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (2 + 1)) <=  (others => '0');
-
-
-         pto_read_mask((sync_cntr_ack + 3)  mod c_swc_num_ports)((3 - 1) downto 0)                   <=  (others => '0');
-         pto_read_mask((sync_cntr_ack + 3)  mod c_swc_num_ports)( 3)                                 <=  pti_transfer_data_ack(3);  
-         pto_read_mask((sync_cntr_ack + 3)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (3 + 1)) <=  (others => '0');
-
-         pto_read_mask((sync_cntr_ack + 4)  mod c_swc_num_ports)((4 - 1) downto 0)                   <=  (others => '0');
-         pto_read_mask((sync_cntr_ack + 4)  mod c_swc_num_ports)(4)                                  <=  pti_transfer_data_ack(4);  
-         pto_read_mask((sync_cntr_ack + 4)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (4 + 1)) <=  (others => '0');
-
-         pto_read_mask((sync_cntr_ack + 5)  mod c_swc_num_ports)((5 - 1) downto 0)                   <=  (others => '0');
-         pto_read_mask((sync_cntr_ack + 5)  mod c_swc_num_ports)(5)                                  <=  pti_transfer_data_ack(5);  
-         pto_read_mask((sync_cntr_ack + 5)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (5 + 1)) <=  (others => '0');
-         
-         
-         pto_read_mask((sync_cntr_ack + 6)  mod c_swc_num_ports)((6 - 1) downto 0)                   <=  (others => '0');
-         pto_read_mask((sync_cntr_ack + 6)  mod c_swc_num_ports)(6)                                  <=  pti_transfer_data_ack(6); 
-         pto_read_mask((sync_cntr_ack + 6)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (6 + 1)) <=  (others => '0');
-         
-          
-         pto_read_mask((sync_cntr_ack + 7)  mod c_swc_num_ports)((7 - 1) downto 0)                   <=  (others => '0'); 
-         pto_read_mask((sync_cntr_ack + 7)  mod c_swc_num_ports)(7)                                  <=  pti_transfer_data_ack(7); 
-         pto_read_mask((sync_cntr_ack + 7)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (7 + 1)) <=  (others => '0');
-          
-         pto_read_mask((sync_cntr_ack + 8)  mod c_swc_num_ports)((8 - 1) downto 0)                   <=  (others => '0'); 
-         pto_read_mask((sync_cntr_ack + 8)  mod c_swc_num_ports)(8)                                  <=  pti_transfer_data_ack(8); 
-         pto_read_mask((sync_cntr_ack + 8)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (8 + 1)) <= (others => '0');         
-         
-         pto_read_mask((sync_cntr_ack + 9)  mod c_swc_num_ports)((9 - 1) downto 0)                   <=  (others => '0'); 
-         pto_read_mask((sync_cntr_ack + 9)  mod c_swc_num_ports)(9)                                  <=  pti_transfer_data_ack(9); 
-         pto_read_mask((sync_cntr_ack + 9)  mod c_swc_num_ports)((9 + 1))                            <=  '0';
-                  
-         pto_read_mask((sync_cntr_ack +10)  mod c_swc_num_ports)((10 - 1) downto 0)                  <=  (others => '0');
-         pto_read_mask((sync_cntr_ack +10)  mod c_swc_num_ports)(10)                                 <=  pti_transfer_data_ack(10);
-         
+         for i in 0 to c_swc_num_ports-1 loop   
+           
+           if(i = 1) then
+             pto_read_mask((sync_cntr_ack + i)  mod c_swc_num_ports)((i - 1))                            <= '0';  
+           elsif(i > 1) then
+             pto_read_mask((sync_cntr_ack + i)  mod c_swc_num_ports)((i - 1) downto 0)                   <= (others => '0');
+           end if;
+           
+           pto_read_mask((sync_cntr_ack + i)  mod c_swc_num_ports)( i)                                   <= pti_transfer_data_ack(i);  
+           
+           if(i < c_swc_num_ports - 2) then
+             pto_read_mask((sync_cntr_ack + i)  mod c_swc_num_ports)(c_swc_num_ports - 1 downto (i + 1)) <= (others => '0'); 
+           elsif(i = c_swc_num_ports - 2) then
+             pto_read_mask((sync_cntr_ack + i)  mod c_swc_num_ports)((i + 1))                            <=  '0';
+           end if;
+            
+         end loop;
+        
       end if;    
     end if;
          
---         pto_read_mask(sync_cntr_ack + 0)(c_swc_num_ports-1  downto 1)  <= (others =>'0');
    end process;  
    
-      
-     
---  gen_mux : for i in 0 to c_swc_num_ports-1 generate
---    multimux_out : process(sync_cntr,pto_output_mask,pto_pageaddr,pto_prio)
---    begin
---
---      for i in 0 to c_swc_num_ports-1 loop    
---
---       if(((sync_cntr + i) mod c_swc_num_ports) < c_swc_num_ports) then
---  
---           pti_transfer_data_valid(i) <= pto_output_mask((sync_cntr + i) mod c_swc_num_ports)(i);
---           pti_pageaddr           (i) <= pto_pageaddr   ((sync_cntr + i) mod c_swc_num_ports);
---           pti_prio               (i) <= pto_prio       ((sync_cntr + i) mod c_swc_num_ports);
---           
---        else
---          
---           pti_transfer_data_valid(i)       <= '0';
---           pti_pageaddr           (i)       <= (others =>'0'); 
-----           pti_prio               (i)       <= (others =>'0');
---
---        end if;
---      end loop;
---    end process;
---  end generate gen_mux;
-
---gen_mux : for i in 0 to c_swc_num_ports-1 generate
---  
---           pti_transfer_data_valid(i) <= pto_output_mask((sync_cntr + i) mod c_swc_num_ports)(i);
---           pti_pageaddr           (i) <= pto_pageaddr   ((sync_cntr + i) mod c_swc_num_ports);
---           pti_prio               (i) <= pto_prio       ((sync_cntr + i) mod c_swc_num_ports);
---           
---end generate gen_mux;
---
---gen_mux_1: for i in 0 to c_swc_num_ports-1 generate    
---
---        pto_read_mask((sync_cntr_ack + i) mod c_swc_num_ports)(i)  <=  pti_transfer_data_ack(i);  
---           
---end generate gen_mux_1;
-
-  
---  gen_mux_1: for i in 0 to c_swc_num_ports-1 generate    
---    multimux_in : process(sync_cntr_ack,pti_transfer_data_ack)
---    begin
---  
---    for i in 0 to c_swc_num_ports-1 loop    
---
---         if(((sync_cntr_ack + i) mod c_swc_num_ports ) < c_swc_num_ports ) then
---
---           pto_read_mask((sync_cntr_ack + i) mod c_swc_num_ports)(i)  <=  pti_transfer_data_ack(i);  
---           
---        else
---          
---           pto_read_mask((sync_cntr_ack + i) mod c_swc_num_ports)(i)  <=  '0';  
---
---        end if;
---      end loop;
---   end process;
---end generate gen_mux_1;
-      
   gen_input : for i in 0 to c_swc_num_ports-1 generate
     TRANSFER_INPUT : swc_pck_transfer_input 
     port map (

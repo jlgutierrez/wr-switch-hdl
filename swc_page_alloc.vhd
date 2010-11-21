@@ -205,6 +205,7 @@ architecture syn of swc_page_allocator is
   signal usecnt_mem_rddata : std_logic_vector(g_use_count_bits-1 downto 0);
   signal usecnt_mem_wrdata : std_logic_vector(g_use_count_bits-1 downto 0);
 
+  signal pgaddr_to_free   : std_logic_vector(g_page_addr_bits -1 downto 0);
   
 begin  -- syn
 
@@ -321,6 +322,9 @@ begin  -- syn
             -- got page release request
             if(free_i = '1') then
               idle_o            <= '0';
+              
+              pgaddr_to_free    <= pgaddr_i;
+              
               state             <= FREE_CHECK_USECNT;
               -- decoding of provided code into low and high part
               l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
@@ -335,6 +339,9 @@ begin  -- syn
              if(force_free_i = '1') then
              
                idle_o            <= '0';
+               
+               pgaddr_to_free    <= pgaddr_i;
+               
                state             <= FREE_RELEASE_PAGE;
                -- decoding of provided code into low and high part
                l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
@@ -416,9 +423,12 @@ begin  -- syn
             end if;
 
           when FREE_RELEASE_PAGE =>
-            l0_wr_data        <= l0_rd_data or f_onehot_decode(pgaddr_i(4 downto 0));
+--            l0_wr_data        <= l0_rd_data or f_onehot_decode(pgaddr_i(4 downto 0));
+            l0_wr_data        <= l0_rd_data or f_onehot_decode(pgaddr_to_free(4 downto 0));
             l0_wr             <= '1';
-            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_i(g_page_addr_bits-1 downto 5));
+            
+            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_to_free(g_page_addr_bits-1 downto 5));
+--            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_i(g_page_addr_bits-1 downto 5));
             free_blocks       <= free_blocks+ 1;
             usecnt_mem_wrdata <= (others =>'0');
             usecnt_mem_wr     <= '1';

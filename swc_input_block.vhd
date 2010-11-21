@@ -343,12 +343,13 @@ begin --arch
             -- of the fram eto be finished, the transfer in normal case should
             -- take 2 cycles
             
-            if(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '1' and rtu_drop_i = '1') then
+            if(rtu_rsp_valid_i = '1'  and rtu_drop_i = '1') then
             
                -- if we've got RTU decision to drop, we don't give a damn about 
                -- anything else, just pretend to be receiving the msg
-               rtu_rsp_ack                  <= '1';
-               pck_state                    <= S_DROP_PCK;
+               tx_dreq                  <= '1';
+               rtu_rsp_ack              <= '1';
+               pck_state                <= S_DROP_PCK;
             
             elsif(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '1' and mpm_full_i = '0' and pckstart_page_in_advance = '1' ) then
 
