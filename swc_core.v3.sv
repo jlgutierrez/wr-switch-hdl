@@ -83,7 +83,9 @@ module main;
       repeat(3) @(posedge clk);
       rst_n  = 1;
    end
-
+ 
+ 
+   integer ports_read = 0;
    
    swc_core 
     DUT (
@@ -262,27 +264,69 @@ module main;
        begin : wait_body
     integer i;
     integer k; // for the macro array_copy()
+
     `array_copy(rtu_dst_port_mask,(chan+1)*`c_wrsw_num_ports  - 1, chan*`c_wrsw_num_ports,  mask ,0); 
     `array_copy(rtu_prio         ,(chan+1)*`c_wrsw_prio_width - 1, chan*`c_wrsw_prio_width, prio, 0); 
     
-//    rtu_dst_port_mask[(chan+1)*`c_wrsw_num_ports  : `c_wrsw_num_ports*chan]  = mask; 
-//    rtu_prio         [(chan+1)*`c_wrsw_prio_width : `c_wrsw_prio_width*chan] = prio;
     rtu_drop         [ chan ]                                                = drop;          
     rtu_rsp_valid    [ chan ]                                                = valid;
  
        end
     endtask // wait_cycles         
+       
+   task send_pck;
+      input ether_header_t            hdr; 
+      input int                       payload[]; 
+      input int                       length;
+      input [31:0]                    port;
+      input                           drop;
+      input [`c_wrsw_num_ports - 1:0] prio;
+      input [`c_wrsw_num_ports - 1:0] mask;    
+      
+      begin : send_pck_body            
+
+        set_rtu_rsp(port,1,drop,prio,mask);  
+        
+        $display("Sending: port = %d, len = %d, drop = %d, prio = %d, mask = %x",port,length, drop, prio, mask);
+      case(port)
+         0: test_input_block_0.send(hdr, payload, length);
+         1: test_input_block_1.send(hdr, payload, length);
+         2: test_input_block_2.send(hdr, payload, length);
+         3: test_input_block_3.send(hdr, payload, length);
+         4: test_input_block_4.send(hdr, payload, length);
+         5: test_input_block_5.send(hdr, payload, length);
+         6: test_input_block_6.send(hdr, payload, length);
+         7: test_input_block_7.send(hdr, payload, length);
+         8: test_input_block_8.send(hdr, payload, length);
+         9: test_input_block_9.send(hdr, payload, length);
+         10:test_input_block_10.send(hdr, payload, length);
+         default: $display("ERROR: Wrong port number !!!");
+       endcase   
+         
+        
+                   
+      end
+   endtask
                    
    initial begin
       ether_header_t hdr;
       int buffer[1024];
       int i;
+      int port = 0;
       
       wait(test_input_block_0.ready);
+      wait(test_input_block_1.ready);
+      wait(test_input_block_2.ready);
       wait(test_input_block_3.ready);
+      wait(test_input_block_4.ready);
+      wait(test_input_block_5.ready);
       wait(test_input_block_6.ready);
+      wait(test_input_block_7.ready);
+      wait(test_input_block_8.ready);
       wait(test_input_block_9.ready);
+      wait(test_input_block_10.ready);
       
+      ports_read = 1;
       
       hdr.src 	       = 'h123456789abcdef;
       hdr.dst 	       = 'hcafeb1badeadbef;
@@ -293,17 +337,17 @@ module main;
       hdr.timestamp_f  = 4;
       hdr.port_id      = 5;
       
-      for(i=0;i<1000;i++)
+      for(i=0;i<2000;i++)
 	        buffer[i]      = i;
 
-//    
-//    task set_rtu_rsp;
-//       input [31:0]                    chan;
-//       input                           valid;
-//       input                           drop;
-//       input [`c_wrsw_num_ports - 1:0] prio;
-//       input [`c_wrsw_num_ports - 1:0] mask;
-//       begin : wait_body
+
+//input ether_header_t            hdr, 
+//input int                       payload[], 
+//input int                       length
+//input [31:0]                    port;
+//input                           drop;
+//input [`c_wrsw_num_ports - 1:0] prio;
+//input [`c_wrsw_num_ports - 1:0] mask; 
 
     
       wait_cycles(50);
@@ -311,399 +355,125 @@ module main;
 //////////////// input port = 0  ////////////////
 
       hdr.src 	       = 'h123456789abcde0;
-
       hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(0,1,0,2,'h7FF);  
-      test_input_block_0.send(hdr, buffer, 901);
-
-      hdr.dst 	       = 'hcafeb1badeadbe1;      
-      set_rtu_rsp(0,1,0,2,'h7FF);  
-      test_input_block_0.send(hdr, buffer, 202);
-
-      hdr.dst 	       = 'hcafeb1badeadbe2;      
-      set_rtu_rsp(0,1,0,2,'h7FF);  
-      test_input_block_0.send(hdr, buffer, 203);
-    
-      hdr.dst 	       = 'hcafeb1badeadbe3;      
-      set_rtu_rsp(0,1,0,2,'h7FF);  
-      test_input_block_0.send(hdr, buffer, 204);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe4;      
-      set_rtu_rsp(0,1,0,2,'h7FF);  
-      test_input_block_0.send(hdr, buffer, 205);
-       
-      hdr.dst 	       = 'hcafeb1badeadbe5;         
-      set_rtu_rsp(0,1,0,2,'h7FF);  
-      test_input_block_0.send(hdr, buffer, 206);
-
-
-//////////////// input port = 3  ////////////////
-      hdr.src 	       = 'h123456789abcde3;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(3,1,0,2,'h7FF);  
-      test_input_block_3.send(hdr, buffer, 931);
-
-      hdr.dst 	       = 'hcafeb1badeadbe1;
-      set_rtu_rsp(3,1,0,2,'h7FF);  
-      test_input_block_3.send(hdr, buffer, 232);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe2;
-      set_rtu_rsp(3,1,0,2,'h7FF);  
-      test_input_block_3.send(hdr, buffer, 233);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe3;
-      set_rtu_rsp(3,1,0,2,'h7FF);  
-      test_input_block_3.send(hdr, buffer, 234);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe4;
-      set_rtu_rsp(3,1,0,2,'h7FF);  
-      test_input_block_3.send(hdr, buffer, 235);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe5;
-      set_rtu_rsp(3,1,0,2,'h7FF);  
-      test_input_block_3.send(hdr, buffer, 236);
-      
-//////////////// input port = 6  ////////////////
-      hdr.src 	       = 'h123456789abcde6;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(6,1,0,2,'h7FF);  
-      test_input_block_6.send(hdr, buffer, 761);
-
-      hdr.dst 	       = 'hcafeb1badeadbe1;
-      set_rtu_rsp(6,1,0,2,'h7FF);  
-      test_input_block_6.send(hdr, buffer, 262);
-
-      hdr.dst 	       = 'hcafeb1badeadbe2;
-      set_rtu_rsp(6,1,0,2,'h7FF);  
-      test_input_block_6.send(hdr, buffer, 263);
-      
-      
-      hdr.dst 	       = 'hcafeb1badeadbe3;
-      set_rtu_rsp(6,1,0,2,'h7FF);  
-      test_input_block_6.send(hdr, buffer, 264);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe4;
-      set_rtu_rsp(6,1,0,2,'h7FF);  
-      test_input_block_6.send(hdr, buffer, 265);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe5;
-      set_rtu_rsp(6,1,0,2,'h7FF);  
-      test_input_block_6.send(hdr, buffer, 266);
-      
-      
-//////////////// input port = 9  ////////////////
-      hdr.src 	       = 'h123456789abcde9;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(9,1,0,2,'h7FF);  
-      test_input_block_9.send(hdr, buffer, 991);
-
-      hdr.dst 	       = 'hcafeb1badeadbe1;
-      set_rtu_rsp(9,1,0,2,'h7FF);  
-      test_input_block_9.send(hdr, buffer, 292);
- 
-      hdr.dst 	       = 'hcafeb1badeadbe2;
-      set_rtu_rsp(9,1,0,2,'h7FF);  
-      test_input_block_9.send(hdr, buffer, 293);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe3;
-      set_rtu_rsp(9,1,0,2,'h7FF);  
-      test_input_block_9.send(hdr, buffer, 294);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe4;
-      set_rtu_rsp(9,1,0,2,'h7FF);  
-      test_input_block_9.send(hdr, buffer, 295);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe5;
-      set_rtu_rsp(9,1,0,2,'h7FF);  
-      test_input_block_9.send(hdr, buffer, 296);
-      
-      
-   end
-
-
-
-//////////////////////////////////////////////////////////
-   initial begin
-      ether_header_t hdr;
-      int buffer[1024];
-      int i;
       
 
-      wait(test_input_block_1.ready);
-      wait(test_input_block_4.ready);
-      wait(test_input_block_7.ready);
-      wait(test_input_block_10.ready);
+      for(i=200;i<1250;i=i+50)
+      begin
+        
+        send_pck(hdr,buffer, i, port, (i/50)%20,  (i/50)%7,(i/50)%11);
+        if(port == 3)
+          port = 0;
+        else
+          port++;
+        
+      end
       
-      
-      hdr.src 	       = 'h123456789abcdef;
-      hdr.dst 	       = 'hcafeb1badeadbef;
-      hdr.ethertype    = 1234;
-      hdr.is_802_1q    = 0;
-      hdr.oob_type     = `OOB_TYPE_RXTS;
-      hdr.timestamp_r  = 10000;
-      hdr.timestamp_f  = 4;
-      hdr.port_id      = 5;
-      
-      for(i=0;i<1000;i++)
-	        buffer[i]      = i;
-
-//    
-//    task set_rtu_rsp;
-//       input [31:0]                    chan;
-//       input                           valid;
-//       input                           drop;
-//       input [`c_wrsw_num_ports - 1:0] prio;
-//       input [`c_wrsw_num_ports - 1:0] mask;
-//       begin : wait_body
-
-    
-      wait_cycles(260);
-
-
-//////////////// input port = 1  ////////////////
-      hdr.src 	       = 'h123456789abcde1;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(1,1,0,2,'h7FF);  
-//      test_input_block_1.simulate_tx_throttling(1, 10);
-
-//      test_input_block_0.simulate_rx_abort(1,80);
-//      test_input_block_1.simulate_tx_error(1,100);
-//      test_input_block_1.send(hdr, buffer, 911);
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(1,1,0,2,'h7FF);  
-      test_input_block_1.send(hdr, buffer, 212);
-
-      hdr.dst 	       = 'hcafeb1badeadbe1;
-      set_rtu_rsp(1,1,0,2,'h7FF);  
-      test_input_block_1.send(hdr, buffer, 213);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe2;
-      set_rtu_rsp(1,1,0,2,'h7FF);  
-      test_input_block_1.send(hdr, buffer, 214);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe3;
-      set_rtu_rsp(1,1,0,2,'h7FF);  
-      test_input_block_1.send(hdr, buffer, 215);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe4;
-      set_rtu_rsp(1,1,0,2,'h002);  
-      test_input_block_1.send(hdr, buffer, 216);
-
-//////////////// input port = 4  ////////////////
-      hdr.src 	       = 'h123456789abcde4;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(4,1,0,2,'h7FF);  
-      test_input_block_4.send(hdr, buffer, 941);
-
-      hdr.dst 	       = 'hcafeb1badeadbe1;
-      set_rtu_rsp(4,1,0,2,'h7FF);  
-      test_input_block_4.send(hdr, buffer, 242);
-
-      hdr.dst 	       = 'hcafeb1badeadbe2;
-      set_rtu_rsp(4,1,0,2,'h7FF);  
-      test_input_block_4.send(hdr, buffer, 243);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe3;
-      set_rtu_rsp(4,1,0,2,'h7FF);  
-      test_input_block_4.send(hdr, buffer, 244);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe4;
-      set_rtu_rsp(4,1,0,2,'h7FF);  
-      test_input_block_4.send(hdr, buffer, 245);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe5;
-      set_rtu_rsp(4,1,0,2,'h008);  
-      test_input_block_4.send(hdr, buffer, 246);
-      
-      
-//////////////// input port = 7  ////////////////
-      hdr.src 	       = 'h123456789abcde7;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(7,1,0,2,'h7FF);  
-      test_input_block_7.send(hdr, buffer, 971);
-
-      hdr.dst 	       = 'hcafeb1badeadbe1;
-      set_rtu_rsp(7,1,0,2,'h7FF);  
-      test_input_block_7.send(hdr, buffer, 272);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe2; 
-      set_rtu_rsp(7,1,0,2,'h7FF);  
-      test_input_block_7.send(hdr, buffer, 273);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe3;
-      set_rtu_rsp(7,1,0,2,'h7FF);  
-      test_input_block_7.send(hdr, buffer, 274);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe4;
-      set_rtu_rsp(7,1,0,2,'h7FF);  
-      test_input_block_7.send(hdr, buffer, 275);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe5;
-      set_rtu_rsp(7,1,0,2,'h7FF);  
-      test_input_block_7.send(hdr, buffer, 276);
-      
-//////////////// input port = 10  ////////////////
-      hdr.src 	       = 'h123456789abcdeA;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-      set_rtu_rsp(10,1,0,2,'h7FF);  
-      test_input_block_10.send(hdr, buffer, 901);
-
-      hdr.dst 	       = 'hcafeb1badeadbe1;
-      set_rtu_rsp(10,1,0,2,'h7FF);  
-      test_input_block_10.send(hdr, buffer, 202);
-     
-      hdr.dst 	       = 'hcafeb1badeadbe2;
-      set_rtu_rsp(10,1,0,2,'h7FF);  
-      test_input_block_10.send(hdr, buffer, 203);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe3;
-      set_rtu_rsp(10,1,0,2,'h7FF);  
-      test_input_block_10.send(hdr, buffer, 204);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe4;
-      set_rtu_rsp(10,1,0,2,'h7FF);  
-      test_input_block_10.send(hdr, buffer, 205);
-      
-      hdr.dst 	       = 'hcafeb1badeadbe5;
-      set_rtu_rsp(10,1,0,2,'h7FF);  
-      test_input_block_10.send(hdr, buffer, 206);
-                                                      
-
-      
-   end
-
-
-//////////////////////////////////////////////////////////////
-
-
-initial begin
-    ether_header_t hdr;
-    int buffer[1024];
-    int i;
-    
-    wait(test_input_block_2.ready);
-    wait(test_input_block_5.ready);
-    wait(test_input_block_8.ready);
-
-   
-    
-    
-    
-    hdr.src 	       = 'h123456789abcdef;
-    hdr.dst 	       = 'hcafeb1badeadbef;
-    hdr.ethertype    = 1234;
-    hdr.is_802_1q    = 0;
-    hdr.oob_type     = `OOB_TYPE_RXTS;
-    hdr.timestamp_r  = 10000;
-    hdr.timestamp_f  = 4;
-    hdr.port_id      = 5;
-    
-    for(i=0;i<1000;i++)
-        buffer[i]      = i;
-
-//    
-//  task set_rtu_rsp;
-//     input [31:0]                    chan;
-//     input                           valid;
-//     input                           drop;
-//     input [`c_wrsw_num_ports - 1:0] prio;
-//     input [`c_wrsw_num_ports - 1:0] mask;
-//     begin : wait_body
-
-  
-    wait_cycles(80);
-
-//////////////// input port = 2  ////////////////
-      hdr.src 	       = 'h123456789abcde2;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-    set_rtu_rsp(2,1,0,2,'h7FF);  
-    test_input_block_2.send(hdr, buffer, 921);
-
-    hdr.dst 	       = 'hcafeb1badeadbe1;
-    set_rtu_rsp(2,1,0,2,'h7FF);  
-    test_input_block_2.send(hdr, buffer, 222);
-
-    hdr.dst 	       = 'hcafeb1badeadbe2;
-    set_rtu_rsp(2,1,0,2,'h7FF);  
-    test_input_block_2.send(hdr, buffer, 223);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe3;
-    set_rtu_rsp(2,1,0,2,'h7FF);  
-    test_input_block_2.send(hdr, buffer, 224);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe4;
-    set_rtu_rsp(2,1,0,2,'h7FF);  
-    test_input_block_2.send(hdr, buffer, 225);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe5;
-    set_rtu_rsp(2,1,0,2,'h7FF);  
-    test_input_block_2.send(hdr, buffer, 226);
-//////////////// input port = 5  ////////////////
-    hdr.src 	       = 'h123456789abcde5;
-
-    hdr.dst 	       = 'hcafeb1badeadbe0;
-    set_rtu_rsp(5,1,0,2,'h7FF);  
-    test_input_block_5.send(hdr, buffer, 951);
-
-    hdr.dst 	       = 'hcafeb1badeadbe1;
-    set_rtu_rsp(5,1,0,2,'h7FF);  
-    test_input_block_5.send(hdr, buffer, 252);
-
-    hdr.dst 	       = 'hcafeb1badeadbe2;
-    set_rtu_rsp(5,1,0,2,'h7FF);  
-    test_input_block_5.send(hdr, buffer, 253);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe3;
-    set_rtu_rsp(5,1,0,2,'h7FF);  
-    test_input_block_5.send(hdr, buffer, 254);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe4;
-    set_rtu_rsp(5,1,0,2,'h7FF);  
-    test_input_block_5.send(hdr, buffer, 255);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe5;
-    set_rtu_rsp(5,1,0,2,'h7FF);  
-    test_input_block_5.send(hdr, buffer, 256);
-  
-//////////////// input port = 8  ////////////////
-      hdr.src 	       = 'h123456789abcde8;
-
-      hdr.dst 	       = 'hcafeb1badeadbe0;
-    set_rtu_rsp(8,1,0,2,'h7FF);  
-    test_input_block_8.send(hdr, buffer, 981);
-
-    hdr.dst 	       = 'hcafeb1badeadbe0;
-    set_rtu_rsp(8,1,0,2,'h7FF);  
-    test_input_block_8.send(hdr, buffer, 282);
-
-    hdr.dst 	       = 'hcafeb1badeadbe1;
-    set_rtu_rsp(8,1,0,2,'h7FF);  
-    test_input_block_8.send(hdr, buffer, 283);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe2;    
-    set_rtu_rsp(8,1,0,2,'h7FF);  
-    test_input_block_8.send(hdr, buffer, 284);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe3;
-    set_rtu_rsp(8,1,0,2,'h7FF);  
-    test_input_block_8.send(hdr, buffer, 285);
-    
-    hdr.dst 	       = 'hcafeb1badeadbe4;
-    set_rtu_rsp(8,1,0,2,'h7FF);  
-    test_input_block_8.send(hdr, buffer, 286);
-    
     
  end
 
+initial begin
+   ether_header_t hdr;
+   int buffer[1024];
+   int i;
+   int port = 4;
+   wait(ports_read);
+   
+   hdr.src 	       = 'h123456789abcdef;
+   hdr.dst 	       = 'hcafeb1badeadbef;
+   hdr.ethertype    = 1234;
+   hdr.is_802_1q    = 0;
+   hdr.oob_type     = `OOB_TYPE_RXTS;
+   hdr.timestamp_r  = 10000;
+   hdr.timestamp_f  = 4;
+   hdr.port_id      = 5;
+   
+   for(i=0;i<2000;i++)
+       buffer[i]      = i;
+
+
+//input ether_header_t            hdr, 
+//input int                       payload[], 
+//input int                       length
+//input [31:0]                    port;
+//input                           drop;
+//input [`c_wrsw_num_ports - 1:0] prio;
+//input [`c_wrsw_num_ports - 1:0] mask; 
+
+ 
+   wait_cycles(50);
+
+//////////////// input port = 0  ////////////////
+
+   hdr.src 	       = 'h123456789abcde0;
+   hdr.dst 	       = 'hcafeb1badeadbe0;
+   
+   
+
+   for(i=200;i<1250;i=i+50)
+   begin
+     
+     send_pck(hdr,buffer, i, port, (i/50)%20,  (i/50)%7,(i/50)%11);
+     if(port == 7)
+       port = 4;
+     else
+       port++;
+     
+   end
+   
+ 
+end
+initial begin
+   ether_header_t hdr;
+   int buffer[1024];
+   int i;
+   int port = 8;
+   wait(ports_read);
+   
+   hdr.src 	       = 'h123456789abcdef;
+   hdr.dst 	       = 'hcafeb1badeadbef;
+   hdr.ethertype    = 1234;
+   hdr.is_802_1q    = 0;
+   hdr.oob_type     = `OOB_TYPE_RXTS;
+   hdr.timestamp_r  = 10000;
+   hdr.timestamp_f  = 4;
+   hdr.port_id      = 5;
+   
+   for(i=0;i<2000;i++)
+       buffer[i]      = i;
+
+
+//input ether_header_t            hdr, 
+//input int                       payload[], 
+//input int                       length
+//input [31:0]                    port;
+//input                           drop;
+//input [`c_wrsw_num_ports - 1:0] prio;
+//input [`c_wrsw_num_ports - 1:0] mask; 
+
+ 
+   wait_cycles(50);
+
+//////////////// input port = 0  ////////////////
+
+   hdr.src 	       = 'h123456789abcde0;
+   hdr.dst 	       = 'hcafeb1badeadbe0;
+   
+   
+
+   for(i=200;i<1250;i=i+50)
+   begin
+     
+     send_pck(hdr,buffer, i, port, (i/50)%20,  (i/50)%7,(i/50)%11);
+     if(port == 10)
+       port = 8;
+     else
+       port++;
+     
+   end
+   
+ 
+end
 //////////////////////////////////////////////////////////
 
 
@@ -723,7 +493,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 0!");
  
 	   test_input_block_0.receive(frame);
-	   dump_frame_header("test RX_0: ", frame);
+	   dump_frame_header("Receiving RX_0: ", frame);
 	   end
 	   
    always @(posedge clk) if (test_input_block_1.poll())
@@ -732,7 +502,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 1!");
  
 	   test_input_block_1.receive(frame);
-	   dump_frame_header("test RX_1: ", frame);
+	   dump_frame_header("Receiving RX_1: ", frame);
 	   end      
    always @(posedge clk) if (test_input_block_2.poll())
      begin
@@ -740,7 +510,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 2!");
  
 	   test_input_block_2.receive(frame);
-	   dump_frame_header("test RX_2: ", frame);
+	   dump_frame_header("Receiving RX_2: ", frame);
 	   end
 	   
    always @(posedge clk) if (test_input_block_3.poll())
@@ -749,7 +519,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 3!");
  
 	   test_input_block_3.receive(frame);
-	   dump_frame_header("test RX_3: ", frame);
+	   dump_frame_header("Receiving RX_3: ", frame);
 	   end      
    always @(posedge clk) if (test_input_block_4.poll())
      begin
@@ -757,7 +527,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 4!");
  
 	   test_input_block_4.receive(frame);
-	   dump_frame_header("test RX_4: ", frame);
+	   dump_frame_header("Receiving RX_4: ", frame);
 	   end
 	   
    always @(posedge clk) if (test_input_block_5.poll())
@@ -766,7 +536,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 5!");
  
 	   test_input_block_5.receive(frame);
-	   dump_frame_header("test RX_5: ", frame);
+	   dump_frame_header("Receiving RX_5: ", frame);
 	   end      
    always @(posedge clk) if (test_input_block_6.poll())
      begin
@@ -774,7 +544,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 6!");
  
 	   test_input_block_6.receive(frame);
-	   dump_frame_header("test RX_6: ", frame);
+	   dump_frame_header("Receiving RX_6: ", frame);
 	   end
 	   
    always @(posedge clk) if (test_input_block_7.poll())
@@ -783,7 +553,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 7!");
  
 	   test_input_block_7.receive(frame);
-	   dump_frame_header("test RX_7: ", frame);
+	   dump_frame_header("Receiving RX_7: ", frame);
 	   end  
       
      always @(posedge clk) if (test_input_block_8.poll())
@@ -793,7 +563,7 @@ initial begin
  
 	   test_input_block_8.receive(frame);
 	  
-	   dump_frame_header("test RX_8: ", frame);
+	   dump_frame_header("Receiving RX_8: ", frame);
 	   end
    
    always @(posedge clk) if (test_input_block_9.poll())
@@ -802,7 +572,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 9!");
  
 	   test_input_block_9.receive(frame);
-	   dump_frame_header("test RX_9: ", frame);
+	   dump_frame_header("Receiving RX_9: ", frame);
 	   end      
    always @(posedge clk) if (test_input_block_10.poll())
      begin
@@ -810,7 +580,7 @@ initial begin
 //	   $display("Emulator test received a frame on port 10!");
  
 	   test_input_block_10.receive(frame);
-	   dump_frame_header("test RX_10: ", frame);
+	   dump_frame_header("Receiving RX_10: ", frame);
 	   end      
 
 
