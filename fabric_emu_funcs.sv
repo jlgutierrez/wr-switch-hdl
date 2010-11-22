@@ -154,5 +154,5 @@ endfunction // automatic
 
   
 task dump_frame_header(string s, ether_frame_t frame);
-   $display("%s %s length = %d %s %s", s, format_ether_header(frame.hdr), frame.size, frame.error?"ERROR":"OK", frame.hdr.has_timestamp?"TS":"NoTS");
+   $display("%s %s (%d) length = %d %s %s", s, format_ether_header(frame.hdr),frame.hdr.ethertype, frame.size, frame.error?"ERROR":"OK", frame.hdr.has_timestamp?"TS":"NoTS");
 endtask // dump_frame_header

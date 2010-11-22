@@ -335,7 +335,7 @@ module main;
       hdr.oob_type     = `OOB_TYPE_RXTS;
       hdr.timestamp_r  = 10000;
       hdr.timestamp_f  = 4;
-      hdr.port_id      = 5;
+      
       
       for(i=0;i<2000;i++)
 	        buffer[i]      = i;
@@ -360,7 +360,9 @@ module main;
 
       for(i=200;i<1250;i=i+50)
       begin
-        
+        hdr.src          = port;
+        hdr.port_id      = port;
+        hdr.ethertype    = i;
         send_pck(hdr,buffer, i, port, (i/50)%20,  (i/50)%7,(i/50)%11);
         if(port == 3)
           port = 0;
@@ -412,7 +414,9 @@ initial begin
 
    for(i=200;i<1250;i=i+50)
    begin
-     
+     hdr.src          = port;
+     hdr.port_id      = port;
+     hdr.ethertype    = i;
      send_pck(hdr,buffer, i, port, (i/50)%20,  (i/50)%7,(i/50)%11);
      if(port == 7)
        port = 4;
@@ -464,6 +468,9 @@ initial begin
    for(i=200;i<1250;i=i+50)
    begin
      
+     hdr.src          = port;
+     hdr.port_id      = port;
+     hdr.ethertype    = i;
      send_pck(hdr,buffer, i, port, (i/50)%20,  (i/50)%7,(i/50)%11);
      if(port == 10)
        port = 8;
