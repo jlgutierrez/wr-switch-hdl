@@ -1,3 +1,43 @@
+-------------------------------------------------------------------------------
+-- Title      : Switching Core Package
+-- Project    : WhiteRabbit switch
+-------------------------------------------------------------------------------
+-- File       : swc_swcore_pkg.vhd
+-- Author     : Tomasz Wlostowski
+-- Company    : CERN BE-Co-HT
+-- Created    : 2010-04-08
+-- Last update: 2010-11-22
+-- Platform   : FPGA-generic
+-- Standard   : VHDL'87
+-------------------------------------------------------------------------------
+-- Description: 
+-------------------------------------------------------------------------------
+--
+-- Copyright (c) 2010 Tomasz Wlostowski / CERN
+--
+-- This source file is free software; you can redistribute it   
+-- and/or modify it under the terms of the GNU Lesser General   
+-- Public License as published by the Free Software Foundation; 
+-- either version 2.1 of the License, or (at your option) any   
+-- later version.                                               
+--
+-- This source is distributed in the hope that it will be       
+-- useful, but WITHOUT ANY WARRANTY; without even the implied   
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      
+-- PURPOSE.  See the GNU Lesser General Public License for more 
+-- details.                                                     
+--
+-- You should have received a copy of the GNU Lesser General    
+-- Public License along with this source; if not, download it   
+-- from http://www.gnu.org/licenses/lgpl-2.1.html
+--
+-------------------------------------------------------------------------------
+-- Revisions  :
+-- Date        Version  Author   Description
+-- 2010-04-08  1.0      twlostow Created
+-- 2010-11-22  2.0      mlipinsk added staff
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.math_real.CEIL;

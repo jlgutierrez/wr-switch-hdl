@@ -12,11 +12,29 @@
 -------------------------------------------------------------------------------
 -- Description: 
 -------------------------------------------------------------------------------
--- Copyright (c) 2010 Maciej Lipinski
+--
+-- Copyright (c) 2010 Maciej Lipinski / CERN
+--
+-- This source file is free software; you can redistribute it   
+-- and/or modify it under the terms of the GNU Lesser General   
+-- Public License as published by the Free Software Foundation; 
+-- either version 2.1 of the License, or (at your option) any   
+-- later version.                                               
+--
+-- This source is distributed in the hope that it will be       
+-- useful, but WITHOUT ANY WARRANTY; without even the implied   
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      
+-- PURPOSE.  See the GNU Lesser General Public License for more 
+-- details.                                                     
+--
+-- You should have received a copy of the GNU Lesser General    
+-- Public License along with this source; if not, download it   
+-- from http://www.gnu.org/licenses/lgpl-2.1.html
+--
 -------------------------------------------------------------------------------
 -- Revisions  :
 -- Date        Version  Author   Description
--- 2010-11-01  2.0      mlipinsk added FSM
+-- 2010-11-01  2.0      mlipinsk created
 
 -------------------------------------------------------------------------------
 
@@ -186,8 +204,8 @@ architecture syn of swc_input_block is
   signal interpck_page_in_advance  : std_logic;  
   signal interpck_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
   signal interpck_page_alloc_req   : std_logic;  
-    
-  
+  signal interpck_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);  
+  signal usecnt_d0                 : std_logic_vector(c_swc_usecount_width - 1 downto 0);    
   -- WHY two separate page's for inter and start pck allocated in advance:
   -- in the case in which one pck has just finished, we need new page addr for the new pck
   -- very soon after writing the last page of previous pck, 
@@ -235,7 +253,10 @@ architecture syn of swc_input_block is
                        S_PCK_START_1,            -- first mode of PCK start: we have the page ready, so we can set the page
                        S_PCK_START_2,            -- second mode of PCK start: we do not have the page ready, so we start writing the packet but
                                                  -- need to set the page as soon as it's allocated
-                       S_SET_USECNT,             -- setting user count to first page of the pck
+                       S_SET_USECNT_PCKSTART,    -- setting user count to the first page of the pck
+                       S_SET_USECNT_INTERPCK,    -- setting user count to the second page of the pck (this is in case that the 
+                                                 -- allocated-in-advance page has been "inherited" from the previous pck 
+                                                 -- (the usecnt is set as for previous pck)
                        S_SET_NEXT_PAGE,    
                        S_WAIT_FOR_PAGE_END,
                        S_WAIT_FOR_PAGE_END_TERMINATION  ,   -- we wait for the pageend signal (comint from MPM) to finish, otherwise, if we enter 
@@ -265,6 +286,7 @@ architecture syn of swc_input_block is
   
   signal mpm_drdy          : std_logic;
   signal pck_size      : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+  
   
 begin --arch
 
@@ -492,17 +514,39 @@ begin --arch
                mpm_pagereq              <= '0';
                current_pckstart_pageaddr<=pckstart_pageaddr;
                -- next state
-               pck_state                <= S_SET_USECNT;
+               pck_state                <= S_SET_USECNT_PCKSTART;
 
-          when S_SET_USECNT =>
+          when S_SET_USECNT_PCKSTART =>
               
            
               if(mmu_set_usecnt_done_i = '1') then
               
+                
+
+                if(usecnt = interpck_usecnt_in_advance) then 
+                
+                  set_usecnt               <= '0';   
+                  pck_state                <=  S_WAIT_FOR_PAGE_END;
+                  pck_mpm_write_established<= '1';
+                                 
+                else
+                  
+                  set_usecnt               <= '1';   
+                  pck_state                <=  S_SET_USECNT_INTERPCK;
+                  
+                end if;
+                
+              end if;          
+          
+          when S_SET_USECNT_INTERPCK =>
+          
+              if(mmu_set_usecnt_done_i = '1') then
+                
                 set_usecnt               <= '0';   
                 pck_state                <=  S_WAIT_FOR_PAGE_END;
-                pck_mpm_write_established<= '1';                
-              end if;          
+                pck_mpm_write_established<= '1';
+                
+              end if;
                
           when S_WAIT_FOR_PAGE_END =>
             
@@ -614,15 +658,15 @@ fsm_page : process(clk_i, rst_n_i)
    if rising_edge(clk_i) then
      if(rst_n_i = '0') then
        --========================================
-       page_state               <= S_IDLE;
+       page_state                 <= S_IDLE;
        
-       interpck_pageaddr        <= (others => '0');
-       interpck_page_alloc_req  <= '0';
+       interpck_pageaddr          <= (others => '0');
+       interpck_page_alloc_req    <= '0';
+       interpck_usecnt_in_advance <= (others => '0');
        
        
-       
-       pckstart_pageaddr        <= (others => '0');
-       pckstart_page_alloc_req  <= '0';
+       pckstart_pageaddr          <= (others => '0');
+       pckstart_page_alloc_req    <= '0';
        
 
        --========================================
@@ -679,6 +723,12 @@ fsm_page : process(clk_i, rst_n_i)
     
              interpck_page_alloc_req   <= '0';
              interpck_pageaddr         <= mmu_pageaddr_i;
+             --remember the usecnt which was at the time of
+             -- page allocation, this is in case that the page
+             -- is used to store another pck then the current one.
+             -- therefore we compare this stored value with the
+             -- current usecnt
+             interpck_usecnt_in_advance <= usecnt_d0;
              
              if(pckstart_page_in_advance = '0') then
                page_state                <= S_PCKSTART_PAGE_REQ;
@@ -696,7 +746,7 @@ fsm_page : process(clk_i, rst_n_i)
            
        end case;
        
-       --
+       usecnt_d0 <= usecnt;
 
      end if;
    end if;
@@ -832,7 +882,7 @@ fsm_perror : process(clk_i, rst_n_i)
         end if;
           
 
-        if(mmu_set_usecnt_done_i = '1') then 
+        if(mmu_set_usecnt_done_i = '1' and pck_state = S_SET_USECNT_PCKSTART) then 
           pckstart_page_in_advance <= '0';
         elsif(mmu_page_alloc_done_i = '1' and pckstart_page_alloc_req = '1') then
           pckstart_page_in_advance <= '1';
@@ -871,11 +921,15 @@ fsm_perror : process(clk_i, rst_n_i)
   mpm_ctrl_o(2 downto 0) <= tx_ctrl_i(2 downto 0);
   
 --  mmu_pageaddr_o         <= pckstart_pageaddr;
-  mmu_pageaddr_o         <= interpck_pageaddr when (pck_state = S_SET_NEXT_PAGE         OR 
-                                                    pck_state = S_WAIT_FOR_PAGE_END)   else pckstart_pageaddr;
+  mmu_pageaddr_o         <= interpck_pageaddr when (pck_state = S_SET_NEXT_PAGE                 OR 
+                                                    pck_state = S_WAIT_FOR_PAGE_END_TERMINATION OR
+                                                    pck_state = S_SET_USECNT_INTERPCK           OR
+                                                    pck_state = S_WAIT_FOR_PAGE_END)           else pckstart_pageaddr;
 
-  mpm_pageaddr_o         <= interpck_pageaddr when (pck_state = S_SET_NEXT_PAGE         OR 
-                                                    pck_state = S_WAIT_FOR_PAGE_END)   else pckstart_pageaddr;
+  mpm_pageaddr_o         <= interpck_pageaddr when (pck_state = S_SET_NEXT_PAGE                 OR 
+                                                    pck_state = S_WAIT_FOR_PAGE_END_TERMINATION OR
+                                                    pck_state = S_SET_USECNT_INTERPCK           OR
+                                                    pck_state = S_WAIT_FOR_PAGE_END)           else pckstart_pageaddr;
   
   rtu_rsp_ack_o          <= rtu_rsp_ack;
   
