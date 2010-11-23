@@ -21,7 +21,7 @@ vcom ../../../modules/wrsw_swcore/swc_output_block.vhd
 
 vcom ../../../modules/wrsw_swcore/swc_core.vhd
 
-vlog -sv swc_core.v3.sv
+vlog -sv swc_core.v4.sv
 #vlog -sv swc_core.sv
 
 vsim work.main -voptargs="+acc"
