@@ -239,7 +239,9 @@ architecture rtl of swc_packet_mem_write_pump is
 
   signal ll_wr_done_reg : std_logic;
   
+  signal no_next_page_addr: std_logic;
   
+  signal writing_last_page : std_logic;
   
   type t_state is (IDLE, WR_NEXT, WR_EOP);
   signal state       : t_state;
@@ -257,6 +259,7 @@ begin  -- rtl
   -- indicates that there was an attempt (rather successful because we have entire in_reg to use)
   -- to write to 'in_reg' while the 'cntr' indicates that the content of the 'in_reg' being filled in
   -- will be written to the last word of the current page.
+--  write_on_sync <= cntr_full and drdy_i;
   write_on_sync <= cntr_full and drdy_i;
   
   
@@ -271,6 +274,8 @@ begin  -- rtl
         flush_reg <= '0';
         pgend     <= '0';
         pckstart    <= '0';
+        no_next_page_addr <='0';
+        writing_last_page <= '0';
         -- reset the memory input register
         for i in 0 to c_swc_packet_mem_multiply-1 loop
           in_reg(i) <= (others => '0');
@@ -286,6 +291,7 @@ begin  -- rtl
 --        if(flush_i = '1' and cntr /= to_unsigned(0, cntr'length)) then
         if(flush_i = '1' ) then
           flush_reg <= '1';
+          writing_last_page <= '1';
           -- imitating the 'in_reg' full, for simpliciy 
           reg_full  <= '1';
         end if;
@@ -296,7 +302,7 @@ begin  -- rtl
         -- content to FB SRAM
 
         
-        if(sync_i = '1' and (write_on_sync = '1'  or reg_full = '1' or flush_reg = '1')) then
+        if(sync_i = '1' and (write_on_sync = '1'  or reg_full = '1' or flush_reg = '1' or no_next_page_addr = '1') and pgend ='0' ) then
           we_int    <= '1'; -- here: write enable
           cntr      <= (others => '0');
   
@@ -304,10 +310,18 @@ begin  -- rtl
           --if(flush_i = '0') then
             flush_reg <= '0';
             reg_full <= '0';
+            no_next_page_addr <= '0';
           --end if;
+        
+
+        elsif(sync_i = '1' and write_on_sync = '1' and pgend = '1') then
+          -- if on syn at the end of the page, no new adress is provided,
+          -- the page is not written, setting new write address is awaited
+          we_int            <= '0';
+          no_next_page_addr <= '1';
          
         else
-          we_int            <='0';
+          we_int           <='0';
           
         end if;
 
@@ -323,7 +337,6 @@ begin  -- rtl
           mem_addr(c_swc_page_offset_width-1 downto 0)                           <= (others => '0');
           
 
-          
           pgend                                                                  <= '0';
           
         -- after writting to FB SRAM, increase the (internal) address in the given page.
@@ -332,16 +345,23 @@ begin  -- rtl
           
           -- ml: bugfix        
           if(flush_i = '1') then
+            writing_last_page <= '1';
             flush_reg <= '1';
             reg_full  <= '1';
           end if;
           
           -- we are approaching the end of current page. Inform the host entity some
           -- cycles in advance.
-          if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0)) then
-             pgend   <= '1';
-
+          if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then
+            pgend   <= '1';
           end if;
+
+-- new solution to be investigated !!!
+--          if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and writing_last_page = '0') then
+--            pgend   <= '1';
+--          elsif(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and writing_last_page = '1')then
+--            writing_last_page <= '0';
+--          end if;
           
         end if;
 
@@ -355,7 +375,7 @@ begin  -- rtl
           if( cntr = 0 and pckstart_i = '1') then
             pckstart <= '1';
           end if;
-              
+ 
           
           -- Added by ML: without this, the old data stayed in register
           -- until it was overwriten, this could cause problems if 'flush' is used,
@@ -381,10 +401,15 @@ begin  -- rtl
           if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
             cntr     <= (others => '0');
             reg_full <= not sync_i;
-          else
+--          elsif(no_next_page_addr = '1') then 
+--            cntr     <= (others => '0');
+--            reg_full <= not sync_i;
+         else
             cntr <= cntr + 1;
           end if;
         end if;
+        
+        
         
         if(ll_wr_done_i = '1') then 
           pckstart <= '0';
@@ -496,7 +521,32 @@ begin  -- rtl
 
 
   we_o   <= we_int;
-  full_o <= (reg_full or cntr_full) and (not sync_i) ;
+  full_o <= ((reg_full or cntr_full) and (not sync_i))   -- this one is for the case when writing is not synchronized
+                                                         -- in such casem, when we write entire multiply words, we need
+                                                         -- to wait for synch to write, so we say that mem is full
+                            or                           
+                                                         -- here we produce full signal (to enforce pause in writing) 
+                                                         -- when new page address is not allocated/known at the end of the page                     
+            ((no_next_page_addr or                       -- this signal is high starting with the synch during which 
+                                                         -- the page was supposed to be written to FB SRAM but was not because
+                                                         -- the address is not know
+            (sync_i and write_on_sync and pgend) ) and   -- this is to start the full_o signal one cycle before no_next_page_addr
+                                                         -- so that the drdy_i is pulled low and no data is written when no_next_page_addr
+                                                         -- is high
+            (no_next_page_addr xor sync_i)) ;            -- this is to enforce the full_o signal to go low one cycle before no_next_page_addr
+                                                         -- is finished, so that the drdy_i is high soon enough to start writing again
+                                                         -- as soon as data is written to FB SRAM
+                                                         
+                                                         --           clock    _|-|_|-|_|-|_|-|_|-|_|-|_|-|_|-|_|-|_|
+                                                         --    write_on_synch ____|---|______________________________
+                                                         --           synch_i ____|---|__________________|---|_______
+                                                         -- no_next_page_addr ________|----------------------|_______
+                                                         --            full_o ____|----------------------|___________
+                                                         --            drdy_i --------|______________________|-------
+                                                         --              data <=><=><=><=========================><=>
+                                                         --             wr_en _______________________________|---|___
+                                                                                                                  
+            
   addr_o <= mem_addr;
   pgend_o <= pgend;
   

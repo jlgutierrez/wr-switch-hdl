@@ -197,13 +197,15 @@ architecture syn of swc_input_block is
   signal pckstart_page_in_advance  : std_logic;
   signal pckstart_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
   signal pckstart_page_alloc_req   : std_logic;
-  
+  signal pckstart_usecnt_req       : std_logic;
   signal current_pckstart_pageaddr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
     
   -- this is a page which used within the pck
   signal interpck_page_in_advance  : std_logic;  
   signal interpck_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
   signal interpck_page_alloc_req   : std_logic;  
+  signal interpck_usecnt_req       : std_logic;  
+
   signal interpck_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);  
   signal usecnt_d0                 : std_logic_vector(c_swc_usecount_width - 1 downto 0);    
   -- WHY two separate page's for inter and start pck allocated in advance:
@@ -261,10 +263,14 @@ architecture syn of swc_input_block is
                        S_WAIT_FOR_PAGE_END,
                        S_WAIT_FOR_PAGE_END_TERMINATION  ,   -- we wait for the pageend signal (comint from MPM) to finish, otherwise, if we enter 
                                                           -- S_WAIT_FOR_PAGE_END state again, we will unnecesarily request new page
+                       S_WAIT_FOR_STARTPCK_PGADDR,
+                       S_WAIT_FOR_INTERPCK_PGADDR,
                        S_DROP_PCK,              -- droping pck
                        S_AWAIT_TRANSFER);              
 
   type t_page_state is (S_IDLE, 
+                        S_PCKSTART_SET_USECNT,
+                        S_INTERPCK_SET_USECNT,
                         S_PCKSTART_PAGE_REQ,    
                         S_INTERPCK_PAGE_REQ); -- droping pck
 
@@ -287,6 +293,10 @@ architecture syn of swc_input_block is
   signal mpm_drdy          : std_logic;
   signal pck_size      : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
   
+  signal need_pckstart_usecnt_set : std_logic;
+  signal need_interpck_usecnt_set : std_logic; 
+  
+  signal tmp_cnt : std_logic_vector(7 downto 0);
   
 begin --arch
 
@@ -341,6 +351,8 @@ begin --arch
         current_pckstart_pageaddr<= (others => '0');
         usecnt                   <= (others => '0');
         
+        tmp_cnt                  <=  (others => '0');
+
         --================================================
       else
 
@@ -349,21 +361,13 @@ begin --arch
 
           when S_IDLE =>
             
-            --tx_dreq                  <= '1';
- --           mpm_flush                <= '0';
-            
---            if(rtu_rsp_valid_i = '1') then
---            
---              tx_dreq                  <= '1';
---              pck_state                <= S_RTU_RSP_SERVE;
---              
---             end if;
---
---          when S_RTU_RSP_SERVE =>
+            tmp_cnt                  <=  (others => '0');
             
             -- we need decision from RTU, but also we want the transfer
             -- of the fram eto be finished, the transfer in normal case should
             -- take 2 cycles
+            
+            tx_dreq                  <= '0';
             
             if(rtu_rsp_valid_i = '1'  and rtu_drop_i = '1') then
             
@@ -388,7 +392,6 @@ begin --arch
                
                rtu_dst_port_mask        <= rtu_dst_port_mask_i;
                rtu_prio                 <= rtu_prio_i;
---               rtu_drop                 <= rtu_drop_i;
                usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
                rtu_rsp_ack              <= '1';               
                -- next state
@@ -404,7 +407,7 @@ begin --arch
                usecnt                 <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
                
                rtu_rsp_ack            <= '1';
-               
+               tx_dreq                <= '0';
                pck_state              <= S_WAIT_TO_WRITE_PREV_PCK;
  
              elsif(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '0') then
@@ -438,7 +441,7 @@ begin --arch
         
           when S_WAIT_TO_WRITE_PREV_PCK =>
             
-            
+              tx_dreq                  <= '0';
               rtu_rsp_ack              <= '0';
               -- TODO !!!!!!!!!!!!!!
               -- needed some signal in advance to tell us that end of full is 
@@ -465,10 +468,15 @@ begin --arch
                 set_usecnt               <= '1';
                 pck_state                <=  S_PCK_START_1;   
                 
-              elsif(tx_sof_p1_i = '1' and ( mpm_full_i = '1' or pckstart_page_in_advance = '0' )) then
+              elsif(tx_sof_p1_i = '1' and ( mpm_full_i = '1' and pckstart_page_in_advance = '0' )) then
                
                pck_state              <= S_WAIT_TO_WRITE_PREV_PCK;
                tx_dreq                <= '0'; 
+                    
+              elsif(tx_sof_p1_i = '1' and ( mpm_full_i = '0' and pckstart_page_in_advance = '0' )) then                    
+                    
+               pck_state              <= S_WAIT_FOR_STARTPCK_PGADDR;
+               tx_dreq                <= '0';     
                     
               end if;
               
@@ -478,7 +486,6 @@ begin --arch
             if(tx_rerror_p1_i = '1' ) then
             
               pck_state                <= S_IDLE;
-  --           mpm_flush                <= '1';
               tx_dreq                  <= '1';
               
             elsif(rtu_rsp_valid_i = '1' and mpm_full_i = '0' and pckstart_page_in_advance = '1') then
@@ -490,22 +497,55 @@ begin --arch
             
               rtu_dst_port_mask        <= rtu_dst_port_mask_i;
               rtu_prio                 <= rtu_prio_i;
---              rtu_drop                 <= rtu_drop_i;
               usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
               rtu_rsp_ack              <= '1'; 
               pck_state                <=  S_PCK_START_1; 
               
-            elsif(rtu_rsp_valid_i = '1' and ( mpm_full_i = '1' or pckstart_page_in_advance = '0' )) then
+            elsif(rtu_rsp_valid_i = '1' and  mpm_full_i = '1' and pckstart_page_in_advance = '0' ) then
             
               tx_dreq                  <= '0';
               rtu_dst_port_mask        <= rtu_dst_port_mask_i;
               rtu_prio                 <= rtu_prio_i;
- --             rtu_drop                 <= rtu_drop_i;
               usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
               rtu_rsp_ack              <= '1'; 
               pck_state                <= S_WAIT_TO_WRITE_PREV_PCK;
               
+            elsif(rtu_rsp_valid_i = '1' and  mpm_full_i = '0' and pckstart_page_in_advance = '0' ) then
+            
+              tx_dreq                  <= '0';
+              rtu_dst_port_mask        <= rtu_dst_port_mask_i;
+              rtu_prio                 <= rtu_prio_i;
+              usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
+              rtu_rsp_ack              <= '1'; 
+              pck_state                <= S_WAIT_FOR_STARTPCK_PGADDR;
+              
             end if;
+           
+          when S_WAIT_FOR_STARTPCK_PGADDR => 
+            
+            tx_dreq                  <= '0';
+            rtu_rsp_ack              <= '0';
+            -- TODO !!!!!!!!!!!!!!
+            -- needed some signal in advance to tell us that end of full is 
+            -- approaching
+            if(mpm_full_i = '0' and pckstart_page_in_advance = '1' ) then
+
+              tx_dreq                  <= '1';              
+              mpm_pckstart             <= '1';
+              mpm_pagereq              <= '1';
+              set_usecnt               <= '1';
+              pck_state                <=  S_PCK_START_1;
+            
+            end if;  
+            
+          when S_WAIT_FOR_INTERPCK_PGADDR =>
+            
+              tmp_cnt <= std_logic_vector(unsigned(tmp_cnt) + 1);
+              
+              if(tmp_cnt > x"10") then 
+                 pck_state               <=  S_SET_NEXT_PAGE;
+                 mpm_pagereq             <= '1';
+               end if;
   
           when S_PCK_START_1 =>
               
@@ -514,69 +554,35 @@ begin --arch
                mpm_pagereq              <= '0';
                current_pckstart_pageaddr<=pckstart_pageaddr;
                -- next state
-               pck_state                <= S_SET_USECNT_PCKSTART;
-
-          when S_SET_USECNT_PCKSTART =>
-              
-           
-              if(mmu_set_usecnt_done_i = '1') then
-              
-                
-
-                if(usecnt = interpck_usecnt_in_advance) then 
-                
-                  set_usecnt               <= '0';   
-                  pck_state                <=  S_WAIT_FOR_PAGE_END;
-                  pck_mpm_write_established<= '1';
-                                 
-                else
-                  
-                  set_usecnt               <= '1';   
-                  pck_state                <=  S_SET_USECNT_INTERPCK;
-                  
-                end if;
-                
-              end if;          
-          
-          when S_SET_USECNT_INTERPCK =>
-          
-              if(mmu_set_usecnt_done_i = '1') then
-                
-                set_usecnt               <= '0';   
-                pck_state                <=  S_WAIT_FOR_PAGE_END;
-                pck_mpm_write_established<= '1';
-                
-              end if;
+               pck_state                <= S_WAIT_FOR_PAGE_END;
                
           when S_WAIT_FOR_PAGE_END =>
             
             
            pck_mpm_write_established<= '0';  
            
---           if(mpm_pageend_i = '1' and mpm_pageend_d1 = '0'  and pckstart_page_alloc_req = '0' and tx_eof_p1_i = '0') then
---           if(mpm_pageend_i = '1' and mpm_pageend_d1 = '0'  and pckstart_page_alloc_req = '0' ) then
            if(tx_rerror_p1_i = '1')then
            
               pck_state               <= S_IDLE;
-  --            mpm_flush               <= '1';
               tx_dreq                 <= '1';
-           
---           elsif(mpm_pageend_i = '1'  and pckstart_page_alloc_req = '0' ) then
-           elsif(mpm_pageend_i = '1' ) then
-       
-              pck_state                <=  S_SET_NEXT_PAGE;
-              mpm_pagereq              <= '1';
+              
+          elsif(mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
+              
+--              if(interpck_page_in_advance = '1') then
+                pck_state               <=  S_SET_NEXT_PAGE;
+                mpm_pagereq             <= '1';
+--              else
+--                pck_state               <= S_WAIT_FOR_INTERPCK_PGADDR;
+--              end if;
               
            elsif(tx_eof_p1_i = '1' and transfering_pck = '1') then
               -- transfer arbiter busy, wait till it is free
               pck_state               <= S_AWAIT_TRANSFER;
- --             mpm_flush               <= '1';
               tx_dreq                 <= '0';
              
            elsif(tx_eof_p1_i = '1'  and transfering_pck = '0' ) then
  
               pck_state               <= S_IDLE;
- --             mpm_flush               <= '1';
               tx_dreq                 <= '1';
               
             end if;        
@@ -587,17 +593,16 @@ begin --arch
               
             if(tx_eof_p1_i = '1' or tx_rerror_p1_i = '1' ) then
 
-              pck_state                    <= S_IDLE;
- --             mpm_flush                <= '1';
+              pck_state                <= S_IDLE;
               tx_dreq                  <= '1';
               
             elsif(mpm_pageend_i = '1') then
             
-              pck_state                    <= S_WAIT_FOR_PAGE_END_TERMINATION;
+              pck_state                <= S_WAIT_FOR_PAGE_END_TERMINATION;
             
             else
 
-              pck_state                    <=  S_WAIT_FOR_PAGE_END;
+              pck_state                <=  S_WAIT_FOR_PAGE_END;
                          
             end if;        
 
@@ -606,8 +611,7 @@ begin --arch
             
             if(tx_eof_p1_i = '1' or tx_rerror_p1_i = '1' ) then
 
-              pck_state                    <= S_IDLE;
- --             mpm_flush                    <= '1';
+              pck_state                <= S_IDLE;
               tx_dreq                  <= '1';
               
             elsif(mpm_pageend_i = '0') then
@@ -623,28 +627,25 @@ begin --arch
               
               tx_dreq                 <= '1';    
               pck_state               <= S_IDLE;
-              tx_dreq                  <= '1';
+              tx_dreq                 <= '1';
               
             end if;
           when S_AWAIT_TRANSFER =>
             
             tx_dreq                  <= '0';
- --           mpm_flush                <= '0';
 
             if(transfering_pck = '0') then
               pck_state               <= S_IDLE;
-              tx_dreq                  <= '1';
+              tx_dreq                 <= '1';
             end if;
 
           when others =>
             
-              pck_state                   <= S_IDLE;
-              tx_dreq                  <= '1';
+              pck_state               <= S_IDLE;
+              tx_dreq                 <= '1';
             
         end case;
         
- --       mpm_pageend_d1   <= mpm_pageend_i;
-
       end if;
     end if;
     
@@ -663,11 +664,11 @@ fsm_page : process(clk_i, rst_n_i)
        interpck_pageaddr          <= (others => '0');
        interpck_page_alloc_req    <= '0';
        interpck_usecnt_in_advance <= (others => '0');
-       
+       interpck_usecnt_req        <= '0';
        
        pckstart_pageaddr          <= (others => '0');
        pckstart_page_alloc_req    <= '0';
-       
+       pckstart_usecnt_req        <= '0';
 
        --========================================
      else
@@ -678,44 +679,127 @@ fsm_page : process(clk_i, rst_n_i)
         when S_IDLE =>
            
            interpck_page_alloc_req   <= '0';
+           interpck_usecnt_req       <= '0';
            pckstart_page_alloc_req   <= '0';
+           pckstart_usecnt_req       <= '0';
            
-           if(pckstart_page_in_advance = '0') then
-           
-             pckstart_page_alloc_req  <= '1';
-             page_state               <= S_PCKSTART_PAGE_REQ;
              
+           if(need_interpck_usecnt_set = '1') then 
+             
+             page_state               <= S_INTERPCK_SET_USECNT;
+             interpck_usecnt_req      <= '1';
+           
            elsif(interpck_page_in_advance = '0') then 
              
              interpck_page_alloc_req  <= '1';
              page_state               <= S_INTERPCK_PAGE_REQ;
+
+             
+           elsif(need_pckstart_usecnt_set = '1') then
+             
+             page_state               <= S_PCKSTART_SET_USECNT;
+             pckstart_usecnt_req      <= '1';
+           
+           elsif(pckstart_page_in_advance = '0') then
+           
+             pckstart_page_alloc_req  <= '1';
+             page_state               <= S_PCKSTART_PAGE_REQ;
              
            end if;
 
+        when S_PCKSTART_SET_USECNT =>
+        
+           if(mmu_set_usecnt_done_i = '1') then
+          
+             pckstart_usecnt_req      <= '0';   
+            
+             
+             if(need_interpck_usecnt_set = '1') then 
+               
+               page_state               <= S_INTERPCK_SET_USECNT;
+               interpck_usecnt_req      <= '1';
+             
+             elsif(interpck_page_in_advance = '0') then 
+               
+               interpck_page_alloc_req  <= '1';
+               page_state               <= S_INTERPCK_PAGE_REQ;
+  
+               
+             elsif(pckstart_page_in_advance = '0') then
+             
+               pckstart_page_alloc_req  <= '1';
+               page_state               <= S_PCKSTART_PAGE_REQ;
+             
+             else
+             
+               page_state               <=  S_IDLE;  
+               
+             end if;
+           
+           end if;
+
+        
+        when S_INTERPCK_SET_USECNT =>
+
+           if(mmu_set_usecnt_done_i = '1') then
+          
+             interpck_usecnt_req      <= '0';   
+             
+             if(interpck_page_in_advance = '0') then 
+             
+               interpck_page_alloc_req  <= '1';
+               page_state               <= S_INTERPCK_PAGE_REQ;
+
+             elsif(need_pckstart_usecnt_set = '1') then
+             
+               page_state               <= S_PCKSTART_SET_USECNT;
+               pckstart_usecnt_req      <= '1';
+           
+             elsif(pckstart_page_in_advance = '0') then
+           
+               pckstart_page_alloc_req  <= '1';
+               page_state               <= S_PCKSTART_PAGE_REQ;
+               
+             else
+               
+               page_state               <=  S_IDLE;
+             
+             end if;
+           
+           end if;          
+          
+          
         when S_PCKSTART_PAGE_REQ =>          
     
           if( mmu_page_alloc_done_i = '1') then
 
              pckstart_page_alloc_req  <= '0';
              -- remember the page start addr
-
-             pckstart_pageaddr        <= mmu_pageaddr_i;
-
-      
-             if(interpck_page_in_advance = '0') then
+             pckstart_pageaddr         <= mmu_pageaddr_i;
              
-               page_state               <= S_INTERPCK_PAGE_REQ;
+      
+             if(need_interpck_usecnt_set = '1') then 
+             
+               page_state               <= S_INTERPCK_SET_USECNT;
+               interpck_usecnt_req      <= '1';
+           
+             elsif(interpck_page_in_advance = '0') then 
+             
                interpck_page_alloc_req  <= '1';
-               
-             else 
+               page_state               <= S_INTERPCK_PAGE_REQ;
+
+             
+             elsif(need_pckstart_usecnt_set = '1') then
+             
+               page_state               <= S_PCKSTART_SET_USECNT;
+               pckstart_usecnt_req      <= '1';
+           
+             else
                
                page_state               <= S_IDLE;
-              
+               
              end if;
-      
            end if;
-
-
 
         when S_INTERPCK_PAGE_REQ =>          
     
@@ -729,14 +813,28 @@ fsm_page : process(clk_i, rst_n_i)
              -- therefore we compare this stored value with the
              -- current usecnt
              interpck_usecnt_in_advance <= usecnt_d0;
+             interpck_page_alloc_req    <= '0';
+      
+             if(need_interpck_usecnt_set = '1') then 
              
-             if(pckstart_page_in_advance = '0') then
-               page_state                <= S_PCKSTART_PAGE_REQ;
-               pckstart_page_alloc_req   <= '1';
-             else 
-               page_state                <= S_IDLE;
-               interpck_page_alloc_req   <= '0';
-             end if;             
+               page_state               <= S_INTERPCK_SET_USECNT;
+               interpck_usecnt_req      <= '1';
+           
+             elsif(need_pckstart_usecnt_set = '1') then
+               
+               page_state               <= S_PCKSTART_SET_USECNT;
+               pckstart_usecnt_req      <= '1';
+           
+             elsif(pckstart_page_in_advance = '0') then
+             
+               pckstart_page_alloc_req  <= '1';
+               page_state               <= S_PCKSTART_PAGE_REQ;
+               
+             else
+               
+               page_state                 <= S_IDLE;
+               
+             end if;
       
            end if;
 
@@ -845,6 +943,8 @@ fsm_perror : process(clk_i, rst_n_i)
       pta_mask                  <=(others => '0');
       pta_prio                  <=(others => '0');
       pta_pck_size              <=(others => '0');
+      need_pckstart_usecnt_set  <= '0';
+      need_interpck_usecnt_set  <= '0'; 
       --===================================================
       else
 
@@ -864,17 +964,32 @@ fsm_perror : process(clk_i, rst_n_i)
           pta_mask        <= (others => '0');
           pta_prio        <= (others => '0');
           pta_pck_size    <= (others => '0');
---        elsif(tx_eof_p1_i = '1' or tx_rerror_p1_i = '1' ) then 
---          transfering_pck <= '0';
+
         end if;
 
---        if(tx_rerror_p1_i = '1' and pck_state /=S_DROP_PCK) then 
         if(tx_rerror_p1_i = '1' )then 
           pck_error_occured <= '1';
         elsif(mmu_force_free_done_i = '1') then 
           pck_error_occured <= '0';
         end if;
       
+      
+        if(pck_state = S_PCK_START_1) then
+        
+          need_pckstart_usecnt_set  <= '1';
+        
+          if(usecnt = interpck_usecnt_in_advance) then 
+            need_interpck_usecnt_set  <= '0';
+          else
+            need_interpck_usecnt_set  <= '1';
+          end if;
+          
+        elsif(page_state = S_INTERPCK_SET_USECNT and mmu_set_usecnt_done_i = '1') then
+          need_interpck_usecnt_set  <= '0';
+        elsif(page_state = S_PCKSTART_SET_USECNT and mmu_set_usecnt_done_i = '1')then
+          need_pckstart_usecnt_set  <= '0';
+        end if;
+        
         if(pck_state = S_SET_NEXT_PAGE) then 
           interpck_page_in_advance <= '0';
         elsif(mmu_page_alloc_done_i = '1' and interpck_page_alloc_req = '1') then
@@ -882,7 +997,7 @@ fsm_perror : process(clk_i, rst_n_i)
         end if;
           
 
-        if(mmu_set_usecnt_done_i = '1' and pck_state = S_SET_USECNT_PCKSTART) then 
+        if(mmu_set_usecnt_done_i = '1' and page_state = S_PCKSTART_SET_USECNT) then 
           pckstart_page_in_advance <= '0';
         elsif(mmu_page_alloc_done_i = '1' and pckstart_page_alloc_req = '1') then
           pckstart_page_in_advance <= '1';
@@ -893,7 +1008,7 @@ fsm_perror : process(clk_i, rst_n_i)
   end process;
 
 
-  mmu_set_usecnt_o       <= set_usecnt;
+  mmu_set_usecnt_o       <= pckstart_usecnt_req or interpck_usecnt_req;--set_usecnt;
   mmu_usecnt_o           <= usecnt;
 
   mpm_pckstart_o         <= mpm_pckstart;
@@ -901,7 +1016,10 @@ fsm_perror : process(clk_i, rst_n_i)
   mmu_page_alloc_req_o   <= interpck_page_alloc_req or pckstart_page_alloc_req;
 --  tx_dreq_o              <= '1' when (state = S_WAIT_FOR_NEW_PAGE_REQ) else tx_dreq and not mpm_full_i;
   tx_dreq_o              <= tx_dreq                       when (pck_state = S_IDLE)                   else
-                            not mpm_full_i                when (pck_state = S_WAIT_TO_WRITE_PREV_PCK) else 
+
+                           -- new solution to be investigated
+                           -- not mpm_full_i                when (pck_state = S_WAIT_TO_WRITE_PREV_PCK) else 
+
                             tx_dreq and not mpm_full_i    ;
                             
                             
@@ -921,10 +1039,8 @@ fsm_perror : process(clk_i, rst_n_i)
   mpm_ctrl_o(2 downto 0) <= tx_ctrl_i(2 downto 0);
   
 --  mmu_pageaddr_o         <= pckstart_pageaddr;
-  mmu_pageaddr_o         <= interpck_pageaddr when (pck_state = S_SET_NEXT_PAGE                 OR 
-                                                    pck_state = S_WAIT_FOR_PAGE_END_TERMINATION OR
-                                                    pck_state = S_SET_USECNT_INTERPCK           OR
-                                                    pck_state = S_WAIT_FOR_PAGE_END)           else pckstart_pageaddr;
+  mmu_pageaddr_o         <= interpck_pageaddr when (page_state = S_INTERPCK_SET_USECNT)  else
+                            pckstart_pageaddr when (page_state = S_PCKSTART_SET_USECNT)  else (others => '0') ;
 
   mpm_pageaddr_o         <= interpck_pageaddr when (pck_state = S_SET_NEXT_PAGE                 OR 
                                                     pck_state = S_WAIT_FOR_PAGE_END_TERMINATION OR

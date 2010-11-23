@@ -477,8 +477,8 @@ architecture rtl of swc_core is
       ------------------------------------------------------------------------------- 
       rd_pagereq_i               => ob_pgreq,
       rd_pageaddr_i              => ob_pgaddr,
-      rd_pageend_o               => mpm_pckend,
-      rd_pckend_o                => mpm_pgend,
+      rd_pageend_o               => mpm_pgend,
+      rd_pckend_o                => mpm_pckend,
       rd_drdy_o                  => mpm_drdy,
       rd_dreq_i                  => ob_dreq,
       --!!!!!!!!!!
