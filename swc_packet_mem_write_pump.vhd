@@ -64,7 +64,8 @@
 -- Date        Version  Author   Description
 -- 2010-04-08  1.0      twlostow Created
 -- 2010-10-12  1.1      mlipinsk comments added !!!!!
--- 2010-10-18  1.1      mlipinsk clearing register
+-- 2010-10-18  1.2      mlipinsk clearing register
+-- 2010-11-24  1.3      mlipinsk adding main FSM !
 -------------------------------------------------------------------------------
 
 
@@ -236,6 +237,7 @@ architecture rtl of swc_packet_mem_write_pump is
   -- Linked List SRAM
   signal ll_wr_req  : std_logic;
   
+  signal ll_idle : std_logic;
 
   signal ll_wr_done_reg : std_logic;
   
@@ -245,130 +247,240 @@ architecture rtl of swc_packet_mem_write_pump is
   
   type t_state is (IDLE, WR_NEXT, WR_EOP);
   signal state       : t_state;
+
+  type t_state_write is (S_IDLE, S_READ_DATA, S_READ_LAST_DATA_WORD, S_WRITE_DATA, S_FLUSH, S_WAIT_WRITE, S_WAIT_LL_READY);
+  signal state_write       : t_state_write;
+  
+  
+  signal cnt_last_word : std_logic;
+  signal next_page_loaded : std_logic;
     
 begin  -- rtl
 
   -- VHDL sucks...
   allones <= (others => '1');
   zeros   <= (others => '0');
-
-  -- page is full, it means that when the 'in_reg' becomes full, it will be written 
-  -- to the last address (word) of the page (indicated by pgaddr_i) in FB SRAM.
-  cntr_full <= '1' when cntr = to_unsigned(c_swc_packet_mem_multiply-1, cntr'length) else '0';
   
-  -- indicates that there was an attempt (rather successful because we have entire in_reg to use)
-  -- to write to 'in_reg' while the 'cntr' indicates that the content of the 'in_reg' being filled in
-  -- will be written to the last word of the current page.
---  write_on_sync <= cntr_full and drdy_i;
-  write_on_sync <= cntr_full and drdy_i;
+  
+  
+  write_fsm : process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+
+        we_int <= '0';
+        reg_full <= '0';
+        cnt_last_word <='0';
+      else
+
+        -- main finite state machine
+        case state_write is
+
+
+          when S_IDLE =>
+             
+             if(drdy_i = '1') then
+             
+               state_write <= S_READ_DATA;                
+             end if;
+
+
+
+          when S_READ_DATA =>
+               
+             if(flush_i = '1') then
+                
+               state_write   <= S_FLUSH;
+               reg_full      <= '1';
+                
+             elsif(cntr = to_unsigned(c_swc_packet_mem_multiply - 2,cntr'length) ) then
+
+               state_write   <= S_READ_LAST_DATA_WORD;       
+               cnt_last_word <= '1';
+               
+             end if;
+
+          when S_READ_LAST_DATA_WORD =>           
+             
+             
+           
+             if( sync_i = '1') then
+             
+
+                 
+               if(pgend = '1') then
+               
+                 reg_full      <= '1';
+                 state_write   <= S_WAIT_WRITE;
+                 cnt_last_word <= '0';
+               
+
+               -- during the last address of the page, the Linked list is being written, so we need 
+               -- to wait for it to finish
+               elsif(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and ll_idle = '0') then
+                 
+                 state_write   <= S_WAIT_LL_READY;
+                 reg_full      <= '1';
+                 
+               elsif(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
+               
+                 state_write   <= S_WRITE_DATA;
+                 we_int        <= '1';
+                 reg_full      <= '0';
+                 cnt_last_word <= '0';
+                 
+               end if;
+               
+             else -- synch_i = '0'
+               
+               if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then 
+               
+                 reg_full      <= '1';
+                 state_write   <= S_WAIT_WRITE;
+                 cnt_last_word <= '0';
+                 
+               end if;
+             end if;
+             
+
+          when S_WRITE_DATA =>
+             
+             we_int      <= '0';
+             reg_full    <= '0';
+             
+             -- flushed precisely when writing data
+             -- when there is new data available
+             -- in such case, there will be one word
+             -- to write in new page
+             if(drdy_i = '1' and flush_i ='1') then
+               
+               state_write   <= S_FLUSH;
+               reg_full      <= '1';
+               
+            -- NORMAL CASE: writing when new data available
+             elsif(drdy_i = '1' and flush_i ='0') then
+             
+               state_write <= S_READ_DATA;
+               
+             elsif(drdy_i = '1' and ll_idle = '0') then
+             
+               state_write   <= S_WAIT_LL_READY;
+               reg_full      <= '1';
+               
+             -- flush when there is no new data, it means that
+             -- the data that is being written is the last
+             elsif(drdy_i = '0' and flush_i ='1') then
+               
+               state_write <= S_IDLE;
+               
+
+               
+             else
+
+               state_write <= S_IDLE;
+               
+             end if;
+             
+          when S_FLUSH =>
+             
+             if(sync_i = '1') then
+               
+               state_write <= S_WRITE_DATA;
+               reg_full    <= '0';
+               we_int      <= '1';
+              
+             end if;
+            
+          when S_WAIT_WRITE =>
+  
+             if(sync_i = '1' and pgend = '0') then
+               
+               if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and ll_idle = '0') then
+                 
+                 state_write   <= S_WAIT_LL_READY;
+                 reg_full      <= '1';
+                 
+               else
+               
+                 state_write <= S_WRITE_DATA;
+                 we_int      <= '1';
+                 reg_full    <= '0';
+                 
+               end if;
+               
+             end if;  
+  
+          when S_WAIT_LL_READY => 
+            
+            if(drdy_i = '0' and ll_idle = '1') then
+               state_write   <= S_WRITE_DATA;
+               we_int        <= '1';
+               reg_full      <= '0';
+               cnt_last_word <= '0';
+            end if;
+            
+          when others =>
+            
+            state_write <= S_IDLE;
+            
+        end case;
+        
+
+      end if;
+    end if;
+    
+  end process;
+  
+  
+  
+  
+  
+  
+  
+  
+--  cntr_full <= '1' when cntr = to_unsigned(c_swc_packet_mem_multiply-1, cntr'length) else '0';
+  
+
   
   
   process(clk_i, rst_n_i)
   begin
     if rising_edge (clk_i) then
       if(rst_n_i = '0') then
-        reg_full <= '0';
+       
         cntr     <= (others => '0');
-        we_int   <= '0';
         mem_addr <= (others => '0');
-        flush_reg <= '0';
-        pgend     <= '0';
-        pckstart    <= '0';
-        no_next_page_addr <='0';
-        writing_last_page <= '0';
-        -- reset the memory input register
+        pgend    <= '0';
+        next_page_loaded <= '0';
+        pckstart <= '0';
         for i in 0 to c_swc_packet_mem_multiply-1 loop
           in_reg(i) <= (others => '0');
         end loop;  -- i 
         
       else
 
-        -- flush received? mark the input register as full (when it's not
-        -- completely empty) and store the flush command. It means that
-        -- in the next 'time slot' for this pump, the 'in_reg' (although
-        -- not fully filled in) will be written to FB SRAM.
-        
---        if(flush_i = '1' and cntr /= to_unsigned(0, cntr'length)) then
-        if(flush_i = '1' ) then
-          flush_reg <= '1';
-          writing_last_page <= '1';
-          -- imitating the 'in_reg' full, for simpliciy 
-          reg_full  <= '1';
-        end if;
 
-        -- TDM write
-        -- if in the 'time slot' (indicated by sync_i HIGH) reserved for this pump, 
-        -- the 'in_reg' is full, or there is other reason for that, write 'in_reg' 
-        -- content to FB SRAM
-
-        
-        if(sync_i = '1' and (write_on_sync = '1'  or reg_full = '1' or flush_reg = '1' or no_next_page_addr = '1') and pgend ='0' ) then
-          we_int    <= '1'; -- here: write enable
-          cntr      <= (others => '0');
-  
-          -- ml: bugfix        
-          --if(flush_i = '0') then
-            flush_reg <= '0';
-            reg_full <= '0';
-            no_next_page_addr <= '0';
-          --end if;
-        
-
-        elsif(sync_i = '1' and write_on_sync = '1' and pgend = '1') then
-          -- if on syn at the end of the page, no new adress is provided,
-          -- the page is not written, setting new write address is awaited
-          we_int            <= '0';
-          no_next_page_addr <= '1';
-         
-        else
-          we_int           <='0';
-          
-        end if;
-
-        -- page request stuff
-        -- here we set the page address in FB SRAM. To this page 'in_reg' content will be written
-        -- when the next 'time slot' is assigned to this pump
         if(pgreq_i = '1') then
         
-          -- composing the FB SRAM address:
-          --  * page address
           mem_addr(c_swc_packet_mem_addr_width-1 downto c_swc_page_offset_width) <= pgaddr_i;
-          --  * internal page address
           mem_addr(c_swc_page_offset_width-1 downto 0)                           <= (others => '0');
-          
-
           pgend                                                                  <= '0';
+          next_page_loaded                                                       <= '1';
           
-        -- after writting to FB SRAM, increase the (internal) address in the given page.
-        elsif(we_int = '1') then
-          mem_addr(c_swc_page_offset_width-1 downto 0) <= std_logic_vector(unsigned(mem_addr(c_swc_page_offset_width-1 downto 0)) + 1);
+        elsif(state_write = S_WRITE_DATA) then
           
-          -- ml: bugfix        
-          if(flush_i = '1') then
-            writing_last_page <= '1';
-            flush_reg <= '1';
-            reg_full  <= '1';
-          end if;
-          
-          -- we are approaching the end of current page. Inform the host entity some
-          -- cycles in advance.
           if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then
-            pgend   <= '1';
+            pgend            <= '1';
+            next_page_loaded <= '0';
+          else
+            
+            mem_addr(c_swc_page_offset_width-1 downto 0) <= std_logic_vector(unsigned(mem_addr(c_swc_page_offset_width-1 downto 0)) + 1);
+                        
           end if;
 
--- new solution to be investigated !!!
---          if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and writing_last_page = '0') then
---            pgend   <= '1';
---          elsif(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and writing_last_page = '1')then
---            writing_last_page <= '0';
---          end if;
           
         end if;
 
-        -- clocking in the data
-        -- writting data (ctrl + data) into 'in_reg', once the reg is full,
-        -- its content will be written to FB SRAM in the time slot reserved
-        -- for this pump
         
         if(drdy_i = '1') then
         
@@ -377,43 +489,36 @@ begin  -- rtl
           end if;
  
           
-          -- Added by ML: without this, the old data stayed in register
-          -- until it was overwriten, this could cause problems if 'flush' is used,
-          -- in such case old dat would be written to memory in the not-overwriten-words
--------------------------------------------------------------------------------------    
--- here problem with synthesization
---          for i in to_integer(cntr) to c_swc_packet_mem_multiply-1 loop
---            in_reg(i) <= (others => '0');
---          end loop;  
--- replaced by this
           for i in 0 to c_swc_packet_mem_multiply-1 loop
             if(i >= to_integer(cntr)) then 
               in_reg(i) <= (others => '0');
             end if;
           end loop;
--------------------------------------------------------------------------------------        
+
           in_reg(to_integer(cntr)) <= d_i;
-
-
                 
           -- wrap around the 'in_reg' indicating that the reg is full to the host
           -- entity
+--          if(state_write = S_IDLE) then
+--            cntr <= (others =>'1');
+--          elsif(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
           if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
             cntr     <= (others => '0');
-            reg_full <= not sync_i;
---          elsif(no_next_page_addr = '1') then 
---            cntr     <= (others => '0');
---            reg_full <= not sync_i;
-         else
+          --elsif((state_write = S_FLUSH or state_write = S_WAIT_LL_READY or state_write = S_READ_LAST_DATA_WORD) and sync_i = '1') then
+            cntr      <= (others => '0');
+          else
             cntr <= cntr + 1;
           end if;
+        else
+          if((state_write = S_FLUSH or state_write = S_WAIT_LL_READY or state_write = S_READ_LAST_DATA_WORD) and sync_i = '1') then
+            cntr      <= (others => '0');
+          end if;
         end if;
-        
-        
         
         if(ll_wr_done_i = '1') then 
           pckstart <= '0';
         end if;
+        
       end if;
     end if;
   end process;
@@ -519,33 +624,21 @@ begin  -- rtl
     
   end process;
 
-
+  ll_idle <= '1' when (state = IDLE) else '0';
+  
   we_o   <= we_int;
-  full_o <= ((reg_full or cntr_full) and (not sync_i))   -- this one is for the case when writing is not synchronized
-                                                         -- in such casem, when we write entire multiply words, we need
-                                                         -- to wait for synch to write, so we say that mem is full
-                            or                           
-                                                         -- here we produce full signal (to enforce pause in writing) 
-                                                         -- when new page address is not allocated/known at the end of the page                     
-            ((no_next_page_addr or                       -- this signal is high starting with the synch during which 
-                                                         -- the page was supposed to be written to FB SRAM but was not because
-                                                         -- the address is not know
-            (sync_i and write_on_sync and pgend) ) and   -- this is to start the full_o signal one cycle before no_next_page_addr
-                                                         -- so that the drdy_i is pulled low and no data is written when no_next_page_addr
-                                                         -- is high
-            (no_next_page_addr xor sync_i)) ;            -- this is to enforce the full_o signal to go low one cycle before no_next_page_addr
-                                                         -- is finished, so that the drdy_i is high soon enough to start writing again
-                                                         -- as soon as data is written to FB SRAM
-                                                         
-                                                         --           clock    _|-|_|-|_|-|_|-|_|-|_|-|_|-|_|-|_|-|_|
-                                                         --    write_on_synch ____|---|______________________________
-                                                         --           synch_i ____|---|__________________|---|_______
-                                                         -- no_next_page_addr ________|----------------------|_______
-                                                         --            full_o ____|----------------------|___________
-                                                         --            drdy_i --------|______________________|-------
-                                                         --              data <=><=><=><=========================><=>
-                                                         --             wr_en _______________________________|---|___
-                                                                                                                  
+  full_o <= (reg_full           -- obvous
+                or 
+            cnt_last_word       -- we need to set full in advance when the last word is not on sync
+                                -- (this means that we need full to stop writing and wait for synchronization
+                                -- with sync 
+                or 
+              pgend)            -- in case when new page is not set by the end of the  last "word" of the page
+                                -- we need to wait for the page to be allocated - in such case we need to stop
+                                -- and here, again, we need to set full_o in advance by making the (X and not sync_i)
+                                -- trick
+               and 
+            not sync_i;
             
   addr_o <= mem_addr;
   pgend_o <= pgend;
@@ -554,8 +647,8 @@ begin  -- rtl
     q_o(c_swc_pump_width * (i+1) - 1 downto c_swc_pump_width * i) <= in_reg(i);
   end generate gen_q1;
   
-  ll_addr_o     <= ll_write_addr;
-  ll_data_o        <= ll_write_data;
+  ll_addr_o   <= ll_write_addr;
+  ll_data_o   <= ll_write_data;
   ll_wr_req_o <= ll_wr_req;
 
 end rtl;
