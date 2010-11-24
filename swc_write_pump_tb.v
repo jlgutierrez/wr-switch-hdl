@@ -123,7 +123,7 @@ module main;
 
         pckstart <=1;         
 
-	       for (i=0;i<100;i=i+1) begin
+	       for (i=1;i<100;i=i+1) begin
   
             if(n%5 != 0 && i == 5) begin
         	     page_addr <= page_addr + 4;
@@ -140,8 +140,10 @@ module main;
 	       end
 	          
        	 flush <= 1;
+       	 drdy  <= 1;
        	 wait_cycles(1);
        	 flush <= 0;
+       	 drdy  <= 0;
       end
    end
    
