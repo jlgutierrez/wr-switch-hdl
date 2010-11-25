@@ -373,7 +373,22 @@ begin  --  behavoural
         
       else
 
+        -- IMPORTANT : nasty trick here !!!
+        --             basically, the 'read' is HIGH, to confirm reading from
+        --             queue output, when state = SET_PAGE, but this is sync with
+        --             the address in the queue, the data is available one cycle later !!
+        --             basically, the data is available when 'pgreq' is HIGH (this is 
+        --             how FSM works), so we capture the data when 'pgreq' is HIGH (to avoid
+        --             extra states and waiting). to optimize the performance, during the
+        --             'pgreq' strobe (HIGH), the data is outputed directly from queue to 
+        --             mpm_pgaddr_o.
+         
+        if(pgreq = '1') then
+          current_pck_size <= rd_pck_size;
+          pck_start_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
+        end if;
         -- main finite state machine
+        
         case state is
 
 
@@ -384,14 +399,17 @@ begin  --  behavoural
             start_free_pck    <= '0';
             rx_sof_p1         <= '0';
 
-            if(rd_data_valid = '1' and rx_dreq_i = '1') then
+            -- 
+            if(rd_data_valid = '1' and rx_dreq_i = '1' 
+                 --and pta_transfer_data_valid_i = '0'
+                 ) then    -- we can't start when transfering data, because the dataa is changing
             
               state             <= SET_PAGE;
               rx_sof_p1         <= '1';
               rx_ctrl           <= (others =>'0');
               rx_data           <= (others =>'0');
-              current_pck_size <= rd_pck_size;
-              pck_start_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
+--              current_pck_size <= rd_pck_size;
+--              pck_start_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
               
             end if;
             
@@ -462,8 +480,15 @@ begin  --  behavoural
                rx_data           <= (others =>'0');
              
               if(ppfm_free = '0') then
-            
-                 ppfm_free_pgaddr<= pck_start_pgaddr;
+                
+                 -- for WTF, refer 'nasty trick above'
+                 -- improbable to be used
+                 if(pgreq = '1') then
+                   ppfm_free_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
+                 else
+                   ppfm_free_pgaddr <= pck_start_pgaddr;  
+                 end if;
+                 
                  start_free_pck  <= '1';
                  state           <= IDLE;
                
@@ -533,7 +558,13 @@ begin  --  behavoural
              
               if(ppfm_free = '0') then
             
-                 ppfm_free_pgaddr<= pck_start_pgaddr;
+                 -- for WTF, refer 'nasty trick above'
+                 -- improbable to be used
+                 if(pgreq = '1') then
+                   ppfm_free_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
+                 else
+                   ppfm_free_pgaddr <= pck_start_pgaddr;  
+                 end if;
                  start_free_pck  <= '1';
                  state           <= IDLE;
                
@@ -607,7 +638,13 @@ begin  --  behavoural
              
               if(ppfm_free = '0') then
             
-                ppfm_free_pgaddr<= pck_start_pgaddr;
+                -- for WTF, refer 'nasty trick above'
+                -- improbable to be used
+                if(pgreq = '1') then
+                  ppfm_free_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
+                else
+                  ppfm_free_pgaddr <= pck_start_pgaddr;  
+                end if;
                 start_free_pck  <= '1';
                 state           <= IDLE;
                
@@ -789,7 +826,16 @@ begin  --  behavoural
   
   
   mpm_pgreq_o         <= pgreq;
-  mpm_pgaddr_o        <= pck_start_pgaddr;--rd_data(c_swc_page_addr_width - 1 downto 0); -- read_data;
+   
+   
+                      -- IMPORTANT : a trick needed here, to make things faster, we provide pgaddr straight 
+                      --             from quque output, otherwise, in  the rare case when the queue is written
+                      --             with new data (so the output can change accordingly) there was a problem
+                      --             of acknowledging the wrong data (we ack'ed the address, but the data is one c
+                      --             cycle later !!!),
+  mpm_pgaddr_o        <= rd_data(c_swc_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;
+                        --rd_data(c_swc_page_addr_width - 1 downto 0); -- read_data;
+                        
   mpm_dreq_o          <= dreq and rx_dreq_i and not rx_tabort_p1_i;
 
 --  rx_valid            <= mpm_drdy_i when (state = READ_MPM) else '0';

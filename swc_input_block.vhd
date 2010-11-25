@@ -198,6 +198,7 @@ architecture syn of swc_input_block is
   signal pckstart_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
   signal pckstart_page_alloc_req   : std_logic;
   signal pckstart_usecnt_req       : std_logic;
+  signal pckstart_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);  
   signal current_pckstart_pageaddr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
     
   -- this is a page which used within the pck
@@ -623,9 +624,10 @@ begin --arch
             
           when S_DROP_PCK => 
              
+            rtu_rsp_ack               <= '0';
+             
             if(tx_eof_p1_i = '1' or tx_rerror_p1_i = '1' ) then 
               
-              tx_dreq                 <= '1';    
               pck_state               <= S_IDLE;
               tx_dreq                 <= '1';
               
@@ -669,7 +671,7 @@ fsm_page : process(clk_i, rst_n_i)
        pckstart_pageaddr          <= (others => '0');
        pckstart_page_alloc_req    <= '0';
        pckstart_usecnt_req        <= '0';
-
+       pckstart_usecnt_in_advance <= (others => '0');
        --========================================
      else
 
@@ -711,8 +713,8 @@ fsm_page : process(clk_i, rst_n_i)
         
            if(mmu_set_usecnt_done_i = '1') then
           
-             pckstart_usecnt_req      <= '0';   
-            
+             pckstart_usecnt_req        <= '0';   
+             pckstart_usecnt_in_advance<= usecnt_d0;
              
              if(need_interpck_usecnt_set = '1') then 
                
@@ -743,7 +745,8 @@ fsm_page : process(clk_i, rst_n_i)
 
            if(mmu_set_usecnt_done_i = '1') then
           
-             interpck_usecnt_req      <= '0';   
+             interpck_usecnt_req        <= '0';   
+             interpck_usecnt_in_advance <= usecnt_d0;
              
              if(interpck_page_in_advance = '0') then 
              
@@ -776,7 +779,7 @@ fsm_page : process(clk_i, rst_n_i)
              pckstart_page_alloc_req  <= '0';
              -- remember the page start addr
              pckstart_pageaddr         <= mmu_pageaddr_i;
-             
+             pckstart_usecnt_in_advance<= usecnt_d0;
       
              if(need_interpck_usecnt_set = '1') then 
              
@@ -976,7 +979,13 @@ fsm_perror : process(clk_i, rst_n_i)
       
         if(pck_state = S_PCK_START_1) then
         
-          need_pckstart_usecnt_set  <= '1';
+          if(usecnt = pckstart_usecnt_in_advance) then
+            need_pckstart_usecnt_set  <= '0';
+            pckstart_page_in_advance  <= '0';            
+          else
+            need_pckstart_usecnt_set  <= '1';
+
+          end if;
         
           if(usecnt = interpck_usecnt_in_advance) then 
             need_interpck_usecnt_set  <= '0';
@@ -1015,7 +1024,8 @@ fsm_perror : process(clk_i, rst_n_i)
 
   mmu_page_alloc_req_o   <= interpck_page_alloc_req or pckstart_page_alloc_req;
 --  tx_dreq_o              <= '1' when (state = S_WAIT_FOR_NEW_PAGE_REQ) else tx_dreq and not mpm_full_i;
-  tx_dreq_o              <= tx_dreq                       when (pck_state = S_IDLE)                   else
+  tx_dreq_o              <= tx_dreq  when (pck_state = S_IDLE)     else
+                            '1'      when (pck_state = S_DROP_PCK) else   
 
                            -- new solution to be investigated
                            -- not mpm_full_i                when (pck_state = S_WAIT_TO_WRITE_PREV_PCK) else 

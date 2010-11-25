@@ -215,10 +215,6 @@ architecture rtl of swc_packet_mem_write_pump is
   -- start of package
   signal pckstart : std_logic;
   
-  -- for the first page of the packet, to indicate the output should be written
-  -- signal start_output_page_addr : std_logic;
-  
-  signal pgreq_reg : std_logic;
   
   --=================================================================================
   
@@ -254,6 +250,12 @@ architecture rtl of swc_packet_mem_write_pump is
   
   signal cnt_last_word : std_logic;
   signal next_page_loaded : std_logic;
+    
+  signal pgreq_reg : std_logic;
+  signal pckstart_reg : std_logic;  
+
+  signal pgreq_or : std_logic;
+  signal pckstart_or : std_logic;  
     
 begin  -- rtl
 
@@ -331,7 +333,7 @@ begin  -- rtl
                  
                end if;
                
-             else -- synch_i = '0'
+            else -- synch_i = '0'
                
                if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then 
                
@@ -452,11 +454,13 @@ begin  -- rtl
         mem_addr <= (others => '0');
         pgend    <= '0';
         next_page_loaded <= '0';
-        pckstart <= '0';
+        --pckstart <= '0';
         for i in 0 to c_swc_packet_mem_multiply-1 loop
           in_reg(i) <= (others => '0');
         end loop;  -- i 
         
+        pckstart_reg <= '0';
+        pgreq_reg    <= '0';
       else
 
 
@@ -484,10 +488,21 @@ begin  -- rtl
         
         if(drdy_i = '1') then
         
-          if( cntr = 0 and pckstart_i = '1') then
-            pckstart <= '1';
+--          if( cntr = 0 and pckstart_i = '1') then
+--            pckstart <= '1';
+--          end if;
+          
+          -- if new address is set when the previous is 
+          -- being written to Linked List, we need to remember
+          -- this to be able to come to it later
+          if(pgreq_i ='1' and state /= IDLE ) then
+            pgreq_reg <='1';
           end if;
- 
+          
+          if(pckstart_i = '1' and state /=IDLE ) then 
+            pckstart_reg <= '1';
+          end if;
+          
           
           for i in 0 to c_swc_packet_mem_multiply-1 loop
             if(i >= to_integer(cntr)) then 
@@ -515,8 +530,10 @@ begin  -- rtl
           end if;
         end if;
         
+        
         if(ll_wr_done_i = '1') then 
-          pckstart <= '0';
+          pckstart_reg <= '0';
+          pgreq_reg    <='0';
         end if;
         
       end if;
@@ -547,8 +564,9 @@ begin  -- rtl
     end if;
   end process;
 
-
-
+ -- IMPORTANT, see below WR_EOP
+ pgreq_or    <= pgreq_i    or pgreq_reg;
+ pckstart_or <= pckstart_i or pckstart_reg;
 
 
   fsm : process(clk_i, rst_n_i)
@@ -571,7 +589,9 @@ begin  -- rtl
             
             -- normal case: load new page within the package (not the
             -- beginning of the package)
-            if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '0')) then
+            --if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '0')) then
+            
+            if((pgreq_or = '1') and (pckstart_or = '0') ) then
               state          <= WR_NEXT;
               ll_write_data  <= pgaddr_i;
               ll_write_addr  <= previous_page_addr_int;
@@ -580,7 +600,8 @@ begin  -- rtl
  
             -- first package, page provided at the same time as pckstart_i strobe
             -- so we remember the address from input
-            if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '1')) then
+            --if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '1')) then
+            if((pgreq_or = '1') and (pckstart_or = '1')) then
               state          <= WR_EOP;
               ll_write_data  <= (others =>'1');
               ll_write_addr  <= pgaddr_i;
@@ -588,12 +609,12 @@ begin  -- rtl
             end if;
 
             -- page provided not in the first cycle of the new package
-            if((pgreq_i = '1') and (pckstart = '1') and (pckstart_i = '0')) then
-              state          <= WR_EOP;
-              ll_write_data  <= (others =>'1');
-              ll_write_addr  <= pgaddr_i;
-              ll_wr_req      <= '1';
-            end if;
+            --if((pgreq_i = '1') and (pckstart = '1') and (pckstart_i = '0')) then
+            --  state          <= WR_EOP;
+            --  ll_write_data  <= (others =>'1');
+            --  ll_write_addr  <= pgaddr_i;
+            --  ll_wr_req      <= '1';
+            --end if;
 
           when WR_NEXT =>
             if (ll_wr_done_i = '1') then
@@ -605,11 +626,44 @@ begin  -- rtl
 
             
           when WR_EOP =>
+            
             if (ll_wr_done_i = '1') then
-              state          <= IDLE;
-              ll_write_data  <= (others =>'0');
-              ll_write_addr  <= (others =>'0');
-              ll_wr_req      <= '0';
+              
+              
+              
+              if((pgreq_or = '1') and (pckstart_or = '0') ) then
+              -- this foresees the situation when new page was set
+              -- while the linked list was being written, so 
+              -- we don't go to idle, but write LL again.
+              -- in theory, should not get here, because the 
+              -- writing FSM, waits for ll_FSM to be IDLE
+                          
+                state          <= WR_NEXT;
+                ll_write_data  <= pgaddr_i;
+                ll_write_addr  <= previous_page_addr_int;
+                ll_wr_req      <= '1';
+
+              elsif((pgreq_or = '1') and (pckstart_or = '1')) then
+              -- this foresees quite often situation when the
+              -- address of previous pck is written to LL while
+              -- new pck's first page is already being set,
+              -- so we remember the request and set the page as soon
+              -- as previous' pck's operations to LL are finished
+ 
+                state          <= WR_EOP;
+                ll_write_data  <= (others =>'1');
+                ll_write_addr  <= pgaddr_i;
+                ll_wr_req      <= '1';
+
+              else
+              -- normal functioning
+              
+                state          <= IDLE;
+                ll_write_data  <= (others =>'0');
+                ll_write_addr  <= (others =>'0');
+                ll_wr_req      <= '0';
+                
+              end if;
             end if;
   
           when others =>
@@ -627,18 +681,19 @@ begin  -- rtl
   ll_idle <= '1' when (state = IDLE) else '0';
   
   we_o   <= we_int;
-  full_o <= (reg_full           -- obvous
+  full_o <= ((reg_full           -- obvous
                 or 
-            cnt_last_word       -- we need to set full in advance when the last word is not on sync
+            cnt_last_word)       -- we need to set full in advance when the last word is not on sync
                                 -- (this means that we need full to stop writing and wait for synchronization
                                 -- with sync 
-                or 
-              pgend)            -- in case when new page is not set by the end of the  last "word" of the page
+           --     or 
+           --   pgend
+           --      )              -- in case when new page is not set by the end of the  last "word" of the page
                                 -- we need to wait for the page to be allocated - in such case we need to stop
                                 -- and here, again, we need to set full_o in advance by making the (X and not sync_i)
                                 -- trick
                and 
-            not sync_i;
+            (not sync_i)) or(pgend and sync_i);
             
   addr_o <= mem_addr;
   pgend_o <= pgend;

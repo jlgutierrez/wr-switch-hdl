@@ -188,7 +188,7 @@ architecture syn of swc_page_allocator is
 
   type t_state is (IDLE, ALLOC_LOOKUP_L1, ALLOC_LOOKUP_L0_UPDATE, 
                    FREE_CHECK_USECNT, FREE_RELEASE_PAGE, FREE_DECREASE_UCNT, 
-                   SET_UCNT--, FORCE_FREE_RELEASE_PAGE
+                   SET_UCNT, NASTY_WAIT--, FORCE_FREE_RELEASE_PAGE
                    );
 
   -- this represents high part of the page address (bit mapping)
@@ -224,6 +224,9 @@ architecture syn of swc_page_allocator is
   signal usecnt_mem_wrdata : std_logic_vector(g_use_count_bits-1 downto 0);
 
   signal pgaddr_to_free   : std_logic_vector(g_page_addr_bits -1 downto 0);
+  
+  signal page_freeing_in_last_operation : std_logic;
+  signal previously_freed_page   : std_logic_vector(g_page_addr_bits -1 downto 0);
   
 begin  -- syn
 
@@ -299,6 +302,9 @@ begin  -- syn
         l0_rd_addr        <= (others => '0');
         l0_wr_data        <= (others => '0');
         
+        -- bugfix by ML (two consecutive page free of the same page addr)
+        page_freeing_in_last_operation <= '0';
+        previously_freed_page          <= (others => '0');
       else
 
         -- main finite state machine
@@ -313,7 +319,7 @@ begin  -- syn
             pgaddr_valid_o <= '0';
             usecnt_mem_wr  <= '0';
             
-            
+            page_freeing_in_last_operation <= '0';
             --usecnt_mem_rdaddr <= pgaddr_i;
             usecnt_mem_wraddr <= pgaddr_i;
 
@@ -339,19 +345,35 @@ begin  -- syn
 
             -- got page release request
             if(free_i = '1') then
+            
               idle_o            <= '0';
               
-              pgaddr_to_free    <= pgaddr_i;
+              if(page_freeing_in_last_operation = '1' and previously_freed_page = pgaddr_i) then
+               
+                state <= NASTY_WAIT;
+                
+              else
               
-              state             <= FREE_CHECK_USECNT;
-              -- decoding of provided code into low and high part
-              l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
-              l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
-              --usecnt_mem_rdaddr <= pgaddr_i;
-              usecnt_mem_wraddr <= pgaddr_i;
-              done_o <= '1';            -- assert the done signal early enough
-                                        -- so the multiport allocator will also
-                                        -- take 3 cycles per request
+                idle_o            <= '0';
+               
+                pgaddr_to_free    <= pgaddr_i;
+                
+                state             <= FREE_CHECK_USECNT;
+                -- decoding of provided code into low and high part
+                l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+                l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+                --usecnt_mem_rdaddr <= pgaddr_i;
+                usecnt_mem_wraddr <= pgaddr_i;
+                done_o <= '1';            -- assert the done signal early enough
+                                          -- so the multiport allocator will also
+                                          -- take 3 cycles per request
+                
+                page_freeing_in_last_operation <= '1'; 
+                
+                previously_freed_page          <= pgaddr_i;
+                 
+              end if;                                      
+                                        
             end if;
              
              if(force_free_i = '1') then
@@ -382,8 +404,25 @@ begin  -- syn
                                          -- take 3 cycles per request
              end if;
              
+          when NASTY_WAIT =>
              
+             idle_o            <= '0';
+            
+             pgaddr_to_free    <= pgaddr_i;
              
+             state             <= FREE_CHECK_USECNT;
+             -- decoding of provided code into low and high part
+             l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+             l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+             --usecnt_mem_rdaddr <= pgaddr_i;
+             usecnt_mem_wraddr <= pgaddr_i;
+             done_o <= '1';            -- assert the done signal early enough
+                                       -- so the multiport allocator will also
+                                       -- take 3 cycles per request
+             
+             page_freeing_in_last_operation <= '1'; 
+             
+             previously_freed_page          <= pgaddr_i;
              
           when ALLOC_LOOKUP_L1 =>
             
