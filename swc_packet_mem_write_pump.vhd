@@ -75,8 +75,11 @@ use ieee.numeric_std.all;
 use ieee.math_real.log2;
 use ieee.math_real.ceil;
 
+use std.textio.all;
+
 library work;
 use work.swc_swcore_pkg.all;
+use work.pck_fio.all;
 
 entity swc_packet_mem_write_pump is
 
@@ -215,6 +218,7 @@ architecture rtl of swc_packet_mem_write_pump is
   -- start of package
   signal pckstart : std_logic;
   
+  signal before_sync : std_logic;
   
   --=================================================================================
   
@@ -256,6 +260,10 @@ architecture rtl of swc_packet_mem_write_pump is
 
   signal pgreq_or : std_logic;
   signal pckstart_or : std_logic;  
+   
+  signal sync_d    : std_logic_vector(c_swc_packet_mem_multiply - 1 downto 0);
+
+
     
 begin  -- rtl
 
@@ -263,7 +271,26 @@ begin  -- rtl
   allones <= (others => '1');
   zeros   <= (others => '0');
   
+  synch_delay : process(clk_i, rst_n_i)
+  begin
+     if rising_edge(clk_i) then
+       if(rst_n_i = '0') then
+ 
+          sync_d <= (others =>'0');
+          
+       else
+         
+         sync_d(0) <= sync_i;
+         for i in 1 to c_swc_packet_mem_multiply-1 loop
+           sync_d(i) <= sync_d(i - 1);
+         end loop; 
+         
+       end if;
+     end if;
+     
+  end process;
   
+  before_sync <= sync_d(c_swc_packet_mem_multiply - 2);
   
   write_fsm : process(clk_i, rst_n_i)
   begin
@@ -308,8 +335,6 @@ begin  -- rtl
            
              if( sync_i = '1') then
              
-
-                 
                if(pgend = '1') then
                
                  reg_full      <= '1';
@@ -570,6 +595,8 @@ begin  -- rtl
 
 
   fsm : process(clk_i, rst_n_i)
+  variable l:line;
+  file fout:text open write_mode is "stdout" ;
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
@@ -586,6 +613,7 @@ begin  -- rtl
 
 
           when IDLE =>
+            --fprint(fout, l, "Jou, ziom!\n");
             
             -- normal case: load new page within the package (not the
             -- beginning of the package)
@@ -681,7 +709,7 @@ begin  -- rtl
   ll_idle <= '1' when (state = IDLE) else '0';
   
   we_o   <= we_int;
-  full_o <= ((reg_full           -- obvous
+  full_o <= (((reg_full           -- obvous
                 or 
             cnt_last_word)       -- we need to set full in advance when the last word is not on sync
                                 -- (this means that we need full to stop writing and wait for synchronization
@@ -693,7 +721,7 @@ begin  -- rtl
                                 -- and here, again, we need to set full_o in advance by making the (X and not sync_i)
                                 -- trick
                and 
-            (not sync_i)) or(pgend and sync_i);
+            (not sync_i)) or(pgend and sync_i));-- and not before_sync;
             
   addr_o <= mem_addr;
   pgend_o <= pgend;

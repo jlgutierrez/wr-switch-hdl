@@ -297,6 +297,8 @@ architecture syn of swc_input_block is
   signal need_pckstart_usecnt_set : std_logic;
   signal need_interpck_usecnt_set : std_logic; 
   
+  signal transfering_pck_on_wait  : std_logic;
+  
   signal tmp_cnt : std_logic_vector(7 downto 0);
   
 begin --arch
@@ -636,7 +638,7 @@ begin --arch
             
             tx_dreq                  <= '0';
 
-            if(transfering_pck = '0') then
+            if(transfering_pck = '0' or (pta_transfer_ack_i = '1' and  transfering_pck_on_wait = '1')) then
               pck_state               <= S_IDLE;
               tx_dreq                 <= '1';
             end if;
@@ -948,19 +950,31 @@ fsm_perror : process(clk_i, rst_n_i)
       pta_pck_size              <=(others => '0');
       need_pckstart_usecnt_set  <= '0';
       need_interpck_usecnt_set  <= '0'; 
+      transfering_pck_on_wait   <= '0';
       --===================================================
       else
 
-        if(tx_eof_p1_i = '1' and pck_state /=S_DROP_PCK) then 
-        
-          transfering_pck <= '1';
+        if(tx_eof_p1_i = '1' and pck_state /=S_DROP_PCK ) then 
+           
+          if(transfering_pck = '0') then
+                      
+            transfering_pck <= '1';
           
-          pta_pageaddr    <= current_pckstart_pageaddr;
-          pta_mask        <= rtu_dst_port_mask;
-          pta_prio        <= rtu_prio;
-          pta_pck_size    <= pck_size;
+            pta_pageaddr    <= current_pckstart_pageaddr;
+            pta_mask        <= rtu_dst_port_mask;
+            pta_prio        <= rtu_prio;
+            pta_pck_size    <= pck_size;
+            
+          else
+            
+            transfering_pck_on_wait <= '1';
+            
+          end if;
           
-        elsif(pta_transfer_ack_i = '1') then
+        elsif(pta_transfer_ack_i = '1' and (pck_state /=S_AWAIT_TRANSFER or transfering_pck_on_wait = '0')) then
+          
+          transfering_pck_on_wait <= '0';
+          
           transfering_pck <= '0';
           
           pta_pageaddr    <= (others => '0');
@@ -968,6 +982,18 @@ fsm_perror : process(clk_i, rst_n_i)
           pta_prio        <= (others => '0');
           pta_pck_size    <= (others => '0');
 
+        elsif(pta_transfer_ack_i = '1' and pck_state =S_AWAIT_TRANSFER) then
+        
+          transfering_pck_on_wait <= '0';
+          
+          transfering_pck <= '1';
+          
+          pta_pageaddr    <= current_pckstart_pageaddr;
+          pta_mask        <= rtu_dst_port_mask;
+          pta_prio        <= rtu_prio;
+          pta_pck_size    <= pck_size;
+        
+         
         end if;
 
         if(tx_rerror_p1_i = '1' )then 

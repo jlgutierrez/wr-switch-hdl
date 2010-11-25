@@ -98,6 +98,8 @@ use ieee.numeric_std.all;
 use work.platform_specific.all;
 use work.swc_swcore_pkg.all;
 
+use std.textio.all;
+use work.pck_fio.all;
 
 entity swc_page_allocator is
   generic (
@@ -228,6 +230,10 @@ architecture syn of swc_page_allocator is
   signal page_freeing_in_last_operation : std_logic;
   signal previously_freed_page   : std_logic_vector(g_page_addr_bits -1 downto 0);
   
+  signal tmp_page   : std_logic_vector(g_page_addr_bits -1 downto 0);
+  
+  signal tmp_pgs   : std_logic_vector(1023 downto 0);
+  
 begin  -- syn
 
 
@@ -287,6 +293,12 @@ begin  -- syn
 
 
   fsm : process(clk_i, rst_n_i)
+  variable l:line;
+  file fout:text open write_mode is "dupa.txt";--"stdout" ;
+  
+  variable cnt : integer := -1;
+  variable usecnt_mem_rdaddr_v : integer :=0; 
+  
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
@@ -302,6 +314,8 @@ begin  -- syn
         l0_rd_addr        <= (others => '0');
         l0_wr_data        <= (others => '0');
         
+        tmp_page <= (others => '0');
+        tmp_pgs <= (others => '0');
         -- bugfix by ML (two consecutive page free of the same page addr)
         page_freeing_in_last_operation <= '0';
         previously_freed_page          <= (others => '0');
@@ -459,6 +473,9 @@ begin  -- syn
             pgaddr_valid_o    <= '1';
             free_blocks       <= free_blocks-1;
             state             <= IDLE;
+            
+            fprint(fout, l, "==> Allocate page %d  ,  usecnt %d, free blocks: %d \n", fo(l1_first_free & l0_first_free),fo(usecnt_i), fo(free_blocks-1));
+            -- tmp_pgs(to_integer(unsigned(l1_first_free & l0_first_free))) <= '1';
              --    done_o <= '0';
 
           when FREE_CHECK_USECNT =>
@@ -492,11 +509,15 @@ begin  -- syn
             state             <= IDLE;
             done_o            <= '0';
             
+            fprint(fout, l, "<== Release page: %d, free blocks: %d  \n",fo(tmp_page),fo(free_blocks+ 1));
+            --tmp_pgs(to_integer(unsigned(tmp_page))) <= '0';
           when FREE_DECREASE_UCNT =>
 
             usecnt_mem_wrdata <= std_logic_vector(unsigned(usecnt_mem_rddata) - 1);
             usecnt_mem_wr     <= '1';
             state             <= IDLE;
+            
+            fprint(fout, l, "     Free page: %d (usecnt = %d)\n",fo(tmp_page),fo(std_logic_vector(unsigned(usecnt_mem_rddata) - 1)));
 
             
           when SET_UCNT =>  
@@ -505,14 +526,16 @@ begin  -- syn
             usecnt_mem_wr     <= '1';
             state             <= IDLE;
             done_o            <= '0';
-  
-          
+            
+            fprint(fout, l, "     Usecnt set: %d (usecnt = %d)\n",fo(tmp_page),fo(usecnt_i));
+            
           when others =>
             state             <= IDLE;
             done_o            <= '0';
             
         end case;
-        
+        --usecnt_mem_rdaddr <= pgaddr_i;
+        tmp_page <= pgaddr_i;
 
       end if;
     end if;
