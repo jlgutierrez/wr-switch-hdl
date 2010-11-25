@@ -305,7 +305,7 @@ module main;
         int j;
         set_rtu_rsp(port,1,drop,prio,mask);  
         
-        $display("Sending [f_nr: %4d]: port = %d, len = %d, drop = %d, prio = %d, mask = %x",frame_number, port,length, drop, prio, mask);
+        $display("Sending [f_nr: %2d]: src = %x, port = %d, len = %d, drop = %d, prio = %d, mask = %x",frame_number,hdr.src, port,length, drop, prio, mask);
       case(port)
          0: test_input_block_0.send(hdr, payload, length);
          1: test_input_block_1.send(hdr, payload, length);
@@ -486,7 +486,7 @@ module main;
    end
    initial begin
       wait(ports_read);
-//      load_port(8);
+      load_port(8);
       tx_port_finished[8] = 1;
    end
    initial begin

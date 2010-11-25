@@ -18,10 +18,12 @@ vcom ../../../modules/wrsw_swcore/swc_multiport_pck_pg_free_module.vhd
 vcom ../../../modules/wrsw_swcore/swc_ob_prio_queue.vhd
 vcom ../../../modules/wrsw_swcore/swc_output_block.vhd
 
+vcom ../../../sim/vhdl_stdio/PCK_FIO_1993.vhd
+vcom ../../../sim/vhdl_stdio/PCK_FIO_1993_BODY.vhd
 
 vcom ../../../modules/wrsw_swcore/swc_core.vhd
 
-vlog -sv swc_core.v4.sv
+#vlog -sv swc_core.v4.sv
 #vlog -sv swc_core.sv
 
 vsim work.main -voptargs="+acc"
