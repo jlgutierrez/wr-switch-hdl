@@ -30,6 +30,6 @@ radix -hexadecimal
 
 do wave.do
 
-run 100us
+run 300us
 wave zoomfull
 
