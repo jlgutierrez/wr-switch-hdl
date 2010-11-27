@@ -385,8 +385,9 @@ module main;
           hdr.src          = port << 44 | cnt ;
           hdr.port_id      = port;
           hdr.ethertype    = i;
-          
-          mask = 'h7FF;;
+
+  //        mask = 'h00F;;          
+        mask = 'h7FF;;
 //          mask = (4*cnt + 3*cnt + 2*cnt + cnt)%2047; 
           if( (i/50)%20 > 10) drop = 1; else drop = 0;
           
@@ -491,12 +492,12 @@ module main;
    end
    initial begin
       wait(ports_read);
-//      load_port(9);
+      load_port(9);
       tx_port_finished[9] = 1;
    end
    initial begin
       wait(ports_read);
-//      load_port(10);
+      load_port(10);
       tx_port_finished[10] = 1;
    end  
            
@@ -545,11 +546,19 @@ module main;
 //////////////////////////////////////////////////////////
 
 
-   always @(posedge clk) if (rtu_rsp_ack != 0)
+   always @(posedge clk) //if (rtu_rsp_ack != 0)
      begin
        
-       rtu_rsp_valid = rtu_rsp_valid & !rtu_rsp_ack;
-       rtu_drop      = rtu_drop      & !rtu_rsp_ack;
+//       int i;
+//       for(i=0;i<<11;i++) if(rtu_rsp_ack[i]) rtu_rsp_valid[i] = 0;
+//       for(i=0;i<<11;i++) if(rtu_rsp_ack[i]) rtu_drop[i]      = 0;
+       
+       int i;
+       for(i = 0;i<11;i++)
+       begin
+         rtu_rsp_valid[i] = rtu_rsp_valid[i] & !rtu_rsp_ack[i];
+         rtu_drop[i]      = rtu_drop[i]      & !rtu_rsp_ack[i];
+       end
        
      end
    
