@@ -224,7 +224,11 @@ architecture rtl of swc_packet_mem_write_pump is
   
   -- address in LL SRAM which corresponds to the page address
   signal current_page_addr_int : std_logic_vector(c_swc_page_addr_width -1 downto 0);
-
+  
+  -- stored during FSM cycle (next->eop), this is needed for the last page of the pck
+  -- in such case we need to remember it, otherwise we have problems
+  signal current_page_addr_fsm : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+   
   signal previous_page_addr_int : std_logic_vector(c_swc_page_addr_width -1 downto 0);
 
   -- internal
@@ -245,7 +249,7 @@ architecture rtl of swc_packet_mem_write_pump is
   
   signal writing_last_page : std_logic;
   
-  type t_state is (IDLE, WR_NEXT, WR_EOP);
+  type t_state is (IDLE, WR_NEXT, WR_EOP, WR_LAST_EOP, WR_TRANS_EOP);
   signal state       : t_state;
 
   type t_state_write is (S_IDLE, S_READ_DATA, S_READ_LAST_DATA_WORD, S_WRITE_DATA, S_FLUSH, S_WAIT_WRITE, S_WAIT_LL_READY);
@@ -263,6 +267,7 @@ architecture rtl of swc_packet_mem_write_pump is
    
   signal sync_d    : std_logic_vector(c_swc_packet_mem_multiply - 1 downto 0);
 
+  signal pgend_output : std_logic;
 
     
 begin  -- rtl
@@ -486,20 +491,37 @@ begin  -- rtl
         
         pckstart_reg <= '0';
         pgreq_reg    <= '0';
+        
+        pgend_output<='0';
+        
       else
+        
+        if(pgreq_i = '1') then
+        
+--          pgend_output         <= '0';
+          pgend                <= '0';
+          
+        elsif(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
+        
+          if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then
+  
+--            pgend_output       <= '1';
+            pgend              <= '1';
 
-
+          end if;
+        end if;
+         
         if(pgreq_i = '1') then
         
           mem_addr(c_swc_packet_mem_addr_width-1 downto c_swc_page_offset_width) <= pgaddr_i;
           mem_addr(c_swc_page_offset_width-1 downto 0)                           <= (others => '0');
-          pgend                                                                  <= '0';
+--          pgend                                                                  <= '0';
           next_page_loaded                                                       <= '1';
           
         elsif(state_write = S_WRITE_DATA) then
           
           if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then
-            pgend            <= '1';
+--            pgend            <= '1';
             next_page_loaded <= '0';
           else
             
@@ -601,10 +623,11 @@ begin  -- rtl
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
 
-        state             <= IDLE;
-        ll_write_data     <=(others =>'0');
-        ll_write_addr     <=(others =>'0'); 
-        ll_wr_req         <='0';
+        state                 <= IDLE;
+        ll_write_data         <=(others =>'0');
+        ll_write_addr         <=(others =>'0'); 
+        ll_wr_req             <='0';
+        current_page_addr_fsm <=(others =>'0'); 
         
       else
 
@@ -614,22 +637,33 @@ begin  -- rtl
 
           when IDLE =>
             --fprint(fout, l, "Jou, ziom!\n");
+
             
-            -- normal case: load new page within the package (not the
-            -- beginning of the package)
             --if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '0')) then
             
             if((pgreq_or = '1') and (pckstart_or = '0') ) then
-              state          <= WR_NEXT;
-              ll_write_data  <= pgaddr_i;
-              ll_write_addr  <= previous_page_addr_int;
-              ll_wr_req      <= '1';
-            end if;
+
+              -- normal case: load new page within the package (not the
+              -- beginning of the package)
+              
+              -- this will not happen during the staart of the frame
+              -- within the frame, pgaddr_i will have the appripriate value
+              state                  <= WR_NEXT;
+              ll_write_data          <= pgaddr_i;
+              ll_write_addr          <= previous_page_addr_int;
+              
+              -- we remember the current (new address)
+              -- just in case, the pck finishes during NEXT OR EOP state
+              -- and new page is set, or just new page is set
+              current_page_addr_fsm  <= pgaddr_i;
+              ll_wr_req              <= '1';
  
-            -- first package, page provided at the same time as pckstart_i strobe
-            -- so we remember the address from input
-            --if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '1')) then
-            if((pgreq_or = '1') and (pckstart_or = '1')) then
+            elsif((pgreq_or = '1') and (pckstart_or = '1')) then
+
+              -- first package, page provided at the same time as pckstart_i strobe
+              -- so we remember the address from input
+              --if((pgreq_i = '1') and (pckstart = '0') and (pckstart_i = '1')) then
+
               state          <= WR_EOP;
               ll_write_data  <= (others =>'1');
               ll_write_addr  <= pgaddr_i;
@@ -645,11 +679,38 @@ begin  -- rtl
             --end if;
 
           when WR_NEXT =>
+
             if (ll_wr_done_i = '1') then
-              state          <= WR_EOP;
-              ll_write_data  <= (others =>'1');
-              ll_write_addr  <= current_page_addr_int;
-              ll_wr_req      <= '1';
+              
+              if((pgreq_or = '1') and (pckstart_or = '1') ) then
+
+                -- this means that the pck finished during NEXT state
+                -- 
+                state          <= WR_LAST_EOP;
+                ll_write_data  <= (others =>'1');
+                --ll_write_addr  <= current_page_addr_int;
+                ll_write_addr  <= current_page_addr_fsm;
+                ll_wr_req      <= '1';
+             
+             elsif((pgreq_or = '1') and (pckstart_or = '0') ) then
+
+                -- this means that new page was set during NEXT state
+                -- 
+                state          <= WR_TRANS_EOP;
+                ll_write_data  <= (others =>'1');
+                --ll_write_addr  <= current_page_addr_int;
+                ll_write_addr  <= current_page_addr_fsm;
+                ll_wr_req      <= '1';
+              
+              else
+          
+                state          <= WR_EOP;
+                ll_write_data  <= (others =>'1');
+                --ll_write_addr  <= current_page_addr_int;
+                ll_write_addr  <= current_page_addr_fsm;
+                ll_wr_req      <= '1';
+          
+              end if;
             end if;
 
             
@@ -693,7 +754,26 @@ begin  -- rtl
                 
               end if;
             end if;
-  
+            
+          when WR_LAST_EOP => 
+            
+           if (ll_wr_done_i = '1') then
+
+              state          <= WR_EOP;
+              ll_write_data  <= (others =>'1');
+              ll_write_addr  <= current_page_addr_int;
+              ll_wr_req      <= '1';
+
+            end if;
+
+          when WR_TRANS_EOP =>
+            
+            if (ll_wr_done_i = '1') then
+              state                  <= WR_NEXT;
+              ll_write_data          <= current_page_addr_int;
+              ll_write_addr          <= previous_page_addr_int;
+            end if;
+            
           when others =>
           
             state             <= IDLE;
@@ -723,8 +803,11 @@ begin  -- rtl
                and 
             (not sync_i)) or(pgend and sync_i));-- and not before_sync;
             
+  -- FIXME: investigate this solutions          
+  --addr_o <= pgaddr_i & zeros (c_swc_page_offset_width-1 downto 0) when (we_int = '1' and pgreq_i = '1') else mem_addr;
   addr_o <= mem_addr;
   pgend_o <= pgend;
+--  pgend_o <= pgend_output;
   
   gen_q1 : for i in 0 to c_swc_packet_mem_multiply-1 generate
     q_o(c_swc_pump_width * (i+1) - 1 downto c_swc_pump_width * i) <= in_reg(i);

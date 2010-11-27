@@ -474,6 +474,7 @@ begin  -- syn
             free_blocks       <= free_blocks-1;
             state             <= IDLE;
             
+            --if(l1_first_free & l0_first_free = x"0E5")
             fprint(fout, l, "==> Allocate page %d  ,  usecnt %d, free blocks: %d \n", fo(l1_first_free & l0_first_free),fo(usecnt_i), fo(free_blocks-1));
             -- tmp_pgs(to_integer(unsigned(l1_first_free & l0_first_free))) <= '1';
              --    done_o <= '0';
