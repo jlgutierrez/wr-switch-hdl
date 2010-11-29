@@ -23,7 +23,7 @@ vcom ../../../sim/vhdl_stdio/PCK_FIO_1993_BODY.vhd
 
 vcom ../../../modules/wrsw_swcore/swc_core.vhd
 
-#vlog -sv swc_core.v4.sv
+vlog -sv swc_core.v4.sv
 #vlog -sv swc_core.sv
 
 vsim work.main -voptargs="+acc"
@@ -33,5 +33,5 @@ radix -hexadecimal
 do wave.do
 
 run 300us
-wave zoomfull
+#wave zoomfull
 

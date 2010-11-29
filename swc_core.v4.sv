@@ -17,7 +17,7 @@
 `define array_copy(a, ah, al, b, bl) \
    for (k=al; k<=ah; k=k+1) a[k] <= b[bl+k-al];
 
-
+int stack_bastard = 0;
 
 module main;
 
@@ -380,15 +380,15 @@ module main;
         $display("Initial waiting: %d cycles",((port*50)%11)*50);
         wait_cycles(((port*50)%11)*50);
         
-        for(i=50;i<1250;i=i+50)
+        for(i=25;i<1250;i=i+25)
         begin
           hdr.src          = port << 44 | cnt ;
           hdr.port_id      = port;
           hdr.ethertype    = i;
 
   //        mask = 'h00F;;          
-        mask = 'h7FF;;
-//          mask = (4*cnt + 3*cnt + 2*cnt + cnt)%2047; 
+  //      mask = 'h7FF;;
+          mask = (4*cnt + 3*cnt + 2*cnt + cnt)%2047; 
           if( (i/50)%20 > 10) drop = 1; else drop = 0;
           
           send_pck(hdr,buffer, i, port, drop,  (i/50)%7, mask, cnt);  
@@ -433,6 +433,13 @@ module main;
       wait(test_input_block_9.ready);
       wait(test_input_block_10.ready);
       
+     // test_input_block_1.simulate_tx_throttling(1, 10);
+      
+      //      test_input_block_0.simulate_rx_abort(1,80);
+            test_input_block_1.simulate_tx_error(1,100);
+      //      test_input_block_1.send(hdr, buffer, 911);
+      
+      
       ports_read = 1;
       
       $display("=======ALL PORTS READY======");
@@ -442,6 +449,7 @@ module main;
    end
    
    initial begin
+      int i;
       wait(ports_read);
       load_port(0);
       tx_port_finished[0] = 1;
@@ -471,7 +479,7 @@ module main;
       tx_port_finished[4] = 1;
    end
    initial begin
-      wait(ports_read);
+     wait(ports_read);
      load_port(5);
      tx_port_finished[5] = 1;
    end
@@ -669,7 +677,7 @@ module main;
 	   dump_frame_header("Receiving RX_8: ", frame);
 	   end
    
-   always @(posedge clk) if (test_input_block_9.poll())
+   always @(posedge clk) if (test_input_block_9.poll() )
      begin
     	ether_frame_t frame;
 //	   $display("Emulator test received a frame on port 9!");
@@ -680,7 +688,7 @@ module main;
 	   rx_cnt_by_port[frame.hdr.src >> 44][9]++;
 	   dump_frame_header("Receiving RX_9: ", frame);
 	   end      
-   always @(posedge clk) if (test_input_block_10.poll())
+   always @(posedge clk) if (test_input_block_10.poll() )
      begin
     	ether_frame_t frame;
 //	   $display("Emulator test received a frame on port 10!");
