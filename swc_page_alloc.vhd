@@ -338,14 +338,16 @@ begin  -- syn
             usecnt_mem_wraddr <= pgaddr_i;
 
             -- check if we have any free blocks and drive the nomem_o line.
-            if(free_blocks = 0) then
+            -- last address (all '1') reserved for end-of-page marker in
+            -- linked list
+            if(free_blocks = 1) then
               nomem_o <= '1';
             else
               nomem_o <= '0';
             end if;
 
             -- got page allocation request
-            if(alloc_i = '1') then
+            if(alloc_i = '1' and free_blocks > 0) then
               -- initiate read from L0 bitmap at address of first free entry in
               -- L1. The address of L0_LUT maps into the position of the first 
               -- LSB '1' in the l1_bitmap register (high part of the page address)

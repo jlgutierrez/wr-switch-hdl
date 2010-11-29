@@ -10,7 +10,30 @@
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
--- Description: 
+-- Description: This block controls input to SW Core. It consists of few 
+-- processes:
+-- 1) PCK_FSM - the most important, it controls interaction between 
+--    Fabric Interface and Multiport Memory
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
+-- 
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2010 Maciej Lipinski / CERN
@@ -213,74 +236,59 @@ architecture syn of swc_input_block is
   -- in the case in which one pck has just finished, we need new page addr for the new pck
   -- very soon after writing the last page of previous pck, 
 
-  -- this one is written one of the above values    
-  --signal mmu_pageaddr              : std_logic_vector(c_swc_page_addr_width - 1 downto 0);  
-    
-
   signal tx_dreq                   : std_logic;
-  signal set_usecnt                : std_logic;
-  
   signal mpm_pckstart              : std_logic;
   signal mpm_pagereq               : std_logic;  
-
   signal transfering_pck           : std_logic;
-
   signal rtu_dst_port_mask         : std_logic_vector(c_swc_num_ports  - 1 downto 0);
   signal rtu_prio                  : std_logic_vector(c_swc_prio_width - 1 downto 0);
---  signal rtu_drop                  : std_logic;
   signal rtu_rsp_ack               : std_logic;
   signal usecnt                    : std_logic_vector(c_swc_usecount_width - 1 downto 0);
-
- -- signal mpm_flush                 : std_logic;
-
   signal mmu_force_free            : std_logic; 
-
- --signal mpm_pageend_d1            : std_logic;
-
-  signal pck_error_occured         : std_logic;
-  
-  
   signal pta_pageaddr              : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
   signal pta_mask                  : std_logic_vector(c_swc_num_ports  - 1 downto 0);
   signal pta_prio                  : std_logic_vector(c_swc_prio_width - 1 downto 0);
   signal pta_pck_size              : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
   
-  type t_pck_state is (S_IDLE, 
-                      -- S_RTU_RSP_SERVE, 
+  type t_pck_state is (S_IDLE,                   -- we wait for other processes (page fsm and 
+                                                 -- transfer) to be ready
+                       S_READY_FOR_PCK,          -- this is introduced to diminish optimization 
+                                                 -- (optimized design did not work) in this state, 
                        S_WAIT_FOR_SOF,           -- we've got RTU response, but there is no SOF
-                       S_WAIT_FOR_RTU_RSP,       -- we've got SOF (request from previous pck) but there is no RTU valid signal (quite improbable)
-                       S_WAIT_TO_WRITE_PREV_PCK, -- waiting for the previous packet to be written, in FB SRAM by the pump, the next
-                                                 -- packet in the endpoint is ready
-                       S_WAIT_FOR_VALID_PAGE,    -- this is the case when the previous packet was written to a page allocated in advance 
-                                                 -- and we need to wait for the page to be allocated
-                       S_PCK_START_1,            -- first mode of PCK start: we have the page ready, so we can set the page
-                       S_PCK_START_2,            -- second mode of PCK start: we do not have the page ready, so we start writing the packet but
-                                                 -- need to set the page as soon as it's allocated
-                       S_SET_USECNT_PCKSTART,    -- setting user count to the first page of the pck
-                       S_SET_USECNT_INTERPCK,    -- setting user count to the second page of the pck (this is in case that the 
-                                                 -- allocated-in-advance page has been "inherited" from the previous pck 
-                                                 -- (the usecnt is set as for previous pck)
-                       S_SET_NEXT_PAGE,    
-                       S_WAIT_FOR_PAGE_END,
-                       S_WAIT_FOR_PAGE_END_TERMINATION  ,   -- we wait for the pageend signal (comint from MPM) to finish, otherwise, if we enter 
-                                                          -- S_WAIT_FOR_PAGE_END state again, we will unnecesarily request new page
-                       S_WAIT_FOR_STARTPCK_PGADDR,
-                       S_WAIT_FOR_INTERPCK_PGADDR,
-                       S_SET_LAST_NEXT_PAGE,
-                       S_NASTY_WAIT,                     -- if this state is used, we are under heavy traffic, badly breathing...
-                                                         -- we need to wait for both: transfer arbiter to be free, and neew page to be allocated
-                       S_WAIT_FOR_LAST_PAGE_SET,
-                       S_DROP_PCK,              -- droping pck
-                       S_AWAIT_TRANSFER);              
+                       S_WAIT_FOR_RTU_RSP,       -- we've got SOF (request from previous pck) but
+                                                 -- there is no RTU valid signal (quite improbable)
+                       S_PCK_START_1,            -- first mode of PCK start: we have the page ready,
+                                                 -- so we can set the page
+                       S_SET_NEXT_PAGE,          -- setting next page address (allocated previously)
+                       S_SET_LAST_NEXT_PAGE,     -- setting the last page address of the pck(only in
+                                                 -- case, the last word to be written (after flush)
+                                                 -- needs allocation of a new page
+                       S_WAIT_FOR_PAGE_END,      -- waiting for the end of new page (should be most
+                                                 -- of the time during pck transfer, in this state)
+                       S_WAIT_FOR_LAST_PAGE_SET, -- waits for the last page to be allocated so it can be 
+                                                 -- written 
+                       S_DROP_PCK);              -- droping pck
+                                                           
 
-  type t_page_state is (S_IDLE, 
-                        S_PCKSTART_SET_USECNT,
-                        S_INTERPCK_SET_USECNT,
-                        S_PCKSTART_PAGE_REQ,    
-                        S_INTERPCK_PAGE_REQ); -- droping pck
+  type t_page_state is (S_IDLE,                  -- waiting for some work :)
+                        S_PCKSTART_SET_USECNT,   -- setting usecnt to a page which was allocated 
+                                                 -- in advance to be used for the first page of 
+                                                 -- the pck
+                                                 -- (only in case of the initially allocated usecnt
+                                                 -- is different than required)
+                        S_INTERPCK_SET_USECNT,   -- setting usecnt to a page which was allocated 
+                                                 -- in advance to be used for the page which is 
+                                                 -- not first
+                                                 -- in the pck, this is needed, only if the page
+                                                 -- was allocated during transfer of previous pck 
+                                                 -- but was not used in the previous pck, 
+                                                 -- only if usecnt of both pcks are different
+                        S_PCKSTART_PAGE_REQ,     -- allocating in advnace first page of the pck
+                        S_INTERPCK_PAGE_REQ);    -- allocating in advance page to be used by 
+                                                 -- all but first page of the pck
 
-  type t_rerror_state is (S_IDLE, 
-                          S_WAIT_TO_FREE_PCK,    
+  type t_rerror_state is (S_IDLE,                -- waiting for some work :)
+                          S_WAIT_TO_FREE_PCK,    -- 
                           S_ONE_PERROR,
                           S_TWO_PERRORS); -- droping pck                   
                    
@@ -291,11 +299,9 @@ architecture syn of swc_input_block is
   -- this goes HIGH for one cycle when all the
   -- initial staff related to starting new packet 
   -- transfer was finished, so when exiting S_SET_USECNT state
-  signal pck_mpm_write_established : std_logic;
   
   signal mmu_force_free_addr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
   
-  signal mpm_drdy          : std_logic;
   signal pck_size      : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
   
   signal need_pckstart_usecnt_set : std_logic;
@@ -305,9 +311,14 @@ architecture syn of swc_input_block is
   
   signal tmp_cnt : std_logic_vector(7 downto 0);
   
+  signal tx_rerror_reg : std_logic;
+  
+  signal tx_rerror_or : std_logic;
+  
 begin --arch
 
-
+ -- here we calculate pck size: we increment when
+ -- the valid_i is HIGH
  pck_size_cnt : process(clk_i, rst_n_i)
  begin
    if rising_edge(clk_i) then
@@ -332,6 +343,10 @@ begin --arch
    
  end process;
      
+     
+     
+ -- Main Finite State Machine which controls communication
+ -- between Fabric Interface and Mutiport Memory
  fsm_pck : process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
@@ -343,18 +358,11 @@ begin --arch
         
         mpm_pckstart             <= '0';
         mpm_pagereq              <= '0';
- --       mpm_flush                <= '0';
-        
-        set_usecnt               <= '0';
-        
+
         rtu_rsp_ack              <= '0';
         rtu_dst_port_mask        <= (others => '0');
         rtu_prio                 <= (others => '0');
-        --rtu_drop                 <= '0';
         
---        mpm_pageend_d1           <= '0';
-        
-        pck_mpm_write_established<= '0';
         current_pckstart_pageaddr<= (others => '0');
         usecnt                   <= (others => '0');
         
@@ -366,9 +374,29 @@ begin --arch
         -- main finite state machine
         case pck_state is
 
+
           when S_IDLE =>
+          
+            tmp_cnt      <=  (others => '0');
+            tx_dreq      <= '0';
             
-            tmp_cnt                  <=  (others => '0');
+            if(page_state               = S_IDLE and      -- all allocations in advnaced finished
+               pckstart_page_in_advance = '1'    and
+               transfering_pck          = '0'    and      -- last package transferred
+               tx_rerror_reg            = '0'    and      -- if error of pck was detected when
+                                                       -- another one is being handled, wait !!!
+               mmu_nomem_i              = '0' ) then   -- there is place in memory
+                
+               -- prepared to be accepting new package
+               pck_state <= S_READY_FOR_PCK;
+               tx_dreq   <= '1';
+            
+              
+            end if;
+           
+          when S_READY_FOR_PCK =>
+            
+            
             
             -- we need decision from RTU, but also we want the transfer
             -- of the fram eto be finished, the transfer in normal case should
@@ -395,185 +423,85 @@ begin --arch
                tx_dreq                  <= '1';
                mpm_pckstart             <= '1';
                mpm_pagereq              <= '1';
-               set_usecnt               <= '1';
-               
                rtu_dst_port_mask        <= rtu_dst_port_mask_i;
                rtu_prio                 <= rtu_prio_i;
                usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
                rtu_rsp_ack              <= '1';               
-               -- next state
                pck_state                <= S_PCK_START_1;
 
 
-             elsif(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '1' and (mpm_full_i = '1' or pckstart_page_in_advance = '0') ) then 
-             
-               
-               rtu_dst_port_mask      <= rtu_dst_port_mask_i;
-               rtu_prio               <= rtu_prio_i;
- --              rtu_drop               <= rtu_drop_i;
-               usecnt                 <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
-               
-               rtu_rsp_ack            <= '1';
---               tx_dreq                <= '0';
-               tx_dreq                <= '1';
-               pck_state              <= S_WAIT_TO_WRITE_PREV_PCK;
- 
              elsif(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '0') then
              
                -- so we've got RTU decision, but no SOF, let's wait for SOF
                -- but remember RTU RSP and ack it, so RTU is free 
                rtu_rsp_ack              <= '1';
                pck_state                <= S_WAIT_FOR_SOF;
-               
                tx_dreq                  <= '1';
-               
                rtu_dst_port_mask        <= rtu_dst_port_mask_i;
                rtu_prio                 <= rtu_prio_i;
---               rtu_drop                 <= rtu_drop_i;
                usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
              
              elsif(rtu_rsp_valid_i = '0' and tx_sof_p1_i = '1') then
              
                -- we've got SOF because it was requested at the end of the last PCK
                -- but the RTU is still processing
-               rtu_rsp_ack              <= '1';
+               rtu_rsp_ack              <= '0';
                pck_state                <= S_WAIT_FOR_RTU_RSP;
                tx_dreq                  <= '0';
 
-             else
-               
-               -- wait for sth to happpen
-               tx_dreq                  <= '0';
-               
              end if;
         
-          when S_WAIT_TO_WRITE_PREV_PCK =>
-            
-              tx_dreq                  <= '1';
-              rtu_rsp_ack              <= '0';
-              -- TODO !!!!!!!!!!!!!!
-              -- needed some signal in advance to tell us that end of full is 
-              -- approaching
-              if(mpm_full_i = '0' and pckstart_page_in_advance = '1' ) then
-
-                tx_dreq                  <= '1';              
-                mpm_pckstart             <= '1';
-                mpm_pagereq              <= '1';
-                set_usecnt               <= '1';
-                pck_state                <=  S_PCK_START_1;
-              
-              end if;                   
-              
-              
           when S_WAIT_FOR_SOF =>
               
-              rtu_rsp_ack              <= '0';
+              rtu_rsp_ack             <= '0';
               
               if(tx_sof_p1_i = '1' and mpm_full_i = '0' and pckstart_page_in_advance = '1' ) then
-                tx_dreq                  <= '1';
-                mpm_pckstart             <= '1';
-                mpm_pagereq              <= '1';
-                set_usecnt               <= '1';
-                pck_state                <=  S_PCK_START_1;   
-                
-              elsif(tx_sof_p1_i = '1' and ( mpm_full_i = '1' and pckstart_page_in_advance = '0' )) then
-               
-               pck_state              <= S_WAIT_TO_WRITE_PREV_PCK;
-               --tx_dreq                <= '0'; 
-               tx_dreq                <= '1'; 
-                    
-              elsif(tx_sof_p1_i = '1' and ( mpm_full_i = '0' and pckstart_page_in_advance = '0' )) then                    
-                    
-               pck_state              <= S_WAIT_FOR_STARTPCK_PGADDR;
-               tx_dreq                <= '0';     
-                    
-              end if;
               
+                -- very nicely, everything is in place, we can go ahead
+                tx_dreq               <= '1';
+                mpm_pckstart          <= '1';
+                mpm_pagereq           <= '1';
+                pck_state             <=  S_PCK_START_1;   
+                
+              end if;
+                
           when S_WAIT_FOR_RTU_RSP => 
             
             
             if(tx_rerror_p1_i = '1' ) then
             
               pck_state                <= S_IDLE;
-              tx_dreq                  <= '1';
+              tx_dreq                  <= '0';
               
             elsif(rtu_rsp_valid_i = '1' and mpm_full_i = '0' and pckstart_page_in_advance = '1') then
 
               tx_dreq                  <= '1';
               mpm_pckstart             <= '1';
               mpm_pagereq              <= '1';
-              set_usecnt               <= '1';
             
               rtu_dst_port_mask        <= rtu_dst_port_mask_i;
               rtu_prio                 <= rtu_prio_i;
               usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
               rtu_rsp_ack              <= '1'; 
               pck_state                <=  S_PCK_START_1; 
-              
-            elsif(rtu_rsp_valid_i = '1' and  mpm_full_i = '1' and pckstart_page_in_advance = '0' ) then
-            
-              --tx_dreq                  <= '0';
-              tx_dreq                  <= '1';
-              rtu_dst_port_mask        <= rtu_dst_port_mask_i;
-              rtu_prio                 <= rtu_prio_i;
-              usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
-              rtu_rsp_ack              <= '1'; 
-              pck_state                <= S_WAIT_TO_WRITE_PREV_PCK;
-              
-            elsif(rtu_rsp_valid_i = '1' and  mpm_full_i = '0' and pckstart_page_in_advance = '0' ) then
-            
-              tx_dreq                  <= '0';
-              rtu_dst_port_mask        <= rtu_dst_port_mask_i;
-              rtu_prio                 <= rtu_prio_i;
-              usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
-              rtu_rsp_ack              <= '1'; 
-              pck_state                <= S_WAIT_FOR_STARTPCK_PGADDR;
-              
+                            
             end if;
            
-          when S_WAIT_FOR_STARTPCK_PGADDR => 
-            
-            tx_dreq                  <= '0';
-            rtu_rsp_ack              <= '0';
-            -- TODO !!!!!!!!!!!!!!
-            -- needed some signal in advance to tell us that end of full is 
-            -- approaching
-            if(mpm_full_i = '0' and pckstart_page_in_advance = '1' ) then
-
-              tx_dreq                  <= '1';              
-              mpm_pckstart             <= '1';
-              mpm_pagereq              <= '1';
-              set_usecnt               <= '1';
-              pck_state                <=  S_PCK_START_1;
-            
-            end if;  
-            
-          when S_WAIT_FOR_INTERPCK_PGADDR =>
-            
-              if(mpm_pageend_i = '1' and interpck_page_in_advance = '0') then 
-                 pck_state               <=  S_SET_NEXT_PAGE;
-                 mpm_pagereq             <= '1';
-               end if;
-  
           when S_PCK_START_1 =>
               
                rtu_rsp_ack              <= '0';
                mpm_pckstart             <= '0';
                mpm_pagereq              <= '0';
                current_pckstart_pageaddr<=pckstart_pageaddr;
-               -- next state
                pck_state                <= S_WAIT_FOR_PAGE_END;
                
           when S_WAIT_FOR_PAGE_END =>
-            
-            
-            pck_mpm_write_established<= '0';  
            
             if(tx_rerror_p1_i = '1')then
            
               -- error, screw everything else
               pck_state               <= S_IDLE;
-              tx_dreq                 <= '1';
+              tx_dreq                 <= '0';
               
            
             elsif(tx_eof_p1_i = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
@@ -586,7 +514,7 @@ begin --arch
           
               -- we wait in the same state, write_pump should do the work
               -- of stopping writing by asserting full_o to HIGH when we 
-              -- run out of space (afther the "end page" is finished
+              -- run out of space (after the "end page" is finished)
               pck_state               <=  S_WAIT_FOR_PAGE_END;
                 
                  
@@ -594,27 +522,19 @@ begin --arch
               
               -- ============= now comes fun ..... =====================
            
-
+              -- transfering_pck will be set to HIGH by another process
               if(transfering_pck = '0' and mpm_pageend_i = '0') then
   
                 -- normal finish of the pck,             
                 pck_state               <= S_IDLE;
-                tx_dreq                 <= '1'; --??
-              
-             
-              elsif(transfering_pck = '1' and mpm_pageend_i = '0') then
-              
-                -- transfer arbiter busy, wait till it is free
-                pck_state               <= S_AWAIT_TRANSFER;
-                tx_dreq                 <= '0';
-              
+                tx_dreq                 <= '0'; 
               
               elsif(transfering_pck = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
               
                 -- we need to set new page to which the last bytes are written
-                mpm_pagereq              <= '1';
+                mpm_pagereq             <= '1';
                 pck_state               <= S_SET_LAST_NEXT_PAGE;
-                tx_dreq                 <= '1'; --??
+                tx_dreq                 <= '0'; 
              
               elsif(transfering_pck = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '0') then 
             
@@ -624,22 +544,6 @@ begin --arch
                 -- finish the transfer after setting the page
                 pck_state               <=  S_WAIT_FOR_LAST_PAGE_SET;
 
-              elsif(transfering_pck = '1' and mpm_pageend_i = '1' and interpck_page_in_advance = '0') then 
-            
-                -- this is VERY BAD, the transfer is not finished(transfering_pck = '1' ), 
-                -- and we have no new page allocated (interpck_page_in_advance = '0')) 
-                -- hope, it will never get here :)
-                pck_state               <= S_NASTY_WAIT;
-                tx_dreq                 <= '0';
-                 
-              elsif(transfering_pck = '1' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
-                       
-                -- now we need to wait for transfer    
---                pck_state               <= S_NASTY_WAIT;
-                pck_state               <= S_SET_LAST_NEXT_PAGE;
-                mpm_pagereq              <= '1';
-                tx_dreq                 <= '1';
-              
               end if;  
             end if;     
 
@@ -648,73 +552,38 @@ begin --arch
             if(interpck_page_in_advance = '1') then 
               mpm_pagereq              <= '1';
               pck_state               <= S_SET_LAST_NEXT_PAGE;
-              tx_dreq                 <= '1'; --??
+              tx_dreq                 <= '0'; 
             end if;
             
           when S_SET_NEXT_PAGE =>
 
             mpm_pagereq                <= '0';
               
-            if(tx_eof_p1_i = '1' or tx_rerror_p1_i = '1' ) then
+            if(tx_rerror_p1_i = '1' ) then
 
               pck_state                <= S_IDLE;
-              tx_dreq                  <= '1';
+              tx_dreq                  <= '0';
+           
+            elsif( tx_eof_p1_i = '1' ) then
+
+              pck_state               <= S_IDLE;
+              tx_dreq                 <= '0'; 
               
-            elsif(mpm_pageend_i = '1') then
-            
-              pck_state                <= S_WAIT_FOR_PAGE_END_TERMINATION;
-            
             else
 
               pck_state                <=  S_WAIT_FOR_PAGE_END;
                          
             end if;        
           
-          
-          when S_NASTY_WAIT =>
-          
-            if(transfering_pck = '0' and interpck_page_in_advance = '1') then 
-    
-              mpm_pagereq              <= '1';
-              pck_state               <= S_SET_LAST_NEXT_PAGE;
-              tx_dreq                 <= '1'; --??
-              
-             end if;
-          
-
           when S_SET_LAST_NEXT_PAGE =>
     
             -- used only in the case that pck finishes when pageend is HIGH,
             -- which means that the data being written has no page allocated    
             
             mpm_pagereq              <= '0';
-            
-            if(transfering_pck = '1' )  then
+            pck_state                <= S_IDLE;
+            tx_dreq                  <= '0';
         
-              pck_state               <= S_AWAIT_TRANSFER;
-              -- ???????
-            else
-                    
-              mpm_pagereq              <= '0';
-              pck_state                <= S_IDLE;
-              tx_dreq                  <= '1';
-        
-            end if;
-        
-          when S_WAIT_FOR_PAGE_END_TERMINATION => 
-            
-            if(tx_eof_p1_i = '1' or tx_rerror_p1_i = '1' ) then
-
-              pck_state                <= S_IDLE;
-              tx_dreq                  <= '1';
-              
-            elsif(mpm_pageend_i = '0') then
-            
-              pck_state                    <= S_WAIT_FOR_PAGE_END;
-            
-            end if; 
-            
-            
           when S_DROP_PCK => 
              
             rtu_rsp_ack               <= '0';
@@ -722,22 +591,14 @@ begin --arch
             if(tx_eof_p1_i = '1' or tx_rerror_p1_i = '1' ) then 
               
               pck_state               <= S_IDLE;
-              tx_dreq                 <= '1';
+              tx_dreq                 <= '0';
               
-            end if;
-          when S_AWAIT_TRANSFER =>
-            
-            tx_dreq                  <= '0';
-
-            if(transfering_pck = '0' or (pta_transfer_ack_i = '1' and  transfering_pck_on_wait = '1')) then
-              pck_state               <= S_IDLE;
-              tx_dreq                 <= '1';
             end if;
 
           when others =>
             
               pck_state               <= S_IDLE;
-              tx_dreq                 <= '1';
+              tx_dreq                 <= '0';
             
         end case;
         
@@ -748,8 +609,11 @@ begin --arch
   
 
 
-
-fsm_page : process(clk_i, rst_n_i)
+ -- Auxiliary Finite State Machine which talks with
+ -- Memory Management Unit, it controls:
+ -- * page allocation
+ -- * usecnt setting
+ fsm_page : process(clk_i, rst_n_i)
  begin
    if rising_edge(clk_i) then
      if(rst_n_i = '0') then
@@ -778,29 +642,31 @@ fsm_page : process(clk_i, rst_n_i)
            pckstart_page_alloc_req   <= '0';
            pckstart_usecnt_req       <= '0';
            
-             
-           if(need_interpck_usecnt_set = '1') then 
-             
-             page_state               <= S_INTERPCK_SET_USECNT;
-             interpck_usecnt_req      <= '1';
            
-           elsif(interpck_page_in_advance = '0') then 
-             
-             interpck_page_alloc_req  <= '1';
-             page_state               <= S_INTERPCK_PAGE_REQ;
-
-             
-           elsif(need_pckstart_usecnt_set = '1') then
+           if((need_pckstart_usecnt_set = '1' and need_interpck_usecnt_set = '1') or
+              (need_pckstart_usecnt_set = '1' and need_interpck_usecnt_set = '0') ) then
              
              page_state               <= S_PCKSTART_SET_USECNT;
              pckstart_usecnt_req      <= '1';
-           
+            
            elsif(pckstart_page_in_advance = '0') then
            
              pckstart_page_alloc_req  <= '1';
              page_state               <= S_PCKSTART_PAGE_REQ;
              
+             
+           elsif(interpck_page_in_advance = '0') then 
+             
+             interpck_page_alloc_req  <= '1';
+             page_state               <= S_INTERPCK_PAGE_REQ;
+
+           elsif(need_interpck_usecnt_set = '1') then 
+             
+             page_state               <= S_INTERPCK_SET_USECNT;
+             interpck_usecnt_req      <= '1';
+           
            end if;
+                      
 
         when S_PCKSTART_SET_USECNT =>
         
@@ -947,9 +813,11 @@ fsm_page : process(clk_i, rst_n_i)
    
  end process;
   
-
-
-fsm_perror : process(clk_i, rst_n_i)
+  tx_rerror_or <= tx_rerror_reg or tx_rerror_p1_i;
+ 
+ -- Auxiliary Finite State Machine which controls
+ -- error handling
+ fsm_perror : process(clk_i, rst_n_i)
  variable cnt : integer := 0;
  begin
    if rising_edge(clk_i) then
@@ -958,26 +826,60 @@ fsm_perror : process(clk_i, rst_n_i)
        mmu_force_free_addr <= (others => '0');
        mmu_force_free      <= '0';
        cnt                 := 0;
+       tx_rerror_reg       <= '0';
        --========================================
      else
 
-       -- main finite state machine
+       
+       -- here is some magic which foresees a case in which
+       -- an rerror occures when a previous rerror case is being
+       -- handled, in such case, we remmeber another signal
+       -- which will be handled next time
+       -- simultaneously, the pck_fsm will wait with
+       -- the transfer of another pck since we cannot stand
+       -- more pck tropped
+       
+       if(tx_rerror_p1_i = '1' and rerror_state /=S_IDLE) then
+       
+         -- when previous error is being handled, remember
+         -- the error signal
+         tx_rerror_reg <= '1';
+         
+       elsif(tx_rerror_reg = '1' and rerror_state = S_IDLE) then
+       
+         -- remembered signal is now detected so we can
+         -- stop remembering
+         tx_rerror_reg <= '0';
+         
+       end if;
+       
+       
        case rerror_state is
 
         when S_IDLE =>
           
           mmu_force_free      <= '0';
           
-          if(tx_rerror_p1_i = '1' and pck_state /=S_DROP_PCK) then 
+          if(tx_rerror_or = '1' and pck_state /=S_DROP_PCK) then 
           
             rerror_state                <= S_WAIT_TO_FREE_PCK;
             mmu_force_free_addr         <= current_pckstart_pageaddr;
             
           end if;
 
-        -- wait till the next pck is started
+        -- why this state ?
+        -- most probably, the pck that is tropped, will be immediately
+        -- followed by another pck, we don't want to perform pck forced
+        -- deallocation at the beginning of transmitting new pck, since
+        -- these two operations interface the same block (MMU), thus
+        -- both of them will work two times slower, so we wait
+        -- until the pck transfer is in "less busy state" 
+        -- (i.e. S_WAIT_FOR_PAGE_END) or there is no pcks being
+        -- transfered for some arbitrar time (10 cycles)
+        -- it may be not the best solutions
+        
         when S_WAIT_TO_FREE_PCK =>          
-            
+                       
             
             if(pck_state =  S_WAIT_FOR_PAGE_END) then
 
@@ -1005,10 +907,6 @@ fsm_perror : process(clk_i, rst_n_i)
             rerror_state              <= S_IDLE;
             
           end if;
-          
--- TODO: add two pck errors
---        when S_TWO_PERRORS =>          
-
 
          when others =>
            
@@ -1023,32 +921,29 @@ fsm_perror : process(clk_i, rst_n_i)
    
  end process;
 
---===================================================================
-  input: process(clk_i, rst_n_i)
+  -- this proces controls Package Transfer Arbiter
+  pta_if: process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
-      
-      
       if(rst_n_i = '0') then
       --===================================================
-      pckstart_page_in_advance  <= '0';
-      interpck_page_in_advance  <= '0';
       transfering_pck           <= '0';
-      pck_error_occured         <= '0';
       pta_pageaddr              <=(others => '0');
       pta_mask                  <=(others => '0');
       pta_prio                  <=(others => '0');
       pta_pck_size              <=(others => '0');
-      need_pckstart_usecnt_set  <= '0';
-      need_interpck_usecnt_set  <= '0'; 
       transfering_pck_on_wait   <= '0';
       --===================================================
       else
 
+        
         if(tx_eof_p1_i = '1' and pck_state /=S_DROP_PCK ) then 
            
+           -- transfer pck when end of frame
+
           if(transfering_pck = '0') then
-                      
+
+            -- normal case, transfer arbiter free                      
             transfering_pck <= '1';
           
             pta_pageaddr    <= current_pckstart_pageaddr;
@@ -1057,42 +952,55 @@ fsm_perror : process(clk_i, rst_n_i)
             pta_pck_size    <= pck_size;
             
           else
-            
+             
+            -- transfer arbiter not free (should not
+            -- get here in non-optimal implementation)
+            -- anyway, we set the special flag           
             transfering_pck_on_wait <= '1';
             
           end if;
           
-        elsif(pta_transfer_ack_i = '1' and (pck_state /=S_AWAIT_TRANSFER or transfering_pck_on_wait = '0')) then
+        elsif(transfering_pck = '0' and transfering_pck_on_wait = '1') then
           
-          transfering_pck_on_wait <= '0';
+          -- if the transfer is finished, but another 
+          -- transfer is in the queue, go for it
           
-          transfering_pck <= '0';
-          
-          pta_pageaddr    <= (others => '0');
-          pta_mask        <= (others => '0');
-          pta_prio        <= (others => '0');
-          pta_pck_size    <= (others => '0');
-
-        elsif(pta_transfer_ack_i = '1' and pck_state =S_AWAIT_TRANSFER) then
-        
           transfering_pck_on_wait <= '0';
           
           transfering_pck <= '1';
           
-          pta_pageaddr    <= current_pckstart_pageaddr;
-          pta_mask        <= rtu_dst_port_mask;
-          pta_prio        <= rtu_prio;
-          pta_pck_size    <= pck_size;
+          pta_pageaddr     <= current_pckstart_pageaddr;
+          pta_mask         <= rtu_dst_port_mask;
+          pta_prio         <= rtu_prio;
+          pta_pck_size     <= pck_size;
+                    
+        elsif(pta_transfer_ack_i = '1' and transfering_pck = '1') then
         
-         
-        end if;
+          --transfer finished
+          transfering_pck   <= '0';
+          pta_pageaddr      <=(others => '0');
+          pta_mask          <=(others => '0');
+          pta_prio          <=(others => '0');
+          pta_pck_size      <=(others => '0');
+          
 
-        if(tx_rerror_p1_i = '1' )then 
-          pck_error_occured <= '1';
-        elsif(mmu_force_free_done_i = '1') then 
-          pck_error_occured <= '0';
         end if;
-      
+      end if;
+    end if;
+  end process;
+
+  -- for page allocation
+  page_if: process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+      --===================================================
+      pckstart_page_in_advance  <= '0';
+      interpck_page_in_advance  <= '0';
+      need_pckstart_usecnt_set  <= '0';
+      need_interpck_usecnt_set  <= '0'; 
+      --===================================================
+      else        
       
         if(pck_state = S_PCK_START_1) then
         
@@ -1133,68 +1041,36 @@ fsm_perror : process(clk_i, rst_n_i)
     end if;
   end process;
 
-
-  mmu_set_usecnt_o       <= pckstart_usecnt_req or interpck_usecnt_req;--set_usecnt;
-  mmu_usecnt_o           <= usecnt;
-
-  mpm_pckstart_o         <= mpm_pckstart;
-
-  mmu_page_alloc_req_o   <= interpck_page_alloc_req or pckstart_page_alloc_req;
---  tx_dreq_o              <= '1' when (state = S_WAIT_FOR_NEW_PAGE_REQ) else tx_dreq and not mpm_full_i;
-  tx_dreq_o              <= tx_dreq  when (pck_state = S_IDLE)     else
-                            '1'      when (pck_state = S_DROP_PCK) else   
-
-                           -- new solution to be investigated
-                           -- not mpm_full_i                when (pck_state = S_WAIT_TO_WRITE_PREV_PCK) else 
-
+  tx_dreq_o              <= '0'    when (pck_state = S_IDLE)     else
+                            '1'    when (pck_state = S_DROP_PCK) else   
                             tx_dreq and not mpm_full_i    ;
                             
-                            
-  mpm_drdy               <= '0' when (pck_state = S_DROP_PCK) else tx_valid_i ;
-  mpm_drdy_o             <= mpm_drdy;
-  mpm_flush_o            <= tx_eof_p1_i when (pck_state = S_WAIT_FOR_PAGE_END or 
-                                              pck_state = S_SET_NEXT_PAGE     or 
-                                              pck_state = S_WAIT_FOR_PAGE_END_TERMINATION) else '0'; --mpm_flush;
-  mpm_pagereq_o          <= mpm_pagereq;
-  
-  mmu_force_free_o       <= mmu_force_free;
-  
-  mpm_data_o             <= tx_data_i;
-  
-  
-  mpm_ctrl_o(3)          <= tx_bytesel_i;
-  mpm_ctrl_o(2 downto 0) <= tx_ctrl_i(2 downto 0);
-  
---  mmu_pageaddr_o         <= pckstart_pageaddr;
+  rtu_rsp_ack_o          <= rtu_rsp_ack;
+
+  mmu_force_free_addr_o  <= mmu_force_free_addr;
+  mmu_set_usecnt_o       <= pckstart_usecnt_req or interpck_usecnt_req;
+  mmu_usecnt_o           <= usecnt;
+  mmu_page_alloc_req_o   <= interpck_page_alloc_req or pckstart_page_alloc_req;
+  mmu_force_free_o       <= mmu_force_free;                            
   mmu_pageaddr_o         <= interpck_pageaddr when (page_state = S_INTERPCK_SET_USECNT)  else
                             pckstart_pageaddr when (page_state = S_PCKSTART_SET_USECNT)  else (others => '0') ;
 
---  mpm_pageaddr_o         <= interpck_pageaddr when (pck_state = S_SET_NEXT_PAGE                 OR 
---                                                    pck_state = S_WAIT_FOR_LAST_PAGE_SET        OR
---                                                    pck_state = S_WAIT_FOR_PAGE_END_TERMINATION OR
---                                                    pck_state = S_SET_USECNT_INTERPCK           OR
---                                                    pck_state = S_WAIT_FOR_PAGE_END)           else pckstart_pageaddr;
---                                                    
+  mpm_pckstart_o         <= mpm_pckstart;                            
+  mpm_drdy_o             <= '0' when (pck_state = S_DROP_PCK) else tx_valid_i;
+  mpm_pagereq_o          <= mpm_pagereq;
+  mpm_data_o             <= tx_data_i;
+  -- TODO: need info from TOMEK
+  mpm_ctrl_o(3)          <= tx_bytesel_i;
+  mpm_ctrl_o(2 downto 0) <= tx_ctrl_i(2 downto 0);
   mpm_pageaddr_o         <= pckstart_pageaddr when (pck_state = S_PCK_START_1) else interpck_pageaddr ;                                           
+  mpm_flush_o            <= tx_eof_p1_i when (pck_state = S_WAIT_FOR_PAGE_END or 
+                                              pck_state = S_SET_NEXT_PAGE     ) else '0'; --mpm_flush;
                                                     
-                                             
-                                                    
-  
-  rtu_rsp_ack_o          <= rtu_rsp_ack;
-  
-  
-  mmu_force_free_addr_o  <= mmu_force_free_addr;
-  
   pta_transfer_pck_o     <= transfering_pck;
-  
---  pta_pageaddr_o         <= current_pckstart_pageaddr;
---  pta_mask_o             <= rtu_dst_port_mask;
---  pta_prio_o             <= rtu_prio;
---  pta_pck_size_o         <= pck_size;
-  
   pta_pageaddr_o         <= pta_pageaddr;
   pta_mask_o             <= pta_mask;
   pta_prio_o             <= pta_prio;
   pta_pck_size_o         <= pta_pck_size;
+  
   
 end syn; -- arch

@@ -269,12 +269,15 @@ architecture rtl of swc_packet_mem_write_pump is
 
   signal pgend_output : std_logic;
 
+
     
 begin  -- rtl
 
   -- VHDL sucks...
   allones <= (others => '1');
   zeros   <= (others => '0');
+  
+  write_on_sync <= '1' when (cntr = to_unsigned(0,cntr'length)) else '0';
   
   synch_delay : process(clk_i, rst_n_i)
   begin
@@ -415,7 +418,7 @@ begin  -- rtl
              
           when S_FLUSH =>
              
-             if(sync_i = '1') then
+             if(sync_i = '1' and pgend = '0') then
                
                state_write <= S_WRITE_DATA;
                reg_full    <= '0';
@@ -432,7 +435,8 @@ begin  -- rtl
                  state_write   <= S_WAIT_LL_READY;
                  reg_full      <= '1';
                  
-               else
+               elsif(drdy_i = '1' or write_on_sync = '1' or flush_reg = '1') then
+--               else
                
                  state_write <= S_WRITE_DATA;
                  we_int      <= '1';
@@ -493,8 +497,14 @@ begin  -- rtl
         pgreq_reg    <= '0';
         
         pgend_output<='0';
-        
+        flush_reg   <='0';
       else
+      
+        if(flush_i = '1') then 
+          flush_reg <= '1';
+        elsif(sync_i = '1' and flush_reg ='1') then
+          flush_reg <= '0';
+        end if;
         
         if(pgreq_i = '1') then
         
@@ -531,7 +541,7 @@ begin  -- rtl
 
           
         end if;
-
+        
         
         if(drdy_i = '1') then
         
@@ -801,11 +811,14 @@ begin  -- rtl
                                 -- and here, again, we need to set full_o in advance by making the (X and not sync_i)
                                 -- trick
                and 
-            (not sync_i)) or(pgend and sync_i));-- and not before_sync;
+            (not sync_i)) or(pgend and sync_i));-- or (sync_i and (not drdy_i)));-- and not before_sync;
             
-  -- FIXME: investigate this solutions          
-  --addr_o <= pgaddr_i & zeros (c_swc_page_offset_width-1 downto 0) when (we_int = '1' and pgreq_i = '1') else mem_addr;
-  addr_o <= mem_addr;
+  -- FIXME: investigate this solutions   
+  
+  --work here
+         
+  addr_o <= pgaddr_i & zeros (c_swc_page_offset_width-1 downto 0) when (we_int = '1' and pgreq_i = '1') else mem_addr;
+  --addr_o <= mem_addr;
   pgend_o <= pgend;
 --  pgend_o <= pgend_output;
   
