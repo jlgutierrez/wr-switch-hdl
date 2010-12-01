@@ -163,6 +163,7 @@ entity swc_page_allocator is
                                         -- end 1 cycle in advance, so the
                                         -- multiport scheduler can optimize
                                         -- it's performance
+                                 
     nomem_o : out std_logic
     );
 
@@ -170,7 +171,7 @@ end swc_page_allocator;
 
 architecture syn of swc_page_allocator is
 
-
+  signal nomem : std_logic;
 
   function f_onehot_decode(x : std_logic_vector) return std_logic_vector is
     variable tmp : std_logic_vector(2**x'length-1 downto 0);
@@ -314,8 +315,9 @@ begin  -- syn
         l0_rd_addr        <= (others => '0');
         l0_wr_data        <= (others => '0');
         
-        tmp_page <= (others => '0');
-        tmp_pgs <= (others => '0');
+        nomem             <= '0';
+        tmp_page          <= (others => '0');
+        tmp_pgs           <= (others => '0');
         -- bugfix by ML (two consecutive page free of the same page addr)
         page_freeing_in_last_operation <= '0';
         previously_freed_page          <= (others => '0');
@@ -340,12 +342,15 @@ begin  -- syn
             -- check if we have any free blocks and drive the nomem_o line.
             -- last address (all '1') reserved for end-of-page marker in
             -- linked list
-            if(free_blocks = 1) then
-              nomem_o <= '1';
-            else
-              nomem_o <= '0';
+            
+            -- ========= hystheresis ===========================
+            if(nomem = '0' and (free_blocks < 3)) then
+              nomem <= '1';
+            elsif(nomem = '1' and (free_blocks > (3*c_swc_num_ports))) then
+              nomem <= '0';
             end if;
-
+            -- ========= =========== ===========================
+             
             -- got page allocation request
             if(alloc_i = '1' and free_blocks > 0) then
               -- initiate read from L0 bitmap at address of first free entry in
@@ -549,5 +554,7 @@ begin  -- syn
   -- we need to set the usercnt read address as early as possible
   -- so that the data is available at the end of the first stata after IDLE
   usecnt_mem_rdaddr <= pgaddr_i;
+  
+  nomem_o <= nomem;
 
 end syn;

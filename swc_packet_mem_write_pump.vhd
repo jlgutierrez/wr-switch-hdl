@@ -252,7 +252,7 @@ architecture rtl of swc_packet_mem_write_pump is
   type t_state is (IDLE, WR_NEXT, WR_EOP, WR_LAST_EOP, WR_TRANS_EOP);
   signal state       : t_state;
 
-  type t_state_write is (S_IDLE, S_READ_DATA, S_READ_LAST_DATA_WORD, S_WRITE_DATA, S_FLUSH, S_WAIT_WRITE, S_WAIT_LL_READY);
+  type t_state_write is (S_IDLE, S_READ_DATA, S_READ_LAST_DATA_WORD, S_WRITE_DATA, S_FLUSH, S_WAIT_WRITE, S_WAIT_LL_READY,S_NASTY_WAIT);
   signal state_write       : t_state_write;
   
   
@@ -267,7 +267,7 @@ architecture rtl of swc_packet_mem_write_pump is
    
   signal sync_d    : std_logic_vector(c_swc_packet_mem_multiply - 1 downto 0);
 
-  signal pgend_output : std_logic;
+  signal nasty_wait_full : std_logic;
 
 
     
@@ -330,7 +330,7 @@ begin  -- rtl
                state_write   <= S_FLUSH;
                reg_full      <= '1';
                 
-             elsif(cntr = to_unsigned(c_swc_packet_mem_multiply - 2,cntr'length) ) then
+             elsif(cntr = to_unsigned(c_swc_packet_mem_multiply - 2,cntr'length) and drdy_i ='1') then
 
                state_write   <= S_READ_LAST_DATA_WORD;       
                cnt_last_word <= '1';
@@ -357,26 +357,68 @@ begin  -- rtl
                  state_write   <= S_WAIT_LL_READY;
                  reg_full      <= '1';
                  
-               elsif(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
+               elsif(drdy_i ='1') then
                
                  state_write   <= S_WRITE_DATA;
                  we_int        <= '1';
                  reg_full      <= '0';
                  cnt_last_word <= '0';
-                 
-               end if;
                
+               else  
+                 
+                 state_write   <= S_NASTY_WAIT;        
+                 we_int        <= '0';
+                 reg_full      <= '0';
+                 cnt_last_word <= '0';
+                                 
+               end if;
+            
+            elsif(drdy_i = '1' and flush_i ='1') then
+              
+              state_write   <= S_WRITE_DATA;
+              we_int        <= '1';
+              reg_full      <= '0';
+              cnt_last_word <= '0';
+                 
             else -- synch_i = '0'
                
-               if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then 
-               
-                 reg_full      <= '1';
-                 state_write   <= S_WAIT_WRITE;
-                 cnt_last_word <= '0';
+--               if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length) and drdy_i = '1') then 
+--               
+                 --==== needs test - start ===
+                 if( drdy_i = '1') then
+                 --==== needs test - end   ===
+                   reg_full      <= '1';
+                   state_write   <= S_WAIT_WRITE;
+                   cnt_last_word <= '0';
+                 --==== needs test - start ===
+                 end if;
+                 --==== needs test - end   ===                 
+--                 
+--               else
+--                 
+---                 reg_full      <= '0';
+--                 state_write   <= S_NASTY_WAIT;
+--               cnt_last_word <= '0';
                  
-               end if;
+--               end if;
              end if;
              
+          when S_NASTY_WAIT =>
+             
+            if(drdy_i = '1' and sync_i = '1' and cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
+    
+              state_write   <= S_WRITE_DATA;
+              we_int        <= '1';
+              reg_full      <= '0';
+              cnt_last_word <= '0';
+    
+            elsif(drdy_i = '1' and sync_i = '0' ) then
+            
+              reg_full      <= '1';
+              state_write   <= S_WAIT_WRITE;
+              cnt_last_word <= '0';
+            
+            end if;   
 
           when S_WRITE_DATA =>
              
@@ -412,7 +454,8 @@ begin  -- rtl
                
              else
 
-               state_write <= S_IDLE;
+--               state_write <= S_IDLE;
+               state_write <= S_READ_DATA;
                
              end if;
              
@@ -496,7 +539,7 @@ begin  -- rtl
         pckstart_reg <= '0';
         pgreq_reg    <= '0';
         
-        pgend_output<='0';
+
         flush_reg   <='0';
       else
       
@@ -508,17 +551,21 @@ begin  -- rtl
         
         if(pgreq_i = '1') then
         
---          pgend_output         <= '0';
           pgend                <= '0';
           
-        elsif(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
+        elsif(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then          
+          
+          
+          if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length) and sync_i = '1' and drdy_i = '1') then
         
-          if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then
-  
---            pgend_output       <= '1';
+            pgend              <= '1';
+            
+          elsif(write_on_sync = '1' and sync_i = '1') then
+          
             pgend              <= '1';
 
           end if;
+        
         end if;
          
         if(pgreq_i = '1') then
@@ -576,13 +623,15 @@ begin  -- rtl
 --          elsif(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
           if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
             cntr     <= (others => '0');
-          --elsif((state_write = S_FLUSH or state_write = S_WAIT_LL_READY or state_write = S_READ_LAST_DATA_WORD) and sync_i = '1') then
+          elsif((state_write = S_READ_LAST_DATA_WORD) and sync_i = '1') then
             cntr      <= (others => '0');
+--          elsif(reg_full = '1') then
+--            cntr      <= (others => '0');
           else
             cntr <= cntr + 1;
           end if;
         else
-          if((state_write = S_FLUSH or state_write = S_WAIT_LL_READY or state_write = S_READ_LAST_DATA_WORD) and sync_i = '1') then
+          if((state_write = S_FLUSH or state_write = S_WAIT_LL_READY ) and sync_i = '1') then
             cntr      <= (others => '0');
           end if;
         end if;
@@ -796,12 +845,19 @@ begin  -- rtl
     
   end process;
 
+  nasty_wait_full <= '1' when (state_write = S_NASTY_WAIT) else '0';
+  
   ll_idle <= '1' when (state = IDLE) else '0';
   
   we_o   <= we_int;
   full_o <= (((reg_full           -- obvous
                 or 
-            cnt_last_word)       -- we need to set full in advance when the last word is not on sync
+            --==== needs test - start   ===   
+            (cnt_last_word and drdy_i) 
+                or
+            (nasty_wait_full and drdy_i))                
+            --==== needs test - end   ===
+--          (cnt_last_word))       -- we need to set full in advance when the last word is not on sync
                                 -- (this means that we need full to stop writing and wait for synchronization
                                 -- with sync 
            --     or 
@@ -817,10 +873,9 @@ begin  -- rtl
   
   --work here
          
-  addr_o <= pgaddr_i & zeros (c_swc_page_offset_width-1 downto 0) when (we_int = '1' and pgreq_i = '1') else mem_addr;
-  --addr_o <= mem_addr;
+  --addr_o <= pgaddr_i & zeros (c_swc_page_offset_width-1 downto 0) when (we_int = '1' and pgreq_i = '1') else mem_addr;
+  addr_o <= mem_addr;
   pgend_o <= pgend;
---  pgend_o <= pgend_output;
   
   gen_q1 : for i in 0 to c_swc_packet_mem_multiply-1 generate
     q_o(c_swc_pump_width * (i+1) - 1 downto c_swc_pump_width * i) <= in_reg(i);

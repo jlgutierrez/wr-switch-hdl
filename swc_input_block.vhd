@@ -57,7 +57,8 @@
 -------------------------------------------------------------------------------
 -- Revisions  :
 -- Date        Version  Author   Description
--- 2010-11-01  2.0      mlipinsk created
+-- 2010-11-01  1.0      mlipinsk created
+-- 2010-11-29  2.0      mlipinsk added FIFO, major changes
 
 -------------------------------------------------------------------------------
 
@@ -68,7 +69,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.swc_swcore_pkg.all;
-
+use work.platform_specific.all;
 
 entity swc_input_block is
 
@@ -193,7 +194,156 @@ end swc_input_block;
     
 architecture syn of swc_input_block is    
 
+signal fifo_data_in  : std_logic_vector(c_swc_data_width + c_swc_ctrl_width + 2 - 1 downto 0);
+signal fifo_wr       : std_logic;
+signal fifo_clean    : std_logic;
+signal fifo_rd       : std_logic;
+signal fifo_rd_and       : std_logic;
+signal fifo_data_out : std_logic_vector(c_swc_data_width + c_swc_ctrl_width + 2 - 1 downto 0);
+signal fifo_empty    : std_logic;
+signal fifo_full     : std_logic;
+signal fifo_usedw    : std_logic_vector(5 -1 downto 0);
+signal tx_ctrl_trans : std_logic_vector(c_swc_ctrl_width - 1 downto 0);  
 
+signal transfering_pck  : std_logic;
+signal pta_pageaddr     : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+signal pta_mask         : std_logic_vector(c_swc_num_ports - 1 downto 0);
+signal pta_prio         : std_logic_vector(c_swc_prio_width - 1 downto 0);
+signal pta_pck_size     : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+signal transfering_pck_on_wait   : std_logic;
+
+
+signal write_ctrl_in : std_logic_vector(1 downto 0);
+signal write_ctrl_out: std_logic_vector(1 downto 0);
+
+signal write_ctrl    : std_logic_vector(c_swc_ctrl_width - 1 downto 0);
+signal write_data    : std_logic_vector(c_swc_data_width - 1 downto 0);
+
+
+signal read_mask     : std_logic_vector(c_swc_num_ports - 1 downto 0);
+signal read_prio     : std_logic_vector(c_swc_prio_width - 1 downto 0);
+signal read_usecnt   : std_logic_vector(c_swc_usecount_width - 1 downto 0);
+
+signal write_mask     : std_logic_vector(c_swc_num_ports - 1 downto 0);
+signal write_pck_size : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+signal write_prio     : std_logic_vector(c_swc_prio_width - 1 downto 0);
+signal write_usecnt   : std_logic_vector(c_swc_usecount_width - 1 downto 0);
+
+signal pck_size      : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+signal current_pckstart_pageaddr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+
+
+signal usecnt_d0                 : std_logic_vector(c_swc_usecount_width - 1 downto 0); 
+
+
+type t_read_state is (S_IDLE,                   -- we wait for other processes (page fsm and 
+                                               -- transfer) to be ready
+                     S_READY_FOR_PCK,          -- this is introduced to diminish optimization 
+                                               -- (optimized design did not work) in this state, 
+                     S_WAIT_FOR_SOF,           -- we've got RTU response, but there is no SOF
+                     S_WAIT_FOR_RTU_RSP,       -- we've got SOF (request from previous pck) but
+                                               -- there is no RTU valid signal (quite improbable)
+                     S_WRITE_FIFO, 
+                     S_WRITE_PAUSE_INPUT_COS,
+                     S_WRITE_PAUSE_FIFO_COS,
+                     S_WRITE_PAUSE_BOTH_COSs,
+                     S_WRITE_DUMMY_EOF,
+                     S_WAIT_FOR_TRANSFER,
+                     S_WAIT_FOR_CLEAN_FIFO,
+                     S_DROP_PCK);              -- droping pck
+
+ type t_page_state is (S_IDLE,                  -- waiting for some work :)
+                       S_PCKSTART_SET_USECNT,   -- setting usecnt to a page which was allocated 
+                                                -- in advance to be used for the first page of 
+                                                -- the pck
+                                                -- (only in case of the initially allocated usecnt
+                                                -- is different than required)
+                       S_INTERPCK_SET_USECNT,   -- setting usecnt to a page which was allocated 
+                                                -- in advance to be used for the page which is 
+                                                -- not first
+                                                -- in the pck, this is needed, only if the page
+                                                -- was allocated during transfer of previous pck 
+                                                -- but was not used in the previous pck, 
+                                                -- only if usecnt of both pcks are different
+                       S_PCKSTART_PAGE_REQ,     -- allocating in advnace first page of the pck
+                       S_INTERPCK_PAGE_REQ);    -- allocating in advance page to be used by 
+                                                -- all but first page of the pck
+   type t_write_state is (S_IDLE,               
+                          S_START_FIFO_RD,
+                          S_START_MPM_WR,            
+                          S_WRITE_MPM,
+                          S_WRITE_PAUSE_MPM_COS,
+                          S_WRITE_PAUSE_FIFO_COS,
+                          S_WRITE_PAUSE_BOTH_COSs,
+                          S_LAST_MPM_WR,
+                          S_NEW_PCK_IN_FIFO,
+                          S_WAIT_WITH_TRANSFER
+                          );
+
+ type t_rerror_state is (S_IDLE,                -- waiting for some work :)
+                        S_WAIT_TO_FREE_PCK,    -- 
+                        S_PERROR); -- droping pck                   
+                 
+ 
+ signal rerror_state    : t_rerror_state;                        
+ signal read_state      : t_read_state;
+ signal write_state     : t_write_state;
+ signal page_state      : t_page_state;                         
+ 
+ 
+ signal mmu_force_free            : std_logic;     
+ signal start_transfer  : std_logic;               
+ signal zeros : std_logic_vector(63 downto 0);   
+
+ signal tx_dreq  : std_logic;                
+ 
+ signal rtu_rsp_ack   : std_logic;                
+ signal pckstart_page_in_advance  : std_logic;
+ signal pckstart_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal pckstart_page_alloc_req   : std_logic;
+ signal pckstart_usecnt_req       : std_logic;
+ signal pckstart_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);  
+
+   
+ -- this is a page which used within the pck
+ signal interpck_page_in_advance  : std_logic;  
+ signal interpck_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal interpck_page_alloc_req   : std_logic;  
+ signal interpck_usecnt_req       : std_logic;  
+ signal interpck_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);       
+ 
+ signal mmu_force_free_addr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ 
+
+ 
+ signal need_pckstart_usecnt_set : std_logic;
+ signal need_interpck_usecnt_set : std_logic; 
+ 
+ 
+ signal tmp_cnt : std_logic_vector(7 downto 0);
+ 
+ signal tx_rerror_reg : std_logic;
+ 
+ signal tx_rerror_or : std_logic; 
+
+ signal mpm_pckstart : std_logic;
+ signal mpm_pageaddr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal mpm_pagereq  : std_logic;
+ signal mpm_data     : std_logic_vector(c_swc_data_width - 1 downto 0);
+ signal mpm_ctrl     : std_logic_vector(c_swc_ctrl_width - 1 downto 0);    
+ signal mpm_drdy     : std_logic;
+ signal mpm_flush    : std_logic; 
+ 
+ signal tx_rerror    : std_logic;
+ 
+ signal two_pck_in_fifo: std_logic;
+ 
+ signal fifo_populated_enough : std_logic;
+ 
+ signal first_pck_word  : std_logic;
+ 
+ 
+ signal clean_pck_cnt  : std_logic;
 -------------------------------------------------------------------------------
 -- Function which calculates number of 1's in a vector
 ------------------------------------------------------------------------------- 
@@ -216,106 +366,64 @@ architecture syn of swc_input_block is
   end cnt;
 
   
-  -- this is a page which is used for pck start
-  signal pckstart_page_in_advance  : std_logic;
-  signal pckstart_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal pckstart_page_alloc_req   : std_logic;
-  signal pckstart_usecnt_req       : std_logic;
-  signal pckstart_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);  
-  signal current_pckstart_pageaddr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-    
-  -- this is a page which used within the pck
-  signal interpck_page_in_advance  : std_logic;  
-  signal interpck_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal interpck_page_alloc_req   : std_logic;  
-  signal interpck_usecnt_req       : std_logic;  
-
-  signal interpck_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);  
-  signal usecnt_d0                 : std_logic_vector(c_swc_usecount_width - 1 downto 0);    
-  -- WHY two separate page's for inter and start pck allocated in advance:
-  -- in the case in which one pck has just finished, we need new page addr for the new pck
-  -- very soon after writing the last page of previous pck, 
-
-  signal tx_dreq                   : std_logic;
-  signal mpm_pckstart              : std_logic;
-  signal mpm_pagereq               : std_logic;  
-  signal transfering_pck           : std_logic;
-  signal rtu_dst_port_mask         : std_logic_vector(c_swc_num_ports  - 1 downto 0);
-  signal rtu_prio                  : std_logic_vector(c_swc_prio_width - 1 downto 0);
-  signal rtu_rsp_ack               : std_logic;
-  signal usecnt                    : std_logic_vector(c_swc_usecount_width - 1 downto 0);
-  signal mmu_force_free            : std_logic; 
-  signal pta_pageaddr              : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal pta_mask                  : std_logic_vector(c_swc_num_ports  - 1 downto 0);
-  signal pta_prio                  : std_logic_vector(c_swc_prio_width - 1 downto 0);
-  signal pta_pck_size              : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
-  
-  type t_pck_state is (S_IDLE,                   -- we wait for other processes (page fsm and 
-                                                 -- transfer) to be ready
-                       S_READY_FOR_PCK,          -- this is introduced to diminish optimization 
-                                                 -- (optimized design did not work) in this state, 
-                       S_WAIT_FOR_SOF,           -- we've got RTU response, but there is no SOF
-                       S_WAIT_FOR_RTU_RSP,       -- we've got SOF (request from previous pck) but
-                                                 -- there is no RTU valid signal (quite improbable)
-                       S_PCK_START_1,            -- first mode of PCK start: we have the page ready,
-                                                 -- so we can set the page
-                       S_SET_NEXT_PAGE,          -- setting next page address (allocated previously)
-                       S_SET_LAST_NEXT_PAGE,     -- setting the last page address of the pck(only in
-                                                 -- case, the last word to be written (after flush)
-                                                 -- needs allocation of a new page
-                       S_WAIT_FOR_PAGE_END,      -- waiting for the end of new page (should be most
-                                                 -- of the time during pck transfer, in this state)
-                       S_WAIT_FOR_LAST_PAGE_SET, -- waits for the last page to be allocated so it can be 
-                                                 -- written 
-                       S_DROP_PCK);              -- droping pck
-                                                           
-
-  type t_page_state is (S_IDLE,                  -- waiting for some work :)
-                        S_PCKSTART_SET_USECNT,   -- setting usecnt to a page which was allocated 
-                                                 -- in advance to be used for the first page of 
-                                                 -- the pck
-                                                 -- (only in case of the initially allocated usecnt
-                                                 -- is different than required)
-                        S_INTERPCK_SET_USECNT,   -- setting usecnt to a page which was allocated 
-                                                 -- in advance to be used for the page which is 
-                                                 -- not first
-                                                 -- in the pck, this is needed, only if the page
-                                                 -- was allocated during transfer of previous pck 
-                                                 -- but was not used in the previous pck, 
-                                                 -- only if usecnt of both pcks are different
-                        S_PCKSTART_PAGE_REQ,     -- allocating in advnace first page of the pck
-                        S_INTERPCK_PAGE_REQ);    -- allocating in advance page to be used by 
-                                                 -- all but first page of the pck
-
-  type t_rerror_state is (S_IDLE,                -- waiting for some work :)
-                          S_WAIT_TO_FREE_PCK,    -- 
-                          S_ONE_PERROR,
-                          S_TWO_PERRORS); -- droping pck                   
-                   
-  signal pck_state       : t_pck_state;
-  signal page_state      : t_page_state;  
-  signal rerror_state    : t_rerror_state;  
-  
-  -- this goes HIGH for one cycle when all the
-  -- initial staff related to starting new packet 
-  -- transfer was finished, so when exiting S_SET_USECNT state
-  
-  signal mmu_force_free_addr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  
-  signal pck_size      : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
-  
-  signal need_pckstart_usecnt_set : std_logic;
-  signal need_interpck_usecnt_set : std_logic; 
-  
-  signal transfering_pck_on_wait  : std_logic;
-  
-  signal tmp_cnt : std_logic_vector(7 downto 0);
-  
-  signal tx_rerror_reg : std_logic;
-  
-  signal tx_rerror_or : std_logic;
   
 begin --arch
+
+ zeros <= (others =>'0');
+
+ fifo_data_in(c_swc_data_width                    - 1 downto 0)                                   <= tx_data_i;
+ fifo_data_in(c_swc_data_width + c_swc_ctrl_width - 1 downto c_swc_data_width)                    <= tx_ctrl_trans;
+ fifo_data_in(c_swc_data_width + c_swc_ctrl_width + 1 downto c_swc_data_width + c_swc_ctrl_width) <= write_ctrl_in;
+
+ tx_ctrl_trans <= b"1111" when (tx_ctrl_i      = x"7" and tx_bytesel_i = '1')  else tx_ctrl_i;
+ 
+ fifo_wr       <=  '1'                                when (read_state = S_WRITE_DUMMY_EOF )     else 
+                    ((not fifo_full) and tx_valid_i)  when (read_state = S_WRITE_FIFO )          else
+                    (not fifo_full)                   when (read_state = S_WRITE_PAUSE_FIFO_COS) else
+                    (tx_valid_i)                      when (read_state = S_WRITE_PAUSE_INPUT_COS)else
+                    ((not fifo_full) and tx_valid_i)  when (read_state = S_WRITE_PAUSE_BOTH_COSs)else
+                    '0';
+
+ 
+ write_ctrl_in <=  b"01"  when (first_pck_word = '1'                   )       else
+                   b"10"  when (tx_valid_i     = '1' and tx_eof_p1_i = '1')    else
+                   b"11"  when (read_state     = S_WRITE_DUMMY_EOF)            else
+                   b"00" ;
+ 
+ write_ctrl_out <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width + 1 downto c_swc_data_width + c_swc_ctrl_width); 
+ write_data     <= fifo_data_out(c_swc_data_width                    - 1 downto 0);
+ write_ctrl     <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width - 1 downto c_swc_data_width) ;
+ 
+ fifo_rd_and    <=  (not fifo_empty) and (not mpm_full_i)                             when (write_state = S_WRITE_PAUSE_BOTH_COSs) else
+                    (not fifo_empty)                                                  when (write_state = S_WRITE_PAUSE_FIFO_COS ) else
+                   ((not fifo_empty) and (not mpm_full_i) 
+                   and fifo_populated_enough and pckstart_page_in_advance)            when (write_state = S_NEW_PCK_IN_FIFO   )    else fifo_rd ;
+     
+     
+ fifo_populated_enough <= '1'  when ((fifo_usedw  > b"01111") or fifo_full = '1') else '0';    
+ 
+ clean_pck_cnt         <= '1'  when ((write_state = S_START_MPM_WR) or (write_state = S_NEW_PCK_IN_FIFO)) else '0';
+ 
+ FIFO: generic_sync_fifo
+  generic map(
+    g_width      => c_swc_data_width + c_swc_ctrl_width + 2,
+    g_depth      => 32,
+    g_depth_log2 => 5
+    )
+  port map   (
+      clk_i    => clk_i,
+      clear_i  => fifo_clean,
+
+      wr_req_i => fifo_wr,
+      d_i      => fifo_data_in,
+
+      rd_req_i => fifo_rd_and,
+      q_o      => fifo_data_out,
+
+      empty_o  => fifo_empty,
+      full_o   => fifo_full,
+      usedw_o  => fifo_usedw
+      );
 
  -- here we calculate pck size: we increment when
  -- the valid_i is HIGH
@@ -328,11 +436,11 @@ begin --arch
        
      else
        
-       if(tx_sof_p1_i = '1') then
+       if(clean_pck_cnt = '1') then
        
          pck_size <= (others =>'0');
          
-       elsif(tx_valid_i = '1' and tx_eof_p1_i = '0') then
+       elsif(mpm_drdy = '1' and mpm_flush = '0') then
        
          pck_size <= std_logic_vector(unsigned(pck_size) + 1);
          
@@ -342,263 +450,334 @@ begin --arch
    end if;
    
  end process;
-     
-     
-     
- -- Main Finite State Machine which controls communication
- -- between Fabric Interface and Mutiport Memory
- fsm_pck : process(clk_i, rst_n_i)
+   
+ transition_check : process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
         --================================================
-        pck_state                <= S_IDLE;
-        
-        tx_dreq                  <= '0';
-        
-        mpm_pckstart             <= '0';
-        mpm_pagereq              <= '0';
-
-        rtu_rsp_ack              <= '0';
-        rtu_dst_port_mask        <= (others => '0');
-        rtu_prio                 <= (others => '0');
-        
-        current_pckstart_pageaddr<= (others => '0');
-        usecnt                   <= (others => '0');
-        
-        tmp_cnt                  <=  (others => '0');
-
+        two_pck_in_fifo          <= '0';
         --================================================
       else
 
-        -- main finite state machine
-        case pck_state is
-
-
-          when S_IDLE =>
+        if(fifo_empty ='0' and tx_sof_p1_i = '1') then
           
-            tmp_cnt      <=  (others => '0');
+          two_pck_in_fifo          <= '1';
+      
+        elsif(write_ctrl_out = b"01") then
+    
+          two_pck_in_fifo          <= '0';
+          
+        end if;  
+
+        
+      end if;
+    end if;   
+  end process;
+  
+  
+
+  
+ read_fsm : process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        --================================================
+        read_state               <= S_IDLE;
+        
+        tx_dreq                  <= '0';
+
+        rtu_rsp_ack              <= '0';
+    
+        read_mask                <= (others => '0');
+        read_prio                <= (others => '0');
+        read_usecnt              <= (others => '0');
+        tx_rerror                <= '0';
+        first_pck_word           <= '0';
+        --================================================
+      else
+
+
+        if(tx_sof_p1_i = '1') then
+          first_pck_word <= '1';
+        elsif(first_pck_word = '1' and tx_valid_i = '1') then
+          first_pck_word <= '0';
+        end if;
+        
+        
+        -- main finite state machine
+        case read_state is
+
+
+          --============================================================================
+          when S_IDLE =>
+          --============================================================================
+                   
             tx_dreq      <= '0';
+            fifo_clean   <= '0';
+            tx_rerror    <= '0';
             
-            if(page_state               = S_IDLE and      -- all allocations in advnaced finished
-               pckstart_page_in_advance = '1'    and
-               transfering_pck          = '0'    and      -- last package transferred
-               tx_rerror_reg            = '0'    and      -- if error of pck was detected when
-                                                       -- another one is being handled, wait !!!
-               mmu_nomem_i              = '0' ) then   -- there is place in memory
-                
+            
+            if(fifo_full = '0' and tx_rerror_reg = '0'   ) then 
+         
                -- prepared to be accepting new package
-               pck_state <= S_READY_FOR_PCK;
-               tx_dreq   <= '1';
-            
+               read_state <= S_READY_FOR_PCK;
               
             end if;
-           
+            
+            
+          --============================================================================           
           when S_READY_FOR_PCK =>
-            
-            
-            
-            -- we need decision from RTU, but also we want the transfer
-            -- of the fram eto be finished, the transfer in normal case should
-            -- take 2 cycles
-            
-            tx_dreq                  <= '0';
-            
+          --============================================================================
+                    
+              fifo_clean               <= '0';
+              tx_dreq                  <= '0';
+              
             if(rtu_rsp_valid_i = '1'  and rtu_drop_i = '1') then
             
                -- if we've got RTU decision to drop, we don't give a damn about 
                -- anything else, just pretend to be receiving the msg
                tx_dreq                  <= '1';
                rtu_rsp_ack              <= '1';
-               pck_state                <= S_DROP_PCK;
+               read_state               <= S_DROP_PCK;
             
-            elsif(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '1' and mpm_full_i = '0' and pckstart_page_in_advance = '1' ) then
+            elsif(fifo_full = '0') then
+            
+               if(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '1') then
 
-               -- beutifull, everything that is needed, is there:
-               --  * RTU decision
-               --  * SOF
-               --  * adress for the first page allocated
-               --  * memory not full
+                 -- beutifull, everything that is needed, is there:
+                 --  * RTU decision
+                 --  * SOF
+                 read_state               <=  S_WRITE_FIFO;
+                 tx_dreq                  <= '1';
+                 rtu_rsp_ack              <= '1';
+         
+         
+                 -- remember
+                 read_mask                <= rtu_dst_port_mask_i;
+                 read_prio                <= rtu_prio_i;
+                 read_usecnt              <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),read_usecnt'length));
+                                
+
+               elsif(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '0') then
+             
+                 -- so we've got RTU decision, but no SOF, let's wait for SOF
+                 -- but remember RTU RSP and ack it, so RTU is free 
+                 rtu_rsp_ack              <= '1';
+                 read_state                <= S_WAIT_FOR_SOF;
+                 tx_dreq                  <= '1';
+                 --- remember
+                 read_mask                <= rtu_dst_port_mask_i;
+                 read_prio                <= rtu_prio_i;
+                 read_usecnt              <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),read_usecnt'length));
+             
+               elsif(rtu_rsp_valid_i = '0' and tx_sof_p1_i = '1') then
                
-               tx_dreq                  <= '1';
-               mpm_pckstart             <= '1';
-               mpm_pagereq              <= '1';
-               rtu_dst_port_mask        <= rtu_dst_port_mask_i;
-               rtu_prio                 <= rtu_prio_i;
-               usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
-               rtu_rsp_ack              <= '1';               
-               pck_state                <= S_PCK_START_1;
+                 -- we've got SOF because it was requested at the end of the last PCK
+                 -- but the RTU is still processing
+                 rtu_rsp_ack              <= '0';
+                 read_state                <= S_WAIT_FOR_RTU_RSP;
+                 tx_dreq                  <= '0';
 
-
-             elsif(rtu_rsp_valid_i = '1' and tx_sof_p1_i = '0') then
-             
-               -- so we've got RTU decision, but no SOF, let's wait for SOF
-               -- but remember RTU RSP and ack it, so RTU is free 
-               rtu_rsp_ack              <= '1';
-               pck_state                <= S_WAIT_FOR_SOF;
-               tx_dreq                  <= '1';
-               rtu_dst_port_mask        <= rtu_dst_port_mask_i;
-               rtu_prio                 <= rtu_prio_i;
-               usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
-             
-             elsif(rtu_rsp_valid_i = '0' and tx_sof_p1_i = '1') then
-             
-               -- we've got SOF because it was requested at the end of the last PCK
-               -- but the RTU is still processing
-               rtu_rsp_ack              <= '0';
-               pck_state                <= S_WAIT_FOR_RTU_RSP;
-               tx_dreq                  <= '0';
-
+               end if;
              end if;
-        
+          --============================================================================   
           when S_WAIT_FOR_SOF =>
-              
+          --============================================================================
+                       
               rtu_rsp_ack             <= '0';
               
-              if(tx_sof_p1_i = '1' and mpm_full_i = '0' and pckstart_page_in_advance = '1' ) then
+              if(tx_sof_p1_i = '1') then
               
                 -- very nicely, everything is in place, we can go ahead
                 tx_dreq               <= '1';
-                mpm_pckstart          <= '1';
-                mpm_pagereq           <= '1';
-                pck_state             <=  S_PCK_START_1;   
+                read_state            <=  S_WRITE_FIFO;   
                 
               end if;
-                
+
+          --============================================================================         
           when S_WAIT_FOR_RTU_RSP => 
-            
+          --============================================================================          
             
             if(tx_rerror_p1_i = '1' ) then
             
-              pck_state                <= S_IDLE;
+              read_state               <= S_IDLE;
               tx_dreq                  <= '0';
               
-            elsif(rtu_rsp_valid_i = '1' and mpm_full_i = '0' and pckstart_page_in_advance = '1') then
+            elsif(rtu_rsp_valid_i = '1') then
 
               tx_dreq                  <= '1';
-              mpm_pckstart             <= '1';
-              mpm_pagereq              <= '1';
-            
-              rtu_dst_port_mask        <= rtu_dst_port_mask_i;
-              rtu_prio                 <= rtu_prio_i;
-              usecnt                   <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),usecnt'length));
               rtu_rsp_ack              <= '1'; 
-              pck_state                <=  S_PCK_START_1; 
-                            
+              read_state               <=  S_WRITE_FIFO;
+             --remember
+              read_mask                <= rtu_dst_port_mask_i;
+              read_prio                <= rtu_prio_i;
+              read_usecnt              <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),read_usecnt'length));
+         
             end if;
-           
-          when S_PCK_START_1 =>
+
+          --============================================================================     
+          when S_WRITE_FIFO =>
+          --============================================================================           
+            if(tx_rerror_p1_i = '1')then
+             
+              if(two_pck_in_fifo = '1') then
+        
+                read_state               <= S_WAIT_FOR_CLEAN_FIFO;
+                tx_dreq                  <= '0';
+        
+              else
+        
+                -- error, screw everything else
+                read_state               <= S_IDLE;
+                tx_dreq                  <= '0';
+                fifo_clean               <= '1';
+                tx_rerror                <= '1';
+        
+              end if;
               
-               rtu_rsp_ack              <= '0';
-               mpm_pckstart             <= '0';
-               mpm_pagereq              <= '0';
-               current_pckstart_pageaddr<=pckstart_pageaddr;
-               pck_state                <= S_WAIT_FOR_PAGE_END;
-               
-          when S_WAIT_FOR_PAGE_END =>
+            elsif( tx_valid_i = '1' and tx_eof_p1_i = '1') then
+              
+              read_state               <= S_IDLE;
+              tx_dreq                  <= '0';
+              
+            elsif( tx_valid_i = '0' and tx_eof_p1_i = '1') then
+            
+              read_state               <= S_WRITE_DUMMY_EOF;
+              tx_dreq                  <= '0';   
+              
+            elsif(fifo_full = '1' and tx_valid_i = '0') then
+            
+              read_state              <= S_WRITE_PAUSE_INPUT_COS;
+              
+            elsif(fifo_full = '1' and tx_valid_i = '1') then  
+              
+              read_state              <= S_WRITE_PAUSE_FIFO_COS;
+              
+            elsif(fifo_full = '0' and tx_valid_i = '0') then  
+            
+              read_state              <= S_WRITE_PAUSE_INPUT_COS;
+
+                   
+              
+            end if;    
+          
+          --============================================================================ 
+          when S_WRITE_PAUSE_FIFO_COS  =>
+          --============================================================================
            
             if(tx_rerror_p1_i = '1')then
-           
-              -- error, screw everything else
-              pck_state               <= S_IDLE;
-              tx_dreq                 <= '0';
-              
-           
-            elsif(tx_eof_p1_i = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
-              
-              -- this is normal case, we load next page within pck transfer   
-              pck_state               <=  S_SET_NEXT_PAGE;
-              mpm_pagereq             <= '1';
-          
-            elsif(tx_eof_p1_i = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '0') then
-          
-              -- we wait in the same state, write_pump should do the work
-              -- of stopping writing by asserting full_o to HIGH when we 
-              -- run out of space (after the "end page" is finished)
-              pck_state               <=  S_WAIT_FOR_PAGE_END;
-                
-                 
-            elsif( tx_eof_p1_i = '1' ) then
-              
-              -- ============= now comes fun ..... =====================
-           
-              -- transfering_pck will be set to HIGH by another process
-              if(transfering_pck = '0' and mpm_pageend_i = '0') then
-  
-                -- normal finish of the pck,             
-                pck_state               <= S_IDLE;
-                tx_dreq                 <= '0'; 
-              
-              elsif(transfering_pck = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
-              
-                -- we need to set new page to which the last bytes are written
-                mpm_pagereq             <= '1';
-                pck_state               <= S_SET_LAST_NEXT_PAGE;
-                tx_dreq                 <= '0'; 
              
-              elsif(transfering_pck = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '0') then 
+              if(two_pck_in_fifo = '1') then
+        
+                read_state               <= S_WAIT_FOR_CLEAN_FIFO;
+                tx_dreq                  <= '0';
+        
+              else
+        
+                -- error, screw everything else
+                read_state               <= S_IDLE;
+                tx_dreq                  <= '0';
+                fifo_clean               <= '1';
+                tx_rerror                <= '1';
+        
+              end if;
+              
+            elsif(fifo_full = '0') then
+              
+              if( tx_valid_i = '1' and tx_eof_p1_i = '1') then
+              
+                read_state               <= S_IDLE;
+                tx_dreq                  <= '0';
+              
+              elsif( tx_valid_i = '0' and tx_eof_p1_i = '1') then
             
-                -- here nothing changes, we just go to different state
-                -- to know that when the new interpck page is allocated
-                -- we need to go to SET_LAST_NEXT_PAGE, in order to 
-                -- finish the transfer after setting the page
-                pck_state               <=  S_WAIT_FOR_LAST_PAGE_SET;
+                read_state               <= S_WRITE_DUMMY_EOF;
+                tx_dreq                  <= '0';                    
+                
+              else
+                
+                read_state              <= S_WRITE_FIFO;
+                
+              end if;    
+            end if;
+          --============================================================================   
+          when S_WRITE_PAUSE_INPUT_COS =>                      
+          --============================================================================
 
-              end if;  
-            end if;     
-
-          when S_WAIT_FOR_LAST_PAGE_SET =>
+            if(tx_rerror_p1_i = '1')then
+             
+              if(two_pck_in_fifo = '1') then
+        
+                read_state               <= S_WAIT_FOR_CLEAN_FIFO;
+                tx_dreq                  <= '0';
+        
+              else
+        
+                -- error, screw everything else
+                read_state               <= S_IDLE;
+                tx_dreq                  <= '0';
+                fifo_clean               <= '1';
+                tx_rerror                <= '1';
+        
+              end if;
+              
+            elsif( tx_valid_i = '1' and tx_eof_p1_i = '1') then
+              
+              read_state               <= S_IDLE;
+              tx_dreq                  <= '0';
+              
+            elsif( tx_valid_i = '0' and tx_eof_p1_i = '1') then
             
-            if(interpck_page_in_advance = '1') then 
-              mpm_pagereq              <= '1';
-              pck_state               <= S_SET_LAST_NEXT_PAGE;
-              tx_dreq                 <= '0'; 
+              read_state               <= S_WRITE_DUMMY_EOF;
+              tx_dreq                  <= '0';                    
+                
+            elsif( tx_valid_i = '1' and tx_eof_p1_i = '0') then
+                
+              read_state              <= S_WRITE_FIFO;
+                
             end if;
             
-          when S_SET_NEXT_PAGE =>
-
-            mpm_pagereq                <= '0';
-              
-            if(tx_rerror_p1_i = '1' ) then
-
-              pck_state                <= S_IDLE;
+          --============================================================================ 
+          when S_WAIT_FOR_CLEAN_FIFO =>			
+          --============================================================================
+                
+            if(two_pck_in_fifo = '0') then
+       
+              read_state               <= S_IDLE;
               tx_dreq                  <= '0';
-           
-            elsif( tx_eof_p1_i = '1' ) then
-
-              pck_state               <= S_IDLE;
-              tx_dreq                 <= '0'; 
-              
-            else
-
-              pck_state                <=  S_WAIT_FOR_PAGE_END;
-                         
-            end if;        
-          
-          when S_SET_LAST_NEXT_PAGE =>
-    
-            -- used only in the case that pck finishes when pageend is HIGH,
-            -- which means that the data being written has no page allocated    
-            
-            mpm_pagereq              <= '0';
-            pck_state                <= S_IDLE;
-            tx_dreq                  <= '0';
+              fifo_clean               <= '1';
+              tx_rerror                <= '1';
         
+            end if;
+
+          --============================================================================
+          when S_WRITE_DUMMY_EOF =>
+          --============================================================================
+                        
+              read_state               <= S_IDLE;  
+
+          --============================================================================          
           when S_DROP_PCK => 
-             
+          --============================================================================             
             rtu_rsp_ack               <= '0';
              
             if(tx_eof_p1_i = '1' or tx_rerror_p1_i = '1' ) then 
               
-              pck_state               <= S_IDLE;
+              read_state              <= S_IDLE;
               tx_dreq                 <= '0';
               
             end if;
 
+          --============================================================================
           when others =>
-            
-              pck_state               <= S_IDLE;
+          --============================================================================
+                      
+              read_state              <= S_IDLE;
               tx_dreq                 <= '0';
+          
+          --============================================================================
+          --============================================================================                    
             
         end case;
         
@@ -608,6 +787,461 @@ begin --arch
   end process;
   
 
+ write_fsm : process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        --================================================
+        write_state               <= S_IDLE;
+        fifo_rd                  <= '0';
+        start_transfer           <= '0';
+        mpm_pckstart             <= '0';
+        mpm_pagereq              <= '0';
+        
+        current_pckstart_pageaddr<= (others => '1');
+        mpm_drdy                 <= '0';
+        
+        write_mask               <= (others => '0');
+        write_pck_size           <= (others => '0');
+        write_prio               <= (others => '0');
+        write_usecnt             <= (others => '0');
+    
+        mpm_pckstart             <= '0';
+        mpm_pageaddr             <= (others => '1');
+        mpm_pagereq              <= '0';
+        mpm_data                 <= (others => '0');
+        mpm_ctrl                 <= (others => '0');
+        mpm_drdy                 <= '0';
+        mpm_flush                <= '0';
+        --================================================
+      else
+
+        -- main finite state machine
+        case write_state is
+
+          --============================================================================
+          when S_IDLE =>
+          --============================================================================
+                     
+            start_transfer       <= '0';
+            mpm_flush            <= '0';
+            mpm_drdy             <= '0';
+            start_transfer       <= '0';  
+            if(((fifo_usedw  > b"01111") or (fifo_full = '1'))  and (pckstart_page_in_advance = '1') and mpm_full_i = '0') then   
+                
+              if(write_ctrl_out = b"01" ) then
+              
+                fifo_rd                    <= '1';
+                write_state                <= S_START_MPM_WR;
+                
+              else
+            
+                write_state                <= S_START_FIFO_RD;
+                fifo_rd                    <= '1';
+                
+              end if;
+               
+            end if;
+       
+          --============================================================================       
+          when S_START_FIFO_RD =>
+          --============================================================================
+                     
+            write_state                <= S_START_MPM_WR;
+           
+          --============================================================================        
+          when S_START_MPM_WR =>
+          --============================================================================            
+            
+            if(write_ctrl_out = b"01" ) then
+              
+              -- first word of the pck
+              current_pckstart_pageaddr  <= pckstart_pageaddr;
+              write_mask                 <= read_mask;
+              write_prio                 <= read_prio;
+              write_usecnt               <= read_usecnt;			
+              
+              
+              mpm_pckstart               <= '1';
+              mpm_pagereq                <= '1';
+              mpm_pageaddr               <= pckstart_pageaddr;
+              mpm_data                   <= write_data;
+              mpm_ctrl                   <= write_ctrl;
+              mpm_drdy                   <= '1';
+            
+              write_state                <= S_WRITE_MPM;
+        
+            end if;
+          
+          --============================================================================     
+          when S_WRITE_MPM =>
+          --============================================================================
+          
+          mpm_pckstart               <= '0';
+          mpm_pagereq                <= '0';
+          
+          if(tx_rerror = '1') then 
+          
+            mpm_flush              <= '1';
+            mpm_drdy               <= '0';
+            fifo_rd                <= '0';
+            write_state            <= S_IDLE;
+            
+          else
+            
+            if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
+        
+              mpm_pageaddr               <= interpck_pageaddr;
+              mpm_pagereq                <= '1';
+        
+            else
+
+              mpm_pageaddr               <= (others => '1');
+              mpm_pagereq                <= '0';
+        
+            end if;
+            
+            if(fifo_empty = '1' and mpm_full_i = '1' ) then
+        
+              write_state              <= S_WRITE_PAUSE_BOTH_COSs;
+              mpm_data                 <= write_data;
+              mpm_ctrl                 <= write_ctrl;
+              mpm_drdy                 <= '0';
+              fifo_rd                  <= '0';
+
+            elsif(fifo_empty = '1' and write_ctrl_out = b"00") then
+        
+              write_state              <= S_WRITE_PAUSE_FIFO_COS;
+              mpm_data                 <= write_data;
+              mpm_ctrl                 <= write_ctrl;
+              mpm_drdy                 <= '0';
+              fifo_rd                  <= '0';
+            
+            elsif(mpm_full_i = '1' ) then
+               
+               write_state              <= S_WRITE_PAUSE_MPM_COS;
+               mpm_data                 <= write_data;
+               mpm_ctrl                 <= write_ctrl;
+               mpm_drdy                 <= '0';
+               fifo_rd                  <= '0';
+                            
+                
+            else
+          
+              if( write_ctrl_out = b"11") then
+          
+                -- last empty word of the pck
+                mpm_flush              <= '1';
+                mpm_drdy               <= '0';
+                fifo_rd                <= '0';
+               -- start_transfer         <= '1';
+                write_state            <= S_LAST_MPM_WR;
+          
+              elsif( write_ctrl_out = b"10") then				  
+        
+                -- last non-empty word of the pck
+                mpm_flush            <= '1';
+                fifo_rd              <= '0';
+                mpm_data             <= write_data;
+                mpm_ctrl             <= write_ctrl;
+                mpm_drdy             <= '1';
+                write_state          <= S_LAST_MPM_WR;
+                --start_transfer       <= '1';
+        
+              else
+        
+                mpm_flush            <= '0';
+                fifo_rd              <= '1';				
+                mpm_data             <= write_data;
+                mpm_ctrl             <= write_ctrl;
+                mpm_drdy             <= '1';
+                write_state          <= S_WRITE_MPM;
+          
+              end if;
+            end if;
+          end if;
+
+       --============================================================================
+       when S_WAIT_WITH_TRANSFER =>
+       --============================================================================
+
+         if(interpck_page_in_advance = '1') then
+
+            start_transfer       <= '1';
+                
+            if(write_ctrl_out = b"01") then 
+              write_state               <= S_NEW_PCK_IN_FIFO;
+            else
+              write_state               <= S_IDLE;
+            end if;
+         end if;
+         
+
+       --============================================================================
+       when S_WRITE_PAUSE_MPM_COS =>
+       --============================================================================
+                
+         if(tx_rerror = '1') then 
+           mpm_flush              <= '1';
+           mpm_drdy               <= '0';
+           fifo_rd                <= '0';
+           write_state            <= S_IDLE;
+            
+         else
+         
+           if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
+          
+             mpm_pageaddr               <= interpck_pageaddr;
+             mpm_pagereq                <= '1';
+          
+           else
+  
+             mpm_pageaddr               <= (others => '1');
+             mpm_pagereq                <= '0';
+          
+           end if;
+  
+           if(mpm_full_i = '0' and fifo_empty = '0') then
+                    
+             if( write_ctrl_out = b"11") then
+             
+               -- last empty word of the pck
+               mpm_flush              <= '1';
+               mpm_drdy               <= '0';
+               fifo_rd                <= '0';
+               write_state           <= S_LAST_MPM_WR;
+           
+             elsif( write_ctrl_out = b"10") then				  
+          
+                -- last non-empty word of the pck
+               mpm_flush            <= '1';
+               fifo_rd              <= '0';
+               --mpm_data             <= write_data;
+               --mpm_ctrl             <= write_ctrl;
+               mpm_drdy             <= '1';
+               write_state          <= S_LAST_MPM_WR;
+        
+             else
+        
+               mpm_flush            <= '0';
+               fifo_rd              <= '1';				
+              -- mpm_data             <= write_data;
+               --mpm_ctrl             <= write_ctrl;
+               mpm_drdy             <= '1';
+               write_state          <= S_WRITE_MPM;
+          
+             end if;
+           end if;
+         end if;         
+         
+         --============================================================================         
+         when S_WRITE_PAUSE_BOTH_COSs =>
+         --============================================================================
+               
+           if(tx_rerror = '1') then 
+             mpm_flush              <= '1';
+             mpm_drdy               <= '0';
+             fifo_rd                <= '0';
+             write_state            <= S_IDLE;
+              
+           else
+           
+             if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
+            
+               mpm_pageaddr               <= interpck_pageaddr;
+               mpm_pagereq                <= '1';
+            
+             else
+    
+               mpm_pageaddr               <= (others => '1');
+               mpm_pagereq                <= '0';
+            
+             end if;
+    
+             if(fifo_empty = '0' and mpm_full_i = '0') then
+                      
+               if( write_ctrl_out = b"11") then
+               
+                 -- last empty word of the pck
+                 mpm_flush              <= '1';
+                 mpm_drdy               <= '0';
+                 fifo_rd                <= '0';
+                 write_state           <= S_LAST_MPM_WR;
+             
+               elsif( write_ctrl_out = b"10") then				  
+            
+                  -- last non-empty word of the pck
+                 mpm_flush            <= '1';
+                 fifo_rd              <= '0';
+                 --mpm_data             <= write_data;
+                 --mpm_ctrl             <= write_ctrl;
+                 mpm_drdy             <= '1';
+                 write_state          <= S_LAST_MPM_WR;
+          
+               else
+          
+                 mpm_flush            <= '0';
+                 fifo_rd              <= '1';				
+                -- mpm_data             <= write_data;
+                 --mpm_ctrl             <= write_ctrl;
+                 mpm_drdy             <= '1';
+                 write_state          <= S_WRITE_MPM;
+            
+               end if;
+             end if;
+           end if;      
+  
+           
+         
+       --============================================================================         
+       when S_WRITE_PAUSE_FIFO_COS =>
+       --============================================================================
+             
+         if(tx_rerror = '1') then 
+           mpm_flush              <= '1';
+           mpm_drdy               <= '0';
+           fifo_rd                <= '0';
+           write_state            <= S_IDLE;
+            
+         else
+         
+           if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
+          
+             mpm_pageaddr               <= interpck_pageaddr;
+             mpm_pagereq                <= '1';
+          
+           else
+  
+             mpm_pageaddr               <= (others => '1');
+             mpm_pagereq                <= '0';
+          
+           end if;
+  
+           if(fifo_empty = '0' and mpm_full_i = '0') then
+                    
+             if( write_ctrl_out = b"11") then
+             
+               -- last empty word of the pck
+               mpm_flush              <= '1';
+               mpm_drdy               <= '0';
+               fifo_rd                <= '0';
+               write_state           <= S_LAST_MPM_WR;
+           
+             elsif( write_ctrl_out = b"10") then				  
+          
+                -- last non-empty word of the pck
+               mpm_flush            <= '1';
+               fifo_rd              <= '0';
+               --mpm_data             <= write_data;
+               --mpm_ctrl             <= write_ctrl;
+               mpm_drdy             <= '1';
+               write_state          <= S_LAST_MPM_WR;
+        
+             else
+        
+               mpm_flush            <= '0';
+               fifo_rd              <= '1';				
+              -- mpm_data             <= write_data;
+               --mpm_ctrl             <= write_ctrl;
+               mpm_drdy             <= '1';
+               write_state          <= S_WRITE_MPM;
+          
+             end if;
+           end if;
+         end if;      
+
+       --============================================================================      
+       when S_LAST_MPM_WR =>
+       --============================================================================
+        
+         start_transfer            <= '0';
+         mpm_flush                 <= '0';
+         mpm_drdy                  <= '0';
+         fifo_rd                   <= '0';
+         
+         if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
+        
+           mpm_pageaddr               <= interpck_pageaddr;
+           mpm_pagereq                <= '1';
+        
+         else
+
+           mpm_pageaddr               <= (others => '1');
+           mpm_pagereq                <= '0';
+        
+         end if;         
+
+                
+         -- if another page needs to be allocated for the last chunck 
+         -- of date, transfer only if we have spare page for that.
+         -- otherwise, we can end up reading pck without last piece of data !!!!
+         if(interpck_page_in_advance = '0' and mpm_pageend_i ='1') then
+             write_state          <= S_WAIT_WITH_TRANSFER;
+         else
+         
+            start_transfer       <= '1';
+                  
+            if(write_ctrl_out = b"01") then 
+              write_state               <= S_NEW_PCK_IN_FIFO;
+            else
+              write_state               <= S_IDLE;
+            end if;
+         end if;
+
+       --============================================================================         
+       when S_NEW_PCK_IN_FIFO => 
+       --============================================================================         
+         start_transfer       <= '0';
+         if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
+        
+           mpm_pageaddr               <= interpck_pageaddr;
+           mpm_pagereq                <= '1';
+        
+         else
+
+           mpm_pageaddr               <= (others => '1');
+           mpm_pagereq                <= '0';
+        
+         end if; 
+         
+         
+         if(((fifo_usedw  > b"01111") or (fifo_full = '1')) and (pckstart_page_in_advance = '1') and mpm_full_i = '0') then 
+         
+           -- first word of the pck
+           current_pckstart_pageaddr  <= pckstart_pageaddr;
+           write_mask                 <= read_mask;
+           write_prio                 <= read_prio;
+           write_usecnt               <= read_usecnt;			
+   
+           mpm_pckstart               <= '1';
+           mpm_pagereq                <= '1';
+           mpm_pageaddr               <= pckstart_pageaddr;
+           mpm_data                   <= write_data;
+           mpm_ctrl                   <= write_ctrl;
+           mpm_drdy                   <= '1';
+         
+           fifo_rd                    <= '1';
+           write_state                <= S_WRITE_MPM;
+           
+         end if;
+      --============================================================================         
+      when others =>
+      --============================================================================
+            
+         write_state               <= S_IDLE;
+         fifo_rd                   <= '0';
+         mpm_drdy                  <= '0';
+           
+           
+      --============================================================================
+      --============================================================================                      
+      end case;
+        
+   end if;
+ end if;
+    
+end process;
+  
 
  -- Auxiliary Finite State Machine which talks with
  -- Memory Management Unit, it controls:
@@ -806,13 +1440,15 @@ begin --arch
            
        end case;
        
-       usecnt_d0 <= usecnt;
+       usecnt_d0 <= read_usecnt;
 
      end if;
    end if;
    
  end process;
   
+  -- used to remember that there was error, when 
+  -- error received when hadline another error
   tx_rerror_or <= tx_rerror_reg or tx_rerror_p1_i;
  
  -- Auxiliary Finite State Machine which controls
@@ -860,10 +1496,11 @@ begin --arch
           
           mmu_force_free      <= '0';
           
-          if(tx_rerror_or = '1' and pck_state /=S_DROP_PCK) then 
+          if(tx_rerror_or = '1' and read_state /= S_DROP_PCK and two_pck_in_fifo = '0' ) then 
           
-            rerror_state                <= S_WAIT_TO_FREE_PCK;
-            mmu_force_free_addr         <= current_pckstart_pageaddr;
+            rerror_state          <= S_PERROR;
+            mmu_force_free_addr   <= current_pckstart_pageaddr;
+            mmu_force_free        <= '1';
             
           end if;
 
@@ -878,33 +1515,13 @@ begin --arch
         -- transfered for some arbitrar time (10 cycles)
         -- it may be not the best solutions
         
-        when S_WAIT_TO_FREE_PCK =>          
-                       
-            
-            if(pck_state =  S_WAIT_FOR_PAGE_END) then
 
-              rerror_state              <= S_ONE_PERROR;--S_TWO_PERRORS;
-              mmu_force_free            <= '1';
-              
-            elsif(cnt > 10 and pck_state = S_IDLE) then
-            
-              rerror_state              <= S_ONE_PERROR;
-              mmu_force_free            <= '1';
-              cnt                       :=  0;
-            
-            elsif(pck_state = S_IDLE) then
-            
-              cnt := cnt + 1;
-            
-            end if;
-               
-
-        when S_ONE_PERROR => 
+        when S_PERROR => 
           
           if(mmu_force_free_done_i = '1' ) then
             
-            mmu_force_free            <= '0';
-            rerror_state              <= S_IDLE;
+            mmu_force_free      <= '0';
+            rerror_state        <= S_IDLE;
             
           end if;
 
@@ -937,42 +1554,16 @@ begin --arch
       else
 
         
-        if(tx_eof_p1_i = '1' and pck_state /=S_DROP_PCK ) then 
+        if(start_transfer = '1' ) then 
            
-           -- transfer pck when end of frame
-
-          if(transfering_pck = '0') then
-
-            -- normal case, transfer arbiter free                      
-            transfering_pck <= '1';
-          
-            pta_pageaddr    <= current_pckstart_pageaddr;
-            pta_mask        <= rtu_dst_port_mask;
-            pta_prio        <= rtu_prio;
-            pta_pck_size    <= pck_size;
-            
-          else
-             
-            -- transfer arbiter not free (should not
-            -- get here in non-optimal implementation)
-            -- anyway, we set the special flag           
-            transfering_pck_on_wait <= '1';
-            
-          end if;
-          
-        elsif(transfering_pck = '0' and transfering_pck_on_wait = '1') then
-          
-          -- if the transfer is finished, but another 
-          -- transfer is in the queue, go for it
-          
-          transfering_pck_on_wait <= '0';
-          
+          -- normal case, transfer arbiter free                      
           transfering_pck <= '1';
-          
-          pta_pageaddr     <= current_pckstart_pageaddr;
-          pta_mask         <= rtu_dst_port_mask;
-          pta_prio         <= rtu_prio;
-          pta_pck_size     <= pck_size;
+        
+          pta_pageaddr    <= current_pckstart_pageaddr;
+          pta_mask        <= write_mask;
+          pta_prio        <= write_prio;
+          pta_pck_size    <= pck_size;
+--          pta_pck_size    <= std_logic_vector(unsigned(pck_size) + 1);        
                     
         elsif(pta_transfer_ack_i = '1' and transfering_pck = '1') then
         
@@ -1002,9 +1593,9 @@ begin --arch
       --===================================================
       else        
       
-        if(pck_state = S_PCK_START_1) then
+        if(mpm_pckstart = '1') then
         
-          if(usecnt = pckstart_usecnt_in_advance) then
+          if(read_usecnt = pckstart_usecnt_in_advance) then
             need_pckstart_usecnt_set  <= '0';
             pckstart_page_in_advance  <= '0';            
           else
@@ -1012,7 +1603,7 @@ begin --arch
 
           end if;
         
-          if(usecnt = interpck_usecnt_in_advance) then 
+          if(read_usecnt = interpck_usecnt_in_advance) then 
             need_interpck_usecnt_set  <= '0';
           else
             need_interpck_usecnt_set  <= '1';
@@ -1024,7 +1615,8 @@ begin --arch
           need_pckstart_usecnt_set  <= '0';
         end if;
         
-        if(pck_state = S_SET_NEXT_PAGE or pck_state = S_SET_LAST_NEXT_PAGE) then 
+        --if(write_state = S_SET_NEXT_PAGE or write_state = S_SET_LAST_NEXT_PAGE) then 
+        if(mpm_pagereq = '1' and mpm_pckstart = '0') then 
           interpck_page_in_advance <= '0';
         elsif(mmu_page_alloc_done_i = '1' and interpck_page_alloc_req = '1') then
           interpck_page_in_advance <= '1';
@@ -1041,31 +1633,28 @@ begin --arch
     end if;
   end process;
 
-  tx_dreq_o              <= '0'    when (pck_state = S_IDLE)     else
-                            '1'    when (pck_state = S_DROP_PCK) else   
-                            tx_dreq and not mpm_full_i    ;
+  tx_dreq_o              <= '0'    when (read_state = S_IDLE)     else
+                            '1'    when (read_state = S_DROP_PCK) else   
+                            tx_dreq and not fifo_full    ;
                             
   rtu_rsp_ack_o          <= rtu_rsp_ack;
 
   mmu_force_free_addr_o  <= mmu_force_free_addr;
   mmu_set_usecnt_o       <= pckstart_usecnt_req or interpck_usecnt_req;
-  mmu_usecnt_o           <= usecnt;
+  mmu_usecnt_o           <= read_usecnt;
   mmu_page_alloc_req_o   <= interpck_page_alloc_req or pckstart_page_alloc_req;
   mmu_force_free_o       <= mmu_force_free;                            
   mmu_pageaddr_o         <= interpck_pageaddr when (page_state = S_INTERPCK_SET_USECNT)  else
                             pckstart_pageaddr when (page_state = S_PCKSTART_SET_USECNT)  else (others => '0') ;
-
+  
   mpm_pckstart_o         <= mpm_pckstart;                            
-  mpm_drdy_o             <= '0' when (pck_state = S_DROP_PCK) else tx_valid_i;
+  mpm_pageaddr_o         <= mpm_pageaddr;
   mpm_pagereq_o          <= mpm_pagereq;
-  mpm_data_o             <= tx_data_i;
-  -- TODO: need info from TOMEK
-  mpm_ctrl_o(3)          <= tx_bytesel_i;
-  mpm_ctrl_o(2 downto 0) <= tx_ctrl_i(2 downto 0);
-  mpm_pageaddr_o         <= pckstart_pageaddr when (pck_state = S_PCK_START_1) else interpck_pageaddr ;                                           
-  mpm_flush_o            <= tx_eof_p1_i when (pck_state = S_WAIT_FOR_PAGE_END or 
-                                              pck_state = S_SET_NEXT_PAGE     ) else '0'; --mpm_flush;
-                                                    
+  mpm_data_o             <= mpm_data;
+  mpm_ctrl_o             <= mpm_ctrl;
+  mpm_drdy_o             <= mpm_drdy;
+  mpm_flush_o            <= mpm_flush;        
+                                                            
   pta_transfer_pck_o     <= transfering_pck;
   pta_pageaddr_o         <= pta_pageaddr;
   pta_mask_o             <= pta_mask;

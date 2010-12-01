@@ -180,7 +180,7 @@ begin  -- syn
   -- and 'free' requests on odd addresses. The condition prevents
   -- considertion of actually processed port for the request to arbiter
   gen_request_vec : for i in 0 to c_swc_num_ports - 1 generate
-    request_vec(4 * i + 0) <= alloc_i(i)      and (not (alloc_done_feedback(i)      or alloc_done(i)));
+    request_vec(4 * i + 0) <= alloc_i(i)      and (not (alloc_done_feedback(i)      or alloc_done(i))) and (not pg_nomem);
     request_vec(4 * i + 1) <= free_i(i)       and (not (free_done_feedback(i)       or free_done(i)));
     request_vec(4 * i + 2) <= set_usecnt_i(i) and (not (set_usecnt_done_feedback(i) or set_usecnt_done(i)));
     request_vec(4 * i + 3) <= force_free_i(i) and (not (force_free_done_feedback(i) or force_free_done(i)));

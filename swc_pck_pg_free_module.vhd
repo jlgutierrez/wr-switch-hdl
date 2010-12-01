@@ -179,8 +179,8 @@ begin  -- syn
 FIFO: generic_sync_fifo
   generic map(
     g_width      => c_swc_page_addr_width + 2,
-    g_depth      => 16,
-    g_depth_log2 => 4
+    g_depth      => c_swc_freeing_fifo_size, --16,
+    g_depth_log2 => c_swc_freeing_fifo_log2 --4
     )
   port map   (
       clk_i   => clk_i,
