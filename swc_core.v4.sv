@@ -380,16 +380,18 @@ module main;
         $display("Initial waiting: %d cycles",((port*50)%11)*50);
         wait_cycles(((port*50)%11)*50);
         
-        for(i=25;i<1250;i=i+25)
+        for(i=400;i<1250;i=i+25)
         begin
           hdr.src          = port << 44 | cnt ;
           hdr.port_id      = port;
           hdr.ethertype    = i;
 
   //        mask = 'h00F;;          
-  //      mask = 'h7FF;;
+   //       mask = 'h7FF;;
           mask = (4*cnt + 3*cnt + 2*cnt + cnt)%2047; 
           if( (i/50)%20 > 10) drop = 1; else drop = 0;
+     //     drop = 0;
+          
           
           send_pck(hdr,buffer, i, port, drop,  (i/50)%7, mask, cnt);  
           
@@ -433,11 +435,30 @@ module main;
       wait(test_input_block_9.ready);
       wait(test_input_block_10.ready);
       
-     // test_input_block_1.simulate_tx_throttling(1, 10);
-      
-      //      test_input_block_0.simulate_rx_abort(1,80);
-            test_input_block_1.simulate_tx_error(1,100);
-      //      test_input_block_1.send(hdr, buffer, 911);
+  
+     test_input_block_0.simulate_tx_throttling(1, 10);
+     test_input_block_1.simulate_tx_throttling(1, 20);
+     test_input_block_2.simulate_tx_throttling(1, 30);
+     test_input_block_3.simulate_tx_throttling(1, 40);
+     test_input_block_4.simulate_tx_throttling(1, 10);
+     test_input_block_5.simulate_tx_throttling(1, 20);
+     test_input_block_6.simulate_tx_throttling(1, 30);
+     test_input_block_7.simulate_tx_throttling(1, 40);
+     test_input_block_8.simulate_tx_throttling(1, 10);
+     test_input_block_9.simulate_tx_throttling(1, 20);
+     test_input_block_10.simulate_tx_throttling(1,40);
+
+
+
+     test_input_block_0.simulate_rx_throttling(1, 10);
+     test_input_block_1.simulate_rx_throttling(1, 20);
+     test_input_block_2.simulate_rx_throttling(1, 10);
+     test_input_block_3.simulate_rx_throttling(1, 20);
+
+
+     //test_input_block_0.simulate_tx_error(1,110);
+     //      test_input_block_0.simulate_rx_abort(1,80);
+     //      test_input_block_1.send(hdr, buffer, 911);
       
       
       ports_read = 1;
@@ -505,7 +526,7 @@ module main;
    end
    initial begin
       wait(ports_read);
-      load_port(10);
+     load_port(10);
       tx_port_finished[10] = 1;
    end  
            

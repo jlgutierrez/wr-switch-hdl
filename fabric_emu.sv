@@ -424,7 +424,7 @@ module fabric_emu
       
       wait_clk();
 
-      while(!tx_eof_p1_i && !tx_rerror_p1_i) begin
+      while(1) begin //while(!tx_eof_p1_i && !tx_rerror_p1_i) begin
 
 	 // simulate the flow throttling	 
 	 if(SIM.sim_rx_throttle && probability_hit(SIM.rx_throttle_prob, 100))
@@ -450,6 +450,8 @@ module fabric_emu
 	    if(tx_bytesel_i && tx_ctrl_i == `c_wrsw_ctrl_payload) bytesel_saved 	= 1;
 	    i++;
 	 end
+      
+      if(tx_eof_p1_i || tx_rerror_p1_i) break;
       
 	 wait_clk();
       end
@@ -500,7 +502,7 @@ module fabric_emu
       frame.size 	      = payload_len;
       frame.error 	      = error;
 
-//      dump_frame_header("RX: ", frame);
+     // dump_frame_header("RX: ", frame);
       rx_queue.push(frame);
       
       
