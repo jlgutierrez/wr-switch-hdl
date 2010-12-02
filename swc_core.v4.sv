@@ -388,13 +388,29 @@ module main;
 
   //        mask = 'h00F;;          
    //       mask = 'h7FF;;
-          mask = (4*cnt + 3*cnt + 2*cnt + cnt)%2047; 
+          mask = (port*cnt + 3*cnt + 2*cnt + cnt)%2047; 
           if( (i/50)%20 > 10) drop = 1; else drop = 0;
      //     drop = 0;
           
           
-          send_pck(hdr,buffer, i, port, drop,  (i/50)%7, mask, cnt);  
+          send_pck(hdr,buffer, i, port, drop,  ((port*i)/50)%7, mask, cnt);  
           
+          if(i > 600) 
+          begin
+            
+            test_input_block_0.simulate_rx_abort(0,10);
+            test_input_block_1.simulate_rx_abort(0,20);
+            test_input_block_2.simulate_rx_abort(0,30);
+            test_input_block_3.simulate_rx_abort(0,40);
+            test_input_block_4.simulate_rx_abort(0,50);
+            test_input_block_5.simulate_rx_abort(0,60);
+            test_input_block_6.simulate_rx_abort(0,70);
+            test_input_block_7.simulate_rx_abort(0,80);
+            test_input_block_8.simulate_rx_abort(0,90);
+            test_input_block_9.simulate_rx_abort(0,100);
+            test_input_block_10.simulate_rx_abort(0,110);
+            
+         end 
           /*
           if(drop == 0)
           begin
@@ -434,9 +450,9 @@ module main;
       wait(test_input_block_8.ready);
       wait(test_input_block_9.ready);
       wait(test_input_block_10.ready);
-      
-  
-     test_input_block_0.simulate_tx_throttling(1, 10);
+ 
+
+     test_input_block_0.simulate_tx_throttling(1, 50);
      test_input_block_1.simulate_tx_throttling(1, 20);
      test_input_block_2.simulate_tx_throttling(1, 30);
      test_input_block_3.simulate_tx_throttling(1, 40);
@@ -454,10 +470,29 @@ module main;
      test_input_block_1.simulate_rx_throttling(1, 20);
      test_input_block_2.simulate_rx_throttling(1, 10);
      test_input_block_3.simulate_rx_throttling(1, 20);
+     test_input_block_4.simulate_rx_throttling(1, 10);
+     test_input_block_5.simulate_rx_throttling(1, 20);
+     test_input_block_6.simulate_rx_throttling(1, 10);
+     test_input_block_7.simulate_rx_throttling(1, 20);
+     test_input_block_8.simulate_rx_throttling(1, 10);
+     test_input_block_9.simulate_rx_throttling(1, 20);
+     test_input_block_10.simulate_rx_throttling(1, 10);
 
+
+     test_input_block_0.simulate_rx_abort(1,10);
+     test_input_block_1.simulate_rx_abort(1,20);
+     test_input_block_2.simulate_rx_abort(1,30);
+     test_input_block_3.simulate_rx_abort(1,40);
+     test_input_block_4.simulate_rx_abort(1,50);
+     test_input_block_5.simulate_rx_abort(1,60);
+     test_input_block_6.simulate_rx_abort(1,70);
+     test_input_block_7.simulate_rx_abort(1,80);
+     test_input_block_8.simulate_rx_abort(1,90);
+     test_input_block_9.simulate_rx_abort(1,100);
+     test_input_block_10.simulate_rx_abort(1,110);
 
      //test_input_block_0.simulate_tx_error(1,110);
-     //      test_input_block_0.simulate_rx_abort(1,80);
+    // test_input_block_0.simulate_rx_abort(1,80);
      //      test_input_block_1.send(hdr, buffer, 911);
       
       
@@ -541,7 +576,7 @@ module main;
           tx_port_finished[5] & tx_port_finished[6] & tx_port_finished[7] & tx_port_finished[8] & tx_port_finished[9] & tx_port_finished[10]);
 
      
-     wait_cycles(100000);
+     wait_cycles(500000);
      $display("=============================================== DBG =================================================");
      $display("Rx Ports   :  P 0  |  P 1  |  P 2  |  P 3  |  P 4  |  P 5  |  P 6  |  P 7  |  P 8  |  P 9  |  P10  | ");
      $display("-----------------------------------------------------------------------------------------------------");

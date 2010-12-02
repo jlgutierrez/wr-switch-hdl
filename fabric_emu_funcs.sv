@@ -159,6 +159,6 @@ task dump_frame_header(string s, ether_frame_t frame);
    else
      begin
      $display("%s %s (size: %d, port_id: %4d)  length = %d %s %s =>> ERROR here", s, format_ether_header(frame.hdr),frame.hdr.ethertype, frame.hdr.src >> 44, frame.size, frame.error?"ERROR":"OK", frame.hdr.has_timestamp?"TS":"NoTS");
-     //$fatal("dupa");
+    $fatal("dupa");
      end
 endtask // dump_frame_header
