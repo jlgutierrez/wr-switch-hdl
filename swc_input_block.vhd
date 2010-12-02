@@ -168,7 +168,7 @@ entity swc_input_block is
     -- thus flash/clean input register of the pump
     mpm_flush_o : out  std_logic;    
     
-
+    mpm_wr_sync_i  : in  std_logic;
 
 -------------------------------------------------------------------------------
 -- I/F with Page Transfer Arbiter (PTA)
@@ -342,8 +342,13 @@ type t_read_state is (S_IDLE,                   -- we wait for other processes (
  
  signal first_pck_word  : std_logic;
  
- 
  signal clean_pck_cnt  : std_logic;
+ 
+ signal eof_in_fifo : std_logic;
+ 
+ signal fifo_full_in_advance : std_logic;
+ 
+ signal drdy : std_logic;
 -------------------------------------------------------------------------------
 -- Function which calculates number of 1's in a vector
 ------------------------------------------------------------------------------- 
@@ -369,22 +374,21 @@ type t_read_state is (S_IDLE,                   -- we wait for other processes (
   
 begin --arch
 
- zeros <= (others =>'0');
-
- fifo_data_in(c_swc_data_width                    - 1 downto 0)                                   <= tx_data_i;
- fifo_data_in(c_swc_data_width + c_swc_ctrl_width - 1 downto c_swc_data_width)                    <= tx_ctrl_trans;
- fifo_data_in(c_swc_data_width + c_swc_ctrl_width + 1 downto c_swc_data_width + c_swc_ctrl_width) <= write_ctrl_in;
+ zeros            <= (others =>'0');
+ clean_pck_cnt    <= '1'  when ((write_state = S_START_FIFO_RD)     or
+                               (write_state = S_NEW_PCK_IN_FIFO)) else '0';
+--==================================================================================================
+-- FIFO signals
+--==================================================================================================
+ fifo_data_in(c_swc_data_width - 1 downto 0)                 <= tx_data_i;
+ fifo_data_in(c_swc_data_width + 
+              c_swc_ctrl_width - 1 downto c_swc_data_width)  <= tx_ctrl_trans;
+ fifo_data_in(c_swc_data_width + 
+              c_swc_ctrl_width + 1 downto c_swc_data_width + 
+                                          c_swc_ctrl_width)  <= write_ctrl_in;
 
  tx_ctrl_trans <= b"1111" when (tx_ctrl_i      = x"7" and tx_bytesel_i = '1')  else tx_ctrl_i;
- 
- fifo_wr       <=  '1'                                when (read_state = S_WRITE_DUMMY_EOF )     else 
-                    ((not fifo_full) and tx_valid_i)  when (read_state = S_WRITE_FIFO )          else
-                    (not fifo_full)                   when (read_state = S_WRITE_PAUSE_FIFO_COS) else
-                    (tx_valid_i)                      when (read_state = S_WRITE_PAUSE_INPUT_COS)else
-                    ((not fifo_full) and tx_valid_i)  when (read_state = S_WRITE_PAUSE_BOTH_COSs)else
-                    '0';
 
- 
  write_ctrl_in <=  b"01"  when (first_pck_word = '1'                   )       else
                    b"10"  when (tx_valid_i     = '1' and tx_eof_p1_i = '1')    else
                    b"11"  when (read_state     = S_WRITE_DUMMY_EOF)            else
@@ -394,21 +398,33 @@ begin --arch
  write_data     <= fifo_data_out(c_swc_data_width                    - 1 downto 0);
  write_ctrl     <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width - 1 downto c_swc_data_width) ;
  
- fifo_rd_and    <=  (not fifo_empty) and (not mpm_full_i)                             when (write_state = S_WRITE_PAUSE_BOTH_COSs) else
-                    (not fifo_empty)                                                  when (write_state = S_WRITE_PAUSE_FIFO_COS ) else
-                   ((not fifo_empty) and (not mpm_full_i) 
-                   and fifo_populated_enough and pckstart_page_in_advance)            when (write_state = S_NEW_PCK_IN_FIFO   )    else fifo_rd ;
-     
-     
- fifo_populated_enough <= '1'  when ((fifo_usedw  > b"01111") or fifo_full = '1') else '0';    
  
- clean_pck_cnt         <= '1'  when ((write_state = S_START_MPM_WR) or (write_state = S_NEW_PCK_IN_FIFO)) else '0';
+ fifo_wr        <= tx_valid_i when (read_state = S_WRITE_FIFO) else '0';
+ 
+ 
+ fifo_rd_and    <= ((not fifo_empty) and (not mpm_full_i)) when (write_state = S_WRITE_MPM  or 
+                                                                 write_state = S_START_FIFO_RD) else '0';
+
+ drdy           <= ((not (fifo_empty and (not write_ctrl_out(1)))) and (not mpm_full_i))  when (write_state = S_WRITE_MPM) else '0';                                                                     
+ -- drdy           <= (((not fifo_empty) and (not mpm_full_i)) or write_ctrl_out(1)) when (write_state = S_WRITE_MPM) else '0';    
+ -- fifo_rd_and    <=  fifo_rd and (not mpm_full_i) ;     
+ 
+ --drdy           <= (fifo_rd and (not mpm_full_i))   when (write_state = S_WRITE_MPM) else '0';    
+
+ fifo_populated_enough <= '1' when ((fifo_usedw > std_logic_vector(to_unsigned(c_swc_packet_mem_multiply,c_swc_input_fifo_size_log2))) or fifo_full = '1') else '0';    
+ fifo_full_in_advance  <= '1' when ((fifo_usedw > std_logic_vector(to_unsigned(c_swc_fifo_full_in_advance,c_swc_input_fifo_size_log2)))     or fifo_full = '1') else '0';
+ 
+ 
+ --==================================================================================================
+ -- FIFO signals
+ --================================================================================================== 
+
  
  FIFO: generic_sync_fifo
   generic map(
     g_width      => c_swc_data_width + c_swc_ctrl_width + 2,
-    g_depth      => 32,
-    g_depth_log2 => 5
+    g_depth      => c_swc_input_fifo_size,
+    g_depth_log2 => c_swc_input_fifo_size_log2
     )
   port map   (
       clk_i    => clk_i,
@@ -440,7 +456,7 @@ begin --arch
        
          pck_size <= (others =>'0');
          
-       elsif(mpm_drdy = '1' and mpm_flush = '0') then
+       elsif(drdy = '1' and mpm_flush = '0') then
        
          pck_size <= std_logic_vector(unsigned(pck_size) + 1);
          
@@ -457,6 +473,7 @@ begin --arch
       if(rst_n_i = '0') then
         --================================================
         two_pck_in_fifo          <= '0';
+        eof_in_fifo              <= '0';
         --================================================
       else
 
@@ -470,6 +487,15 @@ begin --arch
           
         end if;  
 
+        if(tx_eof_p1_i = '1' and tx_rerror_p1_i = '0' ) then
+          
+          eof_in_fifo <= '1';
+          
+        elsif(mpm_flush = '1') then
+          
+          eof_in_fifo <= '0';
+          
+        end if;
         
       end if;
     end if;   
@@ -596,7 +622,7 @@ begin --arch
               end if;
 
           --============================================================================         
-          when S_WAIT_FOR_RTU_RSP => 
+          when S_WAIT_FOR_RTU_RSP =>  -- ca 
           --============================================================================          
             
             if(tx_rerror_p1_i = '1' ) then
@@ -635,109 +661,26 @@ begin --arch
                 tx_rerror                <= '1';
         
               end if;
-              
             elsif( tx_valid_i = '1' and tx_eof_p1_i = '1') then
-              
+                
               read_state               <= S_IDLE;
               tx_dreq                  <= '0';
-              
+               
             elsif( tx_valid_i = '0' and tx_eof_p1_i = '1') then
-            
+              
               read_state               <= S_WRITE_DUMMY_EOF;
-              tx_dreq                  <= '0';   
-              
-            elsif(fifo_full = '1' and tx_valid_i = '0') then
+              tx_dreq                  <= '0'; 
             
-              read_state              <= S_WRITE_PAUSE_INPUT_COS;
-              
-            elsif(fifo_full = '1' and tx_valid_i = '1') then  
-              
-              read_state              <= S_WRITE_PAUSE_FIFO_COS;
-              
-            elsif(fifo_full = '0' and tx_valid_i = '0') then  
-            
-              read_state              <= S_WRITE_PAUSE_INPUT_COS;
-
-                   
-              
-            end if;    
-          
-          --============================================================================ 
-          when S_WRITE_PAUSE_FIFO_COS  =>
-          --============================================================================
-           
-            if(tx_rerror_p1_i = '1')then
+            else 
              
-              if(two_pck_in_fifo = '1') then
-        
-                read_state               <= S_WAIT_FOR_CLEAN_FIFO;
-                tx_dreq                  <= '0';
-        
-              else
-        
-                -- error, screw everything else
-                read_state               <= S_IDLE;
-                tx_dreq                  <= '0';
-                fifo_clean               <= '1';
-                tx_rerror                <= '1';
-        
-              end if;
-              
-            elsif(fifo_full = '0') then
-              
-              if( tx_valid_i = '1' and tx_eof_p1_i = '1') then
-              
-                read_state               <= S_IDLE;
-                tx_dreq                  <= '0';
-              
-              elsif( tx_valid_i = '0' and tx_eof_p1_i = '1') then
-            
-                read_state               <= S_WRITE_DUMMY_EOF;
-                tx_dreq                  <= '0';                    
-                
-              else
-                
-                read_state              <= S_WRITE_FIFO;
-                
-              end if;    
-            end if;
-          --============================================================================   
-          when S_WRITE_PAUSE_INPUT_COS =>                      
-          --============================================================================
-
-            if(tx_rerror_p1_i = '1')then
-             
-              if(two_pck_in_fifo = '1') then
-        
-                read_state               <= S_WAIT_FOR_CLEAN_FIFO;
-                tx_dreq                  <= '0';
-        
-              else
-        
-                -- error, screw everything else
-                read_state               <= S_IDLE;
-                tx_dreq                  <= '0';
-                fifo_clean               <= '1';
-                tx_rerror                <= '1';
-        
-              end if;
-              
-            elsif( tx_valid_i = '1' and tx_eof_p1_i = '1') then
-              
-              read_state               <= S_IDLE;
-              tx_dreq                  <= '0';
-              
-            elsif( tx_valid_i = '0' and tx_eof_p1_i = '1') then
-            
-              read_state               <= S_WRITE_DUMMY_EOF;
-              tx_dreq                  <= '0';                    
-                
-            elsif( tx_valid_i = '1' and tx_eof_p1_i = '0') then
-                
-              read_state              <= S_WRITE_FIFO;
-                
-            end if;
-            
+             if(fifo_full_in_advance = '1') then
+               tx_dreq <= '0';
+             else
+               tx_dreq <= '1';
+               
+             end if;
+               
+           end if;            
           --============================================================================ 
           when S_WAIT_FOR_CLEAN_FIFO =>			
           --============================================================================
@@ -819,75 +762,59 @@ begin --arch
         -- main finite state machine
         case write_state is
 
-          --============================================================================
+          --========================================================================================
           when S_IDLE =>
-          --============================================================================
+          --========================================================================================
                      
             start_transfer       <= '0';
             mpm_flush            <= '0';
             mpm_drdy             <= '0';
             start_transfer       <= '0';  
-            if(((fifo_usedw  > b"01111") or (fifo_full = '1'))  and (pckstart_page_in_advance = '1') and mpm_full_i = '0') then   
-                
-              if(write_ctrl_out = b"01" ) then
-              
-                fifo_rd                    <= '1';
-                write_state                <= S_START_MPM_WR;
-                
-              else
             
-                write_state                <= S_START_FIFO_RD;
-                fifo_rd                    <= '1';
+            if((fifo_populated_enough = '1')  and (pckstart_page_in_advance = '1') and mpm_full_i = '0') then   
                 
-              end if;
+              fifo_rd                  <= '1';  
+              write_state              <= S_START_FIFO_RD;
                
             end if;
        
-          --============================================================================       
+          --========================================================================================       
           when S_START_FIFO_RD =>
-          --============================================================================
+          --========================================================================================
                      
-            write_state                <= S_START_MPM_WR;
-           
-          --============================================================================        
-          when S_START_MPM_WR =>
-          --============================================================================            
+            write_state                <= S_WRITE_MPM;
+            -- first word of the pck
+            current_pckstart_pageaddr  <= pckstart_pageaddr;
+            write_mask                 <= read_mask;
+            write_prio                 <= read_prio;
+            write_usecnt               <= read_usecnt;			
             
-            if(write_ctrl_out = b"01" ) then
-              
-              -- first word of the pck
-              current_pckstart_pageaddr  <= pckstart_pageaddr;
-              write_mask                 <= read_mask;
-              write_prio                 <= read_prio;
-              write_usecnt               <= read_usecnt;			
-              
-              
-              mpm_pckstart               <= '1';
-              mpm_pagereq                <= '1';
-              mpm_pageaddr               <= pckstart_pageaddr;
-              mpm_data                   <= write_data;
-              mpm_ctrl                   <= write_ctrl;
-              mpm_drdy                   <= '1';
             
-              write_state                <= S_WRITE_MPM;
-        
-            end if;
+            mpm_pckstart               <= '1';
+            mpm_pagereq                <= '1';
+            mpm_pageaddr               <= pckstart_pageaddr;
+            
           
-          --============================================================================     
+          --========================================================================================     
           when S_WRITE_MPM =>
-          --============================================================================
+          --========================================================================================
           
           mpm_pckstart               <= '0';
           mpm_pagereq                <= '0';
-          
+          ------------------------------------------------------------------------------------------          
           if(tx_rerror = '1') then 
           
             mpm_flush              <= '1';
-            mpm_drdy               <= '0';
             fifo_rd                <= '0';
             write_state            <= S_IDLE;
-            
-          else
+          ------------------------------------------------------------------------------------------  
+          elsif(write_ctrl_out /= b"01" and mpm_pckstart = '1' ) then
+          
+            -- bad, not sure what to do
+            write_state              <= S_START_FIFO_RD;
+       
+          ------------------------------------------------------------------------------------------ 
+          else 
             
             if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
         
@@ -901,65 +828,27 @@ begin --arch
         
             end if;
             
-            if(fifo_empty = '1' and mpm_full_i = '1' ) then
-        
-              write_state              <= S_WRITE_PAUSE_BOTH_COSs;
-              mpm_data                 <= write_data;
-              mpm_ctrl                 <= write_ctrl;
-              mpm_drdy                 <= '0';
-              fifo_rd                  <= '0';
-
-            elsif(fifo_empty = '1' and write_ctrl_out = b"00") then
-        
-              write_state              <= S_WRITE_PAUSE_FIFO_COS;
-              mpm_data                 <= write_data;
-              mpm_ctrl                 <= write_ctrl;
-              mpm_drdy                 <= '0';
-              fifo_rd                  <= '0';
             
-            elsif(mpm_full_i = '1' ) then
-               
-               write_state              <= S_WRITE_PAUSE_MPM_COS;
-               mpm_data                 <= write_data;
-               mpm_ctrl                 <= write_ctrl;
-               mpm_drdy                 <= '0';
-               fifo_rd                  <= '0';
-                            
-                
+            
+            if(fifo_empty = '1') then
+              fifo_rd                  <= '0';
             else
-          
-              if( write_ctrl_out = b"11") then
-          
-                -- last empty word of the pck
-                mpm_flush              <= '1';
-                mpm_drdy               <= '0';
-                fifo_rd                <= '0';
-               -- start_transfer         <= '1';
-                write_state            <= S_LAST_MPM_WR;
-          
-              elsif( write_ctrl_out = b"10") then				  
-        
-                -- last non-empty word of the pck
-                mpm_flush            <= '1';
-                fifo_rd              <= '0';
-                mpm_data             <= write_data;
-                mpm_ctrl             <= write_ctrl;
-                mpm_drdy             <= '1';
-                write_state          <= S_LAST_MPM_WR;
-                --start_transfer       <= '1';
-        
-              else
-        
-                mpm_flush            <= '0';
-                fifo_rd              <= '1';				
-                mpm_data             <= write_data;
-                mpm_ctrl             <= write_ctrl;
-                mpm_drdy             <= '1';
-                write_state          <= S_WRITE_MPM;
-          
-              end if;
+              fifo_rd                  <= '1';
             end if;
-          end if;
+              
+        
+            if( write_ctrl_out = b"11") then
+          
+              write_state            <= S_LAST_MPM_WR;
+              
+          
+            elsif( write_ctrl_out = b"10") then				  
+        
+              write_state          <= S_LAST_MPM_WR;
+        
+            end if;
+         ------------------------------------------------------------------------------------------  
+         end if;
 
        --============================================================================
        when S_WAIT_WITH_TRANSFER =>
@@ -977,199 +866,26 @@ begin --arch
          end if;
          
 
-       --============================================================================
-       when S_WRITE_PAUSE_MPM_COS =>
-       --============================================================================
-                
-         if(tx_rerror = '1') then 
-           mpm_flush              <= '1';
-           mpm_drdy               <= '0';
-           fifo_rd                <= '0';
-           write_state            <= S_IDLE;
-            
-         else
-         
-           if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
-          
-             mpm_pageaddr               <= interpck_pageaddr;
-             mpm_pagereq                <= '1';
-          
-           else
-  
-             mpm_pageaddr               <= (others => '1');
-             mpm_pagereq                <= '0';
-          
-           end if;
-  
-           if(mpm_full_i = '0' and fifo_empty = '0') then
-                    
-             if( write_ctrl_out = b"11") then
-             
-               -- last empty word of the pck
-               mpm_flush              <= '1';
-               mpm_drdy               <= '0';
-               fifo_rd                <= '0';
-               write_state           <= S_LAST_MPM_WR;
-           
-             elsif( write_ctrl_out = b"10") then				  
-          
-                -- last non-empty word of the pck
-               mpm_flush            <= '1';
-               fifo_rd              <= '0';
-               --mpm_data             <= write_data;
-               --mpm_ctrl             <= write_ctrl;
-               mpm_drdy             <= '1';
-               write_state          <= S_LAST_MPM_WR;
-        
-             else
-        
-               mpm_flush            <= '0';
-               fifo_rd              <= '1';				
-              -- mpm_data             <= write_data;
-               --mpm_ctrl             <= write_ctrl;
-               mpm_drdy             <= '1';
-               write_state          <= S_WRITE_MPM;
-          
-             end if;
-           end if;
-         end if;         
-         
-         --============================================================================         
-         when S_WRITE_PAUSE_BOTH_COSs =>
-         --============================================================================
-               
-           if(tx_rerror = '1') then 
-             mpm_flush              <= '1';
-             mpm_drdy               <= '0';
-             fifo_rd                <= '0';
-             write_state            <= S_IDLE;
-              
-           else
-           
-             if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
-            
-               mpm_pageaddr               <= interpck_pageaddr;
-               mpm_pagereq                <= '1';
-            
-             else
-    
-               mpm_pageaddr               <= (others => '1');
-               mpm_pagereq                <= '0';
-            
-             end if;
-    
-             if(fifo_empty = '0' and mpm_full_i = '0') then
-                      
-               if( write_ctrl_out = b"11") then
-               
-                 -- last empty word of the pck
-                 mpm_flush              <= '1';
-                 mpm_drdy               <= '0';
-                 fifo_rd                <= '0';
-                 write_state           <= S_LAST_MPM_WR;
-             
-               elsif( write_ctrl_out = b"10") then				  
-            
-                  -- last non-empty word of the pck
-                 mpm_flush            <= '1';
-                 fifo_rd              <= '0';
-                 --mpm_data             <= write_data;
-                 --mpm_ctrl             <= write_ctrl;
-                 mpm_drdy             <= '1';
-                 write_state          <= S_LAST_MPM_WR;
-          
-               else
-          
-                 mpm_flush            <= '0';
-                 fifo_rd              <= '1';				
-                -- mpm_data             <= write_data;
-                 --mpm_ctrl             <= write_ctrl;
-                 mpm_drdy             <= '1';
-                 write_state          <= S_WRITE_MPM;
-            
-               end if;
-             end if;
-           end if;      
-  
-           
-         
-       --============================================================================         
-       when S_WRITE_PAUSE_FIFO_COS =>
-       --============================================================================
-             
-         if(tx_rerror = '1') then 
-           mpm_flush              <= '1';
-           mpm_drdy               <= '0';
-           fifo_rd                <= '0';
-           write_state            <= S_IDLE;
-            
-         else
-         
-           if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
-          
-             mpm_pageaddr               <= interpck_pageaddr;
-             mpm_pagereq                <= '1';
-          
-           else
-  
-             mpm_pageaddr               <= (others => '1');
-             mpm_pagereq                <= '0';
-          
-           end if;
-  
-           if(fifo_empty = '0' and mpm_full_i = '0') then
-                    
-             if( write_ctrl_out = b"11") then
-             
-               -- last empty word of the pck
-               mpm_flush              <= '1';
-               mpm_drdy               <= '0';
-               fifo_rd                <= '0';
-               write_state           <= S_LAST_MPM_WR;
-           
-             elsif( write_ctrl_out = b"10") then				  
-          
-                -- last non-empty word of the pck
-               mpm_flush            <= '1';
-               fifo_rd              <= '0';
-               --mpm_data             <= write_data;
-               --mpm_ctrl             <= write_ctrl;
-               mpm_drdy             <= '1';
-               write_state          <= S_LAST_MPM_WR;
-        
-             else
-        
-               mpm_flush            <= '0';
-               fifo_rd              <= '1';				
-              -- mpm_data             <= write_data;
-               --mpm_ctrl             <= write_ctrl;
-               mpm_drdy             <= '1';
-               write_state          <= S_WRITE_MPM;
-          
-             end if;
-           end if;
-         end if;      
-
        --============================================================================      
        when S_LAST_MPM_WR =>
        --============================================================================
-        
+
          start_transfer            <= '0';
          mpm_flush                 <= '0';
          mpm_drdy                  <= '0';
          fifo_rd                   <= '0';
          
-         if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
-        
-           mpm_pageaddr               <= interpck_pageaddr;
-           mpm_pagereq                <= '1';
-        
-         else
-
-           mpm_pageaddr               <= (others => '1');
-           mpm_pagereq                <= '0';
-        
-         end if;         
+--         if(mpm_pagereq = '0' and mpm_pageend_i = '1' and interpck_page_in_advance = '1') then
+--        
+--           mpm_pageaddr               <= interpck_pageaddr;
+--           mpm_pagereq                <= '1';
+--        
+--         else
+--
+--           mpm_pageaddr               <= (others => '1');
+--           mpm_pagereq                <= '0';
+--        
+--         end if;         
 
                 
          -- if another page needs to be allocated for the last chunck 
@@ -1205,7 +921,7 @@ begin --arch
          end if; 
          
          
-         if(((fifo_usedw  > b"01111") or (fifo_full = '1')) and (pckstart_page_in_advance = '1') and mpm_full_i = '0') then 
+         if((fifo_populated_enough = '1') and (pckstart_page_in_advance = '1') and mpm_full_i = '0') then 
          
            -- first word of the pck
            current_pckstart_pageaddr  <= pckstart_pageaddr;
@@ -1216,8 +932,6 @@ begin --arch
            mpm_pckstart               <= '1';
            mpm_pagereq                <= '1';
            mpm_pageaddr               <= pckstart_pageaddr;
-           mpm_data                   <= write_data;
-           mpm_ctrl                   <= write_ctrl;
            mpm_drdy                   <= '1';
          
            fifo_rd                    <= '1';
@@ -1635,7 +1349,9 @@ end process;
 
   tx_dreq_o              <= '0'    when (read_state = S_IDLE)     else
                             '1'    when (read_state = S_DROP_PCK) else   
-                            tx_dreq and not fifo_full    ;
+                            tx_dreq;
+                            
+                                                      
                             
   rtu_rsp_ack_o          <= rtu_rsp_ack;
 
@@ -1650,10 +1366,10 @@ end process;
   mpm_pckstart_o         <= mpm_pckstart;                            
   mpm_pageaddr_o         <= mpm_pageaddr;
   mpm_pagereq_o          <= mpm_pagereq;
-  mpm_data_o             <= mpm_data;
-  mpm_ctrl_o             <= mpm_ctrl;
-  mpm_drdy_o             <= mpm_drdy;
-  mpm_flush_o            <= mpm_flush;        
+  mpm_data_o             <= write_data;
+  mpm_ctrl_o             <= write_ctrl;
+  mpm_drdy_o             <= drdy;
+  mpm_flush_o            <= (mpm_flush or write_ctrl_out(1)) when (write_state = S_WRITE_MPM) else '0';        
                                                             
   pta_transfer_pck_o     <= transfering_pck;
   pta_pageaddr_o         <= pta_pageaddr;

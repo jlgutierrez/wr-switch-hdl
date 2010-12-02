@@ -147,10 +147,11 @@ architecture behavoural of swc_output_block is
   signal wr_array    : t_addr_array;
   signal rd_array    : t_addr_array;
   
-  type t_state is (IDLE, SET_PAGE, READ_MPM, PAUSE_BY_SRC, PAUSE_BY_SINK, READ_LAST_WORD,WAIT_FREE_PCK, WAIT_DREQ, TABORT);
+  type t_state is (IDLE, SET_PAGE, RE_SET_PAGE, READ_MPM, PAUSE_BY_SRC, PAUSE_BY_SINK, READ_LAST_WORD,WAIT_FREE_PCK, WAIT_DREQ, TABORT);
   signal state       : t_state;
   
   signal pgreq       : std_logic;  
+  signal re_pgreq    : std_logic;  
   
   signal wr_data            : std_logic_vector(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto 0);
   signal rd_data            : std_logic_vector(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto 0);
@@ -321,7 +322,7 @@ begin  --  behavoural
        
          
 --         if(rx_eof_p1  = '1' or ) then
-          if(state = SET_PAGE) then
+          if(state = SET_PAGE or state = RE_SET_PAGE) then
        
           cnt_pck_size           <= (others =>'0');
           cnt_one_but_last_word  <= '0';
@@ -370,6 +371,7 @@ begin  --  behavoural
         rx_data           <= (others =>'0');
         rx_eof_p1         <= '0';
         rx_bytesel        <= '0';
+        re_pgreq          <= '0';
         
       else
 
@@ -408,8 +410,7 @@ begin  --  behavoural
               rx_sof_p1         <= '1';
               rx_ctrl           <= (others =>'0');
               rx_data           <= (others =>'0');
---              current_pck_size <= rd_pck_size;
---              pck_start_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
+
               
             end if;
             
@@ -418,31 +419,22 @@ begin  --  behavoural
               rx_sof_p1        <= '0';
               pgreq            <= '1';
               dreq             <= '1';
---              current_pck_size <= rd_pck_size;
---              pck_start_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
 
-           if(rx_dreq_i = '0' and mpm_drdy_i = '1') then
-            
-              rx_valid          <= '0'; 
-              state             <= PAUSE_BY_SINK;
-              rx_ctrl           <= mpm_ctrl_i;
-              rx_data           <= mpm_data_i;
-            
-            elsif(rx_dreq_i = '1' and mpm_drdy_i = '0') then
-            
               rx_valid          <= '0'; 
               state             <= PAUSE_BY_SRC;
               rx_ctrl           <= (others =>'0');
               rx_data           <= (others =>'0');
-              
-            else
-              
-              state            <= READ_MPM;
-              rx_valid         <= '1';
-              rx_ctrl          <= mpm_ctrl_i;
-              rx_data          <= mpm_data_i;
-              
-            end if;
+
+          when RE_SET_PAGE =>
+            
+              rx_sof_p1        <= '0';
+              re_pgreq         <= '1';
+              dreq             <= '1';
+
+              rx_valid          <= '0'; 
+              state             <= PAUSE_BY_SRC;
+              rx_ctrl           <= (others =>'0');
+              rx_data           <= (others =>'0');              
             
           when PAUSE_BY_SINK => 
             
@@ -452,7 +444,7 @@ begin  --  behavoural
 --            if(rx_dreq_i = '1' and mpm_drdy_i = '1') then
             if(rx_tabort_p1_i = '1' and rx_dreq_i = '1') then
                             
-               state             <= SET_PAGE;
+               state             <= RE_SET_PAGE;
                dreq              <= '0';
                rx_sof_p1         <= '1';
                rx_valid          <= '0';
@@ -511,6 +503,9 @@ begin  --  behavoural
               
               if(cnt_one_but_last_word = '1') then   
                 
+                state             <= READ_MPM;
+              elsif(cnt_last_word = '1') then
+
                 rx_eof_p1         <= '1';
                 state             <= READ_LAST_WORD;
                 
@@ -524,12 +519,12 @@ begin  --  behavoural
           when PAUSE_BY_SRC => 
             
             pgreq            <= '0';
-            
+            re_pgreq         <= '0';
             
 --            if(rx_dreq_i = '1' and mpm_drdy_i = '1') then
             if(rx_tabort_p1_i = '1' and rx_dreq_i = '1') then
                             
-               state             <= SET_PAGE;
+               state             <= RE_SET_PAGE;
                dreq              <= '0';
                rx_sof_p1         <= '1';
                rx_valid          <= '0';
@@ -609,7 +604,7 @@ begin  --  behavoural
               
             if(rx_tabort_p1_i = '1' and rx_dreq_i = '1') then
                             
-              state             <= SET_PAGE;
+              state             <= RE_SET_PAGE;
               dreq              <= '0';
               rx_sof_p1         <= '1';
               rx_valid          <= '0';
@@ -755,7 +750,7 @@ begin  --  behavoural
          
            if(rx_dreq_i = '1') then
              
-             state             <= SET_PAGE;
+             state             <= RE_SET_PAGE;
              rx_sof_p1         <= '1';
 
              rx_ctrl           <= (others =>'0');
@@ -825,7 +820,7 @@ begin  --  behavoural
   rd_pck_size         <= rd_data(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto c_swc_page_addr_width);  
   
   
-  mpm_pgreq_o         <= pgreq;
+  mpm_pgreq_o         <= pgreq or re_pgreq;
    
    
                       -- IMPORTANT : a trick needed here, to make things faster, we provide pgaddr straight 

@@ -63,6 +63,10 @@ package swc_swcore_pkg is
   
 
   -- 
+  constant c_swc_input_fifo_size            : integer := 2 * c_swc_packet_mem_multiply;
+  constant c_swc_input_fifo_size_log2  : integer := integer(CEIL(LOG2(real(c_swc_input_fifo_size - 1))));
+  constant c_swc_fifo_full_in_advance  : integer := c_swc_input_fifo_size - 3;
+  
   constant c_swc_num_ports_width       : integer := integer(CEIL(LOG2(real(c_swc_num_ports-1))));
   constant c_swc_packet_mem_num_pages  : integer := (c_swc_packet_mem_size / c_swc_page_size); -- 65536/64 = 1024
 
@@ -258,7 +262,8 @@ package swc_swcore_pkg is
       mpm_ctrl_o  : out  std_logic_vector(c_swc_ctrl_width - 1 downto 0);
       mpm_drdy_o  : out  std_logic;
       mpm_full_i  : in std_logic;
-      mpm_flush_o : out  std_logic;    
+      mpm_flush_o : out  std_logic;  
+      mpm_wr_sync_i : in  std_logic; 
   -------------------------------------------------------------------------------
   -- I/F with Page Transfer Arbiter (PTA)
   -------------------------------------------------------------------------------     
@@ -309,6 +314,7 @@ package swc_swcore_pkg is
       wr_drdy_i  : in  std_logic_vector(c_swc_num_ports-1 downto 0);
       wr_full_o  : out std_logic_vector(c_swc_num_ports-1 downto 0);
       wr_flush_i : in  std_logic_vector(c_swc_num_ports-1 downto 0);
+      wr_sync_o : out std_logic_vector(c_swc_num_ports -1 downto 0);
       ------------------- reading from the shared memory --------------------------
       rd_pagereq_i   : in  std_logic_vector(c_swc_num_ports-1 downto 0);
       rd_pageaddr_i  : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);

@@ -850,28 +850,16 @@ begin  -- rtl
   ll_idle <= '1' when (state = IDLE) else '0';
   
   we_o   <= we_int;
-  full_o <= (((reg_full           -- obvous
-                or 
-            --==== needs test - start   ===   
-            (cnt_last_word and drdy_i) 
-                or
-            (nasty_wait_full and drdy_i))                
-            --==== needs test - end   ===
---          (cnt_last_word))       -- we need to set full in advance when the last word is not on sync
-                                -- (this means that we need full to stop writing and wait for synchronization
-                                -- with sync 
-           --     or 
-           --   pgend
-           --      )              -- in case when new page is not set by the end of the  last "word" of the page
-                                -- we need to wait for the page to be allocated - in such case we need to stop
-                                -- and here, again, we need to set full_o in advance by making the (X and not sync_i)
-                                -- trick
-               and 
-            (not sync_i)) or(pgend and sync_i));-- or (sync_i and (not drdy_i)));-- and not before_sync;
+  full_o <= reg_full;
+--  
+--            (((reg_full           -- obvous
+--                or 
+--            (cnt_last_word and drdy_i) 
+--                or
+--            (nasty_wait_full and drdy_i))                
+--               and 
+--            (not sync_i)) or(pgend and sync_i));-- or (sync_i and (not drdy_i)));-- and not before_sync;
             
-  -- FIXME: investigate this solutions   
-  
-  --work here
          
   --addr_o <= pgaddr_i & zeros (c_swc_page_offset_width-1 downto 0) when (we_int = '1' and pgreq_i = '1') else mem_addr;
   addr_o <= mem_addr;

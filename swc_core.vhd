@@ -131,7 +131,7 @@ architecture rtl of swc_core is
    -- Multiport Memory -> Input Block
    signal mpm_pageend          : std_logic_vector(c_swc_num_ports - 1 downto 0);
    signal mpm_full             : std_logic_vector(c_swc_num_ports - 1 downto 0);
-
+   signal mpm_wr_sync          : std_logic_vector(c_swc_num_ports - 1 downto 0);
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Pck Transfer Arbiter<<
    ----------------------------------------------------------------------------------------------------
@@ -305,6 +305,7 @@ architecture rtl of swc_core is
         mpm_drdy_o               => ib_drdy(i),
         mpm_full_i               => mpm_full(i),
         mpm_flush_o              => ib_flush(i),
+        mpm_wr_sync_i            => mpm_wr_sync(i),
         -------------------------------------------------------------------------------
         -- I/F with Page Transfer Arbiter (PTA)
         -------------------------------------------------------------------------------     
@@ -472,6 +473,7 @@ architecture rtl of swc_core is
       wr_drdy_i                  => ib_drdy,
       wr_full_o                  => mpm_full,
       wr_flush_i                 => ib_flush,
+      wr_sync_o                  => mpm_wr_sync,
       -------------------------------------------------------------------------------
       -- I/F with Output Block
       ------------------------------------------------------------------------------- 

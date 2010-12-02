@@ -125,6 +125,8 @@ entity swc_packet_mem is
     -- request to write the content of pump's input register to FB SRAM memory, 
     -- thus flash/clean input register of the pump
     wr_flush_i : in  std_logic_vector(c_swc_num_ports-1 downto 0);
+    
+    wr_sync_o : out std_logic_vector(c_swc_num_ports -1 downto 0);
 
     ------------------- reading from the shared memory --------------------------
     -- indicates that a port X wants to write page address of the "read" access
@@ -595,5 +597,5 @@ begin  -- rtl
    ll_write_done_o          <= write_done_i;
    llist_rd_data            <= data_i ;
 
-
+   wr_sync_o               <= sync_sreg(c_swc_num_ports-1 downto 0);
 end rtl;
