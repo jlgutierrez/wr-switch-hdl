@@ -191,7 +191,7 @@ architecture syn of swc_page_allocator is
 
   type t_state is (IDLE, ALLOC_LOOKUP_L1, ALLOC_LOOKUP_L0_UPDATE, 
                    FREE_CHECK_USECNT, FREE_RELEASE_PAGE, FREE_DECREASE_UCNT, 
-                   SET_UCNT, NASTY_WAIT--, FORCE_FREE_RELEASE_PAGE
+                   SET_UCNT, NASTY_WAIT, DUMMY--, FORCE_FREE_RELEASE_PAGE
                    );
 
   -- this represents high part of the page address (bit mapping)
@@ -403,7 +403,7 @@ begin  -- syn
                
                pgaddr_to_free    <= pgaddr_i;
                
-               state             <= FREE_RELEASE_PAGE;
+               state             <= DUMMY;-- FREE_RELEASE_PAGE;
                -- decoding of provided code into low and high part
                l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
                l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
@@ -424,6 +424,10 @@ begin  -- syn
                                          -- so the multiport allocator will also
                                          -- take 3 cycles per request
              end if;
+          when DUMMY =>
+            
+             state             <=  FREE_RELEASE_PAGE;
+             done_o            <= '0';
              
           when NASTY_WAIT =>
              

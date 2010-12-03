@@ -343,7 +343,7 @@ begin  -- rtl
            
              if( sync_i = '1') then
              
-               if(pgend = '1') then
+               if(pgend = '1' and drdy_i = '1') then -- see screenshot: swcore-writepump-p1
                
                  reg_full      <= '1';
                  state_write   <= S_WAIT_WRITE;
@@ -352,7 +352,7 @@ begin  -- rtl
 
                -- during the last address of the page, the Linked list is being written, so we need 
                -- to wait for it to finish
-               elsif(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and ll_idle = '0') then
+               elsif(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and ll_idle = '0' ) then
                  
                  state_write   <= S_WAIT_LL_READY;
                  reg_full      <= '1';
@@ -373,13 +373,13 @@ begin  -- rtl
                                  
                end if;
             
-            elsif(drdy_i = '1' and flush_i ='1') then
-              
-              state_write   <= S_WRITE_DATA;
-              we_int        <= '1';
-              reg_full      <= '0';
-              cnt_last_word <= '0';
-                 
+--            elsif(drdy_i = '1' and flush_i ='1') then
+--              
+--              state_write   <= S_WRITE_DATA;
+--              we_int        <= '1';
+--              reg_full      <= '0';
+--              cnt_last_word <= '0';
+--                 
             else -- synch_i = '0'
                
 --               if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length) and drdy_i = '1') then 
