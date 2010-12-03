@@ -386,18 +386,19 @@ module main;
           hdr.port_id      = port;
           hdr.ethertype    = i;
 
-  //        mask = 'h00F;;          
-   //       mask = 'h7FF;;
+       //  mask = 'h7FF;;
+     //       mask = 'h00f;;
           mask = (port*cnt + 3*cnt + 2*cnt + cnt)%2047; 
           if( (i/50)%20 > 10) drop = 1; else drop = 0;
-     //     drop = 0;
+    //       drop = 0;
           
           
           send_pck(hdr,buffer, i, port, drop,  ((port*i)/50)%7, mask, cnt);  
-          
+       //   if(port == 7) $display("====>>> Port 7: send pck nr %d",cnt);
+          //if(port == 6) $display("====>>> Port 6: send pck nr %d",cnt);
           if(i > 600) 
           begin
-            
+       /*     
             test_input_block_0.simulate_rx_abort(0,10);
             test_input_block_1.simulate_rx_abort(0,20);
             test_input_block_2.simulate_rx_abort(0,30);
@@ -409,23 +410,8 @@ module main;
             test_input_block_8.simulate_rx_abort(0,90);
             test_input_block_9.simulate_rx_abort(0,100);
             test_input_block_10.simulate_rx_abort(0,110);
-            
+         */   
          end 
-          /*
-          if(drop == 0)
-          begin
-            for(j=0;j<11;j++)
-            begin
-              if(mask[j]) 
-              begin 
-                tx_cnt[j]++;  
-                //$display("tx cnt = %d, port = %d", tx_cnt[j],j);
-              end
-            end
-          end
-          */
-          //send_pck(hdr,buffer, i, port, (i/50)%20,  (i/50)%7,(i/10)%11, cnt);    
-          //send_pck(hdr,buffer, i, port, (i/50)%20,  (i/50)%7,'h345, cnt);    
           
           cnt ++;    
         end
@@ -450,8 +436,10 @@ module main;
       wait(test_input_block_8.ready);
       wait(test_input_block_9.ready);
       wait(test_input_block_10.ready);
- 
 
+ 
+    //////////////// input thottling ///////////////
+    
      test_input_block_0.simulate_tx_throttling(1, 50);
      test_input_block_1.simulate_tx_throttling(1, 20);
      test_input_block_2.simulate_tx_throttling(1, 30);
@@ -466,6 +454,8 @@ module main;
 
 
 
+     //////////////// output thottling ///////////////
+     
      test_input_block_0.simulate_rx_throttling(1, 10);
      test_input_block_1.simulate_rx_throttling(1, 20);
      test_input_block_2.simulate_rx_throttling(1, 10);
@@ -478,7 +468,7 @@ module main;
      test_input_block_9.simulate_rx_throttling(1, 20);
      test_input_block_10.simulate_rx_throttling(1, 10);
 
-
+/*
      test_input_block_0.simulate_rx_abort(1,10);
      test_input_block_1.simulate_rx_abort(1,20);
      test_input_block_2.simulate_rx_abort(1,30);
@@ -490,10 +480,25 @@ module main;
      test_input_block_8.simulate_rx_abort(1,90);
      test_input_block_9.simulate_rx_abort(1,100);
      test_input_block_10.simulate_rx_abort(1,110);
+*/
 
-     //test_input_block_0.simulate_tx_error(1,110);
-    // test_input_block_0.simulate_rx_abort(1,80);
-     //      test_input_block_1.send(hdr, buffer, 911);
+/*
+    //////////////// input error ///////////////
+    
+     test_input_block_0.simulate_tx_error(1,90);
+     test_input_block_1.simulate_tx_error(1,110);
+     test_input_block_2.simulate_tx_error(1,130);
+     test_input_block_3.simulate_tx_error(1,140);
+     test_input_block_4.simulate_tx_error(1,150);
+     test_input_block_5.simulate_tx_error(1,160);
+     test_input_block_6.simulate_tx_error(1,170);
+     test_input_block_7.simulate_tx_error(1,180);
+     test_input_block_8.simulate_tx_error(1,190);
+     test_input_block_9.simulate_tx_error(1,100);
+     test_input_block_10.simulate_tx_error(1,800);
+ */
+ 
+
       
       
       ports_read = 1;
@@ -564,7 +569,27 @@ module main;
      load_port(10);
       tx_port_finished[10] = 1;
    end  
-           
+ /*    
+   always @(posedge clk) 
+   begin
+       int dupa;
+       if(tx_port_finished[0] & tx_port_finished[1] & tx_port_finished[2] & tx_port_finished[3] & tx_port_finished[4] & 
+          tx_port_finished[5] & tx_port_finished[6] & tx_port_finished[7] & tx_port_finished[8] & tx_port_finished[9] & tx_port_finished[10])
+         dupa = 1;
+       else
+         dupa = 0;
+       
+       $display(""); 
+   	   $display("Condition = %d:  0=%d | 1=%d | 2=%d | 3=%d | 4=%d | 5=%d | 6=%d | 7=%d | 8=%d | 9=%d | 10=%d | ",dupa,
+   	   tx_port_finished[0] , tx_port_finished[1] , tx_port_finished[2] , tx_port_finished[3] , tx_port_finished[4]  ,
+       tx_port_finished[5] , tx_port_finished[6] , tx_port_finished[7] , tx_port_finished[8] , tx_port_finished[9] , tx_port_finished[10]);
+   	   
+   	   $display("");
+       
+       wait_cycles(100);
+       
+   end      
+*/           
            
    initial begin
      int i,j;
