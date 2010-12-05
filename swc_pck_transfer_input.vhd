@@ -100,7 +100,7 @@ architecture syn of swc_pck_transfer_input is
     signal ib_prio        : std_logic_vector(c_swc_prio_width - 1      downto 0);
     signal ib_pck_size    : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
     signal ib_mask        : std_logic_vector(c_swc_num_ports - 1       downto 0);
-    signal pto_read_mask    : std_logic_vector(c_swc_num_ports - 1       downto 0);
+    --signal pto_read_mask    : std_logic_vector(c_swc_num_ports - 1       downto 0);
     signal pto_output_mask  : std_logic_vector(c_swc_num_ports - 1       downto 0);
     signal zeros           : std_logic_vector(c_swc_num_ports - 1       downto 0);
 
@@ -116,7 +116,7 @@ begin --arch
       if(rst_n_i = '0') then
       --===================================================
       ib_mask               <= (others => '0');
-      pto_read_mask         <= (others => '0');
+      --pto_read_mask         <= (others => '0');
       pto_output_mask       <= (others => '0');
       ib_prio               <= (others => '0');
       ib_pck_size           <= (others => '0');
@@ -136,7 +136,7 @@ begin --arch
         
         if(ib_transfer_pck_i = '1' and pto_output_mask = zeros) then         
           
-          pto_read_mask     <= (others => '0');
+          --pto_read_mask     <= (others => '0');
           pto_output_mask   <= ib_mask_i;--(others => '0');        
           
         else

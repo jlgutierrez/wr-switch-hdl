@@ -30,7 +30,7 @@
 --
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Tomasz Wlostowski / CERN
+-- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   
@@ -173,7 +173,7 @@ architecture syn of swc_packet_mem_read_pump is
   signal load_out_reg  : std_logic;
   
   -- seems not used ....
-  signal nothing_read : std_logic;
+ -- signal nothing_read : std_logic;
   
   -- HI indicates that current page is done, and that the parent entity must
   -- select another page in following clock cycles (c_swc_packet_mem_multiply
@@ -236,7 +236,7 @@ begin  -- syn
         reg_not_empty     <= '0';
         mem_addr          <= (others => '0');
         advance_addr      <= '0';
-        nothing_read      <= '0';
+     --   nothing_read      <= '0';
         pgend             <= '0';
         pckend            <= '0';
         current_page_addr <= (others => '0');

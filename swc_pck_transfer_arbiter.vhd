@@ -159,7 +159,8 @@ begin --arch
 
 
   -- multiplex mask from input to output
-  multimux_out : process(sync_cntr,pto_output_mask,pto_pageaddr,pto_prio)
+  --multimux_out : process(sync_cntr,pto_output_mask,pto_pageaddr,pto_prio)
+  multimux_out : process(sync_cntr,pto_output_mask,pto_pageaddr,pto_prio,pto_pck_size)
   begin 
   
      for i in 0 to c_swc_num_ports - 1 loop  

@@ -209,7 +209,7 @@ signal pta_pageaddr     : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
 signal pta_mask         : std_logic_vector(c_swc_num_ports - 1 downto 0);
 signal pta_prio         : std_logic_vector(c_swc_prio_width - 1 downto 0);
 signal pta_pck_size     : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
-signal transfering_pck_on_wait   : std_logic;
+
 
 
 signal write_ctrl_in : std_logic_vector(1 downto 0);
@@ -224,7 +224,6 @@ signal read_prio     : std_logic_vector(c_swc_prio_width - 1 downto 0);
 signal read_usecnt   : std_logic_vector(c_swc_usecount_width - 1 downto 0);
 
 signal write_mask     : std_logic_vector(c_swc_num_ports - 1 downto 0);
-signal write_pck_size : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
 signal write_prio     : std_logic_vector(c_swc_prio_width - 1 downto 0);
 signal write_usecnt   : std_logic_vector(c_swc_usecount_width - 1 downto 0);
 
@@ -321,8 +320,6 @@ type t_read_state is (S_IDLE,                   -- we wait for other processes (
  signal mpm_pckstart : std_logic;
  signal mpm_pageaddr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
  signal mpm_pagereq  : std_logic;
- signal mpm_data     : std_logic_vector(c_swc_data_width - 1 downto 0);
- signal mpm_ctrl     : std_logic_vector(c_swc_ctrl_width - 1 downto 0);    
  
  signal flush_sig    : std_logic; 
  signal flush_reg    : std_logic; 
@@ -787,15 +784,12 @@ begin --arch
         current_pckstart_pageaddr<= (others => '1');
         
         write_mask               <= (others => '0');
-        write_pck_size           <= (others => '0');
         write_prio               <= (others => '0');
         write_usecnt             <= (others => '0');
     
         mpm_pckstart             <= '0';
         mpm_pageaddr             <= (others => '1');
         mpm_pagereq              <= '0';
-        mpm_data                 <= (others => '0');
-        mpm_ctrl                 <= (others => '0');
         flush_reg                <= '0';
         
         mmu_force_free_addr      <= (others => '0');
@@ -1258,7 +1252,6 @@ end process;
       pta_mask                  <=(others => '0');
       pta_prio                  <=(others => '0');
       pta_pck_size              <=(others => '0');
-      transfering_pck_on_wait   <= '0';
       --===================================================
       else
 

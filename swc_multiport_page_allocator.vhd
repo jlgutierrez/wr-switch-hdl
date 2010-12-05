@@ -13,7 +13,7 @@
 -- Description: 
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Tomasz Wlostowski / CERN
+-- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   
@@ -88,8 +88,8 @@ architecture syn of swc_multiport_page_allocator is
   signal pg_addr_usecnt      : std_logic_vector(c_swc_page_addr_width -1 downto 0);
   signal pg_addr  : std_logic_vector(c_swc_page_addr_width -1 downto 0);
   
-  signal pg_addr_valid : std_logic;
-  signal pg_idle       : std_logic;
+  signal pg_addr_valid : std_logic; -- used by symulation , don't remove
+--  signal pg_idle       : std_logic;
   signal pg_done       : std_logic;
   signal pg_nomem      : std_logic;
 
@@ -146,7 +146,7 @@ architecture syn of swc_multiport_page_allocator is
 
 
   signal set_usecnt_done_feedback  : std_logic_vector(c_swc_num_ports-1 downto 0);
-  signal set_usecnt_done           : std_logic_vector(c_swc_num_ports-1 downto 0);
+--  signal set_usecnt_done           : std_logic_vector(c_swc_num_ports-1 downto 0);
 
   
 begin  -- syn
@@ -171,7 +171,7 @@ begin  -- syn
       pgaddr_i       => pg_addr,--pg_addr_free,
       pgaddr_o       => pg_addr_alloc,
       pgaddr_valid_o => pg_addr_valid,
-      idle_o         => pg_idle,
+      idle_o         => open, --pg_idle,
       done_o         => pg_done,
       nomem_o        => pg_nomem);
 
@@ -285,7 +285,7 @@ begin  -- syn
 
         alloc_done      <= alloc_done_feedback;
         free_done       <= free_done_feedback;
-        set_usecnt_done <= set_usecnt_done_feedback;
+       -- set_usecnt_done <= set_usecnt_done_feedback;
         force_free_done <= force_free_done_feedback;
       end if;
     end if;

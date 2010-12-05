@@ -135,7 +135,7 @@ architecture behavoural of swc_output_block is
   signal read                  : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
   signal write_array           : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
   signal write                 : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
-  signal wr_en_array           : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
+--  signal wr_en_array           : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
   signal wr_en                 : std_logic;
   signal rd_data_valid         : std_logic;
   signal zeros                 : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
@@ -266,7 +266,7 @@ begin  --  behavoural
         read_i      => read(i),
         not_full_o  => not_full_array(i),
         not_empty_o => not_empty_array(i),
-        wr_en_o     => wr_en_array(i),
+        wr_en_o     => open, --wr_en_array(i),
         wr_addr_o   => wr_array(i),
         rd_addr_o   => rd_array(i) 
         );

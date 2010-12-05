@@ -80,7 +80,6 @@ architecture behavoural of swc_ob_prio_queue is
   signal tail          : std_logic_vector(c_swc_output_fifo_addr_width - 1  downto 0);
   signal not_full      : std_logic;  
   signal not_empty     : std_logic;
-  signal read          : std_logic;
     
 begin -- behavoural  
   
@@ -92,8 +91,7 @@ begin -- behavoural
       
         head          <= (others => '0');
         tail          <= (others => '0');
-        read          <= '0';
-        
+                
       else
         
         if(write_i = '1' and not_full = '1') then 

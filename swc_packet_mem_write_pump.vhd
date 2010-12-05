@@ -41,7 +41,7 @@
 -- 
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Tomasz Wlostowski / CERN
+-- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   
@@ -75,11 +75,11 @@ use ieee.numeric_std.all;
 use ieee.math_real.log2;
 use ieee.math_real.ceil;
 
-use std.textio.all;
+--use std.textio.all;
 
 library work;
 use work.swc_swcore_pkg.all;
-use work.pck_fio.all;
+--use work.pck_fio.all;
 
 entity swc_packet_mem_write_pump is
 
@@ -208,7 +208,7 @@ architecture rtl of swc_packet_mem_write_pump is
   
   -- we all love VHDL :)
   signal allones : std_logic_vector(63 downto 0);
-  signal zeros : std_logic_vector(63 downto 0);  
+  --signal zeros : std_logic_vector(63 downto 0);  
 
   -- HI indicates that current page is done, and that the parent entity must
   -- select another page in following clock cycles (c_swc_packet_mem_multiply
@@ -218,7 +218,7 @@ architecture rtl of swc_packet_mem_write_pump is
   -- start of package
   signal pckstart : std_logic;
   
-  signal before_sync : std_logic;
+--  signal before_sync : std_logic;
   
   --=================================================================================
   
@@ -256,8 +256,8 @@ architecture rtl of swc_packet_mem_write_pump is
   signal state_write       : t_state_write;
   
   
-  signal cnt_last_word : std_logic;
-  signal next_page_loaded : std_logic;
+--  signal cnt_last_word : std_logic;
+--  signal next_page_loaded : std_logic;
     
   signal pgreq_reg : std_logic;
   signal pckstart_reg : std_logic;  
@@ -267,7 +267,7 @@ architecture rtl of swc_packet_mem_write_pump is
    
   signal sync_d    : std_logic_vector(c_swc_packet_mem_multiply - 1 downto 0);
 
-  signal nasty_wait_full : std_logic;
+--  signal nasty_wait_full : std_logic;
 
 
     
@@ -275,7 +275,7 @@ begin  -- rtl
 
   -- VHDL sucks...
   allones <= (others => '1');
-  zeros   <= (others => '0');
+ -- zeros   <= (others => '0');
   
   write_on_sync <= '1' when (cntr = to_unsigned(0,cntr'length)) else '0';
   
@@ -298,7 +298,7 @@ begin  -- rtl
      
   end process;
   
-  before_sync <= sync_d(c_swc_packet_mem_multiply - 2);
+--  before_sync <= sync_d(c_swc_packet_mem_multiply - 2);
   
   write_fsm : process(clk_i, rst_n_i)
   begin
@@ -307,7 +307,7 @@ begin  -- rtl
 
         we_int <= '0';
         reg_full <= '0';
-        cnt_last_word <='0';
+ --       cnt_last_word <='0';
       else
 
         -- main finite state machine
@@ -333,7 +333,7 @@ begin  -- rtl
              elsif(cntr = to_unsigned(c_swc_packet_mem_multiply - 2,cntr'length) and drdy_i ='1') then
 
                state_write   <= S_READ_LAST_DATA_WORD;       
-               cnt_last_word <= '1';
+   --            cnt_last_word <= '1';
                
              end if;
 
@@ -347,7 +347,7 @@ begin  -- rtl
                
                  reg_full      <= '1';
                  state_write   <= S_WAIT_WRITE;
-                 cnt_last_word <= '0';
+  --               cnt_last_word <= '0';
                
 
                -- during the last address of the page, the Linked list is being written, so we need 
@@ -362,14 +362,14 @@ begin  -- rtl
                  state_write   <= S_WRITE_DATA;
                  we_int        <= '1';
                  reg_full      <= '0';
-                 cnt_last_word <= '0';
+   --              cnt_last_word <= '0';
                
                else  
                  
                  state_write   <= S_NASTY_WAIT;        
                  we_int        <= '0';
                  reg_full      <= '0';
-                 cnt_last_word <= '0';
+   --              cnt_last_word <= '0';
                                  
                end if;
             
@@ -389,7 +389,7 @@ begin  -- rtl
                  --==== needs test - end   ===
                    reg_full      <= '1';
                    state_write   <= S_WAIT_WRITE;
-                   cnt_last_word <= '0';
+     --              cnt_last_word <= '0';
                  --==== needs test - start ===
                  end if;
                  --==== needs test - end   ===                 
@@ -410,13 +410,13 @@ begin  -- rtl
               state_write   <= S_WRITE_DATA;
               we_int        <= '1';
               reg_full      <= '0';
-              cnt_last_word <= '0';
+  --            cnt_last_word <= '0';
     
             elsif(drdy_i = '1' and sync_i = '0' ) then
             
               reg_full      <= '1';
               state_write   <= S_WAIT_WRITE;
-              cnt_last_word <= '0';
+--              cnt_last_word <= '0';
             
             end if;   
 
@@ -495,7 +495,7 @@ begin  -- rtl
                state_write   <= S_WRITE_DATA;
                we_int        <= '1';
                reg_full      <= '0';
-               cnt_last_word <= '0';
+  --             cnt_last_word <= '0';
             end if;
             
           when others =>
@@ -530,7 +530,7 @@ begin  -- rtl
         cntr     <= (others => '0');
         mem_addr <= (others => '0');
         pgend    <= '0';
-        next_page_loaded <= '0';
+  --      next_page_loaded <= '0';
         --pckstart <= '0';
         for i in 0 to c_swc_packet_mem_multiply-1 loop
           in_reg(i) <= (others => '0');
@@ -573,13 +573,13 @@ begin  -- rtl
           mem_addr(c_swc_packet_mem_addr_width-1 downto c_swc_page_offset_width) <= pgaddr_i;
           mem_addr(c_swc_page_offset_width-1 downto 0)                           <= (others => '0');
 --          pgend                                                                  <= '0';
-          next_page_loaded                                                       <= '1';
+ --         next_page_loaded                                                       <= '1';
           
         elsif(state_write = S_WRITE_DATA) then
           
           if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then
 --            pgend            <= '1';
-            next_page_loaded <= '0';
+--            next_page_loaded <= '0';
           else
             
             mem_addr(c_swc_page_offset_width-1 downto 0) <= std_logic_vector(unsigned(mem_addr(c_swc_page_offset_width-1 downto 0)) + 1);
@@ -676,8 +676,8 @@ begin  -- rtl
 
 
   fsm : process(clk_i, rst_n_i)
-  variable l:line;
-  file fout:text open write_mode is "stdout" ;
+--  variable l:line;
+--  file fout:text open write_mode is "stdout" ;
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
@@ -845,7 +845,7 @@ begin  -- rtl
     
   end process;
 
-  nasty_wait_full <= '1' when (state_write = S_NASTY_WAIT) else '0';
+ -- nasty_wait_full <= '1' when (state_write = S_NASTY_WAIT) else '0';
   
   ll_idle <= '1' when (state = IDLE) else '0';
   
