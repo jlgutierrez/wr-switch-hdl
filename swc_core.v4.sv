@@ -17,7 +17,21 @@
 `define array_copy(a, ah, al, b, bl) \
    for (k=al; k<=ah; k=k+1) a[k] <= b[bl+k-al];
 
+
+typedef struct {
+   int cnt;
+   int usecnt[10];
+   int port[10];
+
+} alloc_info_t;
+
+alloc_info_t alloc_table[1024];
+alloc_info_t dealloc_table[1024];
+
 int stack_bastard = 0;
+
+int pg_alloc_cnt[1024][20];
+int pg_dealloc_cnt[1024][20];
 
 module main;
 
@@ -149,7 +163,7 @@ module main;
     .rtu_prio_i            (rtu_prio)
     );
     
-    task wait_cycles;
+    task automatic wait_cycles;
        input [31:0] ncycles;
        begin : wait_body
     integer i;
@@ -305,7 +319,9 @@ module main;
         int j;
         set_rtu_rsp(port,1,drop,prio,mask);  
         
-        $display("Sending [f_nr: %2d]: src = %x, port = %d, len = %d, drop = %d, prio = %d, mask = %x",frame_number,hdr.src, port,length, drop, prio, mask);
+    //    $display("Sending [f_nr: %2d]: src = %x, port = %d, len = %d, drop = %d, prio = %d, mask = %x",frame_number,hdr.src, port,length, drop, prio, mask);
+    
+    
       case(port)
          0: test_input_block_0.send(hdr, payload, length);
          1: test_input_block_1.send(hdr, payload, length);
@@ -321,7 +337,7 @@ module main;
          default: $display("ERROR: Wrong port number !!!");
        endcase   
        
-       if(drop == 0)
+       if(drop == 0 && mask != 0)
        begin
          for(j=0;j<11;j++)
          begin
@@ -387,10 +403,10 @@ module main;
           hdr.ethertype    = i;
 
        //  mask = 'h7FF;;
-     //       mask = 'h00f;;
+       //   mask = 'h00f;;
           mask = (port*cnt + 3*cnt + 2*cnt + cnt)%2047; 
           if( (i/50)%20 > 10) drop = 1; else drop = 0;
-    //       drop = 0;
+       //   drop = 0;
           
           
           send_pck(hdr,buffer, i, port, drop,  ((port*i)/50)%7, mask, cnt);  
@@ -398,7 +414,7 @@ module main;
           //if(port == 6) $display("====>>> Port 6: send pck nr %d",cnt);
           if(i > 600) 
           begin
-       /*     
+            
             test_input_block_0.simulate_rx_abort(0,10);
             test_input_block_1.simulate_rx_abort(0,20);
             test_input_block_2.simulate_rx_abort(0,30);
@@ -410,7 +426,7 @@ module main;
             test_input_block_8.simulate_rx_abort(0,90);
             test_input_block_9.simulate_rx_abort(0,100);
             test_input_block_10.simulate_rx_abort(0,110);
-         */   
+            
          end 
           
           cnt ++;    
@@ -468,7 +484,7 @@ module main;
      test_input_block_9.simulate_rx_throttling(1, 20);
      test_input_block_10.simulate_rx_throttling(1, 10);
 
-/*
+
      test_input_block_0.simulate_rx_abort(1,10);
      test_input_block_1.simulate_rx_abort(1,20);
      test_input_block_2.simulate_rx_abort(1,30);
@@ -480,11 +496,11 @@ module main;
      test_input_block_8.simulate_rx_abort(1,90);
      test_input_block_9.simulate_rx_abort(1,100);
      test_input_block_10.simulate_rx_abort(1,110);
-*/
 
-/*
+
+
     //////////////// input error ///////////////
-    
+ /*   
      test_input_block_0.simulate_tx_error(1,90);
      test_input_block_1.simulate_tx_error(1,110);
      test_input_block_2.simulate_tx_error(1,130);
@@ -569,39 +585,17 @@ module main;
      load_port(10);
       tx_port_finished[10] = 1;
    end  
- /*    
-   always @(posedge clk) 
-   begin
-       int dupa;
-       if(tx_port_finished[0] & tx_port_finished[1] & tx_port_finished[2] & tx_port_finished[3] & tx_port_finished[4] & 
-          tx_port_finished[5] & tx_port_finished[6] & tx_port_finished[7] & tx_port_finished[8] & tx_port_finished[9] & tx_port_finished[10])
-         dupa = 1;
-       else
-         dupa = 0;
-       
-       $display(""); 
-   	   $display("Condition = %d:  0=%d | 1=%d | 2=%d | 3=%d | 4=%d | 5=%d | 6=%d | 7=%d | 8=%d | 9=%d | 10=%d | ",dupa,
-   	   tx_port_finished[0] , tx_port_finished[1] , tx_port_finished[2] , tx_port_finished[3] , tx_port_finished[4]  ,
-       tx_port_finished[5] , tx_port_finished[6] , tx_port_finished[7] , tx_port_finished[8] , tx_port_finished[9] , tx_port_finished[10]);
-   	   
-   	   $display("");
-       
-       wait_cycles(100);
-       
-   end      
-*/           
+        
            
    initial begin
-     int i,j;
+     int i,j, cnt;
      int sum_rx, sum_tx, sum_tx_by_port[11],sum_rx_by_port[11];
-//     bit finished = 1;
-//     for(i=0;i<11;i++)
-//       finished = finished & tx_port_finished[i];
+
      wait(tx_port_finished[0] & tx_port_finished[1] & tx_port_finished[2] & tx_port_finished[3] & tx_port_finished[4] & 
           tx_port_finished[5] & tx_port_finished[6] & tx_port_finished[7] & tx_port_finished[8] & tx_port_finished[9] & tx_port_finished[10]);
 
      
-     wait_cycles(500000);
+     wait_cycles(1000000);
      $display("=============================================== DBG =================================================");
      $display("Rx Ports   :  P 0  |  P 1  |  P 2  |  P 3  |  P 4  |  P 5  |  P 6  |  P 7  |  P 8  |  P 9  |  P10  | ");
      $display("-----------------------------------------------------------------------------------------------------");
@@ -630,17 +624,63 @@ module main;
      $display("=======================================================================");
      $display("SUM    :  sent pcks = %2d, received pcks = %2d", sum_tx,sum_rx);
      $display("=================================== DBG ===============================");
- 
+
+/*
+     cnt =0;
+     for(i=0;i<1024;i++)
+       if(pg_dealloc_cnt[i][0] != pg_alloc_cnt[i][0])
+         begin
+           $display("Page %3d: allocated = %2d [%1d|%1d|%1d|%1d|%1d|%1d]  <=|=>   deallocated = %2d [%1d|%1d|%1d|%1d|%1d|%1d] <- lost page !!!!",i,pg_alloc_cnt[i][0],
+           pg_alloc_cnt[i][1], pg_alloc_cnt[i][2],pg_alloc_cnt[i][3],pg_alloc_cnt[i][4],pg_alloc_cnt[i][5],pg_alloc_cnt[i][6], pg_dealloc_cnt[i][0],
+           pg_dealloc_cnt[i][1],pg_dealloc_cnt[i][2],pg_dealloc_cnt[i][3],pg_dealloc_cnt[i][4],pg_dealloc_cnt[i][5],pg_dealloc_cnt[i][6]);
+           cnt++;
+         end
+        
+     $display("=======================================================================");
+     $display("MEM LEAKGE Report:  number of lost pages = %2d", cnt);
+     $display("=================================== DBG ===============================");
+
+*/
+     cnt =0;
+     for(i=0;i<1024;i++)
+       if(dealloc_table[i].cnt!= alloc_table[i].cnt)
+         begin
+           $display("Page %4d: alloc = %2d [%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d]<=|=>dealloc = %2d [%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b]  ",
+           i,
+           alloc_table[i].cnt,
+           alloc_table[i].usecnt[0], alloc_table[i].port[0], 
+           alloc_table[i].usecnt[1], alloc_table[i].port[1],
+           alloc_table[i].usecnt[2], alloc_table[i].port[2],
+           alloc_table[i].usecnt[3], alloc_table[i].port[3],
+           alloc_table[i].usecnt[4], alloc_table[i].port[4],
+           alloc_table[i].usecnt[5], alloc_table[i].port[5],
+           dealloc_table[i].cnt,
+           dealloc_table[i].usecnt[0], dealloc_table[i].port[0],
+           dealloc_table[i].usecnt[1], dealloc_table[i].port[1],
+           dealloc_table[i].usecnt[2], dealloc_table[i].port[2],
+           dealloc_table[i].usecnt[3], dealloc_table[i].port[3],
+           dealloc_table[i].usecnt[4], dealloc_table[i].port[4],
+           dealloc_table[i].usecnt[5], dealloc_table[i].port[5]);
+           cnt++;
+         end
+        
+     $display("=======================================================================");
+     if(cnt == 22)
+       $display("%4d pages allocated in advance (port X start_of_pck + port X pck_internal pages)", cnt);
+     else
+       $display("MEM LEAKGE Report:  number of lost pages = %2d", (cnt - 22));
+     $display("=================================== DBG ===============================");
+
+
+ $fatal("dupa");
    end                     
 //////////////////////////////////////////////////////////
 
 
-   always @(posedge clk) //if (rtu_rsp_ack != 0)
+   always @(posedge clk) 
      begin
        
-//       int i;
-//       for(i=0;i<<11;i++) if(rtu_rsp_ack[i]) rtu_rsp_valid[i] = 0;
-//       for(i=0;i<<11;i++) if(rtu_rsp_ack[i]) rtu_drop[i]      = 0;
+
        
        int i;
        for(i = 0;i<11;i++)
@@ -656,130 +696,206 @@ module main;
    always @(posedge clk) if (test_input_block_0.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 0!");
  
 	   test_input_block_0.receive(frame);
 	   rx_cnt[0]++;
 	   rx_cnt_0[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][0]++;
-	   dump_frame_header("Receiving RX_0: ", frame);
+//	   dump_frame_header("Receiving RX_0: ", frame);
 	   end
 	   
    always @(posedge clk) if (test_input_block_1.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 1!");
  
 	   test_input_block_1.receive(frame);
 	   rx_cnt[1]++;
 	   rx_cnt_1[frame.hdr.src >> 44]++;
      rx_cnt_by_port[frame.hdr.src >> 44][1]++;;
-	   dump_frame_header("Receiving RX_1: ", frame);
+//	   dump_frame_header("Receiving RX_1: ", frame);
 	   end      
    always @(posedge clk) if (test_input_block_2.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 2!");
  
 	   test_input_block_2.receive(frame);
 	   rx_cnt[2]++;
 	   rx_cnt_2[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][2]++;
-	   dump_frame_header("Receiving RX_2: ", frame);
+	//   dump_frame_header("Receiving RX_2: ", frame);
 	   end
 	   
    always @(posedge clk) if (test_input_block_3.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 3!");
  
 	   test_input_block_3.receive(frame);
 	   rx_cnt[3]++;
 	   rx_cnt_3[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][3]++;
-	   dump_frame_header("Receiving RX_3: ", frame);
+//	   dump_frame_header("Receiving RX_3: ", frame);
 	   end      
    always @(posedge clk) if (test_input_block_4.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 4!");
  
 	   test_input_block_4.receive(frame);
 	   rx_cnt[4]++;
 	   rx_cnt_4[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][4]++;
-	   dump_frame_header("Receiving RX_4: ", frame);
+//	   dump_frame_header("Receiving RX_4: ", frame);
 	   end
 	   
    always @(posedge clk) if (test_input_block_5.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 5!");
+
  
 	   test_input_block_5.receive(frame);
 	   rx_cnt[5]++;
 	   rx_cnt_5[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][5]++;
-	   dump_frame_header("Receiving RX_5: ", frame);
+//	   dump_frame_header("Receiving RX_5: ", frame);
 	   end      
    always @(posedge clk) if (test_input_block_6.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 6!");
+
  
 	   test_input_block_6.receive(frame);
 	   rx_cnt[6]++;
 	   rx_cnt_6[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][6]++;
-	   dump_frame_header("Receiving RX_6: ", frame);
+//	   dump_frame_header("Receiving RX_6: ", frame);
 	   end
 	   
    always @(posedge clk) if (test_input_block_7.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 7!");
  
 	   test_input_block_7.receive(frame);
 	   rx_cnt[7]++;
 	   rx_cnt_7[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][7]++;
-	   dump_frame_header("Receiving RX_7: ", frame);
+	//   dump_frame_header("Receiving RX_7: ", frame);
 	   end  
       
      always @(posedge clk) if (test_input_block_8.poll())
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 8!");
  
 	   test_input_block_8.receive(frame);
 	   rx_cnt[8]++;
 	   rx_cnt_8[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][8]++;
-	   dump_frame_header("Receiving RX_8: ", frame);
+	//   dump_frame_header("Receiving RX_8: ", frame);
 	   end
    
    always @(posedge clk) if (test_input_block_9.poll() )
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 9!");
+
  
 	   test_input_block_9.receive(frame);
 	   rx_cnt[9]++;
 	   rx_cnt_9[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][9]++;
-	   dump_frame_header("Receiving RX_9: ", frame);
+//	   dump_frame_header("Receiving RX_9: ", frame);
 	   end      
    always @(posedge clk) if (test_input_block_10.poll() )
      begin
     	ether_frame_t frame;
-//	   $display("Emulator test received a frame on port 10!");
  
 	   test_input_block_10.receive(frame);
 	   rx_cnt[10]++;
 	   rx_cnt_10[frame.hdr.src >> 44]++;
 	   rx_cnt_by_port[frame.hdr.src >> 44][10]++; 
-	   dump_frame_header("Receiving RX_10: ", frame);
+//	   dump_frame_header("Receiving RX_10: ", frame);
 	   end      
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+///////// Monitoring allocation of pages  /////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+//   always @(posedge clk) if(DUT.memory_management_unit.pg_addr_valid)
+   always @(posedge clk) if(DUT.memory_management_unit.pg_alloc & DUT.memory_management_unit.pg_done)
 
+     begin
+     int address;  
+     int usecnt;
+     
+     usecnt = DUT.memory_management_unit.pg_usecnt;
+     
+     wait(DUT.memory_management_unit.pg_addr_valid);
+     
+     address =  DUT.memory_management_unit.pg_addr_alloc;
+     pg_alloc_cnt[address][pg_alloc_cnt[address][0]+1]= usecnt;
+     pg_alloc_cnt[address][0]++;
+     
+     alloc_table[address].usecnt[alloc_table[address].cnt]   = usecnt;
+     alloc_table[address].port[alloc_table[address].cnt]     = DUT.memory_management_unit.in_sel;
+     alloc_table[address].cnt++;
+
+
+     
+	   end   
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+///////// Monitoring deallocation of pages  /////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+   	   
+   always @(posedge clk) if(DUT.memory_management_unit.alloc_core.tmp_dbg_dealloc)
+     begin
+     int address;  
+    
+     address =  DUT.memory_management_unit.alloc_core.tmp_page;  
+
+     pg_dealloc_cnt[address][0]++;
+       
+     dealloc_table[address].cnt++;  
+       
+     end 	   
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+///////// Monitoring freeing of pages  /////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////// 
+          
+   always @(posedge clk) if(DUT.memory_management_unit.pg_free & DUT.memory_management_unit.pg_done)
+     begin
+     int address;  
+     int port_mask;
+     int port;
+     
+     port      = DUT.memory_management_unit.in_sel;    
+     address   = DUT.memory_management_unit.pg_addr;  
+     port_mask = dealloc_table[address].port[dealloc_table[address].cnt ] ;
+     
+     pg_dealloc_cnt[address][pg_dealloc_cnt[address][0] + 1]++;
+     
+     dealloc_table[address].port[dealloc_table[address].cnt ] = ((1 << port) | port_mask) & 'h7FF;     
+     dealloc_table[address].usecnt[dealloc_table[address].cnt ]++;
+     
+     
+       
+     end 	      
+ 
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+///////// Monitoring setting of pages' usecnt /////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////     
+     
+   always @(posedge clk) if(DUT.memory_management_unit.pg_set_usecnt & DUT.memory_management_unit.pg_done)
+     begin
+     int address;  
+
+     address =  DUT.memory_management_unit.pg_addr;  
+       
+     pg_alloc_cnt[address][pg_alloc_cnt[address][0] + 1] =  DUT.memory_management_unit.pg_usecnt;
+     
+     alloc_table[address].usecnt[alloc_table[address].cnt - 1]   = DUT.memory_management_unit.pg_usecnt;;
+
+       
+     end 	      
+        
 endmodule // main
