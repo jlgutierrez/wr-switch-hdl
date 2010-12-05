@@ -575,7 +575,9 @@ begin --arch
               fifo_clean               <= '0';
               tx_dreq                  <= '0';
               
-            if(rtu_rsp_valid_i = '1'  and rtu_drop_i = '1') then
+            if(rtu_rsp_valid_i = '1'  and                                      -- we've got RTU decision
+              (rtu_drop_i = '1'       or                                       -- RTU says DROP
+              rtu_dst_port_mask_i = zeros(c_swc_num_ports  - 1 downto 0))) then -- mask = 0 means DROP !!!
             
                -- if we've got RTU decision to drop, we don't give a damn about 
                -- anything else, just pretend to be receiving the msg
@@ -646,14 +648,25 @@ begin --arch
               tx_dreq     <= '0';
               
             elsif(rtu_rsp_valid_i = '1') then
-
+             
               tx_dreq     <= '1';
-              rtu_rsp_ack <= '1'; 
-              read_state  <=  S_WRITE_FIFO;
-              --remember
-              read_mask   <= rtu_dst_port_mask_i;
-              read_prio   <= rtu_prio_i;
-              read_usecnt <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),read_usecnt'length));
+              rtu_rsp_ack <= '1';
+             
+              if(rtu_drop_i = '1'  or                                       -- RTU says DROP
+                 rtu_dst_port_mask_i = zeros(c_swc_num_ports  - 1 downto 0) -- mask = 0 means DROP !!!
+                                                                    ) then 
+                
+                read_state               <= S_DROP_PCK;
+                 
+              else
+
+                read_state  <=  S_WRITE_FIFO;
+                --remember
+                read_mask   <= rtu_dst_port_mask_i;
+                read_prio   <= rtu_prio_i;
+                read_usecnt <= std_logic_vector(to_signed(cnt(rtu_dst_port_mask_i),read_usecnt'length));
+                
+              end if;
          
             end if;
 
@@ -892,7 +905,8 @@ begin --arch
 
          start_transfer            <= '0';
          flush_reg                 <= '0';
-        
+         mpm_pageaddr              <= (others => '1');
+         mpm_pagereq               <= '0';
          -- if another page needs to be allocated for the last chunck 
          -- of date, transfer only if we have spare page for that.
          -- otherwise, we can end up reading pck without last piece of data !!!!

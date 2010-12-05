@@ -235,8 +235,12 @@ architecture syn of swc_page_allocator is
   
   signal tmp_pgs   : std_logic_vector(1023 downto 0);
   
+  signal tmp_dbg_dealloc : std_logic;
+  signal tmp_dbg_alloc : std_logic;
 begin  -- syn
 
+
+  tmp_dbg_dealloc <= '1' when (state = FREE_RELEASE_PAGE) else '0';
 
   -- this guy is responsible for decoding 
   -- the bits of l1_bitmap register into the
