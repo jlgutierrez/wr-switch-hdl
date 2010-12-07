@@ -431,7 +431,8 @@ begin  --  behavoural
             
               rx_sof_p1        <= '0';
               pgreq            <= '1';
-              dreq             <= '1';
+              --dreq             <= '1';
+              dreq             <= '0';
               
               waiting_pck_start <='1';
               
@@ -444,7 +445,8 @@ begin  --  behavoural
             
               rx_sof_p1        <= '0';
               re_pgreq         <= '1';
-              dreq             <= '1';
+              --dreq             <= '1';
+              dreq             <= '0';--added
               
               waiting_pck_start<='1';
 
@@ -594,12 +596,12 @@ begin  --  behavoural
               
               end if;
 
-            elsif( mpm_drdy_i = '1') then
+            elsif( (mpm_drdy_i = '1' or rx_sof_p1 = '1') and waiting_pck_start = '0') then
             
             
               rx_valid            <= '1'; 
               rx_bytesel          <= '0';
-              
+              dreq                <= '1'; --added
               
               if(mpm_ctrl_i = b"1111") then
                 rx_ctrl           <= b"0111";
@@ -628,6 +630,7 @@ begin  --  behavoural
                  mpm_sync_i        = '1' and    -- we've got sync, which means that data will be read
                  pgreq_or          = '0' ) then -- if page is request on the sync, it will be read in next sync
                  
+                 dreq               <= '1'; -- added
                  rx_sof_p1          <= '1';
                  waiting_pck_start  <= '0';
                  
@@ -881,7 +884,7 @@ begin  --  behavoural
   mpm_pgaddr_o        <= rd_data(c_swc_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;
                         --rd_data(c_swc_page_addr_width - 1 downto 0); -- read_data;
                         
-  mpm_dreq_o          <= dreq and rx_dreq_i and not rx_tabort_p1_i;
+  mpm_dreq_o          <= (dreq and rx_dreq_i and (not rx_tabort_p1_i)) or pgreq;-- and (not waiting_pck_start);
 
 --  rx_valid            <= mpm_drdy_i when (state = READ_MPM) else '0';
 --  rx_eof_p1           <= cnt_last_word and rx_valid;
