@@ -176,7 +176,7 @@ architecture rtl of swc_core is
    signal mpm_data                  : std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
    signal mpm_ctrl                  : std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0); 
       
-     
+   signal mpm_rd_sync               : std_logic_vector(c_swc_num_ports - 1 downto 0);  
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Muliport Memory<< with >>Linked List<<
    ----------------------------------------------------------------------------------------------------   
@@ -342,6 +342,7 @@ architecture rtl of swc_core is
         mpm_dreq_o               => ob_dreq(i),
         mpm_data_i               => mpm_data((i + 1) * c_swc_data_width - 1 downto i * c_swc_data_width),
         mpm_ctrl_i               => mpm_ctrl((i + 1) * c_swc_ctrl_width - 1 downto i * c_swc_ctrl_width),
+        mpm_sync_i               => mpm_rd_sync(i),
         -------------------------------------------------------------------------------
         -- I/F with Pck's Pages Freeing Module (PPFM)
         -------------------------------------------------------------------------------  
@@ -488,6 +489,7 @@ architecture rtl of swc_core is
       --!!!!!!!!!!!!!!!!!!
       rd_data_o                  => mpm_data,
       rd_ctrl_o                  => mpm_ctrl,
+      rd_sync_o                  => mpm_rd_sync,
       
       write_o                    => mpm_write,
       write_done_i               => ll_write_done,

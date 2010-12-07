@@ -325,7 +325,7 @@ package swc_swcore_pkg is
       rd_sync_read_i : in std_logic_vector(c_swc_num_ports -1 downto 0);
       rd_data_o      : out std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
       rd_ctrl_o      : out std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
-      
+      rd_sync_o      : out std_logic_vector(c_swc_num_ports -1 downto 0);
 --      pa_free_o              : out  std_logic_vector(c_swc_num_ports -1 downto 0);
 --      pa_free_done_i         : in   std_logic_vector(c_swc_num_ports -1 downto 0);
 --      pa_free_pgaddr_o       : out  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
@@ -439,6 +439,7 @@ package swc_swcore_pkg is
       mpm_dreq_o                : out std_logic;
       mpm_data_i                : in  std_logic_vector(c_swc_data_width - 1 downto 0);
       mpm_ctrl_i                : in  std_logic_vector(c_swc_ctrl_width - 1 downto 0); 
+      mpm_sync_i                : in  std_logic;
       ppfm_free_o            : out  std_logic;
       ppfm_free_done_i       : in   std_logic;
       ppfm_free_pgaddr_o     : out  std_logic_vector(c_swc_page_addr_width - 1 downto 0);

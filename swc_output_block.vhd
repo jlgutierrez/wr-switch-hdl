@@ -74,7 +74,8 @@ entity swc_output_block is
     mpm_drdy_i   : in  std_logic;
     mpm_dreq_o   : out std_logic;
     mpm_data_i   : in  std_logic_vector(c_swc_data_width - 1 downto 0);
-    mpm_ctrl_i   : in  std_logic_vector(c_swc_ctrl_width - 1 downto 0); 
+    mpm_ctrl_i   : in  std_logic_vector(c_swc_ctrl_width - 1 downto 0);
+    mpm_sync_i   : in  std_logic; 
    
 -------------------------------------------------------------------------------
 -- I/F with Pck's Pages Free Module(PPFM)
@@ -152,6 +153,10 @@ architecture behavoural of swc_output_block is
   
   signal pgreq       : std_logic;  
   signal re_pgreq    : std_logic;  
+  signal pgreq_d0    : std_logic;  
+  signal re_pgreq_d0 : std_logic;
+  signal pgreq_or    : std_logic;  
+
   
   signal wr_data            : std_logic_vector(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto 0);
   signal rd_data            : std_logic_vector(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto 0);
@@ -178,7 +183,7 @@ architecture behavoural of swc_output_block is
   signal cnt_one_but_last_word     : std_logic;
   
   signal start_free_pck          : std_logic;
-
+  signal waiting_pck_start : std_logic;
   
 begin  --  behavoural
   
@@ -372,7 +377,10 @@ begin  --  behavoural
         rx_eof_p1         <= '0';
         rx_bytesel        <= '0';
         re_pgreq          <= '0';
-        
+        waiting_pck_start <= '0';
+        pgreq_d0          <= '0';
+        re_pgreq_d0       <= '0';
+         
       else
 
         -- IMPORTANT : nasty trick here !!!
@@ -390,6 +398,9 @@ begin  --  behavoural
           pck_start_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
         end if;
         -- main finite state machine
+        pgreq_d0    <= pgreq;
+        re_pgreq_d0 <= re_pgreq;
+        
         
         case state is
 
@@ -407,7 +418,9 @@ begin  --  behavoural
                  ) then    -- we can't start when transfering data, because the dataa is changing
             
               state             <= SET_PAGE;
-              rx_sof_p1         <= '1';
+              --rx_sof_p1         <= '1';
+              rx_sof_p1         <= '0';
+              
               rx_ctrl           <= (others =>'0');
               rx_data           <= (others =>'0');
 
@@ -419,7 +432,9 @@ begin  --  behavoural
               rx_sof_p1        <= '0';
               pgreq            <= '1';
               dreq             <= '1';
-
+              
+              waiting_pck_start <='1';
+              
               rx_valid          <= '0'; 
               state             <= PAUSE_BY_SRC;
               rx_ctrl           <= (others =>'0');
@@ -430,6 +445,8 @@ begin  --  behavoural
               rx_sof_p1        <= '0';
               re_pgreq         <= '1';
               dreq             <= '1';
+              
+              waiting_pck_start<='1';
 
               rx_valid          <= '0'; 
               state             <= PAUSE_BY_SRC;
@@ -446,7 +463,10 @@ begin  --  behavoural
                             
                state             <= RE_SET_PAGE;
                dreq              <= '0';
-               rx_sof_p1         <= '1';
+               
+               --rx_sof_p1         <= '1';
+               rx_sof_p1          <= '0';
+               
                rx_valid          <= '0';
               
                rx_ctrl           <= (others =>'0');
@@ -492,7 +512,8 @@ begin  --  behavoural
 
             elsif( rx_dreq_i = '1') then
             
-            
+              
+              
               rx_valid            <= '1'; 
               rx_bytesel          <= '0';
               
@@ -520,13 +541,17 @@ begin  --  behavoural
             
             pgreq            <= '0';
             re_pgreq         <= '0';
+            rx_sof_p1          <= '0';
             
 --            if(rx_dreq_i = '1' and mpm_drdy_i = '1') then
             if(rx_tabort_p1_i = '1' and rx_dreq_i = '1') then
                             
                state             <= RE_SET_PAGE;
                dreq              <= '0';
-               rx_sof_p1         <= '1';
+               
+               --rx_sof_p1         <= '1';
+               rx_sof_p1          <= '0';
+               
                rx_valid          <= '0';
               
                rx_ctrl           <= (others =>'0');
@@ -575,6 +600,7 @@ begin  --  behavoural
               rx_valid            <= '1'; 
               rx_bytesel          <= '0';
               
+              
               if(mpm_ctrl_i = b"1111") then
                 rx_ctrl           <= b"0111";
                 rx_bytesel        <= '1';
@@ -592,8 +618,26 @@ begin  --  behavoural
                 
               else
                 
+                
                 state             <= READ_MPM; 
               end if;
+            else
+              
+              if(rx_dreq_i         = '1' and 
+                 waiting_pck_start = '1' and    -- this is the start of pck, not a pause in the middle
+                 mpm_sync_i        = '1' and    -- we've got sync, which means that data will be read
+                 pgreq_or          = '0' ) then -- if page is request on the sync, it will be read in next sync
+                 
+                 rx_sof_p1          <= '1';
+                 waiting_pck_start  <= '0';
+                 
+               else
+                 
+                 rx_sof_p1          <= '0';
+                 
+               end if;
+              
+              
               
             end if;   
              
@@ -606,7 +650,10 @@ begin  --  behavoural
                             
               state             <= RE_SET_PAGE;
               dreq              <= '0';
-              rx_sof_p1         <= '1';
+              
+              --rx_sof_p1         <= '1';
+              rx_sof_p1          <= '0';
+              
               rx_valid          <= '0';
              
               rx_ctrl           <= (others =>'0');
@@ -751,7 +798,9 @@ begin  --  behavoural
            if(rx_dreq_i = '1') then
              
              state             <= RE_SET_PAGE;
-             rx_sof_p1         <= '1';
+             
+             --rx_sof_p1         <= '1';
+             rx_sof_p1          <= '0';
 
              rx_ctrl           <= (others =>'0');
              rx_data           <= (others =>'0');
@@ -821,7 +870,8 @@ begin  --  behavoural
   
   
   mpm_pgreq_o         <= pgreq or re_pgreq;
-   
+  
+  pgreq_or            <= pgreq_d0 or pgreq or re_pgreq_d0 or re_pgreq; 
    
                       -- IMPORTANT : a trick needed here, to make things faster, we provide pgaddr straight 
                       --             from quque output, otherwise, in  the rare case when the queue is written

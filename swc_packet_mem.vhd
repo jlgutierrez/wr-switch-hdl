@@ -158,6 +158,8 @@ entity swc_packet_mem is
     -- control data read from the shared memory
     rd_ctrl_o : out std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
     
+    rd_sync_o : out std_logic_vector(c_swc_num_ports -1 downto 0);
+    
     
 --    pa_free_o              : out  std_logic_vector(c_swc_num_ports -1 downto 0);
 --    pa_free_done_i         : in   std_logic_vector(c_swc_num_ports -1 downto 0);
@@ -363,6 +365,7 @@ begin  -- rtl
   end process;
 
   sync_sreg_rd <= sync_sreg;
+  rd_sync_o    <= sync_sreg(c_swc_num_ports - 1 downto 0);
 --  sync_sreg_rd(c_swc_packet_mem_multiply-1 downto 0) <= sync_sreg(1 downto 0) & sync_sreg(c_swc_num_ports-1 downto 2);
 
   -- producing pump output data
