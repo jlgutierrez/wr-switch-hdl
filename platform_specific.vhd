@@ -12,12 +12,14 @@ package platform_specific is
   -----------------------------------------------------------------------------
   -- Component declarations
   -----------------------------------------------------------------------------
+
   component generic_async_fifo_2stage
     generic (
       g_width                    : natural;
       g_depth                    : natural;
       g_almostfull_bit_threshold : natural;
-      g_show_ahead               : boolean := false); 
+      g_show_ahead               : boolean := false;
+      g_with_usedw_ports         : boolean := false);
     port (
       clear_i       : in  std_logic := '0';
       d_i           : in  std_logic_vector (g_width-1 downto 0);
@@ -28,9 +30,10 @@ package platform_specific is
       q_o           : out std_logic_vector (g_width-1 downto 0);
       rd_empty_o    : out std_logic;
       wr_full_o     : out std_logic;
-      almost_full_o : out std_logic); 
+      almost_full_o : out std_logic;
+      wr_usedw_o    : out std_logic_vector(31 downto 0);
+      rd_usedw_o    : out std_logic_vector(31 downto 0));
   end component;
-
   
   component generic_sync_fifo
     generic (
