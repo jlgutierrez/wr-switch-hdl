@@ -43,7 +43,9 @@ entity generic_ssram_dualport_singleclock is
   generic (
     g_width     : natural := 8;
     g_addr_bits : natural := 10;
-    g_size      : natural := 1024);
+    g_size      : natural := 1024;
+    g_init_file : string  := "UNUSED");
+
   port
     (
       data_i    : in  std_logic_vector (g_width-1 downto 0);
@@ -80,6 +82,8 @@ architecture SYN of generic_ssram_dualport_singleclock is
       widthad_b                          : natural;
       width_a                            : natural;
       width_b                            : natural;
+      INIT_FILE                          : string ;
+  
       width_byteena_a                    : natural
       );
     port (
@@ -115,7 +119,9 @@ begin
       widthad_b                          => g_addr_bits,
       width_a                            => g_width,
       width_b                            => g_width,
-      width_byteena_a                    => 1
+      width_byteena_a                    => 1,
+      INIT_FILE => g_init_file
+      
       )
     port map (
       wren_a    => wr_en_i,

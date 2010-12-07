@@ -68,7 +68,8 @@ package platform_specific is
     generic (
       g_width     : natural;
       g_addr_bits : natural;
-      g_size      : natural);
+      g_size      : natural;
+      g_init_file : string := "UNUSED");
     port (
       data_i    : in  std_logic_vector (g_width-1 downto 0);
       clk_i     : in  std_logic;
