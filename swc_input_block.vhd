@@ -10,29 +10,20 @@
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
--- Description: This block controls input to SW Core. It consists of few 
--- processes:
--- 1) PCK_FSM - the most important, it controls interaction between 
---    Fabric Interface and Multiport Memory
+-- Description: This block controls input to SW Core. It consists of a three 
+-- Finite State Machines (FSMs):
+-- 1) Read FSM - read information from Fabric Interface and stores it in FIFO
 -- 
+-- 2) Write FSM - reads data from FIFO and writes it into write pump
 -- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
--- 
+-- 3) Page FSM - allocates pages in advance and sets usecnt of pages, i.e
+--    * it allocates in advance one page to be used as the first page 
+--      of the pck (pckstart)
+--    * it allocates in advnace one page to be used within the pck (interpck)
+--    * it sets usecnt of pckstart page if it's different then the one set 
+--      durring allocation
+--    * it sets usecnt of interpck page if it's different then the one set 
+--      durring allocation
 -- 
 -------------------------------------------------------------------------------
 --
@@ -59,7 +50,10 @@
 -- Date        Version  Author   Description
 -- 2010-11-01  1.0      mlipinsk created
 -- 2010-11-29  2.0      mlipinsk added FIFO, major changes
-
+--
+-------------------------------------------------------------------------------
+-- TODO: 
+-- 1) dreq HIGH in idle ?
 -------------------------------------------------------------------------------
 
 
@@ -233,116 +227,140 @@ architecture syn of swc_input_block is
 
   signal usecnt_d0 : std_logic_vector(c_swc_usecount_width - 1 downto 0);
 
+type t_read_state is (S_IDLE,                   -- we wait for other processes (page fsm and 
+                                               -- transfer) to be ready
+                     S_READY_FOR_PCK,          -- this is introduced to diminish optimization 
+                                               -- (optimized design did not work) in this state, 
+                     S_WAIT_FOR_SOF,           -- we've got RTU response, but there is no SOF
+                     S_WAIT_FOR_RTU_RSP,       -- we've got SOF (request from previous pck) but
+                                               -- there is no RTU valid signal (quite improbable)
+                     S_WRITE_FIFO,             -- all the writing to FIFO done here
+                     S_WRITE_DUMMY_EOF,        -- in case the EOF signal is not when VALID is high
+                                               -- we write dummy word to FIFO with fifo_ctrl data
+                                               -- saying that it's dummy end of pck
+                     S_WAIT_FOR_CLEAN_FIFO,    -- if the pck which is to be dropped is not the only
+                                               -- one in the fifo, we need to wait for the other one
+                                               -- to be written to the write_pump, and than we can 
+                                               -- clean the fifo
+                     S_DROP_PCK);              -- droping pck
 
-  type t_read_state is (S_IDLE,  -- we wait for other processes (page fsm and 
-                                 -- transfer) to be ready
-                        S_READY_FOR_PCK,  -- this is introduced to diminish optimization 
-                                 -- (optimized design did not work) in this state, 
-                        S_WAIT_FOR_SOF,  -- we've got RTU response, but there is no SOF
-                        S_WAIT_FOR_RTU_RSP,  -- we've got SOF (request from previous pck) but
-                                 -- there is no RTU valid signal (quite improbable)
-                        S_WRITE_FIFO,
-                        S_WRITE_DUMMY_EOF,
-                        S_WAIT_FOR_TRANSFER,
-                        S_WAIT_FOR_CLEAN_FIFO,
-                        S_DROP_PCK);    -- droping pck
+ type t_page_state is (S_IDLE,                  -- waiting for some work :)
+                       S_PCKSTART_SET_USECNT,   -- setting usecnt to a page which was allocated 
+                                                -- in advance to be used for the first page of 
+                                                -- the pck
+                                                -- (only in case of the initially allocated usecnt
+                                                -- is different than required)
+                       S_INTERPCK_SET_USECNT,   -- setting usecnt to a page which was allocated 
+                                                -- in advance to be used for the page which is 
+                                                -- not first
+                                                -- in the pck, this is needed, only if the page
+                                                -- was allocated during transfer of previous pck 
+                                                -- but was not used in the previous pck, 
+                                                -- only if usecnt of both pcks are different
+                       S_PCKSTART_PAGE_REQ,     -- allocating in advnace first page of the pck
+                       S_INTERPCK_PAGE_REQ);    -- allocating in advance page to be used by 
+                                                -- all but first page of the pck
 
-  type t_page_state is (S_IDLE,         -- waiting for some work :)
-                        S_PCKSTART_SET_USECNT,  -- setting usecnt to a page which was allocated 
-                                              -- in advance to be used for the first page of 
-                                              -- the pck
-                                              -- (only in case of the initially allocated usecnt
-                                              -- is different than required)
-                        S_INTERPCK_SET_USECNT,  -- setting usecnt to a page which was allocated 
-                                              -- in advance to be used for the page which is 
-                                              -- not first
-                                              -- in the pck, this is needed, only if the page
-                                              -- was allocated during transfer of previous pck 
-                                              -- but was not used in the previous pck, 
-                                              -- only if usecnt of both pcks are different
-                        S_PCKSTART_PAGE_REQ,  -- allocating in advnace first page of the pck
-                        S_INTERPCK_PAGE_REQ);  -- allocating in advance page to be used by 
-                                               -- all but first page of the pck
-  type t_write_state is (S_IDLE,
-                         S_START_FIFO_RD,
-                         S_START_MPM_WR,
-                         S_WRITE_MPM,
-                         S_LAST_MPM_WR,
-                         S_NEW_PCK_IN_FIFO,
-                         S_WAIT_WITH_TRANSFER,
-                         S_PERROR
-                         );
+type t_write_state is (S_IDLE,               
+                       S_START_FIFO_RD,         -- start requesting data from FIFO, but still
+                                                -- not outputing to write_pump (initial cycle)
+                                                -- trick: drdy restricted only to S_WRITE_MPM
+                                                -- (see comments in the FSM)
+                       S_WRITE_MPM,             -- reading FIFO, writing write_pump
+                       S_LAST_MPM_WR,           -- last word of pck already written, finishing
+                                                -- pck writting
+                       S_NEW_PCK_IN_FIFO,       -- if there is beginning of new pck in the fifo
+                                                -- we use this state (not IDLE) to wait for the 
+                                                -- possibilty to start new new pck write
+                       S_WAIT_WITH_TRANSFER,    -- if we get to the end of the pck, in normal case 
+                                                -- we transfer startpck address, pcksize and pck prio
+                                                -- to output ports. If the transfer of the previous pck
+                                                -- data has not finished yet (only in case the traffic
+                                                -- is really heavy), we need to wait for it to be 
+                                                -- finished 
+                       S_PERROR                 -- handling perror
+                       );
+                 
+                 
+ -- we love VHDL
+ signal zeros                     : std_logic_vector(63 downto 0);   
+ 
+ -- FSMs                
+ signal read_state                : t_read_state;
+ signal write_state               : t_write_state;
+ signal page_state                : t_page_state;                         
+ 
+ -- pckstart page allocation in advance
+ signal pckstart_page_in_advance  : std_logic;
+ signal pckstart_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal pckstart_page_alloc_req   : std_logic;
+ signal pckstart_usecnt_req       : std_logic;
+ signal pckstart_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);  
 
+   
+ -- interpck page allocation in advance
+ signal interpck_page_in_advance  : std_logic;  
+ signal interpck_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal interpck_page_alloc_req   : std_logic;  
+ signal interpck_usecnt_req       : std_logic;  
+ signal interpck_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);       
 
+ -- pck usecnt setting
+ signal need_pckstart_usecnt_set  : std_logic;
+ signal need_interpck_usecnt_set  : std_logic; 
 
+ -- errored pck freeing 
+ signal mmu_force_free_addr       : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal mmu_force_free            : std_logic;     
+ 
+ -- error signal handling 
+ signal tx_rerror_reg             : std_logic;
+ signal tx_rerror_or              : std_logic; 
+ signal tx_rerror                 : std_logic;
+ 
+ -- data requset
+ signal tx_dreq                   : std_logic;   
+  
+ -- multiport memory I/F
+ signal mpm_pckstart              : std_logic;
+ signal mpm_pageaddr              : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal mpm_pagereq               : std_logic;
+ signal mpm_flush                 : std_logic;
+ -- help signal for MPM I/F
+ signal flush_sig                 : std_logic; 
+ signal flush_reg                 : std_logic; 
+ 
+ -- pck info transfer signal 
+ signal start_transfer            : std_logic;                
+ 
+ -- RTU I/F
+ signal rtu_rsp_ack               : std_logic;                
+ 
+ 
+ signal tmp_cnt                   : std_logic_vector(7 downto 0);
 
-
-  signal read_state  : t_read_state;
-  signal write_state : t_write_state;
-  signal page_state  : t_page_state;
-
-
-  signal mmu_force_free : std_logic;
-  signal start_transfer : std_logic;
-  signal zeros          : std_logic_vector(63 downto 0);
-
-  signal tx_dreq : std_logic;
-
-  signal rtu_rsp_ack                : std_logic;
-  signal pckstart_page_in_advance   : std_logic;
-  signal pckstart_pageaddr          : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal pckstart_page_alloc_req    : std_logic;
-  signal pckstart_usecnt_req        : std_logic;
-  signal pckstart_usecnt_in_advance : std_logic_vector(c_swc_usecount_width - 1 downto 0);
-
-
-  -- this is a page which used within the pck
-  signal interpck_page_in_advance   : std_logic;
-  signal interpck_pageaddr          : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal interpck_page_alloc_req    : std_logic;
-  signal interpck_usecnt_req        : std_logic;
-  signal interpck_usecnt_in_advance : std_logic_vector(c_swc_usecount_width - 1 downto 0);
-
-  signal mmu_force_free_addr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-
-
-
-  signal need_pckstart_usecnt_set : std_logic;
-  signal need_interpck_usecnt_set : std_logic;
-
-
-  signal tmp_cnt : std_logic_vector(7 downto 0);
-
-  signal tx_rerror_reg : std_logic;
-
-  signal tx_rerror_or : std_logic;
-
-  signal mpm_pckstart : std_logic;
-  signal mpm_pageaddr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal mpm_pagereq  : std_logic;
-
-  signal flush_sig : std_logic;
-  signal flush_reg : std_logic;
-  signal mpm_flush : std_logic;
-
-  signal tx_rerror : std_logic;
-
-
-
-  signal fifo_populated_enough : std_logic;
-
-  signal first_pck_word : std_logic;
-
-  signal clean_pck_cnt : std_logic;
-
-  signal sof_in_fifo : std_logic;
-  signal eof_in_fifo : std_logic;
-
-  signal fifo_full_in_advance : std_logic;
-
-  signal drdy : std_logic;
-
-  signal flush_with_valid_data : std_logic;
+ 
+ signal fifo_populated_enough     : std_logic;
+ 
+ signal first_pck_word            : std_logic;
+ 
+ signal clean_pck_cnt             : std_logic;
+ 
+ -- signals used to check whether there is only
+ -- one pck in the FIFO by detecting SOF and EOF
+ -- in the FIFO, used for error handling
+ signal sof_in_fifo               : std_logic;
+ signal eof_in_fifo               : std_logic;
+ 
+ -- indicates that FIFO is going to be full
+ -- this is to simplify things: disable dreq
+ -- when FIFO full
+ signal fifo_full_in_advance      : std_logic;
+ 
+ signal drdy                      : std_logic;
+ 
+ -- to make if-condition simpler
+ signal flush_with_valid_data     : std_logic;
 -------------------------------------------------------------------------------
 -- Function which calculates number of 1's in a vector
 ------------------------------------------------------------------------------- 

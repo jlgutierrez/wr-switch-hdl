@@ -257,6 +257,7 @@ begin  -- syn
           
           -----------------------------
           reg_not_empty     <= '0'; -- added by ML
+          cntr <= (others=>'0');
           -----------------------------
           
           --ll_read_req       <= '1';

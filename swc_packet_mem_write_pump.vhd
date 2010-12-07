@@ -252,7 +252,14 @@ architecture rtl of swc_packet_mem_write_pump is
   type t_state is (IDLE, WR_NEXT, WR_EOP, WR_LAST_EOP, WR_TRANS_EOP);
   signal state       : t_state;
 
-  type t_state_write is (S_IDLE, S_READ_DATA, S_READ_LAST_DATA_WORD, S_WRITE_DATA, S_FLUSH, S_WAIT_WRITE, S_WAIT_LL_READY,S_NASTY_WAIT);
+  type t_state_write is (S_IDLE, S_READ_DATA, 
+                         S_READ_LAST_DATA_WORD, 
+                         S_WRITE_DATA, 
+                         S_WRITE_ON_FLUSH, 
+                         S_FLUSH, 
+                         S_WAIT_WRITE, 
+                         S_WAIT_LL_READY,
+                         S_NASTY_WAIT);
   signal state_write       : t_state_write;
   
   
@@ -363,7 +370,12 @@ begin  -- rtl
                  we_int        <= '1';
                  reg_full      <= '0';
    --              cnt_last_word <= '0';
+               elsif(flush_i = '1') then
                
+                 state_write   <= S_WRITE_DATA;
+                 we_int        <= '1';
+                 reg_full      <= '0';
+                 
                else  
                  
                  state_write   <= S_NASTY_WAIT;        
@@ -418,8 +430,8 @@ begin  -- rtl
               state_write   <= S_WAIT_WRITE;
 --              cnt_last_word <= '0';
             
-            end if;   
-
+           end if;   
+           
           when S_WRITE_DATA =>
              
              we_int      <= '0';
@@ -543,7 +555,7 @@ begin  -- rtl
         flush_reg   <='0';
       else
       
-        if(flush_i = '1') then 
+        if(flush_i = '1' and sync_i = '0') then 
           flush_reg <= '1';
         elsif(sync_i = '1' and flush_reg ='1') then
           flush_reg <= '0';
@@ -631,7 +643,7 @@ begin  -- rtl
             cntr <= cntr + 1;
           end if;
         else
-          if((state_write = S_FLUSH or state_write = S_WAIT_LL_READY ) and sync_i = '1') then
+          if(((state_write = S_FLUSH or state_write = S_WAIT_LL_READY ) or flush_i = '1') and sync_i = '1') then
             cntr      <= (others => '0');
           end if;
         end if;
