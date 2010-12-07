@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-28
--- Last update: 2010-11-01
+-- Last update: 2010-12-07
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -396,7 +396,8 @@ begin --arch
  write_ctrl     <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width - 1 downto c_swc_data_width) ;
  
  
- fifo_wr        <= tx_valid_i when (read_state = S_WRITE_FIFO) else '0';
+ fifo_wr        <= '1' when (read_state = S_WRITE_DUMMY_EOF)
+                   else tx_valid_i when (read_state = S_WRITE_FIFO) else '0';
  
  
  fifo_rd        <= ((not fifo_empty) and (not mpm_full_i)) when (write_state = S_WRITE_MPM  or 
