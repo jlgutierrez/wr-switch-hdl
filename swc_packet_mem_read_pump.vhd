@@ -261,7 +261,7 @@ begin  -- syn
           -----------------------------
           
           --ll_read_req       <= '1';
-        elsif(sync_d1 = '1' and advance_addr = '1') then
+        elsif(sync_d1 = '1' and advance_addr = '1' and pgreq_i = '0' and pgreq_d0 = '0') then
           -- incrementing address inside the same page 
           mem_addr(c_swc_page_offset_width-1 downto 0) <= std_logic_vector(unsigned(mem_addr(c_swc_page_offset_width-1 downto 0)) + 1);
 
