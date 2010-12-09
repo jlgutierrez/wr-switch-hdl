@@ -236,10 +236,15 @@ architecture syn of swc_page_allocator is
 --  signal tmp_pgs   : std_logic_vector(1023 downto 0);
   
   signal tmp_dbg_dealloc : std_logic;  -- used for symulation debugging, don't remove
+  
+  signal was_reset : std_logic;
+  signal first_addr : std_logic;
+  signal ones : std_logic_vector(c_l1_bitmap_addrbits-1 downto 0);
 --  signal tmp_dbg_alloc : std_logic;
 begin  -- syn
 
-
+  ones <= (others => '1');
+  
   tmp_dbg_dealloc <= '1' when (state = FREE_RELEASE_PAGE) else '0';
 
   -- this guy is responsible for decoding 
@@ -325,8 +330,27 @@ begin  -- syn
         -- bugfix by ML (two consecutive page free of the same page addr)
         page_freeing_in_last_operation <= '0';
         previously_freed_page          <= (others => '0');
-      else
+        
+        was_reset <= '1';
+        first_addr <='1';
+        
 
+          
+      elsif(was_reset = '1') then
+      
+          if(first_addr = '1') then
+            l0_wr_data <=  (others=> '1');
+            l0_wr      <= '1';
+            first_addr <= '0';
+          elsif(l0_wr_addr =  ones) then
+            was_reset <='0';
+          else
+            l0_wr_addr <= std_logic_vector(unsigned(l0_wr_addr) + 1);
+          end if;
+      
+          
+
+      else        
         -- main finite state machine
         case state is
 
