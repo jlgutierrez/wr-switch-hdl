@@ -323,14 +323,16 @@ begin  -- syn
         l0_wr_addr        <= (others => '0');
         l0_rd_addr        <= (others => '0');
         l0_wr_data        <= (others => '0');
-        
+        pgaddr_valid_o    <= '0';
         nomem             <= '0';
+        usecnt_mem_wrdata <= (others => '0'); 
+        pgaddr_o         <= (others => '0'); 
         tmp_page          <= (others => '0'); -- used for symulation debugging, don't remove
         --tmp_pgs           <= (others => '0');
         -- bugfix by ML (two consecutive page free of the same page addr)
         page_freeing_in_last_operation <= '0';
         previously_freed_page          <= (others => '0');
-        
+        pgaddr_to_free           <= (others => '0');
         was_reset <= '1';
         first_addr <='1';
         
