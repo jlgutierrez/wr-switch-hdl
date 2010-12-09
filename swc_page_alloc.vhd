@@ -344,6 +344,7 @@ begin  -- syn
             first_addr <= '0';
           elsif(l0_wr_addr =  ones) then
             was_reset <='0';
+            l0_wr     <= '0';
           else
             l0_wr_addr <= std_logic_vector(unsigned(l0_wr_addr) + 1);
           end if;
