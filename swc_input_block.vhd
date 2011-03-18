@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-28
--- Last update: 2010-12-07
+-- Last update: 2011-03-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.swc_swcore_pkg.all;
-use work.platform_specific.all;
+use work.genram_pkg.all;
 
 entity swc_input_block is
 
@@ -191,6 +191,7 @@ architecture syn of swc_input_block is
   signal fifo_data_in  : std_logic_vector(c_swc_data_width + c_swc_ctrl_width + 2 - 1 downto 0);
   signal fifo_wr       : std_logic;
   signal fifo_clean    : std_logic;
+  signal fifo_clear_n    : std_logic;
   signal fifo_rd       : std_logic;
   signal fifo_data_out : std_logic_vector(c_swc_data_width + c_swc_ctrl_width + 2 - 1 downto 0);
   signal fifo_empty    : std_logic;
@@ -427,28 +428,30 @@ begin  --arch
                             or fifo_full = '1') else '0';    
 
   fifo_full_in_advance <= '1'
-                           when ((fifo_usedw > std_logic_vector(to_unsigned(c_swc_fifo_full_in_advance, c_swc_input_fifo_size_log2)))
+                      when ((fifo_usedw > std_logic_vector(to_unsigned(c_swc_fifo_full_in_advance, c_swc_input_fifo_size_log2)))
                                  or fifo_full = '1') else '0';
 
-  FIFO : generic_sync_fifo
+
+  fifo_clear_n <= not fifo_clean;
+  U_FIFO : generic_sync_fifo
     generic map(
-      g_width      => c_swc_data_width + c_swc_ctrl_width + 2,
-      g_depth      => c_swc_input_fifo_size,
-      g_depth_log2 => c_swc_input_fifo_size_log2
+      g_data_width      => c_swc_data_width + c_swc_ctrl_width + 2,
+      g_size      => c_swc_input_fifo_size,
+      g_with_count => true
       )
     port map (
       clk_i   => clk_i,
-      clear_i => fifo_clean,
+      rst_n_i => fifo_clear_n,
 
-      wr_req_i => fifo_wr,
+      we_i => fifo_wr,
       d_i      => fifo_data_in,
 
-      rd_req_i => fifo_rd,
+      rd_i => fifo_rd,
       q_o      => fifo_data_out,
 
       empty_o => fifo_empty,
       full_o  => fifo_full,
-      usedw_o => fifo_usedw
+      count_o => fifo_usedw
       );
 
   --==================================================================================================

@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-15
--- Last update: 2010-11-15
+-- Last update: 2011-03-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.swc_swcore_pkg.all;
-use work.platform_specific.all;
+use work.genram_pkg.all;
 
 
 entity swc_lost_pck_dealloc is
@@ -107,18 +107,16 @@ architecture syn of swc_lost_pck_dealloc is
   signal next_page          : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
   
   
-  signal ll_read_req        : std_logic;
-    
-  signal mmu_force_free     : std_logic;
-  
+  signal ll_read_req        : std_logic;    
+  signal mmu_force_free     : std_logic;  
   signal ones               : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-    
+
+  
   
 begin  -- syn
 
 
   ones <= (others => '1');
-  fifo_clean <= not rst_n_i;
 
   INPUT: process(clk_i, rst_n_i)
   begin
@@ -161,25 +159,24 @@ begin  -- syn
   end process;
 
 
-FIFO: generic_sync_fifo
+U_FIFO: generic_sync_fifo
   generic map(
-    g_width      => c_swc_page_addr_width,
-    g_depth      => 16,
-    g_depth_log2 => 4
+    g_data_width      => c_swc_page_addr_width,
+    g_size      => 16
     )
   port map   (
       clk_i   => clk_i,
-      clear_i => fifo_clean,
+      rst_n_i => rst_n_i,
 
-      wr_req_i => fifo_wr,
+      we_i => fifo_wr,
       d_i      => fifo_data_in,
 
-      rd_req_i => fifo_rd,
+      rd_i => fifo_rd,
       q_o      => fifo_data_out,
 
       empty_o  => fifo_empty,
       full_o   => fifo_full,
-      usedw_o  => open
+      count_o  => open
       );
 
 

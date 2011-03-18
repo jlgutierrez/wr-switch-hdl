@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-15
--- Last update: 2010-11-15
+-- Last update: 2011-03-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -48,8 +48,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.swc_swcore_pkg.all;
-use work.platform_specific.all;
-
+use work.genram_pkg.all;
 
 entity swc_pck_pg_free_module is
 
@@ -93,7 +92,7 @@ architecture syn of swc_pck_pg_free_module is
                    S_READ_NEXT_PAGE_ADDR,
                    S_FREE_CURRENT_PAGE_ADDR,
                    S_FORCE_FREE_CURRENT_PAGE_ADDR
-                       );              
+                   );              
   
   signal state       : t_state;
   
@@ -120,6 +119,7 @@ architecture syn of swc_pck_pg_free_module is
   signal ones               : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
     
   signal freeing_mode       : std_logic_vector(1 downto 0);
+  signal fifo_clear_n : std_logic;
   
 begin  -- syn
 
@@ -175,29 +175,29 @@ begin  -- syn
     end if;
   end process;
 
+  
+  fifo_clear_n <= not fifo_clean;
 
-FIFO: generic_sync_fifo
-  generic map(
-    g_width      => c_swc_page_addr_width + 2,
-    g_depth      => c_swc_freeing_fifo_size, --16,
-    g_depth_log2 => c_swc_freeing_fifo_log2 --4
-    )
-  port map   (
-      clk_i   => clk_i,
-      clear_i => fifo_clean,
-
-      wr_req_i => fifo_wr,
-      d_i      => fifo_data_in,
-
-      rd_req_i => fifo_rd,
-      q_o      => fifo_data_out,
-
-      empty_o  => fifo_empty,
-      full_o   => fifo_full,
-      usedw_o  => open
-      );
-
-
+  -- replaced by GenRams component: TW
+  U_FIFO: generic_sync_fifo
+    generic map (
+      g_data_width      => c_swc_page_addr_width + 2,
+      g_size      => c_swc_freeing_fifo_size
+      )
+    port map (
+      rst_n_i        => fifo_clear_n,
+      clk_i          => clk_i,
+      d_i            => fifo_data_in,
+      we_i           => fifo_wr,
+      q_o            => fifo_data_out,
+      rd_i           => fifo_rd,
+      empty_o        => fifo_empty,
+      full_o         => fifo_full,
+      almost_empty_o => open,
+      almost_full_o  => open,
+      count_o        => open);
+  
+ 
 fsm_force_free : process(clk_i, rst_n_i)
  begin
    if rising_edge(clk_i) then
