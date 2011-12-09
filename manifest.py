@@ -17,4 +17,5 @@ files = ["swc_swcore_pkg.vhd",
 "swc_pck_transfer_input.vhd",
 "swc_pck_transfer_output.vhd",
 "swc_prio_encoder.vhd",
-"swc_rr_arbiter.vhd"]
+"swc_rr_arbiter.vhd",
+"generic_ssram_dualport_singleclock.vhd"]
