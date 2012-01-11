@@ -1,0 +1,19 @@
+# Current time Mon Oct 18 18:05:56 2010
+# ModelSim Stack Trace
+# Program = vish
+# Id = "6.6a"
+# Version = "2010.03"
+# Date = "Mar 19 2010"
+# Platform = linux
+# 0    0x08184ff0: 'treew_TriggerEventQ + 0x160' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# 1    0x0812ded3: 'name_ValueCancelPendingEvents + 0x1043' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# 2    0x083b138c: 'TclServiceIdle + 0x48' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# 3    0x083a3a99: 'Tcl_DoOneEvent + 0x1ad' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# 4    0x082cd87d: 'Tk_MainLoop + 0x19' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# 5    0x082d4a50: 'Tk_MainEx + 0x298' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# 6    0x0816b0e8: 'vish_inner_loop + 0x238' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# 7    0x0816bde2: 'main + 0x862' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# 8    0xb74ddbd1: '_libc_start_main + 0xe1' in '/lib/tls/i686/cmov/libc.so.6'
+# 9    0x080bc3fc: 'start + 0x1c' in '/opt/modeltech/modeltech/bin/../linux/vish'
+# End of Stack Trace
+
