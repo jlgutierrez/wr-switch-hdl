@@ -1,0 +1,17 @@
+
+# /
+/*.mpf
+/*.bak
+/*.state
+/*.wlf
+/*.summary
+/*.rpt
+/*.done
+/*.pin
+/*.sof
+/*.smsg
+/*.dpf
+/*.rbf
+/incremental_db
+/*.ddb
+/PLLJ_PLLSPE_INFO.txt
