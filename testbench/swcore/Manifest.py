@@ -9,6 +9,7 @@ vlog_opt="+incdir+../../../sim "
 
 modules = {"local":
 		[ 
+		  "../../ip_cores/wr-cores",
 		  "../../ip_cores/general-cores/modules/genrams/",
 		  "../../modules/wrsw_swcore",
 		],

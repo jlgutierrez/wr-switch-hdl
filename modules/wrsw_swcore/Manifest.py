@@ -6,6 +6,7 @@
 #         "swc_pipelined_mux.vhd",
 #         "swc_async_multiport_mem.vhd"]
 
+
 files = [
 "swc_swcore_pkg.vhd",
 "swc_block_alloc.vhd",
@@ -27,9 +28,5 @@ files = [
 "swc_pck_transfer_output.vhd",
 "swc_prio_encoder.vhd",
 "swc_rr_arbiter.vhd",
-"generic_ssram_dualport_singleclock.vhd",
-#"wr_fec_pkg.vhd",
-#"wr_wb_to_wrf.vhd",
-#"xswc_core.vhd"
-#"../../ip_cores/general-cores"
+"xswc_core.vhd",
 ]
