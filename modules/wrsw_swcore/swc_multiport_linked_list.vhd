@@ -149,7 +149,7 @@ architecture syn of swc_multiport_linked_list is
   signal free_pck_read_done           : std_logic_vector(c_swc_num_ports-1 downto 0);
 
   signal ram_zeros                 : std_logic_vector( c_swc_page_addr_width - 1 downto 0);
-  signal ram_ones                  : std_logic_vector((c_swc_page_addr_width+7)/8 - 1 downto 0);
+  signal ram_ones                  : std_logic_vector((c_swc_page_addr_width)/8 - 1 downto 0);
   
 begin  -- syn
 
@@ -157,43 +157,43 @@ begin  -- syn
   ram_zeros <=(others => '0');
   ram_ones  <=(others => '1');
 
-   PAGE_INDEX_LINKED_LIST : generic_ssram_dualport_singleclock
+--    PAGE_INDEX_LINKED_LIST : generic_ssram_dualport_singleclock
+--      generic map (
+--        g_width     => c_swc_page_addr_width,
+--        g_addr_bits => c_swc_page_addr_width,
+--        g_size      => c_swc_packet_mem_num_pages --c_swc_packet_mem_size / c_swc_packet_mem_multiply
+--        )
+--      port map (
+--        clk_i     => clk_i,
+--        rd_addr_i => ll_rd_addr,
+--        wr_addr_i => ll_wr_addr,
+--        data_i    => ll_wr_data, 
+--        wr_en_i   => ll_write_enable ,
+--        q_o       => ll_read_data);
+
+
+   PAGE_INDEX_LINKED_LIST : generic_dpram
      generic map (
-       g_width     => c_swc_page_addr_width,
-       g_addr_bits => c_swc_page_addr_width,
-       g_size      => c_swc_packet_mem_num_pages --c_swc_packet_mem_size / c_swc_packet_mem_multiply
-       )
+       g_data_width  => c_swc_page_addr_width,
+       g_size        => c_swc_packet_mem_num_pages
+                 )
      port map (
-       clk_i     => clk_i,
-       rd_addr_i => ll_rd_addr,
-       wr_addr_i => ll_wr_addr,
-       data_i    => ll_wr_data, 
-       wr_en_i   => ll_write_enable ,
-       q_o       => ll_read_data);
-
-
---   PAGE_INDEX_LINKED_LIST : generic_dpram
---     generic map (
---       g_data_width  => c_swc_page_addr_width,
---       g_size        => c_swc_packet_mem_num_pages
---                 )
---     port map (
---       -- Port A -- writing
---       clka_i => clk_i,
---       bwea_i => ram_ones,
---       wea_i  => ll_write_enable,
---       aa_i   => ll_wr_addr,
---       da_i   => ll_wr_data,
---       qa_o   => open,   
--- 
---       -- Port B  -- reading
---       clkb_i => clk_i,
---       bweb_i => ram_ones, 
---       web_i  => '0',
---       ab_i   => ll_rd_addr,
---       db_i   => ram_zeros,
---       qb_o   => ll_read_data
---       );
+       -- Port A -- writing
+       clka_i => clk_i,
+       bwea_i => ram_ones,
+       wea_i  => ll_write_enable,
+       aa_i   => ll_wr_addr,
+       da_i   => ll_wr_data,
+       qa_o   => open,   
+ 
+       -- Port B  -- reading
+       clkb_i => clk_i,
+       bweb_i => ram_ones, 
+       web_i  => '0',
+       ab_i   => ll_rd_addr,
+       db_i   => ram_zeros,
+       qb_o   => ll_read_data
+       );
 
 
   gen_write_request_vec : for i in 0 to c_swc_num_ports - 1 generate

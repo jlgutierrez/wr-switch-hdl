@@ -13,7 +13,6 @@ modules = {"local":
 		  "../../platform/genrams/altera",
 		  #"../../ip_cores/general-cores/modules/genrams/",
 		  "../../modules/wrsw_swcore",
-		  #"../../ip_cores/wr-cores/modules/wr_endpoint", # for wr_fabric_pkg
 		],
 	    #"git" :
 		#[

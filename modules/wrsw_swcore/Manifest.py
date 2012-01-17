@@ -6,7 +6,8 @@
 #         "swc_pipelined_mux.vhd",
 #         "swc_async_multiport_mem.vhd"]
 
-files = ["swc_swcore_pkg.vhd",
+files = [
+"swc_swcore_pkg.vhd",
 "swc_block_alloc.vhd",
 "swc_core.vhd",
 "swc_input_block.vhd",

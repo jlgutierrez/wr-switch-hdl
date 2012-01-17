@@ -286,43 +286,43 @@ begin  --  behavoural
         );
   end generate prio_ctrl;
   
-   PRIO_QUEUE : generic_ssram_dualport_singleclock
+--    PRIO_QUEUE : generic_ssram_dualport_singleclock
+--      generic map (
+--        g_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
+--        g_addr_bits   => c_swc_output_prio_num_width + c_swc_output_fifo_addr_width,
+--        g_size        => (c_swc_output_prio_num * c_swc_output_fifo_size) 
+--                  )
+--      port map (
+--        clk_i         => clk_i,
+--        rd_addr_i     => rd_addr,
+--        wr_addr_i     => wr_addr,
+--        data_i        => wr_data,
+--        wr_en_i       => wr_en,
+--        q_o           => rd_data
+--        );
+  
+   PRIO_QUEUE : generic_dpram
      generic map (
-       g_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
-       g_addr_bits   => c_swc_output_prio_num_width + c_swc_output_fifo_addr_width,
+       g_data_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
        g_size        => (c_swc_output_prio_num * c_swc_output_fifo_size) 
                  )
      port map (
-       clk_i         => clk_i,
-       rd_addr_i     => rd_addr,
-       wr_addr_i     => wr_addr,
-       data_i        => wr_data,
-       wr_en_i       => wr_en,
-       q_o           => rd_data
-       );
-  
---   PRIO_QUEUE : generic_dpram
---     generic map (
---       g_data_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
---       g_size        => (c_swc_output_prio_num * c_swc_output_fifo_size) 
---                 )
---     port map (
---     -- Port A -- writing
---       clka_i => clk_i,
---       bwea_i => ram_ones,
---       wea_i  => wr_en,
---       aa_i   => wr_addr,
---       da_i   => wr_data,
---       qa_o   => open,   
--- 
---       -- Port B  -- reading
---       clkb_i => clk_i,
---       bweb_i => ram_ones, 
---       web_i  => '0',
---       ab_i   => rd_addr,
---       db_i   => ram_zeros,
---       qb_o   => rd_data
---       );
+     -- Port A -- writing
+       clka_i => clk_i,
+       bwea_i => ram_ones,
+       wea_i  => wr_en,
+       aa_i   => wr_addr,
+       da_i   => wr_data,
+       qa_o   => open,   
+ 
+      -- Port B  -- reading
+       clkb_i => clk_i,
+       bweb_i => ram_ones, 
+       web_i  => '0',
+       ab_i   => rd_addr,
+       db_i   => ram_zeros,
+       qb_o   => rd_data
+      );
   
   rd_valid : process(clk_i, rst_n_i)
   begin
