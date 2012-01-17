@@ -42,11 +42,11 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-use work.genram_pkg.all;
+
 
 library work;
 use work.swc_swcore_pkg.all;
-
+use work.genram_pkg.all;
 
 entity swc_output_block is
 
@@ -111,19 +111,19 @@ end swc_output_block;
 
 architecture behavoural of swc_output_block is
 
-  component generic_ssram_dualport_singleclock
-    generic (
-      g_width     : natural;
-      g_addr_bits : natural;
-      g_size      : natural);
-    port (
-      data_i    : in  std_logic_vector (g_width-1 downto 0);
-      clk_i     : in  std_logic;
-      rd_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
-      wr_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
-      wr_en_i   : in  std_logic := '1';
-      q_o       : out std_logic_vector (g_width-1 downto 0));
-  end component;
+--   component generic_ssram_dualport_singleclock
+--     generic (
+--       g_width     : natural;
+--       g_addr_bits : natural;
+--       g_size      : natural);
+--     port (
+--       data_i    : in  std_logic_vector (g_width-1 downto 0);
+--       clk_i     : in  std_logic;
+--       rd_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
+--       wr_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
+--       wr_en_i   : in  std_logic := '1';
+--       q_o       : out std_logic_vector (g_width-1 downto 0));
+--   end component;
   
   signal pta_transfer_data_ack : std_logic;
 
@@ -304,7 +304,6 @@ begin  --  behavoural
   PRIO_QUEUE : generic_dpram
     generic map (
       g_data_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
---      g_addr_bits   => c_swc_output_prio_num_width + c_swc_output_fifo_addr_width,
       g_size        => (c_swc_output_prio_num * c_swc_output_fifo_size) 
                 )
     port map (

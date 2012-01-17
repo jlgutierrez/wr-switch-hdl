@@ -81,6 +81,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.swc_swcore_pkg.all;
+use work.genram_pkg.all;
 
 entity swc_packet_mem is
 
@@ -181,19 +182,19 @@ end swc_packet_mem;
 
 architecture rtl of swc_packet_mem is
 
-  component generic_ssram_dualport_singleclock
-    generic (
-      g_width     : natural;
-      g_addr_bits : natural;
-      g_size      : natural);
-    port (
-      data_i    : in  std_logic_vector (g_width-1 downto 0);
-      clk_i     : in  std_logic;
-      rd_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
-      wr_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
-      wr_en_i   : in  std_logic := '1';
-      q_o       : out std_logic_vector (g_width-1 downto 0));
-  end component;
+--   component generic_ssram_dualport_singleclock
+--     generic (
+--       g_width     : natural;
+--       g_addr_bits : natural;
+--       g_size      : natural);
+--     port (
+--       data_i    : in  std_logic_vector (g_width-1 downto 0);
+--       clk_i     : in  std_logic;
+--       rd_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
+--       wr_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
+--       wr_en_i   : in  std_logic := '1';
+--       q_o       : out std_logic_vector (g_width-1 downto 0));
+--   end component;
 
   --  
   subtype t_pump_data_in        is std_logic_vector(c_swc_pump_width-1                             downto 0);
@@ -326,9 +327,15 @@ architecture rtl of swc_packet_mem is
   -- may be needed advance, etc 
   signal sync_cntr_rd : integer range 0 to c_swc_packet_mem_multiply-1;
 
+  signal ram_zeros    : std_logic_vector(c_swc_packet_mem_multiply * c_swc_pump_width - 1 downto 0);
+  signal ram_ones     : std_logic_vector((c_swc_packet_mem_multiply * c_swc_pump_width+7)/8 - 1 downto 0);
+
 
   
 begin  -- rtl
+
+  ram_zeros <=(others => '0');
+  ram_ones  <=(others => '1');
 
   -- managing synchronization of the pumps, so each pump is given one-cycle
   -- time slot in which it can read and write.
@@ -427,21 +434,42 @@ begin  -- rtl
   end process;
 
   -- The most important part, the shared memory
-  FUCKING_BIG_MEMORY : generic_ssram_dualport_singleclock
+--   FUCKING_BIG_MEMORY : generic_ssram_dualport_singleclock
+--     generic map (
+--       g_width     => c_swc_packet_mem_multiply * c_swc_pump_width,
+--       g_addr_bits => c_swc_packet_mem_addr_width,
+--       g_size      => c_swc_packet_mem_size / c_swc_packet_mem_multiply)
+--     port map (
+--       clk_i     => clk_i,
+--       rd_addr_i => ram_rd_addr_muxed,
+--       wr_addr_i => ram_wr_addr_muxed,
+--       data_i    => ram_wr_data_muxed,
+--       wr_en_i   => ram_we_muxed,
+--       q_o       => ram_rd_data);
+
+
+  FUCKING_BIG_MEMORY : generic_dpram
     generic map (
-      g_width     => c_swc_packet_mem_multiply * c_swc_pump_width,
-      g_addr_bits => c_swc_packet_mem_addr_width,
-      g_size      => c_swc_packet_mem_size / c_swc_packet_mem_multiply)
+      g_data_width  => c_swc_packet_mem_multiply * c_swc_pump_width,
+      g_size        => (c_swc_packet_mem_size / c_swc_packet_mem_multiply) 
+                )
     port map (
-      clk_i     => clk_i,
-      rd_addr_i => ram_rd_addr_muxed,
-      wr_addr_i => ram_wr_addr_muxed,
-      data_i    => ram_wr_data_muxed,
-      wr_en_i   => ram_we_muxed,
-      q_o       => ram_rd_data);
+    -- Port A -- writing
+      clka_i => clk_i,
+      bwea_i => ram_ones,
+      wea_i  => ram_we_muxed,
+      aa_i   => ram_wr_addr_muxed,
+      da_i   => ram_wr_data_muxed,
+      qa_o   => open,   
 
-
-
+      -- Port B  -- reading
+      clkb_i => clk_i,
+      bweb_i => ram_ones, 
+      web_i  => '0',
+      ab_i   => ram_rd_addr_muxed,
+      db_i   => ram_zeros,
+      qb_o   => ram_rd_data
+      );
 
 
   -- read pump: it reads c_swc_packet_mem_multiply words (ctrl + data) from FB SRAM and makes it
