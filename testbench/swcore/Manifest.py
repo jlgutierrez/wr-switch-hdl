@@ -1,4 +1,4 @@
-target = "altera" #"xilinx" # 
+target = "altera" # "xilinx" # 
 action = "simulation"
 
 #fetchto = "../../ip_cores"
@@ -9,8 +9,6 @@ vlog_opt="+incdir+../../../sim "
 
 modules = {"local":
 		[ 
-		  #"../../platform/altera",
-		  #"../../platform/genrams/altera",
 		  "../../ip_cores/general-cores/modules/genrams/",
 		  "../../modules/wrsw_swcore",
 		],
