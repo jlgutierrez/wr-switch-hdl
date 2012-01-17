@@ -1,15 +1,94 @@
 onerror {resume}
 quietly WaveActivateNextPane {} 0
-add wave -noupdate -format Logic /main/clk
-add wave -noupdate -format Logic /main/rst
-add wave -noupdate -format Logic /main/stb
-add wave -noupdate -format Logic /main/cyc
-add wave -noupdate -format Logic /main/we
-add wave -noupdate -format Literal /main/addr
-add wave -noupdate -format Literal /main/data_o
-add wave -noupdate -format Literal /main/data_i
-add wave -noupdate -format Logic /main/stall
-add wave -noupdate -format Logic /main/ack
+add wave -noupdate /main/clk
+add wave -noupdate /main/DUT/clk_i
+add wave -noupdate /main/DUT/rst_n_i
+add wave -noupdate /main/DUT/tx_sof_p1_i
+add wave -noupdate /main/DUT/tx_eof_p1_i
+add wave -noupdate /main/DUT/tx_data_i
+add wave -noupdate /main/DUT/tx_ctrl_i
+add wave -noupdate /main/DUT/tx_valid_i
+add wave -noupdate /main/DUT/tx_bytesel_i
+add wave -noupdate /main/DUT/tx_dreq_o
+add wave -noupdate /main/DUT/tx_abort_p1_i
+add wave -noupdate /main/DUT/tx_rerror_p1_i
+add wave -noupdate /main/DUT/rx_sof_p1_o
+add wave -noupdate /main/DUT/rx_eof_p1_o
+add wave -noupdate /main/DUT/rx_dreq_i
+add wave -noupdate /main/DUT/rx_ctrl_o
+add wave -noupdate /main/DUT/rx_data_o
+add wave -noupdate /main/DUT/rx_valid_o
+add wave -noupdate /main/DUT/rx_bytesel_o
+add wave -noupdate /main/DUT/rx_idle_o
+add wave -noupdate /main/DUT/rx_rerror_p1_o
+add wave -noupdate /main/DUT/rx_terror_p1_i
+add wave -noupdate /main/DUT/rx_tabort_p1_i
+add wave -noupdate /main/DUT/rtu_rsp_valid_i
+add wave -noupdate /main/DUT/rtu_rsp_ack_o
+add wave -noupdate /main/DUT/rtu_dst_port_mask_i
+add wave -noupdate /main/DUT/rtu_drop_i
+add wave -noupdate /main/DUT/rtu_prio_i
+add wave -noupdate /main/DUT/ib_page_alloc_req
+add wave -noupdate /main/DUT/ib_pageaddr_output
+add wave -noupdate /main/DUT/ib_set_usecnt
+add wave -noupdate /main/DUT/ib_usecnt
+add wave -noupdate /main/DUT/mmu_page_alloc_done
+add wave -noupdate /main/DUT/mmu_pageaddr_input
+add wave -noupdate /main/DUT/mmu_set_usecnt_done
+add wave -noupdate /main/DUT/mmu_nomem
+add wave -noupdate /main/DUT/ib_pckstart
+add wave -noupdate /main/DUT/ib_pageaddr_to_mpm
+add wave -noupdate /main/DUT/ib_pagereq
+add wave -noupdate /main/DUT/ib_data
+add wave -noupdate /main/DUT/ib_ctrl
+add wave -noupdate /main/DUT/ib_drdy
+add wave -noupdate /main/DUT/ib_flush
+add wave -noupdate /main/DUT/mpm_pageend
+add wave -noupdate /main/DUT/mpm_full
+add wave -noupdate /main/DUT/mpm_wr_sync
+add wave -noupdate /main/DUT/ib_transfer_pck
+add wave -noupdate /main/DUT/ib_pageaddr_to_pta
+add wave -noupdate /main/DUT/ib_mask
+add wave -noupdate /main/DUT/ib_prio
+add wave -noupdate /main/DUT/ib_pck_size
+add wave -noupdate /main/DUT/pta_transfer_ack
+add wave -noupdate /main/DUT/pta_data_valid
+add wave -noupdate /main/DUT/pta_pageaddr
+add wave -noupdate /main/DUT/pta_prio
+add wave -noupdate /main/DUT/pta_pck_size
+add wave -noupdate /main/DUT/ob_ack
+add wave -noupdate /main/DUT/ob_pgreq
+add wave -noupdate /main/DUT/ob_pgaddr
+add wave -noupdate /main/DUT/ob_dreq
+add wave -noupdate /main/DUT/mpm_pckend
+add wave -noupdate /main/DUT/mpm_pgend
+add wave -noupdate /main/DUT/mpm_drdy
+add wave -noupdate /main/DUT/mpm_data
+add wave -noupdate /main/DUT/mpm_ctrl
+add wave -noupdate /main/DUT/mpm_rd_sync
+add wave -noupdate /main/DUT/mpm_write
+add wave -noupdate /main/DUT/mpm_write_addr
+add wave -noupdate /main/DUT/mpm_write_data
+add wave -noupdate /main/DUT/mpm_read_pump_read
+add wave -noupdate /main/DUT/mpm_read_pump_addr
+add wave -noupdate /main/DUT/ll_write_done
+add wave -noupdate /main/DUT/ll_read_pump_read_done
+add wave -noupdate /main/DUT/ll_data
+add wave -noupdate /main/DUT/ib_force_free
+add wave -noupdate /main/DUT/ib_force_free_pgaddr
+add wave -noupdate /main/DUT/ppfm_force_free_done_to_ib
+add wave -noupdate /main/DUT/ob_free
+add wave -noupdate /main/DUT/ob_free_pgaddr
+add wave -noupdate /main/DUT/ppfm_free_done_to_ob
+add wave -noupdate /main/DUT/ppfm_read_addr
+add wave -noupdate /main/DUT/ppfm_read_req
+add wave -noupdate /main/DUT/ll_read_valid_data
+add wave -noupdate /main/DUT/ppfm_force_free
+add wave -noupdate /main/DUT/ppfm_force_free_pgaddr
+add wave -noupdate /main/DUT/ppfm_free
+add wave -noupdate /main/DUT/ppfm_free_pgaddr
+add wave -noupdate /main/DUT/mmu_force_free_done
+add wave -noupdate /main/DUT/mmu_free_done
 TreeUpdate [SetDefaultTree]
 WaveRestoreCursors {{Cursor 1} {505000 ps} 0}
 configure wave -namecolwidth 362
@@ -24,5 +103,6 @@ configure wave -gridoffset 0
 configure wave -gridperiod 1
 configure wave -griddelta 40
 configure wave -timeline 0
+configure wave -timelineunits ps
 update
-WaveRestoreZoom {0 ps} {3681818 ps}
+WaveRestoreZoom {296502273 ps} {300184091 ps}
