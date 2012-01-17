@@ -7,6 +7,7 @@
 `define c_swc_ctrl_width      4
 `define c_swc_data_width      16
 `define c_wrsw_num_ports      11
+//`define c_wrsw_num_ports      7
 
 
 `timescale 1ns / 1ps
@@ -591,11 +592,13 @@ module main;
      int i,j, cnt;
      int sum_rx, sum_tx, sum_tx_by_port[11],sum_rx_by_port[11];
 
-     wait(tx_port_finished[0] & tx_port_finished[1] & tx_port_finished[2] & tx_port_finished[3] & tx_port_finished[4] & 
-          tx_port_finished[5] & tx_port_finished[6] & tx_port_finished[7] & tx_port_finished[8] & tx_port_finished[9] & tx_port_finished[10]);
-
+     wait_cycles(100000);
      
-     wait_cycles(1000000);
+//     wait(tx_port_finished[0] & tx_port_finished[1] & tx_port_finished[2] & tx_port_finished[3] & tx_port_finished[4] & 
+//          tx_port_finished[5] & tx_port_finished[6] & tx_port_finished[7] & tx_port_finished[8] & tx_port_finished[9] & tx_port_finished[10]);
+
+//     wait_cycles(1000000);
+     
      $display("=============================================== DBG =================================================");
      $display("Rx Ports   :  P 0  |  P 1  |  P 2  |  P 3  |  P 4  |  P 5  |  P 6  |  P 7  |  P 8  |  P 9  |  P10  | ");
      $display("-----------------------------------------------------------------------------------------------------");
