@@ -54,7 +54,7 @@ package swc_swcore_pkg is
   
 
 -- number of switch ports
-  constant c_swc_num_ports       : integer := 11;
+  constant c_swc_num_ports       : integer := 7; --c_NUM_PORTS
 -- size of the packet memory in words (1 word = 1 ctrl + data sequence)
   constant c_swc_packet_mem_size : integer := 65536;
 
@@ -83,7 +83,8 @@ package swc_swcore_pkg is
   constant c_swc_freeing_fifo_log2     : integer := integer(CEIL(LOG2(real(c_swc_freeing_fifo_size-1))));
   
   constant c_swc_page_addr_width       : integer := integer(CEIL(LOG2(real(c_swc_packet_mem_num_pages-1))));
-  constant c_swc_usecount_width        : integer := integer(CEIL(LOG2(real(c_swc_num_ports-1))));
+  --todo:
+  constant c_swc_usecount_width        : integer := 4;-- HACK... integer(CEIL(LOG2(real(c_swc_num_ports-1))));
   constant c_swc_page_offset_width     : integer := integer(CEIL(LOG2(real(c_swc_page_size / c_swc_packet_mem_multiply))));
   constant c_swc_packet_mem_addr_width : integer := c_swc_page_addr_width + c_swc_page_offset_width;
   constant c_swc_pump_width            : integer := c_swc_data_width + c_swc_ctrl_width;
