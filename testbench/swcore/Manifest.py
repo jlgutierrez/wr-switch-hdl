@@ -9,9 +9,9 @@ vlog_opt="+incdir+../../../sim "
 
 modules = {"local":
 		[ 
-		  "../../platform/altera",
-		  "../../platform/genrams/altera",
-		  #"../../ip_cores/general-cores/modules/genrams/",
+		  #"../../platform/altera",
+		  #"../../platform/genrams/altera",
+		  "../../ip_cores/general-cores/modules/genrams/",
 		  "../../modules/wrsw_swcore",
 		],
 	    #"git" :

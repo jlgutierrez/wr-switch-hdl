@@ -149,7 +149,7 @@ architecture syn of swc_multiport_linked_list is
   signal free_pck_read_done           : std_logic_vector(c_swc_num_ports-1 downto 0);
 
   signal ram_zeros                 : std_logic_vector( c_swc_page_addr_width - 1 downto 0);
-  signal ram_ones                  : std_logic_vector((c_swc_page_addr_width)/8 - 1 downto 0);
+  signal ram_ones                  : std_logic_vector((c_swc_page_addr_width+7)/8 - 1 downto 0);
   
 begin  -- syn
 

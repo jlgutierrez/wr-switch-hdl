@@ -308,12 +308,12 @@ begin  -- syn
       aa_i   => usecnt_mem_wraddr,
       qa_o   => open,
       wea_i  => usecnt_mem_wr,
-      bwea_i => ones((g_use_count_bits)/8 -1 downto 0),--ones((g_use_count_bits+7)/8 -1 downto 0),
+      bwea_i => ones((g_use_count_bits+7)/8 -1 downto 0),--ones((g_use_count_bits+7)/8 -1 downto 0),
 
       ab_i   => usecnt_mem_rdaddr,
       qb_o   => usecnt_mem_rddata,
       db_i   => ones(g_use_count_bits-1 downto 0),
-      bweb_i => ones((g_use_count_bits)/8-1 downto 0), --ones((g_use_count_bits+7)/8-1 downto 0),
+      bweb_i => ones((g_use_count_bits+7)/8-1 downto 0), --ones((g_use_count_bits+7)/8-1 downto 0),
       web_i  => '0'
       );
 
