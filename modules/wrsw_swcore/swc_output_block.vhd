@@ -42,6 +42,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use work.genram_pkg.all;
 
 library work;
 use work.swc_swcore_pkg.all;
@@ -141,6 +142,7 @@ architecture behavoural of swc_output_block is
   signal rd_data_valid         : std_logic;
   signal zeros                 : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
   
+
   subtype t_head_and_head      is std_logic_vector(c_swc_output_fifo_addr_width - 1  downto 0);
 
   type t_addr_array      is array (c_swc_output_prio_num - 1 downto 0) of t_head_and_head;  
@@ -185,9 +187,16 @@ architecture behavoural of swc_output_block is
   signal start_free_pck          : std_logic;
   signal waiting_pck_start : std_logic;
   
+
+  signal ram_zeros                 : std_logic_vector(c_swc_page_addr_width + c_swc_max_pck_size_width - 1 downto 0);
+  signal ram_ones                  : std_logic_vector((c_swc_page_addr_width + c_swc_max_pck_size_width+7)/8 - 1 downto 0);
+
+
 begin  --  behavoural
   
-  zeros <=(others => '0');
+  zeros     <=(others => '0');
+  ram_zeros <=(others => '0');
+  ram_ones  <=(others => '1');
     
   wr_prio <= not pta_prio_i;
     
@@ -277,21 +286,44 @@ begin  --  behavoural
         );
   end generate prio_ctrl;
   
-  PRIO_QUEUE : generic_ssram_dualport_singleclock
+--   PRIO_QUEUE : generic_ssram_dualport_singleclock
+--     generic map (
+--       g_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
+--       g_addr_bits   => c_swc_output_prio_num_width + c_swc_output_fifo_addr_width,
+--       g_size        => (c_swc_output_prio_num * c_swc_output_fifo_size) 
+--                 )
+--     port map (
+--       clk_i         => clk_i,
+--       rd_addr_i     => rd_addr,
+--       wr_addr_i     => wr_addr,
+--       data_i        => wr_data,
+--       wr_en_i       => wr_en,
+--       q_o           => rd_data
+--       );
+  
+  PRIO_QUEUE : generic_dpram
     generic map (
-      g_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
-      g_addr_bits   => c_swc_output_prio_num_width + c_swc_output_fifo_addr_width,
+      g_data_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
+--      g_addr_bits   => c_swc_output_prio_num_width + c_swc_output_fifo_addr_width,
       g_size        => (c_swc_output_prio_num * c_swc_output_fifo_size) 
                 )
     port map (
-      clk_i         => clk_i,
-      rd_addr_i     => rd_addr,
-      wr_addr_i     => wr_addr,
-      data_i        => wr_data,
-      wr_en_i       => wr_en,
-      q_o           => rd_data
+    -- Port A -- writing
+      clka_i => clk_i,
+      bwea_i => ram_ones,
+      wea_i  => wr_en,
+      aa_i   => wr_addr,
+      da_i   => wr_data,
+      qa_o   => open,   
+
+      -- Port B  -- reading
+      clkb_i => clk_i,
+      bweb_i => ram_ones, 
+      web_i  => '0',
+      ab_i   => rd_addr,
+      db_i   => ram_zeros,
+      qb_o   => rd_data
       );
-  
   
   rd_valid : process(clk_i, rst_n_i)
   begin
