@@ -3,9 +3,16 @@ action = "simulation"
 
 #fetchto = "../../ip_cores"
 
-files = "swc_core.v4.sv" 
+#files = "swc_core.v4.sv"
 
-vlog_opt="+incdir+../../../sim "
+files = [
+  "xswc_core_7_ports_wrapper.vhd",
+  "swcore_wrapper.svh",
+  "xswc_core.sv"
+  ]
+
+#vlog_opt="+incdir+../../../sim "
+vlog_opt="+incdir+../../ip_cores/wr-cores/sim +incdir+../../ip_cores/wr-cores/sim/fabric_emu"
 
 modules = {"local":
 		[ 
