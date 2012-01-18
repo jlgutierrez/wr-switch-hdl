@@ -61,7 +61,7 @@ entity xswc_core is
     rst_n_i : in std_logic;
 
 -------------------------------------------------------------------------------
--- Fabric I/F : input (comes from the Endpoint)
+-- pWB  : input (comes from the Endpoint)
 -------------------------------------------------------------------------------
 
     snk_i : in  t_wrf_sink_in_array(g_swc_num_ports-1 downto 0);
@@ -69,7 +69,7 @@ entity xswc_core is
 
  
 -------------------------------------------------------------------------------
--- Fabric I/F : output (goes to the Endpoint)
+-- pWB : output (goes to the Endpoint)
 -------------------------------------------------------------------------------  
 
     src_i : in  t_wrf_source_in_array(g_swc_num_ports-1 downto 0);
