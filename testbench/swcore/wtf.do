@@ -1,5 +1,4 @@
-
-make -f Makefile
+make 
 vsim -L unisim -t 10fs work.main -voptargs="+acc"
 
 radix -hexadecimal

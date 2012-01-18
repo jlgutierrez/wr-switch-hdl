@@ -283,7 +283,7 @@ end component;
 
 begin
 
-U_Wrapped: xswc_core
+U_xswc_core: xswc_core
   generic map
 	( 
 	  g_swc_num_ports      => g_swc_num_ports,
@@ -314,7 +314,7 @@ U_Wrapped: xswc_core
     snk_i(0).sel  <= snk_sel_0_i;   
     snk_i(0).cyc  <= snk_cyc_0_i;   
     snk_i(0).stb  <= snk_stb_0_i;   
-    snk_i(0).we  <= snk_we_0_i;    
+    snk_i(0).we   <= snk_we_0_i;    
     snk_stall_0_o <= snk_o(0).stall;
     snk_ack_0_o   <= snk_o(0).ack;
     snk_err_0_o   <= snk_o(0).err;

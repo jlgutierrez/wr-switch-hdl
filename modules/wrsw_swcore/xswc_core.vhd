@@ -260,7 +260,7 @@ begin
   swc_src_terror_p1 <= (others => '0');
   swc_src_tabort_p1 <= (others => '0');
 
-  U_SWCORE: swc_core
+  U_swc_core: swc_core
     port map (
       clk_i               => clk_i,
       rst_n_i             => rst_n_i,

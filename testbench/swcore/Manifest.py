@@ -7,7 +7,7 @@ action = "simulation"
 
 files = [
   "xswc_core_7_ports_wrapper.vhd",
-  "swcore_wrapper.svh",
+  "xswcore_wrapper.svh",
   "xswc_core.sv"
   ]
 
