@@ -82,7 +82,13 @@ module main;
    int tx_cnt_by_port[11][11];
    int rx_cnt_by_port[11][11];
 
+  integer ports_ready  = 0;
+  
+  // some settings
+  integer n_packets_to_send = 10;
+  integer dbg               = 0;
    
+  
    xswcore_wrapper
     DUT_xswcore_wrapper (
     .clk_i                 (clk),
@@ -121,6 +127,10 @@ module main;
       .rtu_drop_i            (rtu_drop),
       .rtu_prio_i            (rtu_prio)
     );
+
+/*
+ *  wait ncycles
+ */	
     
     task automatic wait_cycles;
        input [31:0] ncycles;
@@ -132,7 +142,9 @@ module main;
        end
     endtask // wait_cycles
     
-
+/*
+ *  set RTU
+ */	
     task automatic set_rtu_rsp;
        input [31:0]                    chan;
        input                           valid;
@@ -153,6 +165,9 @@ module main;
        end
     endtask // wait_cycles 
 
+/*
+ *  send single frame onm a given port with given RTU settings
+ */	
   task automatic send_random_packet(
 	ref 				WBPacketSource src[],
 	ref  				EthPacket q[$], 
@@ -192,20 +207,58 @@ module main;
              tx_cnt_by_port[port][j]++; 
          end
        end
-      $display("Sent:[@port_%1d, to mask=0x%x, with prio=%1d]!", port, mask, prio);
+      if(dbg) $display("Sent:[@port_%1d, to mask=0x%x, with prio=%1d]!", port, mask, prio);
       
       
    endtask // send_random_packets
 	
+/*
+ *  send frames on a given port
+ */	
+   task automatic load_port;
+      ref 			WBPacketSource src[];
+      input [31:0]              port;
+      input integer             n_packets;
+      begin : load_port_body
+                 
+        EthPacket      txed[$];         
+        int i,j, seed = 0;
+        int cnt = 0;
+        //bit [10:0] mask ;
+	int mask;
+        int drop;
+
+        if(dbg) $display("Initial waiting: %d cycles",((port*50)%11)*50);
+        wait_cycles(((port*50)%11)*50);
+        
+        for(i=0;i<n_packets;i++)
+        begin
+
+	  //mask = ($dist_uniform(seed,0,127) );// 2047;
+	  j = $dist_uniform(seed,0,20);
+          if(j > 15) drop = 1; else drop = 0;
+          
+          mask=1<<$dist_uniform(seed,0,`c_wrsw_num_ports);
+          
+	  send_random_packet(src,txed, port, drop,$dist_uniform(seed,0,7) , mask);          
+          
+        end
+
+        if(dbg) $display("==>> FINISHED: %2d  !!!!!",port);
+      end
+   endtask  //load_port
+
 	
+	
+/*
+ *  check statistics of the received frames (vs sent)
+ */		
   task automatic check_transfer;
     begin
     
       int i,j, cnt;
       int sum_rx=0, sum_tx=1, sum_tx_by_port[11],sum_rx_by_port[11];
 
-      
-      
       while(sum_tx != sum_rx)
 	begin 
 		for(i=0;i<11;i++)
@@ -226,7 +279,6 @@ module main;
 		for(i=0;i<11;i++) sum_tx += sum_tx_by_port[i];
 		for(i=0;i<11;i++) sum_rx += sum_rx_by_port[i];
 	
-		//$display("sum_tx = %3d  <-> sum_rx = %3d", sum_tx, sum_rx);
 		wait_cycles(50);
 	
 	end
@@ -246,16 +298,6 @@ module main;
       
       $display("=============================================== DBG =================================================");
       
-//       for(i=0;i<11;i++)
-// 	begin
-// 	  for(j=0;j<11;j++) sum_tx_by_port[i] += tx_cnt_by_port[j][i];
-// 	  for(j=0;j<11;j++) sum_rx_by_port[i] += rx_cnt_by_port[i][j];
-// 	  $display("Tx Port %2d : pcks sent to P%2d = %2d, pcks received on P%2d = %2d",i,i, sum_tx_by_port[i],i ,sum_rx_by_port[i]);
-// 	end
-// 
-//       for(i=0;i<11;i++) sum_tx += sum_tx_by_port[i];
-//       for(i=0;i<11;i++) sum_rx += sum_rx_by_port[i];
-
       $display("=======================================================================");
       $display("SUM    :  sent pcks = %2d, received pcks = %2d", sum_tx,sum_rx);
       $display("=================================== DBG ===============================");
@@ -265,18 +307,10 @@ module main;
      end
    endtask // check_transfer	
 	
-/*  task automatic send_random_packets_to_random_port(ref WBPacketSource src[],ref EthPacket q[$], input int n_packets);
-      int i, seed = 0;
-      integer port;
-
-     for(i=0;i<n_packets;i++)
-       begin
-          port       = $dist_uniform(seed,0,6);
-	  send_random_packets_to_single_port(src,q,port,1);
-       end
-   endtask // send_random_packets*/	
 	
-   // generate RTUs' acks (fake RTU)
+/*
+ *  generate faked RTU responses
+ */	
    always @(posedge clk) 
      begin
        int i;
@@ -291,8 +325,6 @@ module main;
       
   // and the party starts here....      
   initial begin        
-      //WBPacketSource src[];
-      //WBPacketSink   sink[];
       EthPacket      pkt, tmpl;
       EthPacket      txed[$];
       EthPacketGenerator gen;
@@ -323,70 +355,101 @@ module main;
       @(posedge clk);
       wait_cycles(50);
       
-
-      send_random_packet(src,txed, 0 /*port*/,0 /*drop*/ , 0 /*prio*/, 7 /*mask*/ );
-      send_random_packet(src,txed, 1 /*port*/,0 /*drop*/ , 0 /*prio*/, 7 /*mask*/ );
-      send_random_packet(src,txed, 2 /*port*/,0 /*drop*/ , 0 /*prio*/, 7 /*mask*/ );
-      send_random_packet(src,txed, 3 /*port*/,0 /*drop*/ , 0 /*prio*/, 7 /*mask*/ );
-      send_random_packet(src,txed, 4 /*port*/,0 /*drop*/ , 0 /*prio*/, 7 /*mask*/ );
-      send_random_packet(src,txed, 5 /*port*/,0 /*drop*/ , 0 /*prio*/, 7 /*mask*/ );
-      send_random_packet(src,txed, 6 /*port*/,0 /*drop*/ , 0 /*prio*/, 7 /*mask*/ );
+      ports_ready  	= 1; // let now the ports to start sending
       
       wait_cycles(500);
       
-      check_transfer();
+      check_transfer(); // here we wait for all pcks to be received and then make statistics
       
   end // initial
   
+   ////////////////////////// sending frames /////////////////////////////////////////
+     
+   initial begin
+      int i;
+      wait(ports_ready);
+      load_port(src, 0, n_packets_to_send);
+   end
+   
+   initial begin
+      wait(ports_ready);
+      load_port(src, 1, n_packets_to_send);
+   end
+   
+   initial begin
+      wait(ports_ready);
+      load_port(src, 2, n_packets_to_send);
+   end
+
+   initial begin
+      wait(ports_ready);
+      load_port(src, 3, n_packets_to_send);
+   end
+
+   initial begin
+      wait(ports_ready);
+      load_port(src, 4, n_packets_to_send);
+   end
+   initial begin
+     wait(ports_ready);
+     load_port(src, 5, n_packets_to_send);
+   end
+   initial begin
+       wait(ports_ready);
+      load_port(src, 6, n_packets_to_send);
+   end
+     
+     
+   ////////////////////////// receiving frames ///////////////////////////////////
      
    always @(posedge clk) if (sink[0].poll())
      begin
        EthPacket pkt;
        sink[0].recv(pkt);
        rx_cnt_by_port[pkt.src[0]][0]++;
-       $display("Received @ port_%1d from port_%1d",0, pkt.src[0]);
+       if(dbg) $display("Received @ port_%1d from port_%1d",0, pkt.src[0]);
      end
    always @(posedge clk) if (sink[1].poll())
      begin
        EthPacket pkt;
        sink[1].recv(pkt);
        rx_cnt_by_port[pkt.src[0]][1]++;
-       $display("Received @ port_%1d from port_%1d",1, pkt.src[0]);
+       if(dbg) $display("Received @ port_%1d from port_%1d",1, pkt.src[0]);
      end
    always @(posedge clk) if (sink[2].poll())
      begin
        EthPacket pkt;
        sink[2].recv(pkt);
        rx_cnt_by_port[pkt.src[0]][2]++;
-       $display("Received @ port_%1d from port_%1d",2, pkt.src[0]);
+       if(dbg) $display("Received @ port_%1d from port_%1d",2, pkt.src[0]);
      end
    always @(posedge clk) if (sink[3].poll())
      begin
        EthPacket pkt;
        sink[3].recv(pkt);
        rx_cnt_by_port[pkt.src[0]][3]++;
-       $display("Received @ port_%1d from port_%1d",3, pkt.src[0]);
+       if(dbg) $display("Received @ port_%1d from port_%1d",3, pkt.src[0]);
      end
    always @(posedge clk) if (sink[4].poll())
      begin
        EthPacket pkt;
        sink[4].recv(pkt);
        rx_cnt_by_port[pkt.src[0]][4]++;
-       $display("Received @ port_%1d from port_%1d",4, pkt.src[0]);
+       if(dbg) $display("Received @ port_%1d from port_%1d",4, pkt.src[0]);
      end
    always @(posedge clk) if (sink[5].poll())
      begin
        EthPacket pkt;
        sink[5].recv(pkt);
        rx_cnt_by_port[pkt.src[0]][5]++;
-       $display("Received @ port_%1d from port_%1d",5, pkt.src[0]);
+       if(dbg) $display("Received @ port_%1d from port_%1d",5, pkt.src[0]);
      end     
    always @(posedge clk) if (sink[5].poll())
      begin
        EthPacket pkt;
        sink[6].recv(pkt);
        rx_cnt_by_port[pkt.src[0]][6]++;
-       $display("Received @ port_%1d from port_%1d",6, pkt.src[0]);
+       if(dbg) $display("Received @ port_%1d from port_%1d",6, pkt.src[0]);
      end      
   
 endmodule // main
