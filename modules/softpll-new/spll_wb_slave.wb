@@ -1,0 +1,206 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+
+peripheral {
+	 name = "WR Softcore PLL";
+	 hdl_entity = "spll_wb_slave";
+	 prefix = "SPLL";
+	 
+	 reg {
+			name = "SPLL Control/Status Register";
+			prefix = "CSR";
+			
+      field {
+         align = 8;
+         name = "Period detector reference select";
+         prefix = "PER_SEL";
+         size = 6;
+         type = SLV;
+         access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+
+			field {
+				 align = 8;
+				 name = "Number of reference channels (max: 32)";
+				 prefix = "N_REF";
+				 type = SLV;
+				 size = 6;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+			};
+
+			field {
+				 align = 8;
+				 name = "Number of output channels (max: 8)";
+				 prefix = "N_OUT";
+				 type = SLV;
+				 size = 3;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+			};
+	 };
+
+	 reg {
+			name = "Output Channel Control Register";
+			prefix = "OCCR";
+
+			field {
+				 align = 8;
+				 name = "Output Channel HW enable flag";
+				 prefix = "OUT_EN";
+				 type = SLV;
+				 size = 8;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+			};
+
+			field {
+				 name = "Output Channel locked flag";
+				 prefix = "OUT_LOCK";
+				 type = SLV;
+				 size = 8;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+			};
+	 };
+	 
+	 reg {
+			name = "Reference Channel Enable Register";
+			prefix = "RCER";
+			
+			field {
+				 name = "Reference Channel Enable";
+				 description = "write 1: enables tag generation on the input channel corresponding to the written bit\
+				 write 0: disables tag generation";
+				 type = SLV;
+				 size = 32;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_WRITE;
+				 load = LOAD_EXT;
+			};
+	 };
+
+	 reg {
+			name = "Output Channel Enable Register";
+			prefix = "OCER";
+			
+			field {
+				 name = "Output Channel Enable";
+				 description = "write 1: enables tag generation on the output channel corresponding to the written bit\
+				 write 0: disables tag generation";
+				 type = SLV;
+				 size = 8;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_WRITE;
+				 load = LOAD_EXT;
+			};
+	 };
+
+
+	 reg {
+			name = "HPLL Period Error";
+			prefix = "PER_HPLL";
+			field {
+				 name = "Period error value";
+         prefix = "ERROR";
+				 type = SLV;
+				 size = 16;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+				 ack_read = "tag_hpll_rd_period_o";
+			};
+
+
+			field {
+         name = "Period Error Valid";
+         prefix = "VALID";
+         type = BIT;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+      };
+
+	 };
+
+	 reg {
+			name = "Helper DAC Output";
+			prefix = "DAC_HPLL";
+			
+			field {
+				 name = "DAC value";
+				 type = PASS_THROUGH;
+				 size = 16;
+			};
+	 };
+
+	 reg {
+			name = "Main DAC Output";
+			prefix = "DAC_MAIN";
+			
+			field {
+				 name = "DAC value";
+				 prefix = "VALUE";
+				 type = PASS_THROUGH;
+				 size = 16;
+			};
+
+			field {
+				 name = "DAC select";
+				 prefix = "DAC_SEL";
+				 description = "Selects the output DAC to be updated with VALUE";
+				 type = PASS_THROUGH;
+				 size = 4;
+			};
+	 }; 
+
+	 reg {
+			name = "Deglitcher threshold";
+			prefix = "DEGLITCH_THR";
+			
+			field {
+				 name = "Threshold";
+				 type = SLV;
+				 size = 16;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+			};
+	 };
+
+	 fifo_reg {
+			name = "Tag Readout Register";		
+			prefix = "TRR";
+			direction = CORE_TO_BUS;		 		 
+			size = 32;
+
+			flags_dev = {FIFO_FULL};
+			flags_bus = {FIFO_EMPTY};
+
+			field {
+				 name = "Tag value";
+				 prefix = "VALUE";
+				 type = SLV;
+				 size = 24;
+			};
+
+			field {
+				 name = "Channel ID";
+				 description = "Tagged Channel ID: 0-31: reference tags, 32-47: output tags"; 
+				 prefix = "CHAN_ID";
+				 type = SLV;
+				 size = 7;
+			};
+			field {
+				 name = "Discontinuous bit";
+				 prefix = "DISC";
+				 description = "1: previous tag has been dropped due to FIFO overflow";
+				 type = BIT;
+			};
+	 };
+
+	 irq {
+			name = "Got a tag";
+			prefix = "TAG";
+			trigger = LEVEL_1;
+	 };
+};
+
+
