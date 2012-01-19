@@ -1,0 +1,72 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+
+peripheral {
+	 name = "Shared TX Timestamping Unit (TXTSU)";
+   prefix="txtsu";
+
+	 hdl_entity="wrsw_txtsu_wb";
+	 
+-- TXTSU shared FIFO
+
+	 fifo_reg {
+			size = 256; -- or more. We'll see :)
+			direction = CORE_TO_BUS;
+			prefix = "tsf";
+			name = "Timestamp FIFO";
+			description = "This FIFO holds the TX packet timestamps gathered from all switch endpoints. Each entry contains a single timestamp value consisting of 2 numbers:\
+			               - VAL_R - the timestamp taken at rising clock edge. This is the main timestamp value\
+            				 - VAL_F - few LSBs of timestamp taken at falling clock edge. It's used in conjunction with VAL_R to determine if the timestamp has been taken\
+                           		 properly (there was no metastability/setup/hold violation)\
+										 Entries also contain information required to identify the endpoint and frame for which the timestamp was taken:\
+                     - FID - Frame identifier assigned by the NIC\
+                     - PID - TXTSU port ID to which came the timestamp. Used to distinguish the timestamps for broadcast/multicast frames";
+
+			flags_bus = {FIFO_FULL, FIFO_EMPTY, FIFO_COUNT};
+			flags_dev = {FIFO_FULL, FIFO_EMPTY};
+			
+			field {
+				 name = "Rising edge timestamp";
+				 descritpion = "Timestamp value taken on rising clock edge (full word)";
+				 prefix = "val_r";
+				 type = SLV;
+				 size = 28;
+			};
+
+			field {
+				 name = "Falling edge timestamp";
+				 description = "Timestamp value taken on falling clock edge (few LSBs)";
+				 prefix = "val_f";
+				 type = SLV;
+				 size = 4;
+			};
+
+
+			field {
+				 name ="Physical port ID";
+				 description = "Identifier of the TXTSU port to which came the timestamp. There may be multiple timestamps sharing the same FID value for broadcast/multicast packets.";
+				 prefix = "pid";
+				 type = SLV;
+				 size = 5;
+				 align= 16;
+			};
+		
+		
+			field {
+				 name = "Frame ID";
+				 description = "OOB Frame Identifier. Used to associate the timestamp value with transmitted packet.";
+				 prefix = "fid";
+				 type = SLV;
+				 size = 16;
+				 align = 16;
+		};
+	};
+
+-- TXTSU interrupts
+	irq {
+		 name = "TXTSU fifo not-empty";
+		 description = "Interrupt active when TXTSU shared FIFO contains any timestamps.";
+		 prefix = "nempty";
+		 trigger = LEVEL_1;
+	};
+
+};
