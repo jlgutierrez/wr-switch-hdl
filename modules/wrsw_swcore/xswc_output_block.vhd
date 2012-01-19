@@ -39,7 +39,6 @@
 
 -------------------------------------------------------------------------------
 
-
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -432,12 +431,15 @@ begin  --  behavoural
 	      state             <= SET_PAGE;
 	    end if;
             
+	  -- requesting to MPM the next frame (inputting the starting page address)
           when SET_PAGE =>
 	    
 	    pgreq                <= '1';
 	    waiting_pck_start    <= '1';
 	    state                <= WAIT_READ;
    
+	  -- waiting for the indication that the data is ready (the first page has been retrieved
+	  -- from the MPM
           when WAIT_READ => 
 	    
 	    pgreq                 <= '0';
@@ -450,13 +452,14 @@ begin  --  behavoural
 	                                                           -- conversion here
 	    end if;
 
+	  -- reading process (FIFO-to-pWB)
           when READ_MPM =>
 	    
 	    src_cyc_int         <= '1';
 	    src_stb_int         <= '1';
 
-	    if(src_err_int = '1') then                             -- error
-
+	    if(src_err_int = '1') then                             -- error: free pages allocated to 
+	                                                           -- the packet(frame) and finish
 	      src_cyc_int         <= '0';
 	      src_stb_int         <= '0';
 	      src_adr_int         <= (others => '0');
@@ -467,14 +470,14 @@ begin  --  behavoural
 
 	    else                                                    -- everything works
 
-	      dreq                <= '1';
+	      dreq                <= '1';                           -- enable stall-to-dreq translation
 
-	      if(mpm_drdy_i = '0') then                             -- stopped by source
+	      if(mpm_drdy_i = '0') then                             -- paused by source
 
 		src_cyc_int         <= '1';
 		src_stb_int         <= '0';
 
-	      elsif(mpm_drdy_i = '1' and src_stall_int = '1') then  -- blocked by sink
+	      elsif(mpm_drdy_i = '1' and src_stall_int = '1') then  -- paused by sink
 
 		  src_cyc_tmp         <= '1';
 		  src_stb_tmp         <= '1';
@@ -484,8 +487,8 @@ begin  --  behavoural
 		
 	      elsif(mpm_drdy_i = '1' and src_stall_int = '0') then  -- read data
 		
-		if(src_stall_d0 = '1') then                         -- read stored data (stopped by
-		                                                    -- source before)
+		if(src_stall_d0 = '1') then                         -- read stored data in tmp reg 
+		                                                    -- (stopped by source before)
 		    src_adr_int         <= src_adr_tmp;
 		    src_dat_int         <= src_dat_tmp;
 		    src_sel_int         <= src_sel_tmp;
@@ -498,9 +501,8 @@ begin  --  behavoural
 		
 		end if;
 
-		if(cnt_last_word = '1') then
-
-		  state              <= READ_LAST_WORD;
+		if(cnt_last_word = '1') then                        -- this was the last word of the 
+		  state              <= READ_LAST_WORD;             -- frame (package)
 		end if;
 	      
 	      end if; --if(mpm_drdy_i = '0') then   
@@ -534,9 +536,7 @@ begin  --  behavoural
         end case; -- src_fsm
       end if; -- (rst_n_i = '0') 
     end if; -- rising_edge(clk_i)
-    
   end process src_fsm;
-  
 
   -- here we perform the "free pages of the pck" process, 
   -- we do it while reading already the next pck

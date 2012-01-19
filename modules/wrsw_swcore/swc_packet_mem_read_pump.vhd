@@ -26,8 +26,9 @@
 -- 4) it announces it with 'drdy_o' HIGH
 -- 5) the next word is available after setting dreq_i high
 --
--- 
---
+-- BUGS: 
+-- 1) does not indicate the end of the package (pckend_o does not work well)
+--    but it's not really used by the output_block
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
