@@ -7,9 +7,10 @@ use work.genram_pkg.all;                -- for f_log2_size
 entity swc_async_grow_fifo is
   
   generic (
-    g_width : integer := 16;
-    g_ratio : integer := 6;
-    g_size  : integer := 8);
+    g_width          : integer := 16;
+    g_ratio          : integer := 6;
+    g_size           : integer := 8;
+    g_sideband_width : integer := 16);
 
   port (
     rst_n_i  : in std_logic;
@@ -20,8 +21,12 @@ entity swc_async_grow_fifo is
     align_i : in std_logic;             -- 1: aligned write
     d_i     : in std_logic_vector(g_width-1 downto 0);
 
-    rd_i : in  std_logic;
-    q_o  : out std_logic_vector(g_width * g_ratio-1 downto 0);
+    rd_i   : in  std_logic;
+    q_o    : out std_logic_vector(g_width * g_ratio-1 downto 0);
+
+    -- "Sideband" channel (for passing aux data)
+    side_i  : in std_logic_vector(g_sideband_width-1 downto 0);
+    side_o : out std_logic_vector(g_sideband_width-1 downto 0);
 
     full_o  : out std_logic;
     empty_o : out std_logic);
