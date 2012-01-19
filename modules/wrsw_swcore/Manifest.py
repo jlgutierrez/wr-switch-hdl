@@ -29,4 +29,5 @@ files = [
 "swc_prio_encoder.vhd",
 "swc_rr_arbiter.vhd",
 "xswc_core.vhd",
+"xswc_output_block.vhd",
 ]

@@ -345,7 +345,8 @@ begin  -- syn
         end if;
         
 
-        if(dreq_i = '1' and reg_not_empty = '1' and load_out_reg = '0') then  
+--        if(dreq_i = '1' and reg_not_empty = '1' and load_out_reg = '0') then
+        if(reg_not_empty = '1' and load_out_reg = '0') then    
           read_valid <= '1';
         elsif(load_out_reg = '1' and pckend = '0') then 
           read_valid <= '1';

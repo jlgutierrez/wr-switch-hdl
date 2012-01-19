@@ -43,6 +43,9 @@ use ieee.std_logic_1164.all;
 use ieee.math_real.CEIL;
 use ieee.math_real.log2;
 
+library work;
+use work.wr_fabric_pkg.all;
+
 package swc_swcore_pkg is
 
   type t_swcore_gen_parameters is record
@@ -433,6 +436,33 @@ package swc_swcore_pkg is
       );
   end component;
   
+  component xswc_output_block is
+
+    port (
+      clk_i   : in std_logic;
+      rst_n_i : in std_logic;
+      pta_transfer_data_valid_i : in   std_logic;
+      pta_pageaddr_i            : in   std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+      pta_prio_i                : in   std_logic_vector(c_swc_prio_width - 1 downto 0);
+      pta_pck_size_i            : in   std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+      pta_transfer_data_ack_o   : out  std_logic;
+      mpm_pgreq_o  : out std_logic;
+      mpm_pgaddr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+      mpm_pckend_i : in  std_logic;
+      mpm_pgend_i  : in  std_logic;
+      mpm_drdy_i   : in  std_logic;
+      mpm_dreq_o   : out std_logic;
+      mpm_data_i   : in  std_logic_vector(c_swc_data_width - 1 downto 0);
+      mpm_ctrl_i   : in  std_logic_vector(c_swc_ctrl_width - 1 downto 0);
+      mpm_sync_i   : in  std_logic; 
+      ppfm_free_o            : out  std_logic;
+      ppfm_free_done_i       : in   std_logic;
+      ppfm_free_pgaddr_o     : out  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+      src_i : in  t_wrf_source_in;
+      src_o : out t_wrf_source_out
+      );
+  end component;
+
   component swc_output_block is
     port (
       clk_i                     : in std_logic;

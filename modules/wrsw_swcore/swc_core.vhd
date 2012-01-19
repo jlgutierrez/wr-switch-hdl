@@ -47,9 +47,13 @@ use ieee.numeric_std.all;
 
 library work;
 use work.swc_swcore_pkg.all;
+use work.wr_fabric_pkg.all;
 
 entity swc_core is
-
+  generic( 
+          g_swc_num_ports      : integer := c_swc_num_ports;
+          g_swc_prio_width     : integer := c_swc_prio_width
+        );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -72,18 +76,24 @@ entity swc_core is
 -- Fabric I/F : output (goes to the Endpoint)
 -------------------------------------------------------------------------------  
 
-   rx_sof_p1_o         : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
-   rx_eof_p1_o         : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
-   rx_dreq_i           : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-   rx_ctrl_o           : out std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
-   rx_data_o           : out std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
-   rx_valid_o          : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
-   rx_bytesel_o        : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
-   rx_idle_o           : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
-   rx_rerror_p1_o      : out std_logic_vector(c_swc_num_ports  - 1 downto 0);    
-   rx_terror_p1_i      : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-   rx_tabort_p1_i      : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--    rx_sof_p1_o         : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--    rx_eof_p1_o         : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--    rx_dreq_i           : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--    rx_ctrl_o           : out std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
+--    rx_data_o           : out std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
+--    rx_valid_o          : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--    rx_bytesel_o        : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--    rx_idle_o           : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--    rx_rerror_p1_o      : out std_logic_vector(c_swc_num_ports  - 1 downto 0);    
+--    rx_terror_p1_i      : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--    rx_tabort_p1_i      : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
 
+-------------------------------------------------------------------------------
+-- pWB : output (goes to the Endpoint)
+-------------------------------------------------------------------------------  
+
+    src_i : in  t_wrf_source_in_array(g_swc_num_ports-1 downto 0);
+    src_o : out t_wrf_source_out_array(g_swc_num_ports-1 downto 0);
     
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
@@ -249,7 +259,7 @@ architecture rtl of swc_core is
    
    
   gen_blocks : for i in 0 to c_swc_num_ports-1 generate
-    INPUT_BLOCK : swc_input_block 
+    INPUT_BLOCK : swc_input_block
       port map (
         clk_i                    => clk_i,
         rst_n_i                  => rst_n_i,
@@ -265,6 +275,7 @@ architecture rtl of swc_core is
         tx_dreq_o                => tx_dreq_o(i),
         tx_abort_p1_i            => tx_abort_p1_i(i),
         tx_rerror_p1_i           => tx_rerror_p1_i(i),
+
         -------------------------------------------------------------------------------
         -- I/F with Page allocator (MMU)
         -------------------------------------------------------------------------------    
@@ -319,7 +330,8 @@ architecture rtl of swc_core is
         );
         
         
-    OUTPUT_BLOCK: swc_output_block 
+--    OUTPUT_BLOCK: swc_output_block 
+    OUTPUT_BLOCK: xswc_output_block
       port map (
         clk_i                    => clk_i,
         rst_n_i                  => rst_n_i,
@@ -352,17 +364,24 @@ architecture rtl of swc_core is
         -------------------------------------------------------------------------------
         -- Fabric I/F 
         -------------------------------------------------------------------------------        
-        rx_sof_p1_o              => rx_sof_p1_o(i),
-        rx_eof_p1_o              => rx_eof_p1_o(i),
-        rx_dreq_i                => rx_dreq_i(i),
-        rx_ctrl_o                => rx_ctrl_o((i + 1) * c_swc_ctrl_width    -1 downto i * c_swc_ctrl_width),
-        rx_data_o                => rx_data_o((i + 1) * c_swc_data_width    -1 downto i * c_swc_data_width),
-        rx_valid_o               => rx_valid_o(i),
-        rx_bytesel_o             => rx_bytesel_o(i),
-        rx_idle_o                => rx_idle_o(i),
-        rx_rerror_p1_o           => rx_rerror_p1_o(i),
-        rx_terror_p1_i           => rx_terror_p1_i(i),
-        rx_tabort_p1_i           => rx_tabort_p1_i(i)
+--         rx_sof_p1_o              => rx_sof_p1_o(i),
+--         rx_eof_p1_o              => rx_eof_p1_o(i),
+--         rx_dreq_i                => rx_dreq_i(i),
+--         rx_ctrl_o                => rx_ctrl_o((i + 1) * c_swc_ctrl_width    -1 downto i * c_swc_ctrl_width),
+--         rx_data_o                => rx_data_o((i + 1) * c_swc_data_width    -1 downto i * c_swc_data_width),
+--         rx_valid_o               => rx_valid_o(i),
+--         rx_bytesel_o             => rx_bytesel_o(i),
+--         rx_idle_o                => rx_idle_o(i),
+--         rx_rerror_p1_o           => rx_rerror_p1_o(i),
+--         rx_terror_p1_i           => rx_terror_p1_i(i),
+--         rx_tabort_p1_i           => rx_tabort_p1_i(i)
+
+        -------------------------------------------------------------------------------
+        -- pWB : output (goes to the Endpoint)
+        -------------------------------------------------------------------------------  
+
+        src_i                    => src_i(i),
+        src_o                    => src_o(i)
       );        
         
   end generate gen_blocks;
