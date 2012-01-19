@@ -2,7 +2,6 @@
 \#*
 .\#*
 *.*~
-syn/
 work
 *.wlf
 modelsim.ini
