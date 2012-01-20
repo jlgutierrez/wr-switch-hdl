@@ -30,4 +30,5 @@ files = [
 "swc_rr_arbiter.vhd",
 "xswc_core.vhd",
 "xswc_output_block.vhd",
+"xswc_input_block.vhd",
 ]

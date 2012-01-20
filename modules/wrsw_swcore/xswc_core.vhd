@@ -101,15 +101,22 @@ architecture rtl of xswc_core is
     -- Fabric I/F : input (comes from the Endpoint)
     -------------------------------------------------------------------------------
 
-    tx_sof_p1_i         : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_eof_p1_i         : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_data_i           : in  std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
-    tx_ctrl_i           : in  std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
-    tx_valid_i          : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_bytesel_i        : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_dreq_o           : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_abort_p1_i       : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_rerror_p1_i      : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_sof_p1_i         : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_eof_p1_i         : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_data_i           : in  std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
+--     tx_ctrl_i           : in  std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
+--     tx_valid_i          : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_bytesel_i        : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_dreq_o           : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_abort_p1_i       : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_rerror_p1_i      : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+
+    -------------------------------------------------------------------------------
+    -- pWB  : input (comes from the Endpoint)
+    -------------------------------------------------------------------------------
+
+    snk_i : in  t_wrf_sink_in_array(g_swc_num_ports-1 downto 0);
+    snk_o : out t_wrf_sink_out_array(g_swc_num_ports-1 downto 0);
 
     -------------------------------------------------------------------------------
     -- Fabric I/F : output (goes to the Endpoint)
@@ -194,17 +201,17 @@ architecture rtl of xswc_core is
 
   end component ;
 
-  signal swc_snk_sof_p1         : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal swc_snk_eof_p1         : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal swc_snk_dreq           : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal swc_snk_ctrl           : std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
-  signal swc_snk_data           : std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
-  signal swc_snk_valid          : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal swc_snk_bytesel        : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal swc_snk_idle           : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal swc_snk_rerror_p1      : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal swc_snk_terror_p1      : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal swc_snk_tabort_p1      : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_sof_p1         : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_eof_p1         : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_dreq           : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_ctrl           : std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
+--   signal swc_snk_data           : std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
+--   signal swc_snk_valid          : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_bytesel        : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_idle           : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_rerror_p1      : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_terror_p1      : std_logic_vector(c_swc_num_ports - 1 downto 0);
+--   signal swc_snk_tabort_p1      : std_logic_vector(c_swc_num_ports - 1 downto 0);
 
 
 --   signal swc_src_sof_p1         : std_logic_vector(c_swc_num_ports - 1 downto 0);
@@ -223,26 +230,26 @@ begin
 
 
 
-    gen_port_connections : for i in 0 to g_swc_num_ports-1 generate
+--     gen_port_connections : for i in 0 to g_swc_num_ports-1 generate
 
-     swc_snk_ctrl((i+1)*c_swc_ctrl_width - 1 downto i*c_swc_ctrl_width + 2) <= (others => '0');
+--      swc_snk_ctrl((i+1)*c_swc_ctrl_width - 1 downto i*c_swc_ctrl_width + 2) <= (others => '0');
 
-     CONV_wb_to_wrf: xwb_fabric_sink 
-      
-	port map(
-	clk_i     => clk_i,
-	rst_n_i   => rst_n_i,
-	snk_i     => snk_i(i),
-	snk_o     => snk_o(i),
-	addr_o    => swc_snk_ctrl((i+1)*c_swc_ctrl_width - 3 downto i*c_swc_ctrl_width),
-	data_o    => swc_snk_data((i+1)*c_swc_data_width - 1 downto i*c_swc_data_width),
-	dvalid_o  => swc_snk_valid(i),
-	sof_o     => swc_snk_sof_p1(i),
-	eof_o     => swc_snk_eof_p1(i),
-	error_o   => swc_snk_rerror_p1(i),
-	bytesel_o => swc_snk_bytesel(i),
-	dreq_i    => swc_snk_dreq(i)
-	);
+--      CONV_wb_to_wrf: xwb_fabric_sink 
+--       
+-- 	port map(
+-- 	clk_i     => clk_i,
+-- 	rst_n_i   => rst_n_i,
+-- 	snk_i     => snk_i(i),
+-- 	snk_o     => snk_o(i),
+-- 	addr_o    => swc_snk_ctrl((i+1)*c_swc_ctrl_width - 3 downto i*c_swc_ctrl_width),
+-- 	data_o    => swc_snk_data((i+1)*c_swc_data_width - 1 downto i*c_swc_data_width),
+-- 	dvalid_o  => swc_snk_valid(i),
+-- 	sof_o     => swc_snk_sof_p1(i),
+-- 	eof_o     => swc_snk_eof_p1(i),
+-- 	error_o   => swc_snk_rerror_p1(i),
+-- 	bytesel_o => swc_snk_bytesel(i),
+-- 	dreq_i    => swc_snk_dreq(i)
+-- 	);
 
 --      CONV_wrf_to_wb: xwb_fabric_source
 --       
@@ -261,9 +268,9 @@ begin
 -- 	dreq_o    => swc_src_dreq(i)
 -- 	);
 
-    end generate;
+--     end generate;
 
-  swc_snk_tabort_p1 <= (others => '0');
+--  swc_snk_tabort_p1 <= (others => '0');
 
 --   swc_src_terror_p1 <= (others => '0');
 --   swc_src_tabort_p1 <= (others => '0');
@@ -274,16 +281,19 @@ begin
       rst_n_i             => rst_n_i,
 
       -- this is swc_sink (input data)
-      tx_sof_p1_i         => swc_snk_sof_p1,
-      tx_eof_p1_i         => swc_snk_eof_p1,
-      tx_data_i           => swc_snk_data,
-      tx_ctrl_i           => swc_snk_ctrl,
-      tx_valid_i          => swc_snk_valid,
-      tx_bytesel_i        => swc_snk_bytesel,
-      tx_dreq_o           => swc_snk_dreq,
-      tx_abort_p1_i       => swc_snk_tabort_p1, -- fake
-      tx_rerror_p1_i      => swc_snk_rerror_p1,
+--       tx_sof_p1_i         => swc_snk_sof_p1,
+--       tx_eof_p1_i         => swc_snk_eof_p1,
+--       tx_data_i           => swc_snk_data,
+--       tx_ctrl_i           => swc_snk_ctrl,
+--       tx_valid_i          => swc_snk_valid,
+--       tx_bytesel_i        => swc_snk_bytesel,
+--       tx_dreq_o           => swc_snk_dreq,
+--       tx_abort_p1_i       => swc_snk_tabort_p1, -- fake
+--       tx_rerror_p1_i      => swc_snk_rerror_p1,
       
+      snk_i               => snk_i,
+      snk_o               => snk_o,
+
       --this is swc_source (itput data)
 --       rx_sof_p1_o         => swc_src_sof_p1,
 --       rx_eof_p1_o         => swc_src_eof_p1,

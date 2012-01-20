@@ -174,10 +174,15 @@ architecture behavoural of xswc_output_block is
   signal src_err_int   : std_logic;
   signal src_rty_int   : std_logic;
 
-  signal mpm_data          : std_logic_vector(c_swc_data_width + c_swc_ctrl_width - 1 downto 0);
-  signal snk_ack_count     : unsigned(2 downto 0); -- size?
+  signal snk_ack_count : unsigned(2 downto 0); -- size?
 
-  signal src_stall_d0   : std_logic;
+  signal src_stall_d0  : std_logic;
+
+  signal mpm_drdy_d0   : std_logic;
+
+  signal special_dreq  : std_logic;
+
+  signal special_dreq_d0 : std_logic;
 
 begin  --  behavoural
   
@@ -318,7 +323,7 @@ begin  --  behavoural
        
          cnt_last_word         <= '0';
          cnt_pck_size          <= (others => '0');
-	 cnt_pck_size(0)        <= '1';
+	-- cnt_pck_size(0)        <= '1';
          cnt_one_but_last_word <= '0';
          
        else
@@ -328,6 +333,7 @@ begin  --  behavoural
           if(state = SET_PAGE) then
        
             cnt_pck_size           <= (others =>'0');
+	   -- cnt_pck_size(0)        <= '1';
             cnt_one_but_last_word  <= '0';
             cnt_last_word          <= '0';
 
@@ -377,15 +383,20 @@ begin  --  behavoural
           current_pck_size  <= (others => '0');
 	  pck_start_pgaddr  <= (others => '0');
 	  dreq              <= '0';
-
+	  special_dreq      <= '0';
+	  special_dreq_d0   <= '0';
 	  waiting_pck_start <= '0';
+
+	  mpm_drdy_d0       <= '0';
 
       else
 
 	--------------------------------------------------------------------------------------------
 	-- some helpers to the state machines
         --------------------------------------------------------------------------------------------
-	src_stall_d0 <= src_stall_int;
+	src_stall_d0      <= src_stall_int;
+	special_dreq_d0   <= special_dreq;
+	mpm_drdy_d0       <= mpm_drdy_i;
 
 	-- traccking ACKs from the sink
 	if (src_cyc_int = '0' or src_err_int = '1') then
@@ -424,7 +435,7 @@ begin  --  behavoural
 	    start_free_pck    <= '0';
 	    pgreq             <= '0';
 	    dreq              <= '0';
-
+	    special_dreq      <= '0';
 	    waiting_pck_start <= '0';
 
             if(rd_data_valid = '1' and src_stall_int = '0' and src_err_int ='0') then
@@ -471,23 +482,33 @@ begin  --  behavoural
 	    else                                                    -- everything works
 
 	      dreq                <= '1';                           -- enable stall-to-dreq translation
+	      special_dreq        <= '0';
 
-	      if(mpm_drdy_i = '0') then                             -- paused by source
+	      if(mpm_drdy_i = '0' ) then     -- paused by source
 
-		src_cyc_int         <= '1';
-		src_stb_int         <= '0';
+		  src_cyc_int         <= '1';
+		  src_stb_int         <= '0';
 
 	      elsif(mpm_drdy_i = '1' and src_stall_int = '1') then  -- paused by sink
 
 		  src_cyc_tmp         <= '1';
 		  src_stb_tmp         <= '1';
-		  src_adr_tmp         <= mpm_data(17 downto 16);
-		  src_dat_tmp         <= mpm_data(15 downto 0);
-		  src_sel_tmp         <= '1' & not mpm_ctrl_i(3);
+
+		  if(src_stb_int = '1') then                        -- when stall is after drdy_i LOW
+		    src_adr_tmp         <= mpm_ctrl_i(1 downto 0);
+		    src_sel_tmp         <= mpm_ctrl_i(3 downto 2);
+		    src_dat_tmp         <= mpm_data_i;
+		  else
+		    src_adr_int         <= mpm_ctrl_i(1 downto 0);
+		    src_sel_int         <= mpm_ctrl_i(3 downto 2);
+		    src_dat_int         <= mpm_data_i;	
+
+		  end if;
+
 		
 	      elsif(mpm_drdy_i = '1' and src_stall_int = '0') then  -- read data
 		
-		if(src_stall_d0 = '1') then                         -- read stored data in tmp reg 
+		if(src_stall_d0 = '1') then  -- read stored data in tmp reg 
 		                                                    -- (stopped by source before)
 		    src_adr_int         <= src_adr_tmp;
 		    src_dat_int         <= src_dat_tmp;
@@ -495,14 +516,22 @@ begin  --  behavoural
 
 		else                                                -- normal read
 
-		    src_adr_int         <= mpm_data(17 downto 16);
-		    src_dat_int         <= mpm_data(15 downto 0);
-		    src_sel_int         <= '1' & not mpm_ctrl_i(3);
+		    src_adr_int         <= mpm_ctrl_i(1 downto 0);
+		    src_sel_int         <= mpm_ctrl_i(3 downto 2);
+		    src_dat_int         <= mpm_data_i;
+
 		
 		end if;
 
+--		if(cnt_one_but_last_word = '1') then                        -- this was the last word of the 
 		if(cnt_last_word = '1') then                        -- this was the last word of the 
+
 		  state              <= READ_LAST_WORD;             -- frame (package)
+
+-- 		  if(src_stall_int = '0') then
+-- 		    src_stb_int        <= '0';
+-- 		  end if;
+
 		end if;
 	      
 	      end if; --if(mpm_drdy_i = '0') then   
@@ -558,7 +587,7 @@ begin  --  behavoural
   rd_pck_size         <= rd_data(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto c_swc_page_addr_width);  
 
   -------------- MPM ---------------------
-  mpm_dreq_o    <= (not src_stall_int) and dreq;
+  mpm_dreq_o    <= ((not src_stall_int) and dreq);
   mpm_pgreq_o         <= pgreq;
   mpm_pgaddr_o        <= rd_data(c_swc_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;  
   -------------- pWB ----------------------
@@ -577,8 +606,5 @@ begin  --  behavoural
   -------------- PPFM ----------------------
   ppfm_free_o         <= ppfm_free;
   ppfm_free_pgaddr_o  <= ppfm_free_pgaddr;
-
-  ---- tmp
-  mpm_data <= mpm_ctrl_i & mpm_data_i;
   
 end behavoural;

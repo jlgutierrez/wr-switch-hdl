@@ -62,15 +62,22 @@ entity swc_core is
 -- Fabric I/F : input (comes from the Endpoint)
 -------------------------------------------------------------------------------
 
-    tx_sof_p1_i         : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_eof_p1_i         : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_data_i           : in  std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
-    tx_ctrl_i           : in  std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
-    tx_valid_i          : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_bytesel_i        : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_dreq_o           : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_abort_p1_i       : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    tx_rerror_p1_i      : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_sof_p1_i         : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_eof_p1_i         : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_data_i           : in  std_logic_vector(c_swc_num_ports * c_swc_data_width - 1 downto 0);
+--     tx_ctrl_i           : in  std_logic_vector(c_swc_num_ports * c_swc_ctrl_width - 1 downto 0);
+--     tx_valid_i          : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_bytesel_i        : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_dreq_o           : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_abort_p1_i       : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     tx_rerror_p1_i      : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+
+-------------------------------------------------------------------------------
+-- pWB  : input (comes from the Endpoint)
+-------------------------------------------------------------------------------
+
+    snk_i : in  t_wrf_sink_in_array(g_swc_num_ports-1 downto 0);
+    snk_o : out t_wrf_sink_out_array(g_swc_num_ports-1 downto 0);
 
 -------------------------------------------------------------------------------
 -- Fabric I/F : output (goes to the Endpoint)
@@ -259,22 +266,27 @@ architecture rtl of swc_core is
    
    
   gen_blocks : for i in 0 to c_swc_num_ports-1 generate
-    INPUT_BLOCK : swc_input_block
+    INPUT_BLOCK : xswc_input_block
       port map (
         clk_i                    => clk_i,
         rst_n_i                  => rst_n_i,
         -------------------------------------------------------------------------------
         -- Fabric I/F  
         ------------------------------------------------------------------------------
-        tx_sof_p1_i              => tx_sof_p1_i(i),
-        tx_eof_p1_i              => tx_eof_p1_i(i),
-        tx_data_i                => tx_data_i ((i + 1) * c_swc_data_width -1 downto i * c_swc_data_width),
-        tx_ctrl_i                => tx_ctrl_i((i + 1) * c_swc_ctrl_width -1 downto i * c_swc_ctrl_width),
-        tx_valid_i               => tx_valid_i(i),
-        tx_bytesel_i             => tx_bytesel_i(i),
-        tx_dreq_o                => tx_dreq_o(i),
-        tx_abort_p1_i            => tx_abort_p1_i(i),
-        tx_rerror_p1_i           => tx_rerror_p1_i(i),
+--         tx_sof_p1_i              => tx_sof_p1_i(i),
+--         tx_eof_p1_i              => tx_eof_p1_i(i),
+--         tx_data_i                => tx_data_i ((i + 1) * c_swc_data_width -1 downto i * c_swc_data_width),
+--         tx_ctrl_i                => tx_ctrl_i((i + 1) * c_swc_ctrl_width -1 downto i * c_swc_ctrl_width),
+--         tx_valid_i               => tx_valid_i(i),
+--         tx_bytesel_i             => tx_bytesel_i(i),
+--         tx_dreq_o                => tx_dreq_o(i),
+--         tx_abort_p1_i            => tx_abort_p1_i(i),
+--         tx_rerror_p1_i           => tx_rerror_p1_i(i),
+        -------------------------------------------------------------------------------
+        -- pWB  : input (comes from the Endpoint)
+        -------------------------------------------------------------------------------
+        snk_i                    => snk_i(i),
+        snk_o                    => snk_o(i),
 
         -------------------------------------------------------------------------------
         -- I/F with Page allocator (MMU)

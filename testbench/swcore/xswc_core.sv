@@ -195,6 +195,8 @@ module main;
       gen.set_size(46, 1000);
 
       pkt         = gen.gen();
+      //pkt.set_size(100);
+      
       q.push_back(pkt);
      
       set_rtu_rsp(port,1,drop /*drop*/,prio /*prio*/,mask /*mask*/); 

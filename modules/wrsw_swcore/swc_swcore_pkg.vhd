@@ -291,7 +291,63 @@ package swc_swcore_pkg is
       );
   end component;
   
-  
+  component xswc_input_block is
+    port (
+      clk_i   : in std_logic;
+      rst_n_i : in std_logic;
+      -------------------------------------------------------------------------------
+      -- pWB  : input (comes from the Endpoint)
+      -------------------------------------------------------------------------------
+      snk_i : in  t_wrf_sink_in;
+      snk_o : out t_wrf_sink_out;
+      -------------------------------------------------------------------------------
+      -- I/F with Page allocator (MMU)
+      -------------------------------------------------------------------------------    
+      mmu_page_alloc_req_o : out std_logic;
+      mmu_page_alloc_done_i : in std_logic;
+      mmu_pageaddr_i : in std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+      mmu_pageaddr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+      mmu_force_free_o : out std_logic;
+      mmu_force_free_done_i : in std_logic;
+      mmu_force_free_addr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+      mmu_set_usecnt_o : out std_logic;
+      mmu_set_usecnt_done_i : in std_logic;
+      mmu_usecnt_o : out std_logic_vector(c_swc_usecount_width - 1 downto 0);
+      mmu_nomem_i : in std_logic;
+  -------------------------------------------------------------------------------
+  -- I/F with Routing Table Unit (RTU)
+  -------------------------------------------------------------------------------      
+      rtu_rsp_valid_i     : in  std_logic;
+      rtu_rsp_ack_o       : out std_logic;
+      rtu_dst_port_mask_i : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+      rtu_drop_i          : in  std_logic;
+      rtu_prio_i          : in  std_logic_vector(c_swc_prio_width - 1 downto 0);
+  -------------------------------------------------------------------------------
+  -- I/F with Multiport Memory (MPU)
+  -------------------------------------------------------------------------------    
+      mpm_pckstart_o : out std_logic;
+      mpm_pageaddr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+      mpm_pagereq_o : out std_logic;
+      mpm_pageend_i : in  std_logic;
+      mpm_data_o : out std_logic_vector(c_swc_data_width - 1 downto 0);
+      mpm_ctrl_o : out std_logic_vector(c_swc_ctrl_width - 1 downto 0);
+      mpm_drdy_o : out std_logic;
+      mpm_full_i : in std_logic;
+      mpm_flush_o : out std_logic;
+      mpm_wr_sync_i : in std_logic;
+  -------------------------------------------------------------------------------
+  -- I/F with Page Transfer Arbiter (PTA)
+  -------------------------------------------------------------------------------     
+      pta_transfer_pck_o : out std_logic;
+      pta_transfer_ack_i : in std_logic;
+      pta_pageaddr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+      pta_mask_o : out std_logic_vector(c_swc_num_ports - 1 downto 0);
+      pta_pck_size_o : out std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+      pta_prio_o : out std_logic_vector(c_swc_prio_width - 1 downto 0)
+      );
+  end component;
+
+
   component swc_multiport_page_allocator is
     port (
       rst_n_i             : in std_logic;
