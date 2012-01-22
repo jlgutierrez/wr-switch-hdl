@@ -449,7 +449,8 @@ begin  --  behavoural
 	    dreq                <= '1';
 	    
 	    -- the end of frame
-	    if(cnt_last_word = '1') then
+	    if(cnt_last_word = '1' and   -- last word is expected *and*
+	       mpm_drdy_i    = '1') then -- this last word is valid
 	    
 	      state              <= READ_LAST_WORD;
 	      dreq               <= '0';
