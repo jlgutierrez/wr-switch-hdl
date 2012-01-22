@@ -48,6 +48,7 @@ use ieee.numeric_std.all;
 library work;
 use work.swc_swcore_pkg.all;
 use work.wr_fabric_pkg.all;
+use work.wrsw_shared_types_pkg.all;
 
 entity xswc_core_7_ports_wrapper is
   generic
@@ -266,11 +267,8 @@ component xswc_core is
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
     
-    rtu_rsp_valid_i     : in  std_logic_vector(g_swc_num_ports  - 1 downto 0);
-    rtu_rsp_ack_o       : out std_logic_vector(g_swc_num_ports  - 1 downto 0);
-    rtu_dst_port_mask_i : in  std_logic_vector(g_swc_num_ports * g_swc_num_ports  - 1 downto 0);
-    rtu_drop_i          : in  std_logic_vector(g_swc_num_ports  - 1 downto 0);
-    rtu_prio_i          : in  std_logic_vector(g_swc_num_ports * g_swc_prio_width - 1 downto 0)
+    rtu_rsp_i           : in t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
+    rtu_rsp_ack_o       : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
 
     );
 end component;
@@ -280,6 +278,8 @@ end component;
 
     signal src_i : t_wrf_source_in_array(g_swc_num_ports-1 downto 0);
     signal src_o : t_wrf_source_out_array(g_swc_num_ports-1 downto 0);
+
+    signal rtu_rsp_i     : t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
 
 begin
 
@@ -299,15 +299,17 @@ U_xswc_core: xswc_core
     src_i               => src_i,
     src_o               => src_o,
 
-    rtu_rsp_valid_i     => rtu_rsp_valid_i,
-    rtu_rsp_ack_o       => rtu_rsp_ack_o,
-    rtu_dst_port_mask_i => rtu_dst_port_mask_i,
-    rtu_drop_i          => rtu_drop_i,
-    rtu_prio_i          => rtu_prio_i
-
+    rtu_rsp_i           => rtu_rsp_i,
+    rtu_rsp_ack_o       => rtu_rsp_ack_o
     );
 
-
+    rtu: for i in 0 to g_swc_num_ports -1 generate
+      rtu_rsp_i(i).valid                                    <= rtu_rsp_valid_i(i);
+      rtu_rsp_i(i).port_mask( c_RTU_MAX_PORTS- 1 downto  g_swc_num_ports)<= (others => '0');
+      rtu_rsp_i(i).port_mask(g_swc_num_ports - 1 downto 0)  <= rtu_dst_port_mask_i((i+1)*g_swc_num_ports - 1 downto i*g_swc_num_ports);
+      rtu_rsp_i(i).prio                                     <= rtu_prio_i((i+1)*g_swc_prio_width -1 downto i*g_swc_prio_width);
+      rtu_rsp_i(i).drop                                     <= rtu_drop_i(i);
+    end generate;
   
     snk_i(0).dat  <= snk_dat_0_i;   
     snk_i(0).adr  <= snk_adr_0_i;   

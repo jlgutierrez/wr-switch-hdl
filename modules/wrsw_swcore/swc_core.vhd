@@ -48,6 +48,7 @@ use ieee.numeric_std.all;
 library work;
 use work.swc_swcore_pkg.all;
 use work.wr_fabric_pkg.all;
+use work.wrsw_shared_types_pkg.all;
 
 entity swc_core is
   generic( 
@@ -106,11 +107,13 @@ entity swc_core is
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
     
-    rtu_rsp_valid_i     : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    rtu_rsp_ack_o       : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    rtu_dst_port_mask_i : in  std_logic_vector(c_swc_num_ports * c_swc_num_ports  - 1 downto 0);
-    rtu_drop_i          : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
-    rtu_prio_i          : in  std_logic_vector(c_swc_num_ports * c_swc_prio_width - 1 downto 0)
+--     rtu_rsp_valid_i     : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     rtu_rsp_ack_o       : out std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     rtu_dst_port_mask_i : in  std_logic_vector(c_swc_num_ports * c_swc_num_ports  - 1 downto 0);
+--     rtu_drop_i          : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
+--     rtu_prio_i          : in  std_logic_vector(c_swc_num_ports * c_swc_prio_width - 1 downto 0)
+    rtu_rsp_i           : in t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
+    rtu_rsp_ack_o       : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
 
     );
 end swc_core;
@@ -311,11 +314,17 @@ architecture rtl of swc_core is
         -------------------------------------------------------------------------------
         -- I/F with Routing Table Unit (RTU)
         -------------------------------------------------------------------------------      
-        rtu_rsp_valid_i          => rtu_rsp_valid_i(i),
-        rtu_rsp_ack_o            => rtu_rsp_ack_o(i),
-        rtu_dst_port_mask_i      => rtu_dst_port_mask_i((i + 1) * c_swc_num_ports -1 downto i * c_swc_num_ports),
-        rtu_drop_i               => rtu_drop_i(i),
-        rtu_prio_i               => rtu_prio_i((i + 1) * c_swc_prio_width -1 downto i * c_swc_prio_width),
+        rtu_rsp_ack_o            => rtu_rsp_ack_o(i),        
+	rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
+        rtu_dst_port_mask_i      => rtu_rsp_i(i).port_mask(c_swc_num_ports  - 1 downto 0),
+        rtu_drop_i               => rtu_rsp_i(i).drop,
+        rtu_prio_i               => rtu_rsp_i(i).prio,
+
+-- 	rtu_rsp_valid_i          => rtu_rsp_valid_i(i),
+--         rtu_rsp_ack_o            => rtu_rsp_ack_o(i),
+--         rtu_dst_port_mask_i      => rtu_dst_port_mask_i((i + 1) * c_swc_num_ports -1 downto i * c_swc_num_ports),
+--         rtu_drop_i               => rtu_drop_i(i),
+--         rtu_prio_i               => rtu_prio_i((i + 1) * c_swc_prio_width -1 downto i * c_swc_prio_width),
         -------------------------------------------------------------------------------
         -- I/F with Multiport Memory (MPU)
         -------------------------------------------------------------------------------    

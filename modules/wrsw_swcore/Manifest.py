@@ -31,4 +31,5 @@ files = [
 "xswc_core.vhd",
 "xswc_output_block.vhd",
 "xswc_input_block.vhd",
+"../wrsw_shared_types_pkg.vhd",
 ]
