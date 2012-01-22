@@ -562,9 +562,9 @@ begin  --arch
 
         -- remember the info that we are writing first word to the FIFO in the case
         -- when the first word is stalled.
-        if(in_pck_sof = '1' and snk_stall_int = '1') then
+        if(in_pck_sof = '1' and (snk_stall_int = '1' or snk_stb_int='0') ) then
           first_pck_word <= '1';
-        elsif(first_pck_word = '1' and snk_stall_int = '0') then
+        elsif(first_pck_word = '1' and snk_stall_int = '0' and snk_stb_int='0') then
           first_pck_word <= '0';
         end if;
         
@@ -1278,9 +1278,9 @@ begin  --arch
   snk_stb_int        <= snk_i.stb;  
   snk_we_int         <= snk_i.we;  
   snk_o.stall        <= snk_stall_int;
-  snk_o.err          <= snk_err_int;  
+  snk_o.err          <= '0';  
   snk_o.ack          <= snk_ack_int;   
-  snk_o.rty          <= snk_rty_int;   
+  snk_o.rty          <= '0';   
   
   
 end syn;  -- arch
