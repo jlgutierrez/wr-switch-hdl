@@ -44,7 +44,6 @@ use ieee.numeric_std.all;
 
 library work;
 use work.swc_swcore_pkg.all;
-use work.platform_specific.all;
 
 
 
