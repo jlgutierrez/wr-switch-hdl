@@ -564,7 +564,7 @@ begin  --arch
         -- when the first word is stalled.
         if(in_pck_sof = '1' and (snk_stall_int = '1' or snk_stb_int='0') ) then
           first_pck_word <= '1';
-        elsif(first_pck_word = '1' and snk_stall_int = '0' and snk_stb_int='0') then
+        elsif(first_pck_word = '1' and snk_stall_int = '0' and snk_stb_int='1') then
           first_pck_word <= '0';
         end if;
         
