@@ -82,7 +82,7 @@ entity xswc_core is
 -------------------------------------------------------------------------------      
     
     rtu_rsp_i           : in t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
-    rtu_rsp_ack_o       : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
+    rtu_ack_o            : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
 
     );
 end xswc_core;
@@ -115,7 +115,7 @@ architecture rtl of xswc_core is
     -------------------------------------------------------------------------------      
     
     rtu_rsp_i           : in t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
-    rtu_rsp_ack_o       : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
+    rtu_ack_o            : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
 
     );
    end component;
@@ -140,6 +140,6 @@ begin
       src_o               => src_o,
 
       rtu_rsp_i           => rtu_rsp_i,
-      rtu_rsp_ack_o       => rtu_rsp_ack_o);   
+      rtu_ack_o           => rtu_ack_o);   
 
 end rtl;

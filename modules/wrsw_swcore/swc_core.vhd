@@ -113,7 +113,7 @@ entity swc_core is
 --     rtu_drop_i          : in  std_logic_vector(c_swc_num_ports  - 1 downto 0);
 --     rtu_prio_i          : in  std_logic_vector(c_swc_num_ports * c_swc_prio_width - 1 downto 0)
     rtu_rsp_i           : in t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
-    rtu_rsp_ack_o       : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
+    rtu_ack_o          : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
 
     );
 end swc_core;
@@ -314,7 +314,7 @@ architecture rtl of swc_core is
         -------------------------------------------------------------------------------
         -- I/F with Routing Table Unit (RTU)
         -------------------------------------------------------------------------------      
-        rtu_rsp_ack_o            => rtu_rsp_ack_o(i),        
+        rtu_rsp_ack_o            => rtu_ack_o(i),        
 	rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
         rtu_dst_port_mask_i      => rtu_rsp_i(i).port_mask(c_swc_num_ports  - 1 downto 0),
         rtu_drop_i               => rtu_rsp_i(i).drop,

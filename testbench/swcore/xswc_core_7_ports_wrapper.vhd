@@ -268,7 +268,7 @@ component xswc_core is
 -------------------------------------------------------------------------------      
     
     rtu_rsp_i           : in t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
-    rtu_rsp_ack_o       : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
+    rtu_ack_o           : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
 
     );
 end component;
@@ -300,7 +300,7 @@ U_xswc_core: xswc_core
     src_o               => src_o,
 
     rtu_rsp_i           => rtu_rsp_i,
-    rtu_rsp_ack_o       => rtu_rsp_ack_o
+    rtu_ack_o       => rtu_rsp_ack_o
     );
 
     rtu: for i in 0 to g_swc_num_ports -1 generate
