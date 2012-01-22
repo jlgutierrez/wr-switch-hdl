@@ -131,7 +131,7 @@ architecture behavoural of xswc_output_block is
   signal current_pck_size   : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
   signal cnt_pck_size       : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
   
-  signal dreq              : std_logic;
+  signal dreq              : std_logic;  -- control of dreq_o from FSM
   signal pgreq             : std_logic;
     
   signal ppfm_free        : std_logic;
@@ -160,29 +160,16 @@ architecture behavoural of xswc_output_block is
   signal src_we_int  : std_logic;
   signal src_sel_int : std_logic_vector(1 downto 0);
 
-  signal src_stb_d0  : std_logic;
-
-  signal src_adr_tmp : std_logic_vector(1 downto 0);
-  signal src_dat_tmp : std_logic_vector(15 downto 0);
-  signal src_cyc_tmp : std_logic;
-  signal src_stb_tmp : std_logic;
-  signal src_sel_tmp : std_logic_vector(1 downto 0);
-
   -- source in
+  signal stab          : std_logic; -- control of src_stb from FSM 
   signal src_ack_int   : std_logic;
   signal src_stall_int : std_logic;
   signal src_err_int   : std_logic;
   signal src_rty_int   : std_logic;
-
+ 
+  -- counting acks
   signal snk_ack_count : unsigned(2 downto 0); -- size?
 
-  signal src_stall_d0  : std_logic;
-
-  signal mpm_drdy_d0   : std_logic;
-
-  signal special_dreq  : std_logic;
-
-  signal special_dreq_d0 : std_logic;
 
 begin  --  behavoural
   
@@ -323,17 +310,15 @@ begin  --  behavoural
        
          cnt_last_word         <= '0';
          cnt_pck_size          <= (others => '0');
-	-- cnt_pck_size(0)        <= '1';
+	 cnt_pck_size(0)        <= '1';
          cnt_one_but_last_word <= '0';
          
        else
- 
-          src_stb_d0 <= src_stb_int;
   
           if(state = SET_PAGE) then
        
             cnt_pck_size           <= (others =>'0');
-	   -- cnt_pck_size(0)        <= '1';
+	    cnt_pck_size(0)        <= '1';
             cnt_one_but_last_word  <= '0';
             cnt_last_word          <= '0';
 
@@ -356,47 +341,41 @@ begin  --  behavoural
   end process;
 
   -- sending frame (pipelined WB)
-  -- it reads the data from MultiPortMemory (which has an interface more-or-less like a FIFO) 
-  -- and sends it out with pipelined WB interface
+  -- it controls the process of sending out the data from the MultiPortMemory (which works like FIFO)
+  -- into pipelined WB. This includes:
+  -- 1. requesting first page of pck from MPM
+  -- 2. requesting freeing pages allocated to read out pck
+  -- 3. reading data from MPM and sending it through pWB, 
+  --    in fact, it only controls :
+  --            pWB(src.stb_o)   <-> MPM(mpm_drdy_i)
+  --            pWB(src.stall_i) <-> MPM(mpm_dreq_o)
+  --            pWB(src.cyc_o)
+  --    all the outputs/intputs of pWB (except cyc_o and we_o) are not registered !
+  --    
   src_fsm: process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
 
-	  -- source out
-	  src_adr_int       <= (others => '0'); 
-	  src_dat_int       <= (others => '0'); 
+	  -- pWB <-> MPM
 	  src_cyc_int       <= '0';
-	  src_stb_int       <= '0';
-	  src_sel_int       <= (others => '0'); 
-
-	  src_adr_tmp       <= (others => '0');
-	  src_dat_tmp       <= (others => '0');
-	  src_sel_tmp       <= (others => '0');
-
-	  src_stall_d0      <= '0'; -- delayed stall-> needed to know whether to read data from tmp 
-	                            -- or from MPM
+	  stab              <= '0';
+	  dreq              <= '0';
+	                            
 	  start_free_pck    <= '0';
 	  ppfm_free_pgaddr  <= (others => '0');
 
 	  pgreq             <= '0';
           current_pck_size  <= (others => '0');
 	  pck_start_pgaddr  <= (others => '0');
-	  dreq              <= '0';
-	  special_dreq      <= '0';
-	  special_dreq_d0   <= '0';
-	  waiting_pck_start <= '0';
 
-	  mpm_drdy_d0       <= '0';
+	  waiting_pck_start <= '0';
 
       else
 
 	--------------------------------------------------------------------------------------------
 	-- some helpers to the state machines
         --------------------------------------------------------------------------------------------
-	src_stall_d0      <= src_stall_int;
-	special_dreq_d0   <= special_dreq;
-	mpm_drdy_d0       <= mpm_drdy_i;
 
 	-- traccking ACKs from the sink
 	if (src_cyc_int = '0' or src_err_int = '1') then
@@ -422,27 +401,22 @@ begin  --  behavoural
 
           when IDLE =>
 	    
-	    src_adr_int       <= (others => '0'); 
-	    src_dat_int       <= (others => '0'); 
 	    src_cyc_int       <= '0';
-	    src_stb_int       <= '0';
-	    src_sel_int       <= (others => '0'); 
-
-	    src_adr_tmp       <= (others => '0');
-	    src_dat_tmp       <= (others => '0');
-	    src_sel_tmp       <= (others => '0');
+	    stab              <= '0';
 
 	    start_free_pck    <= '0';
 	    pgreq             <= '0';
 	    dreq              <= '0';
-	    special_dreq      <= '0';
 	    waiting_pck_start <= '0';
 
-            if(rd_data_valid = '1' and src_stall_int = '0' and src_err_int ='0') then
+            if(rd_data_valid = '1' and   -- there is data in an output QUEUE
+               src_stall_int = '0' and   -- sink can read
+               src_err_int   = '0') then
+
 	      state             <= SET_PAGE;
 	    end if;
             
-	  -- requesting to MPM the next frame (inputting the starting page address)
+	  -- requesting from MPM the next frame (inputting the starting page address)
           when SET_PAGE =>
 	    
 	    pgreq                <= '1';
@@ -455,98 +429,46 @@ begin  --  behavoural
 	    
 	    pgreq                 <= '0';
 	    
-	    if(mpm_sync_i = '1' and waiting_pck_start = '1') then -- start reading new frame
+	    if(mpm_sync_i        = '1'  and  -- indicates that there should be valid data on MPM output in the next cycle
+	       waiting_pck_start = '1') then -- start reading new frame
 
 	      state               <= READ_MPM;
+	      src_cyc_int         <= '1';
+	      stab                <= '1';
 	      waiting_pck_start   <= '0';
 	      dreq                <= '1';                          -- we enable stall-to-dreq 
 	                                                           -- conversion here
 	    end if;
 
-	  -- reading process (FIFO-to-pWB)
+	  -- reading process (FIFO-to-pWB): this just controls the src.cyc_o, src_stb_o and mpm_dreq_o
+	  -- the rest of signals is assigned directly
           when READ_MPM =>
-	    
+
 	    src_cyc_int         <= '1';
-	    src_stb_int         <= '1';
+	    stab                <= '1';
+	    dreq                <= '1';
+	    
+	    -- the end of frame
+	    if(cnt_last_word = '1') then
+	    
+	      state              <= READ_LAST_WORD;
+	      dreq               <= '0';
 
-	    if(src_err_int = '1') then                             -- error: free pages allocated to 
-	                                                           -- the packet(frame) and finish
-	      src_cyc_int         <= '0';
-	      src_stb_int         <= '0';
-	      src_adr_int         <= (others => '0');
-	      src_dat_int         <= (others => '0');
-	      src_sel_int         <= (others => '0');
-	      dreq                <= '0';
-	      state               <= WAIT_FREE_PCK;
-
-	    else                                                    -- everything works
-
-	      dreq                <= '1';                           -- enable stall-to-dreq translation
-	      special_dreq        <= '0';
-
-	      if(mpm_drdy_i = '0' ) then     -- paused by source
-
-		  src_cyc_int         <= '1';
-		  src_stb_int         <= '0';
-
-	      elsif(mpm_drdy_i = '1' and src_stall_int = '1') then  -- paused by sink
-
-		  src_cyc_tmp         <= '1';
-		  src_stb_tmp         <= '1';
-
-		  if(src_stb_int = '1') then                        -- when stall is after drdy_i LOW
-		    src_adr_tmp         <= mpm_ctrl_i(1 downto 0);
-		    src_sel_tmp         <= mpm_ctrl_i(3 downto 2);
-		    src_dat_tmp         <= mpm_data_i;
-		  else
-		    src_adr_int         <= mpm_ctrl_i(1 downto 0);
-		    src_sel_int         <= mpm_ctrl_i(3 downto 2);
-		    src_dat_int         <= mpm_data_i;	
-
-		  end if;
-
-		
-	      elsif(mpm_drdy_i = '1' and src_stall_int = '0') then  -- read data
-		
-		if(src_stall_d0 = '1') then  -- read stored data in tmp reg 
-		                                                    -- (stopped by source before)
-		    src_adr_int         <= src_adr_tmp;
-		    src_dat_int         <= src_dat_tmp;
-		    src_sel_int         <= src_sel_tmp;
-
-		else                                                -- normal read
-
-		    src_adr_int         <= mpm_ctrl_i(1 downto 0);
-		    src_sel_int         <= mpm_ctrl_i(3 downto 2);
-		    src_dat_int         <= mpm_data_i;
-
-		
-		end if;
-
---		if(cnt_one_but_last_word = '1') then                        -- this was the last word of the 
-		if(cnt_last_word = '1') then                        -- this was the last word of the 
-
-		  state              <= READ_LAST_WORD;             -- frame (package)
-
--- 		  if(src_stall_int = '0') then
--- 		    src_stb_int        <= '0';
--- 		  end if;
-
-		end if;
-	      
-	      end if; --if(mpm_drdy_i = '0') then   
-	    end if; --if(src_err_int = '1') then        
+	      if(src_stall_int = '0') then
+		stab               <= '0';
+	      end if;
+	    
+	    end if;
 
           when READ_LAST_WORD =>
         
 	    if(src_stall_int = '0') then
-	      src_stb_int        <= '0';
-	      dreq               <= '0';
+	      stab               <= '0';
 	    end if;
 	    
-	    if(snk_ack_count = 0 and src_stb_int = '0') then
+	    -- the ack is the last needed, output data is valid, so we can finish cycle
+	    if(snk_ack_count = 1 and src_stb_int = '0' and src_ack_int = '1') then
 	      src_cyc_int <= '0';
-	      dreq        <= '0';
 	      state       <= WAIT_FREE_PCK;
 	    end if;
                
@@ -587,10 +509,16 @@ begin  --  behavoural
   rd_pck_size         <= rd_data(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto c_swc_page_addr_width);  
 
   -------------- MPM ---------------------
-  mpm_dreq_o    <= ((not src_stall_int) and dreq);
+  mpm_dreq_o          <= ((not src_stall_int) and dreq);
   mpm_pgreq_o         <= pgreq;
   mpm_pgaddr_o        <= rd_data(c_swc_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;  
   -------------- pWB ----------------------
+
+  src_stb_int         <= stab and mpm_drdy_i;
+  src_adr_int         <= mpm_ctrl_i(1 downto 0);
+  src_sel_int         <= mpm_ctrl_i(3 downto 2);
+  src_dat_int         <= mpm_data_i;
+
   -- source out
   src_o.adr     <= src_adr_int; 
   src_o.dat     <= src_dat_int;

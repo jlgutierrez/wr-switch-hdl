@@ -34,6 +34,7 @@ alloc_info_t alloc_table[1024];
 alloc_info_t dealloc_table[1024];
 
 int stack_bastard = 0;
+int global_seed = 0;
 
 int pg_alloc_cnt[1024][20];
 int pg_dealloc_cnt[1024][20];
@@ -85,7 +86,7 @@ module main;
   integer ports_ready  = 0;
   
   // some settings
-  integer n_packets_to_send = 10;
+  integer n_packets_to_send = 100;
   integer dbg               = 0;
    
   
@@ -177,11 +178,11 @@ module main;
 	input [`c_wrsw_num_ports - 1:0] mask
       );
       
-      int i, j, seed = 0;
+      int i, j, seed = global_seed;
       integer index;
       EthPacket pkt, tmpl;
       EthPacketGenerator gen  = new;
-     
+      global_seed ++;     
       tmpl                   = new;
       tmpl.src               = '{1,2,3,4,5,6};
       tmpl.dst               = '{10,11,12,13,14,15};
@@ -224,12 +225,12 @@ module main;
       begin : load_port_body
                  
         EthPacket      txed[$];         
-        int i,j, seed = 0;
+        int i,j, seed = global_seed;
         int cnt = 0;
         //bit [10:0] mask ;
 	int mask;
         int drop;
-
+	global_seed ++;
         if(dbg) $display("Initial waiting: %d cycles",((port*50)%11)*50);
         wait_cycles(((port*50)%11)*50);
         
