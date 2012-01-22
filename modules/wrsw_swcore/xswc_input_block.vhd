@@ -386,8 +386,6 @@ type t_write_state is (S_IDLE,
     end if;
     return nmb;
   end cnt;
-
-  
   
 begin  --arch
 
@@ -400,14 +398,10 @@ begin  --arch
 
   write_ctrl_out <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width + 1 downto c_swc_data_width +
                                   c_swc_ctrl_width); 
-  write_data <= fifo_data_out(c_swc_data_width - 1 downto 0);
-  write_ctrl <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width - 1 downto c_swc_data_width);
+  write_data     <= fifo_data_out(c_swc_data_width - 1 downto 0);
+  write_ctrl     <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width - 1 downto c_swc_data_width);
 
-
-
-  
-  
-  fifo_rd <= ((not fifo_empty) and (not mpm_full_i)) when (write_state = S_WRITE_MPM or
+  fifo_rd        <= ((not fifo_empty) and (not mpm_full_i)) when (write_state = S_WRITE_MPM or
                                                                   write_state = S_START_FIFO_RD) else '0';
 
 
@@ -520,21 +514,24 @@ begin  --arch
   --==================================================================================================
   -- pWB (sink) to input FIFO
   --==================================================================================================
-  in_pck_sof    <= snk_cyc_int and not snk_cyc_d0;                                   -- !!!!! if we have stall when sof, we need to include this	
-  in_pck_dvalid <= snk_stb_int and     snk_we_int and snk_cyc_int and not snk_stall_int; --valid data which can be stored into FIFO
-  in_pck_eof    <= snk_cyc_d0  and not snk_cyc_int;                                  -- !!!!! if we have stall when sof, we need to include this	
-  in_pck_err    <= '1'         when   in_pck_dvalid = '1' and                        -- we have valid data 
-                               (snk_adr_int = c_WRF_STATUS) and                        -- address indicates status
-                               (f_unmarshall_wrf_status(snk_dat_int).error = '1') else -- status indicates error
+  in_pck_sof    <= snk_cyc_int and not snk_cyc_d0;                                       -- detecting the beginning of the pck
+  in_pck_dvalid <= snk_stb_int and     snk_we_int and snk_cyc_int and not snk_stall_int; -- valid data which can be stored into FIFO
+  in_pck_eof    <= snk_cyc_d0  and not snk_cyc_int;                                      -- detecting the end of the pck
+  in_pck_err    <= '1'         when   in_pck_dvalid = '1'   and                          -- we have valid data           *and*
+                               (snk_adr_int = c_WRF_STATUS) and                          -- the address indicates status *and*
+                               (f_unmarshall_wrf_status(snk_dat_int).error = '1') else   -- the status indicates error       
                    '0';
 
   -- we need to indicate somehow that there is error and pck is dumped !!!
 
   snk_stall_int <= fifo_full or stall_after_err;
 
-  write_ctrl_in <=  b"01" when (first_pck_word = '1' or in_pck_sof = '1')     else -- first word of the pck
-                    b"10" when (in_pck_eof = '1'    and snk_stall_int = '1')  else -- TODO: this is impossible condition, I'm not sure what to do here 
-                    b"11" when (in_pck_eof = '1'    or  in_pck_err = '1')     else -- last word or dummy after last word
+  -- this is internal to the input_block (i.e. the input FIFO)
+  -- IMPORTANT: bit 1 [write_ctrl_in(1)] determines (negation) whether data written to MPM is valid
+  -- (see the bottom of the page)
+  write_ctrl_in <=  b"01" when (first_pck_word = '1' or in_pck_sof = '1')    else -- first word of the pck
+                    b"10" when (in_pck_err = '1')                            else -- error on input
+                    b"11" when (in_pck_eof = '1')                            else -- last word or dummy after last word
                     b"00";
   
   fifo_wr       <=  (in_pck_dvalid or  -- valid data from pWB
@@ -574,28 +571,32 @@ begin  --arch
         -- generating ack
         snk_ack_int <= snk_cyc_int and snk_stb_int and snk_we_int and not snk_stall_int;
 
-        -- if there error and the input is stopped, 
+        -- if there is error and the input is stopped, 
         fifo_clean     <= '0';
         tx_rerror      <= '0';
 
         if(in_pck_err = '1') then 
           if(eof_in_fifo = '1' and sof_in_fifo = '1') then
+            -- there is the end of a valid pck in the fifo, wait fo this pck to be read
+            -- by the write_fsm, stall input while waiting
             stall_after_err  <= '1';
           else
+            -- there is only invalid pck in the fifo, clean the fifo
             fifo_clean     <= '1';
             tx_rerror      <= '1';            
           end if;
         elsif(stall_after_err ='1' and eof_in_fifo = '0') then
+          -- the valid pck has been read by write_fsm from the FIFO, now the fifo can be cleaned,
+          -- the error handled on the other side of the FIFO, and pWB input enabled (stall LOW on 
+          -- sink)
           fifo_clean     <= '1';
           tx_rerror      <= '1';
           stall_after_err<= '0';
         end if;
 
-
        end if;  -- if(rst_n_i = '0') then
      end if; --rising_edge(clk_i) then
    end process read_helper;
--- 
 
   --==================================================================================================
   -- FSM to write pck to Multiport memory write pump (FIFO -> MPM)
@@ -645,13 +646,14 @@ begin  --arch
             
             if((fifo_populated_enough = '1'             ) and   -- at least on "c_swc_packet_mem_multiply"
                (pckstart_page_in_advance = '1'          ) and   -- needed to write first page
-               (rcv_rtu_state = S_RTU_DECISION_AVAILABLE) and   -- there is RTU decision avaible (TODO: !!!)
+               (rcv_rtu_state = S_RTU_DECISION_AVAILABLE) and   -- there is RTU decision avaible (TODO: *)
                (mpm_full_i = '0'                        )) then -- obvious, no write to full MPM
 
               write_state <= S_START_FIFO_RD;
               
             end if;
-
+          -- TODO* enable to write to MPM even without RTU decision (will be quite some work)
+          -- for the time being wait for RTU here
           --========================================================================================       
           when S_START_FIFO_RD =>
             --========================================================================================
@@ -661,38 +663,42 @@ begin  --arch
             -- drdy is restricted only to S_WRITE_MPM !!! thanx to this trick we can have things
             -- simple
             
-            write_state               <= S_WRITE_MPM;
-            -- first word of the pck, need to be remembered (for i.e. transfer, force free)
-            current_pckstart_pageaddr <= pckstart_pageaddr;
-            write_mask                <= read_mask;
-            write_prio                <= read_prio;
-            write_usecnt              <= read_usecnt;
-            rtu_data_read_by_write_process <= '1';
+            write_state                    <= S_WRITE_MPM;
+            -- address of the first word of the pck, need to be remembered (for i.e. transfer, force free)
+            current_pckstart_pageaddr      <= pckstart_pageaddr;
+            write_mask                     <= read_mask;
+            write_prio                     <= read_prio;
+            write_usecnt                   <= read_usecnt;
+            
+            -- info to the *fsm_rcv_rtu*
+            rtu_data_read_by_write_process <= '1'; 
 
             -- indicate this is the first pck, set page
-            mpm_pckstart <= '1';
-            mpm_pagereq  <= '1';
-            mpm_pageaddr <= pckstart_pageaddr;
+            mpm_pckstart                   <= '1';
+            mpm_pagereq                    <= '1';
+            mpm_pageaddr                   <= pckstart_pageaddr;
 
           --========================================================================================     
           when S_WRITE_MPM =>
             --========================================================================================
             
             rtu_data_read_by_write_process <= '0';
-            mpm_pckstart <= '0';
-            mpm_pagereq  <= '0';
+            mpm_pckstart                   <= '0';
+            mpm_pagereq                    <= '0';
             ------------------------------------------------------------------------------------------          
-            if(tx_rerror = '1') then  -- handling error, this signal is generated by read_fsm
+            if(tx_rerror      = '1'     or   -- handling error, this signal is generated by read_fsm
+               write_ctrl_out = b"10") then  -- should not use this (this should be indicated previously
+                                             -- by tx_rerror
               ------------------------------------------------------------------------------------------          
               
-              flush_reg           <= '1';
-              write_state         <= S_PERROR;
-              mmu_force_free_addr <= current_pckstart_pageaddr;
-              mmu_force_free      <= '1';
+              flush_reg                    <= '1';
+              write_state                  <= S_PERROR;
+              mmu_force_free_addr          <= current_pckstart_pageaddr;
+              mmu_force_free               <= '1';
             ------------------------------------------------------------------------------------------  
-            elsif(write_ctrl_out /= b"01" and  -- the data coming from FIFO indicates its not first 
-                                               -- word of PCK
-                  mpm_pckstart = '1') then  -- we are saying to MPM it's first word of PCK
+            elsif(write_ctrl_out /= b"01" and  -- the data coming from FIFO indicates its not the first 
+                                               -- word of PCK *and*
+                  mpm_pckstart = '1') then     -- we are saying to MPM it's first word of PCK
               ------------------------------------------------------------------------------------------  
 
               -- this is pathologic situation, bad, not sure what to do
@@ -705,9 +711,9 @@ begin  --arch
             else                        -- in normal case, we end up here
               ------------------------------------------------------------------------------------------ 
               
-              if(mpm_pagereq = '0' and  -- not setting yet new page
-                 mpm_pageend_i = '1' and  -- detecting info from MPM: new page needed
-                 interpck_page_in_advance = '1') then  -- we have a spare page allocated
+              if(mpm_pagereq              = '0'  and  -- not setting yet new page
+                 mpm_pageend_i            = '1'  and  -- detecting info from MPM: new page needed
+                 interpck_page_in_advance = '1') then -- we have a spare page allocated
 
                 mpm_pageaddr <= interpck_pageaddr;
                 mpm_pagereq  <= '1';
@@ -719,9 +725,8 @@ begin  --arch
                 
               end if;
               
-              
-              if(write_ctrl_out = b"11" or      -- EOF with valid data
-                  write_ctrl_out = b"10") then  -- EOF without valid data
+
+              if(write_ctrl_out = b"11") then  -- EOF without valid data -
 
                 write_state <= S_LAST_MPM_WR;
                 
@@ -1230,14 +1235,9 @@ begin  --arch
   --================================================================================================
   -- Output signals
   --================================================================================================
---   tx_dreq_o <=
---     '0' when tx_eof_p1_i = '1' else
---     '0' when (read_state = S_IDLE) else
---     '1' when (read_state = S_DROP_PCK) else
---     tx_dreq;
   
-  
-  flush_with_valid_data <= '1' when (write_ctrl_out = b"10") else '0';
+  --flush_with_valid_data <= '1' when (write_ctrl_out = b"10") else '0';
+  flush_with_valid_data <= '0';
 
   drdy <= ((not (fifo_empty and (not flush_with_valid_data))) and (not mpm_full_i) and not write_ctrl_out(1))
                             when (write_state = S_WRITE_MPM) else '0';
