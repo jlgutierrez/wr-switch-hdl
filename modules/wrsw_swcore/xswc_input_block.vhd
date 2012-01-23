@@ -247,7 +247,8 @@ architecture syn of xswc_input_block is
 
 type t_write_state is (S_IDLE,  
                        S_DROP_PCK,      
-                       S_LAST_DROP,       
+                       S_LAST_DROP, 
+                       S_STUCK_WITH_DATA,      
                        S_START_FIFO_RD,         -- start requesting data from FIFO, but still
                                                 -- not outputing to write_pump (initial cycle)
                                                 -- trick: drdy restricted only to S_WRITE_MPM
@@ -693,7 +694,10 @@ begin  --arch
           when S_LAST_DROP =>
             --===========================================================================================
 
-              if(write_ctrl_out = b"01") then
+              if(transfering_pck = '1') then -- this means that we are fucked, the SWCORE is stuck with too
+                                              -- much data
+                 write_state <= S_STUCK_WITH_DATA;
+              elsif(write_ctrl_out = b"01") then
                 write_state <= S_NEW_PCK_IN_FIFO;
               else
                 write_state <= S_IDLE;
@@ -724,6 +728,13 @@ begin  --arch
             mpm_pckstart                   <= '1';
             mpm_pagereq                    <= '1';
             mpm_pageaddr                   <= pckstart_pageaddr;
+
+          --========================================================================================     
+          when S_STUCK_WITH_DATA =>
+            --========================================================================================
+
+                write_state <= S_DROP_PCK;
+                rtu_data_read_by_write_process <= '1';
 
           --========================================================================================     
           when S_WRITE_MPM =>
@@ -797,6 +808,11 @@ begin  --arch
             if(mpm_pageend_i = '1') then  -- new page needed to write last chucnk of data
               
               write_state <= S_WAIT_WITH_TRANSFER;
+              
+            elsif(transfering_pck = '1') then -- this means that we are fucked, the SWCORE is stuck with too
+                                              -- much data
+              write_state <= S_STUCK_WITH_DATA;
+              
             else
               
               start_transfer <= '1';
@@ -817,18 +833,22 @@ begin  --arch
             -- Of course, this is the case only if the pck finished while pgend request HIGH
             
             if(interpck_page_in_advance = '1') then
-
-              start_transfer <= '1';
-              mpm_pageaddr   <= interpck_pageaddr;
-              mpm_pagereq    <= '1';
-
-              if(write_ctrl_out = b"01") then
-                write_state <= S_NEW_PCK_IN_FIFO;
+            
+              if(transfering_pck = '1') then
+                  write_state <= S_STUCK_WITH_DATA;
               else
-                write_state <= S_IDLE;
+
+                 start_transfer <= '1';
+                 mpm_pageaddr   <= interpck_pageaddr;
+                 mpm_pagereq    <= '1';
+
+                 if(write_ctrl_out = b"01") then
+                   write_state <= S_NEW_PCK_IN_FIFO;
+                 else
+                   write_state <= S_IDLE;
+                 end if;
               end if;
             end if;
-
 
           --===========================================================================================         
           when S_NEW_PCK_IN_FIFO =>
