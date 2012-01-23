@@ -68,7 +68,10 @@ use work.genram_pkg.all;
 use work.wr_fabric_pkg.all;
 
 entity xswc_input_block is
-
+  generic (
+    g_when_cannot_accept_data : string := "drop_pck" --"stall_o", "rty_o" -- Don't CHANGE !
+  
+  );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -364,6 +367,7 @@ type t_write_state is (S_IDLE,
  signal snk_cyc_d0    : std_logic;
 
  signal stall_after_err : std_logic;
+ signal stall_when_stuck: std_logic;
  signal in_pck_sof      : std_logic;
  signal in_pck_dvalid   : std_logic;
  signal in_pck_eof      : std_logic;
@@ -530,7 +534,7 @@ begin  --arch
 
   -- we need to indicate somehow that there is error and pck is dumped !!!
 
-  snk_stall_int <= fifo_full or stall_after_err;
+  snk_stall_int <= fifo_full or stall_after_err or stall_when_stuck;
 
   -- this is internal to the input_block (i.e. the input FIFO)
   -- IMPORTANT: bit 1 [write_ctrl_in(1)] determines (negation) whether data written to MPM is valid
@@ -581,7 +585,7 @@ begin  --arch
         fifo_clean     <= '0';
         tx_rerror      <= '0';
 
-        if(in_pck_err = '1') then 
+        if(in_pck_err = '1' or snk_rty_int = '1') then 
           if(eof_in_fifo = '1' and sof_in_fifo = '1') then
             -- there is the end of a valid pck in the fifo, wait fo this pck to be read
             -- by the write_fsm, stall input while waiting
@@ -629,10 +633,13 @@ begin  --arch
         mpm_pageaddr <= (others => '1');
         mpm_pagereq  <= '0';
         flush_reg    <= '0';
+        snk_rty_int      <= '0';
 
         mmu_force_free_addr <= (others => '0');
         mmu_force_free      <= '0';
         
+	stall_when_stuck <='0';
+
         rtu_data_read_by_write_process <= '0';
       --================================================
       else
@@ -649,6 +656,8 @@ begin  --arch
             start_transfer <= '0';
             mpm_pagereq    <= '0';
             rtu_data_read_by_write_process <= '0';
+            stall_when_stuck <= '0';
+	    snk_rty_int      <= '0';
             
             if((fifo_populated_enough = '1'             ) and   -- at least on "c_swc_packet_mem_multiply"
                (pckstart_page_in_advance = '1'          ) and   -- needed to write first page
@@ -696,7 +705,10 @@ begin  --arch
 
               if(transfering_pck = '1') then -- this means that we are fucked, the SWCORE is stuck with too
                                               -- much data
-                 write_state <= S_STUCK_WITH_DATA;
+                 --write_state                    <= S_STUCK_WITH_DATA;
+                  write_state <= S_DROP_PCK;
+                  rtu_data_read_by_write_process <= '1';
+
               elsif(write_ctrl_out = b"01") then
                 write_state <= S_NEW_PCK_IN_FIFO;
               else
@@ -733,8 +745,16 @@ begin  --arch
           when S_STUCK_WITH_DATA =>
             --========================================================================================
 
-                write_state <= S_DROP_PCK;
-                rtu_data_read_by_write_process <= '1';
+                if(g_when_cannot_accept_data = "drop_pck") then 
+
+                   if(mmu_force_free_done_i = '1') then
+               
+                       mmu_force_free <= '0';
+                       write_state <= S_DROP_PCK;
+                       rtu_data_read_by_write_process <= '1';
+
+                    end if;
+                end if;
 
           --========================================================================================     
           when S_WRITE_MPM =>
@@ -811,7 +831,10 @@ begin  --arch
               
             elsif(transfering_pck = '1') then -- this means that we are fucked, the SWCORE is stuck with too
                                               -- much data
-              write_state <= S_STUCK_WITH_DATA;
+              write_state                    <= S_STUCK_WITH_DATA;
+              mmu_force_free_addr            <= current_pckstart_pageaddr;
+              mmu_force_free                 <= '1';
+
               
             else
               
@@ -835,7 +858,10 @@ begin  --arch
             if(interpck_page_in_advance = '1') then
             
               if(transfering_pck = '1') then
-                  write_state <= S_STUCK_WITH_DATA;
+                  write_state                    <= S_STUCK_WITH_DATA;
+                  mmu_force_free_addr            <= current_pckstart_pageaddr;
+                  mmu_force_free                 <= '1';
+                  
               else
 
                  start_transfer <= '1';
@@ -1228,7 +1254,7 @@ begin  --arch
       else
 
         
-        if(start_transfer = '1') then
+        if(start_transfer = '1' ) then -- after being stuck, transfer the pck received while being stuck
 
           -- normal case, transfer arbiter free                      
           transfering_pck <= '1';
@@ -1358,7 +1384,7 @@ begin  --arch
   snk_o.stall        <= snk_stall_int;
   snk_o.err          <= '0';  
   snk_o.ack          <= snk_ack_int;   
-  snk_o.rty          <= '0';   
+  snk_o.rty          <= snk_rty_int;--'0';   
   
   
 end syn;  -- arch
