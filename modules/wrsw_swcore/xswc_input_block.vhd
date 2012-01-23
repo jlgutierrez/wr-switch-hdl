@@ -246,7 +246,8 @@ architecture syn of xswc_input_block is
                                                 -- all but first page of the pck
 
 type t_write_state is (S_IDLE,  
-                       S_DROP_PCK,             
+                       S_DROP_PCK,      
+                       S_LAST_DROP,       
                        S_START_FIFO_RD,         -- start requesting data from FIFO, but still
                                                 -- not outputing to write_pump (initial cycle)
                                                 -- trick: drdy restricted only to S_WRITE_MPM
@@ -677,27 +678,26 @@ begin  --arch
               ------------------------------------------------------------------------------------------          
               write_state                  <= S_IDLE;
               
-            ------------------------------------------------------------------------------------------  
-            elsif(write_ctrl_out /= b"01" and  -- the data coming from FIFO indicates its not the first 
-                                               -- word of PCK *and*
-                  mpm_pckstart = '1') then     -- we are saying to MPM it's first word of PCK
-              ------------------------------------------------------------------------------------------  
-
-              -- this is pathologic situation, bad, not sure what to do
-              assert false
-                report "write_fsm: S_WRITE_MPM, should not go here";
-              
             ------------------------------------------------------------------------------------------ 
             else                        -- in normal case, we end up here
               ------------------------------------------------------------------------------------------ 
 
               if(write_ctrl_out = b"11") then  -- EOF without valid data -
-                write_state <= S_LAST_MPM_WR;
+
+                write_state <= S_LAST_DROP;
+                
               end if;
             ------------------------------------------------------------------------------------------  
             end if;
+          --===========================================================================================      
+          when S_LAST_DROP =>
+            --===========================================================================================
 
-
+              if(write_ctrl_out = b"01") then
+                write_state <= S_NEW_PCK_IN_FIFO;
+              else
+                write_state <= S_IDLE;
+              end if;
 
           -- TODO* enable to write to MPM even without RTU decision (will be quite some work)
           -- for the time being wait for RTU here
