@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2010-10-12
+-- Last update: 2012-01-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -643,7 +643,8 @@ begin  -- rtl
             cntr <= cntr + 1;
           end if;
         else
-          if(((state_write = S_FLUSH or state_write = S_WAIT_LL_READY ) or flush_i = '1') and sync_i = '1') then
+          --if(((state_write = S_FLUSH or state_write = S_WAIT_LL_READY ) or flush_i = '1') and sync_i = '1') then
+          if(((state_write = S_FLUSH or state_write = S_WAIT_LL_READY)  and sync_i = '1') or (flush_i = '1')) then --change by Tom
             cntr      <= (others => '0');
           end if;
         end if;

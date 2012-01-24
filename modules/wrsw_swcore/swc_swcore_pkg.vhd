@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2011-12-15
+-- Last update: 2012-01-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -121,7 +121,8 @@ package swc_swcore_pkg is
       zero_o   : out std_logic);
   end component;
 
-  component swc_page_allocator
+  --component swc_page_allocator
+  component swc_page_allocator_new
     generic (
       g_num_pages      : integer;
       g_page_addr_bits : integer;

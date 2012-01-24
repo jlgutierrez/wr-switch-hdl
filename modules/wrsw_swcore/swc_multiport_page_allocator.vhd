@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2010-04-08
+-- Last update: Last update: 2012-01-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -36,6 +36,7 @@
 -- Date        Version  Author   Description
 -- 2010-04-08  1.0      twlostow Created
 -- 2010-10-11  1.1      mlipinsk comments added !!!!!
+-- 2010-10-11  1.1      twlostow changed allocator
 -------------------------------------------------------------------------------
 
 
@@ -155,7 +156,8 @@ begin  -- syn
 
 
   -- one allocator/deallocator for all ports
-  ALLOC_CORE : swc_page_allocator
+  ALLOC_CORE : swc_page_allocator_new -- tom's new allocator
+  --ALLOC_CORE : swc_page_allocator
     generic map (
       g_num_pages      => c_swc_packet_mem_num_pages,
       g_page_addr_bits => c_swc_page_addr_width,

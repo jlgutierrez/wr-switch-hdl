@@ -22,6 +22,7 @@ files = [
 "swc_packet_mem_read_pump.vhd",
 "swc_packet_mem_write_pump.vhd",
 "swc_page_alloc.vhd",
+"swc_page_alloc_old.vhd",
 "swc_pck_pg_free_module.vhd",
 "swc_pck_transfer_arbiter.vhd",
 "swc_pck_transfer_input.vhd",

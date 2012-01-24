@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2010-11-03
+-- Last update: 2012-01-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -36,7 +36,7 @@
 -- Date        Version  Author   Description
 -- 2010-11-09  1.0      mlipinsk created
 -- 2012-01-19  2.0      mlipinsk wisbonized (pipelined WB)
-
+-- 2012-01-19  2.0      twlostow added buffer-FIFO
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -48,6 +48,8 @@ library work;
 use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
 use work.wr_fabric_pkg.all;
+use work.endpoint_private_pkg.all; -- Tom
+use work.ep_wbgen2_pkg.all; -- tom
 
 entity xswc_output_block is
 
@@ -169,6 +171,37 @@ architecture behavoural of xswc_output_block is
  
   -- counting acks
   signal snk_ack_count : unsigned(2 downto 0); -- size?
+
+  signal out_fab, buf_fab  : t_ep_internal_fabric;
+  signal out_dreq, buf_dreq : std_logic;
+  signal t_regs   : t_ep_out_registers;
+
+    component ep_rx_wb_master
+    generic (
+      g_ignore_ack : boolean);
+    port (
+      clk_sys_i  : in  std_logic;
+      rst_n_i    : in  std_logic;
+      snk_fab_i  : in  t_ep_internal_fabric;
+      snk_dreq_o : out std_logic;
+      src_wb_i   : in  t_wrf_source_in;
+      src_wb_o   : out t_wrf_source_out);
+  end component;
+
+  component ep_rx_buffer
+    generic (
+      g_size : integer);
+    port (
+      clk_sys_i  : in  std_logic;
+      rst_n_i    : in  std_logic;
+      snk_fab_i  : in  t_ep_internal_fabric;
+      snk_dreq_o : out std_logic;
+      src_fab_o  : out t_ep_internal_fabric;
+      src_dreq_i : in  std_logic;
+      level_o    : out std_logic_vector(7 downto 0);
+      regs_i     : in  t_ep_out_registers;
+      rmon_o     : out    t_rmon_triggers);
+  end component;
 
 
 begin  --  behavoural
@@ -322,7 +355,8 @@ begin  --  behavoural
             cnt_one_but_last_word  <= '0';
             cnt_last_word          <= '0';
 
-          elsif(src_stb_int = '1' and src_stall_int = '0') then
+          --elsif(src_stb_int = '1' and src_stall_int = '0') then
+          elsif(out_fab.dvalid = '1') then -- tom
 
             cnt_last_word         <= '0';
             cnt_one_but_last_word <= '0';
@@ -358,6 +392,9 @@ begin  --  behavoural
       if(rst_n_i = '0') then
 
 	  -- pWB <-> MPM
+	  out_fab.eof    <= '0';  -- tom
+          out_fab.error    <= '0';  -- tom
+	  
 	  src_cyc_int       <= '0';
 	  stab              <= '0';
 	  dreq              <= '0';
@@ -378,16 +415,17 @@ begin  --  behavoural
         --------------------------------------------------------------------------------------------
 
 	-- traccking ACKs from the sink
-	if (src_cyc_int = '0' or src_err_int = '1') then
-	  snk_ack_count <= (others => '0');
-	else
-	  if(src_ack_int = '0' and src_stb_int = '1' and src_stall_int = '0') then
-	      snk_ack_count <= snk_ack_count + 1;
-	  elsif(src_ack_int = '1' and not(src_stb_int = '1' and src_stall_int = '0')) then
-	      snk_ack_count <= snk_ack_count - 1;
-	  end if;
-	end if;
-
+------------------ tom commented below --------------------------
+-- 	if (src_cyc_int = '0' or src_err_int = '1') then
+-- 	  snk_ack_count <= (others => '0');
+-- 	else
+-- 	  if(src_ack_int = '0' and src_stb_int = '1' and src_stall_int = '0') then
+-- 	      snk_ack_count <= snk_ack_count + 1;
+-- 	  elsif(src_ack_int = '1' and not(src_stb_int = '1' and src_stall_int = '0')) then
+-- 	      snk_ack_count <= snk_ack_count - 1;
+-- 	  end if;
+-- 	end if;
+------------------------------------------
 	-- registering parameters of the currently read frame
         if(pgreq = '1') then
           current_pck_size <= rd_pck_size;
@@ -401,7 +439,7 @@ begin  --  behavoural
 
           when IDLE =>
 	    
-	    src_cyc_int       <= '0';
+	    --src_cyc_int       <= '0'; -- tom
 	    stab              <= '0';
 
 	    start_free_pck    <= '0';
@@ -409,9 +447,12 @@ begin  --  behavoural
 	    dreq              <= '0';
 	    waiting_pck_start <= '0';
 
-            if(rd_data_valid = '1' and   -- there is data in an output QUEUE
-               src_stall_int = '0' and   -- sink can read
-               src_err_int   = '0') then
+--             if(rd_data_valid = '1' and   -- there is data in an output QUEUE
+--                src_stall_int = '0' and   -- sink can read
+--                src_err_int   = '0') then
+--tom
+            if(rd_data_valid = '1' and  -- there is data in an output QUEUE
+               out_dreq = '1') then
 
 	      state             <= SET_PAGE;
 	    end if;
@@ -433,7 +474,7 @@ begin  --  behavoural
 	       waiting_pck_start = '1') then -- start reading new frame
 
 	      state               <= READ_MPM;
-	      src_cyc_int         <= '1';
+-- tom	      src_cyc_int         <= '1';
 	      stab                <= '1';
 	      waiting_pck_start   <= '0';
 	      dreq                <= '1';                          -- we enable stall-to-dreq 
@@ -444,9 +485,9 @@ begin  --  behavoural
 	  -- the rest of signals is assigned directly
           when READ_MPM =>
 
-	    src_cyc_int         <= '1';
-	    stab                <= '1';
-	    dreq                <= '1';
+--tom	    src_cyc_int         <= '1';
+--tom	    stab                <= '1';
+--tom	    dreq                <= '1';
 	    
 	    -- the end of frame
 	    if(cnt_last_word = '1' and   -- last word is expected *and*
@@ -455,26 +496,42 @@ begin  --  behavoural
 	      state              <= READ_LAST_WORD;
 	      dreq               <= '0';
 
-	      if(src_stall_int = '0') then
-		stab               <= '0';
-	      end if;
-	    
-	    end if;
+-- 	      if(src_stall_int = '0') then
+-- 		stab               <= '0';
+-- 	      end if;
+--tom
+              if(out_dreq = '1') then
+                stab <= '0';
+              end if;
+
+            else
+              stab <= '1';
+              dreq <= '1';
+            end if;              
 
           when READ_LAST_WORD =>
         
-	    if(src_stall_int = '0') then
-	      stab               <= '0';
-	    end if;
+-- 	    if(src_stall_int = '0') then
+-- 	      stab               <= '0';
+-- 	    end if;
+--tom
+            if(out_dreq = '1') then
+              stab <= '0';
+            end if;
 	    
 	    -- the ack is the last needed, output data is valid, so we can finish cycle
-	    if(snk_ack_count = 1 and src_stb_int = '0' and src_ack_int = '1') then
-	      src_cyc_int <= '0';
-	      state       <= WAIT_FREE_PCK;
-	    end if;
+-- 	    if(snk_ack_count = 1 and src_stb_int = '0' and src_ack_int = '1') then
+-- 	      src_cyc_int <= '0';
+-- 	      state       <= WAIT_FREE_PCK;
+-- 	    end if;
+--tom
+            if(out_fab.dvalid = '0') then
+              out_fab.eof <= '1';
+              state       <= WAIT_FREE_PCK;
+            end if;
                
           when WAIT_FREE_PCK => 
-
+            out_fab.eof <='0'; --tom
               if(ppfm_free = '0') then
                 
                  ppfm_free_pgaddr <= pck_start_pgaddr;  
@@ -514,26 +571,61 @@ begin  --  behavoural
   mpm_pgreq_o         <= pgreq;
   mpm_pgaddr_o        <= rd_data(c_swc_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;  
   -------------- pWB ----------------------
+--tom
+  out_fab.dvalid  <= stab and mpm_drdy_i;
+  out_fab.addr    <= mpm_ctrl_i(1 downto 0);
+  out_fab.bytesel <= not mpm_ctrl_i(2);
+  out_fab.data    <= mpm_data_i;
 
-  src_stb_int         <= stab and mpm_drdy_i;
-  src_adr_int         <= mpm_ctrl_i(1 downto 0);
-  src_sel_int         <= mpm_ctrl_i(3 downto 2);
-  src_dat_int         <= mpm_data_i;
-
-  -- source out
-  src_o.adr     <= src_adr_int; 
-  src_o.dat     <= src_dat_int;
-  src_o.cyc     <= src_cyc_int;
-  src_o.stb     <= src_stb_int;
-  src_o.we      <= '1'; 
-  src_o.sel     <= src_sel_int; 
-  -- source in
-  src_ack_int   <= src_i.ack; 
-  src_stall_int <= src_i.stall; 
-  src_err_int   <= src_i.err;
-  src_rty_int   <= src_i.rty;
+--tom
+--   src_stb_int         <= stab and mpm_drdy_i;
+--   src_adr_int         <= mpm_ctrl_i(1 downto 0);
+--   src_sel_int         <= mpm_ctrl_i(3 downto 2);
+--   src_dat_int         <= mpm_data_i;
+-- 
+--   -- source out
+--   src_o.adr     <= src_adr_int; 
+--   src_o.dat     <= src_dat_int;
+--   src_o.cyc     <= src_cyc_int;
+--   src_o.stb     <= src_stb_int;
+--   src_o.we      <= '1'; 
+--   src_o.sel     <= src_sel_int; 
+--   -- source in
+--   src_ack_int   <= src_i.ack; 
+--   src_stall_int <= src_i.stall; 
+--   src_err_int   <= src_i.err;
+--   src_rty_int   <= src_i.rty;
   -------------- PPFM ----------------------
   ppfm_free_o         <= ppfm_free;
   ppfm_free_pgaddr_o  <= ppfm_free_pgaddr;
   
+  t_regs.ecr_rx_en_o <= '1';
+
+  out_fab.sof <= '1' when (mpm_sync_i = '1') and (waiting_pck_start = '1') and (state = WAIT_READ) else '0';
+
+  U_Rx_Buffer : ep_rx_buffer
+    generic map (
+      g_size => 512)
+    port map (
+      clk_sys_i  => clk_i,
+      rst_n_i    => rst_n_i,
+      snk_fab_i  => out_fab,
+      snk_dreq_o => out_dreq,
+      src_fab_o  => buf_fab,
+      src_dreq_i => buf_dreq,
+      regs_i  => t_regs,
+      rmon_o  => open);
+
+  U_RX_Wishbone_Master : ep_rx_wb_master
+    generic map (
+      g_ignore_ack => true)
+    port map (
+      clk_sys_i  => clk_i,
+      rst_n_i    => rst_n_i,
+      snk_fab_i  => buf_fab,
+      snk_dreq_o => buf_dreq,
+      src_wb_i   => src_i,
+      src_wb_o   => src_o
+      );
+
 end behavoural;
