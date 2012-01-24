@@ -195,7 +195,9 @@ architecture syn of xswc_input_block is
   signal fifo_data_out : std_logic_vector(c_swc_data_width + c_swc_ctrl_width + 2 - 1 downto 0);
   signal fifo_empty    : std_logic;
   signal fifo_full     : std_logic;
-  signal fifo_usedw    : std_logic_vector(5 -1 downto 0);
+  --signal fifo_usedw    : std_logic_vector(5 -1 downto 0);
+  signal fifo_usedw    : std_logic_vector(c_swc_input_fifo_size_log2 -1 downto 0);
+
   signal tx_ctrl_trans : std_logic_vector(c_swc_ctrl_width - 1 downto 0);
 
   signal transfering_pck : std_logic;
@@ -374,6 +376,8 @@ type t_write_state is (S_IDLE,
  signal in_pck_err      : std_logic;
 
  signal rtu_data_read_by_write_process : std_logic;
+
+ signal mask_eof: std_logic;
 -------------------------------------------------------------------------------
 -- Function which calculates number of 1's in a vector
 ------------------------------------------------------------------------------- 
@@ -543,9 +547,10 @@ begin  --arch
                     b"10" when (in_pck_err = '1')                            else -- error on input
                     b"11" when (in_pck_eof = '1')                            else -- last word or dummy after last word
                     b"00";
-  
+  mask_eof <= '0' when (write_state = S_PERROR) else '1';
+
   fifo_wr       <=  (in_pck_dvalid or  -- valid data from pWB
-                     in_pck_eof)   and -- we want to write dummy EOF
+                    (in_pck_eof and mask_eof))   and -- we want to write dummy EOF, but not when there is an error
                      not fifo_full;    -- FIFO can accept data
 
   fifo_data_in(c_swc_data_width - 1    downto 0)                     <= snk_dat_int;
