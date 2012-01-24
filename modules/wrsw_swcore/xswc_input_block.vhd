@@ -378,6 +378,8 @@ type t_write_state is (S_IDLE,
  signal rtu_data_read_by_write_process : std_logic;
 
  signal mask_eof: std_logic;
+ 
+ signal waiting_for_error_handling : std_logic;
 -------------------------------------------------------------------------------
 -- Function which calculates number of 1's in a vector
 ------------------------------------------------------------------------------- 
@@ -530,7 +532,7 @@ begin  --arch
   --==================================================================================================
   in_pck_sof    <= snk_cyc_int and not snk_cyc_d0;                                       -- detecting the beginning of the pck
   in_pck_dvalid <= snk_stb_int and     snk_we_int and snk_cyc_int and not snk_stall_int; -- valid data which can be stored into FIFO
-  in_pck_eof    <= snk_cyc_d0  and not snk_cyc_int;                                      -- detecting the end of the pck
+  in_pck_eof    <= snk_cyc_d0  and not snk_cyc_int  ;                     -- detecting the end of the pck
   in_pck_err    <= '1'         when   in_pck_dvalid = '1'   and                          -- we have valid data           *and*
                                (snk_adr_int = c_WRF_STATUS) and                          -- the address indicates status *and*
                                (f_unmarshall_wrf_status(snk_dat_int).error = '1') else   -- the status indicates error       
@@ -547,11 +549,11 @@ begin  --arch
                     b"10" when (in_pck_err = '1')                            else -- error on input
                     b"11" when (in_pck_eof = '1')                            else -- last word or dummy after last word
                     b"00";
-  mask_eof <= '0' when (write_state = S_PERROR) else '1';
+  
 
-  fifo_wr       <=  (in_pck_dvalid or  -- valid data from pWB
-                    (in_pck_eof and mask_eof))   and -- we want to write dummy EOF, but not when there is an error
-                     not fifo_full;    -- FIFO can accept data
+  fifo_wr       <=  (in_pck_dvalid or                     -- valid data from pWB
+                    (in_pck_eof and (not mask_eof)))   and -- we want to write dummy EOF, but not when there is an error
+                     not fifo_full;                       -- FIFO can accept data
 
   fifo_data_in(c_swc_data_width - 1    downto 0)                     <= snk_dat_int;
   fifo_data_in(c_swc_data_width + 2 -1 downto c_swc_data_width)      <= snk_adr_int;
@@ -570,6 +572,8 @@ begin  --arch
         stall_after_err<= '0';
 	fifo_clean     <= '0';
 	snk_cyc_d0     <= '0';
+	mask_eof       <= '0';
+	waiting_for_error_handling <= '0';
       --================================================
       else
       
@@ -585,6 +589,19 @@ begin  --arch
         
         -- generating ack
         snk_ack_int <= snk_cyc_int and snk_stb_int and snk_we_int and not snk_stall_int;
+
+        
+        if(in_pck_err = '1') then 
+          mask_eof       <= '1';
+        elsif( in_pck_eof = '1') then
+          mask_eof       <= '0';
+        end if;
+
+	if(in_pck_err = '1') then
+	   waiting_for_error_handling <='1';
+	elsif(tx_rerror = '1') then
+	  waiting_for_error_handling <='0';
+	end if;
 
         -- if there is error and the input is stopped, 
         fifo_clean     <= '0';
@@ -845,7 +862,7 @@ begin  --arch
               
               start_transfer <= '1';
 
-              if(write_ctrl_out = b"01") then
+              if(write_ctrl_out = b"01" and waiting_for_error_handling = '0') then
                 write_state <= S_NEW_PCK_IN_FIFO;
               else
                 write_state <= S_IDLE;
@@ -1224,8 +1241,10 @@ begin  --arch
           --===========================================================================================
 
              rtu_rsp_ack   <= '0';
-
-             if(rtu_data_read_by_write_process = '1') then
+             
+             -- TODO: potential problem if we can confuse RTU decisions if 
+             -- the error occures at the end of the pck, and the new decision is there
+             if(rtu_data_read_by_write_process = '1' or tx_rerror = '1') then
                rcv_rtu_state <= S_IDLE;
              end if;
 
