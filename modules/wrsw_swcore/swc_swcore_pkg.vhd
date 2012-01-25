@@ -121,6 +121,27 @@ package swc_swcore_pkg is
       zero_o   : out std_logic);
   end component;
 
+  component swc_page_allocator
+    generic (
+      g_num_pages      : integer;
+      g_page_addr_bits : integer;
+      g_use_count_bits : integer);
+    port (
+      clk_i          : in  std_logic;
+      rst_n_i        : in  std_logic;
+      alloc_i        : in  std_logic;
+      free_i         : in  std_logic;
+      force_free_i   : in std_logic;
+      set_usecnt_i   : in std_logic;
+      usecnt_i       : in  std_logic_vector(g_use_count_bits-1 downto 0);
+      pgaddr_i       : in  std_logic_vector(g_page_addr_bits -1 downto 0);
+      pgaddr_o       : out std_logic_vector(g_page_addr_bits -1 downto 0);
+      pgaddr_valid_o : out std_logic;
+      idle_o         : out std_logic;
+      done_o         : out std_logic;
+      nomem_o        : out std_logic);
+  end component;
+
   --component swc_page_allocator
   component swc_page_allocator_new
     generic (

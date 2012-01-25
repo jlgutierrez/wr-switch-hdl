@@ -1387,7 +1387,8 @@ begin  --arch
   drdy <= ((not (fifo_empty and (not flush_with_valid_data))) and (not mpm_full_i) and not write_ctrl_out(1))
                             when (write_state = S_WRITE_MPM) else '0';
   
-  flush_sig <= (write_ctrl_out(1)) when (write_state = S_WRITE_MPM) else '0';
+  --flush_sig <= (write_ctrl_out(1)) when (write_state = S_WRITE_MPM) else '0';
+  flush_sig <= '1' when ((write_state = S_WRITE_MPM) and (write_ctrl_out = b"11")) else '0';
   mpm_flush <= flush_reg or flush_sig;
 
 
