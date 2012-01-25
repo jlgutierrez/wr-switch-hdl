@@ -380,6 +380,8 @@ type t_write_state is (S_IDLE,
  signal mask_eof: std_logic;
  
  signal waiting_for_error_handling : std_logic;
+
+ signal in_fifo_full_on_eof : std_logic;
 -------------------------------------------------------------------------------
 -- Function which calculates number of 1's in a vector
 ------------------------------------------------------------------------------- 
@@ -547,13 +549,17 @@ begin  --arch
   -- (see the bottom of the page)
   write_ctrl_in <=  b"01" when (first_pck_word = '1' or in_pck_sof = '1')    else -- first word of the pck
                     b"10" when (in_pck_err = '1')                            else -- error on input
-                    b"11" when (in_pck_eof = '1')                            else -- last word or dummy after last word
+                    b"11" when (in_pck_eof = '1' or in_fifo_full_on_eof = '1')     else -- last word or dummy after last word
                     b"00";
   
 
-  fifo_wr       <=  (in_pck_dvalid or                     -- valid data from pWB
-                    (in_pck_eof and (not mask_eof)))   and -- we want to write dummy EOF, but not when there is an error
-                     not fifo_full;                       -- FIFO can accept data
+  fifo_wr       <=  ((in_pck_dvalid                  or   -- valid data from pWB
+                    (in_pck_eof and (not mask_eof))) and  -- we want to write dummy EOF, but not when there is an error
+                    (not fifo_full))                 or   -- we usually don't attempt to write to a full fifo
+                     in_fifo_full_on_eof;                 -- this is the case when the dummy EOF is to be written to 
+                                                          -- FIFO but the FIFO is full, so we try writing as long as we we succeed 
+                                                          -- (in_fifo_full_on_eof is HIGH when (fifo_full & in_pck_eof), gets LOW 
+                                                          -- 1 cycle after fifo_full gets LOW
 
   fifo_data_in(c_swc_data_width - 1    downto 0)                     <= snk_dat_int;
   fifo_data_in(c_swc_data_width + 2 -1 downto c_swc_data_width)      <= snk_adr_int;
@@ -574,6 +580,7 @@ begin  --arch
 	snk_cyc_d0     <= '0';
 	mask_eof       <= '0';
 	waiting_for_error_handling <= '0';
+	in_fifo_full_on_eof <='0';
       --================================================
       else
       
@@ -585,6 +592,12 @@ begin  --arch
           first_pck_word <= '1';
         elsif(first_pck_word = '1' and snk_stall_int = '0' and snk_stb_int='1') then
           first_pck_word <= '0';
+        end if;
+        
+        if(in_pck_eof = '1' and fifo_full = '1') then 
+          in_fifo_full_on_eof <='1';
+        elsif(in_fifo_full_on_eof = '1' and fifo_full = '0') then
+          in_fifo_full_on_eof <='0';
         end if;
         
         -- generating ack
@@ -917,9 +930,13 @@ begin  --arch
 --           mpm_pagereq                <= '0';
 --        
 --         end if; 
-            
-            
-            if((fifo_populated_enough = '1'             ) and   -- at least on "c_swc_packet_mem_multiply"
+            if(tx_rerror      = '1' ) then -- in case that the pack which we are about to read
+                                           -- from the FIFO gets errored
+               
+               write_state <= S_IDLE;
+               rtu_data_read_by_write_process <= '1';
+               
+            elsif((fifo_populated_enough = '1'             ) and   -- at least on "c_swc_packet_mem_multiply"
                (pckstart_page_in_advance = '1'          ) and   -- needed to write first page
                (rcv_rtu_state = S_RTU_DECISION_AVAILABLE) and   -- there is RTU decision avaible (TODO: !!!)
                (mpm_full_i = '0'                        )) then -- obvious, no write to full MPM

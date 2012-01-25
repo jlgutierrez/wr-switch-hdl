@@ -567,7 +567,7 @@ begin  --  behavoural
   rd_pck_size         <= rd_data(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto c_swc_page_addr_width);  
 
   -------------- MPM ---------------------
-  mpm_dreq_o          <= ((not src_stall_int) and dreq);
+  mpm_dreq_o          <= dreq and out_dreq;--((not src_stall_int) and dreq);
   mpm_pgreq_o         <= pgreq;
   mpm_pgaddr_o        <= rd_data(c_swc_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;  
   -------------- pWB ----------------------

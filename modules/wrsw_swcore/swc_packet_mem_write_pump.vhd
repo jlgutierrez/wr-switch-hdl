@@ -397,7 +397,12 @@ begin  -- rtl
 --               if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length) and drdy_i = '1') then 
 --               
                  --==== needs test - start ===
-                 if( drdy_i = '1') then
+                 if (flush_i = '1') then -- when we flush the last word
+                 
+                    state_write   <= S_FLUSH;
+                    reg_full      <= '1';
+                 
+                 elsif( drdy_i = '1') then
                  --==== needs test - end   ===
                    reg_full      <= '1';
                    state_write   <= S_WAIT_WRITE;
