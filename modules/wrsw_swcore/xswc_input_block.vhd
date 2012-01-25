@@ -292,6 +292,8 @@ type t_write_state is (S_IDLE,
    
  -- interpck page allocation in advance
  signal interpck_page_in_advance  : std_logic;  
+ signal interpck_page_in_advance_d0: std_logic;  
+ signal interpck_page_in_advance_d1: std_logic;  
  signal interpck_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
  signal interpck_page_alloc_req   : std_logic;  
  signal interpck_usecnt_req       : std_logic;  
@@ -826,7 +828,9 @@ begin  --arch
               
               if(mpm_pagereq              = '0'  and  -- not setting yet new page
                  mpm_pageend_i            = '1'  and  -- detecting info from MPM: new page needed
-                 interpck_page_in_advance = '1') then -- we have a spare page allocated
+                 interpck_page_in_advance = '1')then  -- we have a spare page allocated
+--                 interpck_page_in_advance = '1'  and  -- we have a spare page allocated
+--                 flush_sig                = '0') then -- if there is flush, no need  for next page (now !!!)
 
                 mpm_pageaddr <= interpck_pageaddr;
                 mpm_pagereq  <= '1';
@@ -891,6 +895,7 @@ begin  --arch
             -- Of course, this is the case only if the pck finished while pgend request HIGH
             
             if(interpck_page_in_advance = '1') then
+            --if(interpck_page_in_advance_d0 = '1' and interpck_page_in_advance_d1 = '0') then
             
               if(transfering_pck = '1') then
                   write_state                    <= S_STUCK_WITH_DATA;
@@ -900,8 +905,8 @@ begin  --arch
               else
 
                  start_transfer <= '1';
-                 mpm_pageaddr   <= interpck_pageaddr;
-                 mpm_pagereq    <= '1';
+                -- mpm_pageaddr   <= interpck_pageaddr;
+                -- mpm_pagereq    <= '1';
 
                  if(write_ctrl_out = b"01") then
                    write_state <= S_NEW_PCK_IN_FIFO;
@@ -1333,8 +1338,13 @@ begin  --arch
         interpck_page_in_advance <= '0';
         need_pckstart_usecnt_set <= '0';
         need_interpck_usecnt_set <= '0';
+        interpck_page_in_advance_d0<= '0';
+        interpck_page_in_advance_d1<= '0';
       --===================================================
       else
+      
+        interpck_page_in_advance_d0<= interpck_page_in_advance;
+        interpck_page_in_advance_d1<= interpck_page_in_advance_d0;
         
         if(mpm_pckstart = '1') then
           

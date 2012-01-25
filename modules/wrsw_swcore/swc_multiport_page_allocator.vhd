@@ -156,8 +156,8 @@ begin  -- syn
 
 
   -- one allocator/deallocator for all ports
-  ALLOC_CORE : swc_page_allocator_new -- tom's new allocator
-  --ALLOC_CORE : swc_page_allocator
+  --ALLOC_CORE : swc_page_allocator_new -- tom's new allocator
+  ALLOC_CORE : swc_page_allocator
     generic map (
       g_num_pages      => c_swc_packet_mem_num_pages,
       g_page_addr_bits => c_swc_page_addr_width,

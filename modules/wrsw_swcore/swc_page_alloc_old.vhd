@@ -359,8 +359,8 @@ begin  -- syn
       elsif(was_reset = '1') then
         
         if(first_addr = '1') then
-          --l0_wr_data <= (others => '1');
-          l0_wr_data <= x"fffffffe"; -- tom
+          l0_wr_data <= (others => '1');
+          --l0_wr_data <= x"fffffffe"; -- tom
           l0_wr      <= '1';
           first_addr <= '0';
         elsif(l0_wr_addr = ones) then
