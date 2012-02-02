@@ -1,3 +1,45 @@
+-------------------------------------------------------------------------------
+-- Title        : Dual clock (asynchronous) FIFO controller
+-- Project      : White Rabbit Switch
+-------------------------------------------------------------------------------
+-- File         : swc_async_fifo_ctrl.vhd
+-- Author       : Tomasz Włostowski
+-- Company      : CERN BE-CO-HT
+-- Created      : 2012-01-30
+-- Last update  : 2012-01-30
+-- Platform     : FPGA-generic
+-- Standard     : VHDL'93
+-- Dependencies : genram_pkg
+-------------------------------------------------------------------------------
+-- Description: Gray-encoded dual clock FIFO controller and address generator.
+-- Based on Xilinx Application Note "Asynchronous FIFO in Virtex-II FPGAs" by
+-- P. Alfke & example code from http://www.asic-world.com.
+-------------------------------------------------------------------------------
+--
+-- Copyright (c) 2012 CERN
+--
+-- This source file is free software; you can redistribute it   
+-- and/or modify it under the terms of the GNU Lesser General   
+-- Public License as published by the Free Software Foundation; 
+-- either version 2.1 of the License, or (at your option) any   
+-- later version.                                               
+--
+-- This source is distributed in the hope that it will be       
+-- useful, but WITHOUT ANY WARRANTY; without even the implied   
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      
+-- PURPOSE.  See the GNU Lesser General Public License for more 
+-- details.                                                     
+--
+-- You should have received a copy of the GNU Lesser General    
+-- Public License along with this source; if not, download it   
+-- from http://www.gnu.org/licenses/lgpl-2.1.html
+--
+-------------------------------------------------------------------------------
+-- Revisions  :
+-- Date        Version  Author          Description
+-- 2012-01-30  1.0      twlostow        Created
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -10,7 +52,7 @@ entity swc_async_fifo_ctrl is
     g_size : integer);
 
   port(
-    rst_n_i  : in std_logic;
+    rst_n_a_i  : in std_logic;
     clk_wr_i : in std_logic;
     clk_rd_i : in std_logic;
 
@@ -27,6 +69,8 @@ end swc_async_fifo_ctrl;
 
 architecture rtl of swc_async_fifo_ctrl is
 
+  -- Gray-encoded increase-by-1 function. Takes a gray-encoded integer x and returns
+  -- gray-encoded value of (x+1).
   function f_gray_inc(x : unsigned) return unsigned is
     variable bin, tmp : unsigned(x'left downto 0);
   begin
@@ -51,9 +95,9 @@ architecture rtl of swc_async_fifo_ctrl is
   signal stat                : std_logic;
 begin  -- rtl
 
-  p_write_ptr : process(clk_wr_i, rst_n_i)
+  p_write_ptr : process(clk_wr_i, rst_n_a_i)
   begin
-    if rst_n_i = '0' then
+    if rst_n_a_i = '0' then
       wr_ptr <= (others => '0');
     elsif rising_edge(clk_wr_i) then
       if(wr_i = '1' and full_int = '0') then
@@ -63,9 +107,9 @@ begin  -- rtl
   end process;
 
 
-  p_read_ptr : process(clk_rd_i, rst_n_i)
+  p_read_ptr : process(clk_rd_i, rst_n_a_i)
   begin
-    if rst_n_i = '0' then
+    if rst_n_a_i = '0' then
       rd_ptr <= (others => '0');
     elsif rising_edge(clk_rd_i) then
       if(rd_i = '1' and empty_int = '0') then
@@ -82,9 +126,9 @@ begin  -- rtl
                 and (wr_ptr(wr_ptr'left) xnor rd_ptr(rd_ptr'left-1));
   end process;
 
-  process(set_stat, rst_stat, rst_n_i)
+  process(set_stat, rst_stat, rst_n_a_i)
   begin
-    if(rst_stat = '1' or rst_n_i = '0') then
+    if(rst_stat = '1' or rst_n_a_i = '0') then
       stat <= '0';
     elsif(set_stat = '1') then
       stat <= '1';
