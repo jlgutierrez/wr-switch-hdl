@@ -291,6 +291,9 @@ begin  --  behavoural
     read(i)         <= read_array(i)  when (state = SET_PAGE) else '0';--rx_dreq_i;
       
     PRIO_QUEUE_CTRL : swc_ob_prio_queue
+      generic map(
+        g_per_prio_fifo_size_width => c_per_prio_fifo_size_width -- c_swc_output_fifo_addr_width
+       )
       port map (
         clk_i       => clk_i,
         rst_n_i     => rst_n_i,

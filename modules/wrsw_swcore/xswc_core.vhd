@@ -53,7 +53,7 @@ use work.wrsw_shared_types_pkg.all;
 entity xswc_core is
   generic
     ( 
-    g_num_ports             : integer := c_swc_num_ports
+    g_num_ports             : integer := 7 --c_swc_num_ports
     );
   port (
     clk_i   : in std_logic;
@@ -66,14 +66,12 @@ entity xswc_core is
     snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
     snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
 
- 
 -------------------------------------------------------------------------------
 -- pWB : output (goes to the Endpoint)
 -------------------------------------------------------------------------------  
 
     src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
     src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
-
     
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
@@ -92,7 +90,7 @@ architecture rtl of xswc_core is
     g_mem_size                         : integer ;--:= c_swc_packet_mem_size
     g_page_size                        : integer ;--:= c_swc_page_size
     g_prio_num                         : integer ;--:= c_swc_output_prio_num;
-    g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width    
+    g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_data_width                       : integer ;--:= c_swc_data_width
     g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
@@ -117,7 +115,6 @@ architecture rtl of xswc_core is
     snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
     snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
 
-
     -------------------------------------------------------------------------------
     -- pWB : output (goes to the Endpoint)
     -------------------------------------------------------------------------------  
@@ -135,30 +132,24 @@ architecture rtl of xswc_core is
     );
    end component;
 
-
-
 begin
-
-
-
-
 
   U_swc_core: swc_core
     generic map( 
-      g_mem_size                         => c_swc_packet_mem_size,
-      g_page_size                        => c_swc_page_size,
-      g_prio_num                         => c_swc_output_prio_num,
-      g_max_pck_size_width               => c_swc_max_pck_size_width,
-      g_num_ports                        => c_swc_num_ports,
-      g_data_width                       => c_swc_data_width,
-      g_ctrl_width                       => c_swc_ctrl_width,
-      g_pck_pg_free_fifo_size            => c_swc_freeing_fifo_size,
-      g_input_block_cannot_accept_data   => "drop_pck", --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
-      g_output_block_per_prio_fifo_size  => c_swc_output_fifo_size,
+      g_mem_size                         => 65536,           -- c_swc_packet_mem_size,
+      g_page_size                        => 64,              -- c_swc_page_size,
+      g_prio_num                         => 8,               -- c_swc_output_prio_num,
+      g_max_pck_size                     => 10 * 1024, --10kB -- c_swc_max_pck_size,
+      g_num_ports                        => 7 ,              -- c_swc_num_ports,
+      g_data_width                       => 16,              -- c_swc_data_width,
+      g_ctrl_width                       => 4,               -- c_swc_ctrl_width,
+      g_pck_pg_free_fifo_size            => (65536/64)/2,    -- c_swc_freeing_fifo_size,
+      g_input_block_cannot_accept_data   => "drop_pck",      --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
+      g_output_block_per_prio_fifo_size  => 64,              -- c_swc_output_fifo_size,
       -- probably useless with new memory      
-      g_packet_mem_multiply              => c_swc_packet_mem_multiply,
-      g_input_block_fifo_size            => c_swc_input_fifo_size,     
-      g_input_block_fifo_full_in_advance => c_swc_fifo_full_in_advance
+      g_packet_mem_multiply              => 16,              -- c_swc_packet_mem_multiply,
+      g_input_block_fifo_size            => 2 *  16,         -- c_swc_input_fifo_size,     
+      g_input_block_fifo_full_in_advance => (2 * 16) - 3     -- c_swc_fifo_full_in_advance
     )
     port map (
       clk_i               => clk_i,

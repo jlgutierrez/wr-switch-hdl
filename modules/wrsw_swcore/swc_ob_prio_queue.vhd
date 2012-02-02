@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2010-11-03
+-- Last update: 2012-02-02
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -35,7 +35,7 @@
 -- Revisions  :
 -- Date        Version  Author   Description
 -- 2010-11-09  1.0      mlipinsk created
-
+-- 2012-02-02  2.0      mlipinsk generic-azed
 -------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
@@ -47,7 +47,9 @@ use work.swc_swcore_pkg.all;
 
 
 entity swc_ob_prio_queue is
-
+  generic(
+    g_per_prio_fifo_size_width : integer --:= c_swc_output_fifo_addr_width
+    );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -67,8 +69,8 @@ entity swc_ob_prio_queue is
 -------------------------------------------------------------------------------
     
     wr_en_o           : out  std_logic;
-    wr_addr_o         : out  std_logic_vector(c_swc_output_fifo_addr_width - 1 downto 0);
-    rd_addr_o         : out  std_logic_vector(c_swc_output_fifo_addr_width - 1 downto 0)
+    wr_addr_o         : out  std_logic_vector(g_per_prio_fifo_size_width - 1 downto 0);
+    rd_addr_o         : out  std_logic_vector(g_per_prio_fifo_size_width - 1 downto 0)
     
     );
 end swc_ob_prio_queue;
@@ -76,8 +78,8 @@ end swc_ob_prio_queue;
 
 architecture behavoural of swc_ob_prio_queue is
   
-  signal head          : std_logic_vector(c_swc_output_fifo_addr_width - 1  downto 0);
-  signal tail          : std_logic_vector(c_swc_output_fifo_addr_width - 1  downto 0);
+  signal head          : std_logic_vector(g_per_prio_fifo_size_width - 1  downto 0);
+  signal tail          : std_logic_vector(g_per_prio_fifo_size_width - 1  downto 0);
   signal not_full      : std_logic;  
   signal not_empty     : std_logic;
     

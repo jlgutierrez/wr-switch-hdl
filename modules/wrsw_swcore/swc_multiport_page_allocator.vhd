@@ -168,6 +168,7 @@ begin  -- syn
     generic map (
       g_num_pages      => g_page_num,
       g_page_addr_width=> g_page_addr_width,
+      g_num_ports      => g_page_num,
       g_usecount_width => g_usecount_width)
     port map (
       clk_i          => clk_i,

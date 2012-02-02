@@ -109,6 +109,8 @@ entity swc_page_allocator is
     -- number of bits of the page address
     g_page_addr_width: integer := 11; --g_page_addr_bits 
 
+    g_num_ports      : integer ;--:= c_swc_num_ports
+
     -- number of bits of the user count value
     g_usecount_width: integer := 4 --g_use_count_bits 
     );
@@ -397,7 +399,7 @@ begin  -- syn
             -- ========= hystheresis ===========================
             if(nomem = '0' and (free_blocks < 3)) then
               nomem <= '1';
-            elsif(nomem = '1' and (free_blocks > (3*c_swc_num_ports))) then
+            elsif(nomem = '1' and (free_blocks > (3*g_num_ports))) then
               nomem <= '0';
             end if;
             -- ========= =========== ===========================

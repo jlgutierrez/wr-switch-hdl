@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-01-24
+-- Last update: 2012-02-02
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -21,7 +21,7 @@
 --    - data consits of a word of ctrl + data seq
 --    - one word can be written at one clock cycle, in such case drdy_i is
 --    - constantly HIGH
--- 2) if entire "vector" of data words is collected ('c_swc_packet_mem_multiply'
+-- 2) if entire "vector" of data words is collected ('g_packet_mem_multiply'
 --    number of data words), such a vector is written to SSRAM to one word:
 --    - the dats is written to SRAM memory address = page_addr + offset
 --    - each "memory page" (indicated by page_addr) consists of a few
@@ -31,7 +31,7 @@
 -- 
 -- Each pump has its 'time slot' (one cycle) to read/write from/to 
 -- *FUCKING BIG SRAM (FB SRAM)*.  The access is granted to each pump in sequence: 
--- 1,2,3...(c_swc_packet_mem_multiply - 1). The access is multiplexed
+-- 1,2,3...(g_packet_mem_multiply - 1). The access is multiplexed
 -- between the pumps. 
 --
 -- If we want to write to the FB SRAM vector not fully filled in with data, 
@@ -66,6 +66,7 @@
 -- 2010-10-12  1.1      mlipinsk comments added !!!!!
 -- 2010-10-18  1.2      mlipinsk clearing register
 -- 2010-11-24  1.3      mlipinsk adding main FSM !
+-- 2012-02-02  2.0      mlipinsk generic-azed
 -------------------------------------------------------------------------------
 
 
@@ -82,8 +83,15 @@ use work.swc_swcore_pkg.all;
 --use work.pck_fio.all;
 
 entity swc_packet_mem_write_pump is
+  generic ( 
+      g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
+      g_pump_data_width                  : integer ;--:= c_swc_pump_width
+      g_mem_addr_width                   : integer ;--:= c_swc_packet_mem_addr_width
+      g_page_addr_offset_width           : integer ;--:= c_swc_page_offset_width
 
-  
+      -- probably useless with new memory
+      g_packet_mem_multiply              : integer --:= c_swc_packet_mem_multiply
+    );  
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -93,14 +101,14 @@ entity swc_packet_mem_write_pump is
 -------------------------------------------------------------------------------    
     
     -- Next page address input (from page allocator)
-    pgaddr_i : in  std_logic_vector(c_swc_page_addr_width-1 downto 0);
+    pgaddr_i : in  std_logic_vector(g_page_addr_width-1 downto 0);
     
     -- Next page address input strobe (active HI) - loads internal
     -- memory address register with the address of new page
     pgreq_i  : in  std_logic;
 
     -- HI indicates that current page is done, and that the parent entity must
-    -- select another page in following clock cycles (c_swc_packet_mem_multiply
+    -- select another page in following clock cycles (g_packet_mem_multiply
     -- 2) if it wants to write more data into the memory
     pgend_o  : out std_logic;
 
@@ -113,23 +121,23 @@ entity swc_packet_mem_write_pump is
 
     -- data input. data consists of 'c_swc_ctrl_width' of control data and 
     -- 'c_swc_data_width' of data
-    -- sequence (of 'c_swc_packet_mem_multiply' number) of such data is saved 
+    -- sequence (of 'g_packet_mem_multiply' number) of such data is saved 
     -- in one SRAM memory word at the pgaddr_i
-    d_i    : in  std_logic_vector(c_swc_pump_width -1 downto 0);
+    d_i    : in  std_logic_vector(g_pump_data_width -1 downto 0);
 
     -- data input ready strobe (active HI). Clocks in the data. drdy_i cannot 
     -- be asserted when full_o is active.
     drdy_i  : in  std_logic;
     
     -- input register full (active HI). Indicates that the memory input
-    -- register is full ('c_swc_packet_mem_multiply' words have been written)
+    -- register is full ('g_packet_mem_multiply' words have been written)
     -- it will go back to 0 as soon as the memory input reg is synced to the
     -- shared memory. 
     full_o  : out std_logic;
 
     -- Memory input register flush (active HI). Forces a flush of memory input 
     -- register to the shared memory on the next sync pulse even if the number 
-    -- of words clocked into the pump is less than c_swc_packet_mem_multiply.
+    -- of words clocked into the pump is less than g_packet_mem_multiply.
     flush_i : in  std_logic;
 
 -------------------------------------------------------------------------------
@@ -137,11 +145,11 @@ entity swc_packet_mem_write_pump is
 -------------------------------------------------------------------------------
 
     -- address in LL SRAM which corresponds to the page address
-    ll_addr_o : out std_logic_vector(c_swc_page_addr_width -1 downto 0);
+    ll_addr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
 
     -- data output for LL SRAM - it is the address of the next page or 0xF...F
     -- if this is the last page of the package
-    ll_data_o    : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ll_data_o    : out std_logic_vector(g_page_addr_width - 1 downto 0);
 
     -- request to write to Linked List, should be high until
     -- ll_wr_done_i indicates successfull write
@@ -151,7 +159,7 @@ entity swc_packet_mem_write_pump is
 -------------------------------------------------------------------------------
 -- shared memory (FB SRAM) interface 
 -- The access is multiplexed with other pumps. Each pump has a one-cycle-timeslot
--- to access the FB SRAM every 'c_swc_packet_mem_multiply' cycles.
+-- to access the FB SRAM every 'g_packet_mem_multiply' cycles.
 -------------------------------------------------------------------------------
 
     -- synchronization pulse. HI indicates a time-slot assigned to this write pump.
@@ -161,10 +169,10 @@ entity swc_packet_mem_write_pump is
     sync_i  : in  std_logic;
 
     -- address output for shared memory block
-    addr_o : out std_logic_vector(c_swc_packet_mem_addr_width -1 downto 0);
+    addr_o : out std_logic_vector(g_mem_addr_width -1 downto 0);
 
     -- data output for shared memory block
-    q_o    : out std_logic_vector(c_swc_pump_width * c_swc_packet_mem_multiply - 1 downto 0);
+    q_o    : out std_logic_vector(g_pump_data_width * g_packet_mem_multiply - 1 downto 0);
 
     -- write strobe output for shared memory block (FB SRAM), multiplexed with other pumps
     we_o   : out std_logic
@@ -180,16 +188,18 @@ architecture rtl of swc_packet_mem_write_pump is
   -- word counter (word consists of ctrl + data), counts words in the 'in_reg' register
   signal cntr      : unsigned(3 downto 0);
 
-  -- memory input register organized as an array of (c_swc_packet_mem_multiply) input
+  subtype t_pump_entry is std_logic_vector(g_pump_data_width-1 downto 0);
+  type t_pump_reg is array (g_packet_mem_multiply-1 downto 0) of t_pump_entry;
+  -- memory input register organized as an array of (g_packet_mem_multiply) input
   -- wordsn (ctrl + data).
   signal in_reg    : t_pump_reg;
   
-  -- indicates that in_reg is full, 'c_swc_packet_mem_multiply' words has been written)
+  -- indicates that in_reg is full, 'g_packet_mem_multiply' words has been written)
   signal reg_full  : std_logic;
 
   -- memory register, consists of 'pg_addr' and in-page count (the number of inside
-  -- page FB SRAM words is: (c_swc_page_size / c_swc_packet_mem_multiply)
-  signal mem_addr  : std_logic_vector (c_swc_packet_mem_addr_width - 1 downto 0);
+  -- page FB SRAM words is: (c_swc_page_size / g_packet_mem_multiply)
+  signal mem_addr  : std_logic_vector (g_mem_addr_width - 1 downto 0);
   
   -- FB SRAM write enable (internal). Translate into write request to FB SRAM. 
   -- the access is multiplexed, so the write request has to be issued in this
@@ -211,7 +221,7 @@ architecture rtl of swc_packet_mem_write_pump is
   --signal zeros : std_logic_vector(63 downto 0);  
 
   -- HI indicates that current page is done, and that the parent entity must
-  -- select another page in following clock cycles (c_swc_packet_mem_multiply
+  -- select another page in following clock cycles (g_packet_mem_multiply
   -- 2) if it wants to write more data into the memory
   signal pgend  : std_logic;
   
@@ -223,19 +233,19 @@ architecture rtl of swc_packet_mem_write_pump is
   --=================================================================================
   
   -- address in LL SRAM which corresponds to the page address
-  signal current_page_addr_int : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+  signal current_page_addr_int : std_logic_vector(g_page_addr_width -1 downto 0);
   
   -- stored during FSM cycle (next->eop), this is needed for the last page of the pck
   -- in such case we need to remember it, otherwise we have problems
-  signal current_page_addr_fsm : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+  signal current_page_addr_fsm : std_logic_vector(g_page_addr_width -1 downto 0);
    
-  signal previous_page_addr_int : std_logic_vector(c_swc_page_addr_width -1 downto 0);
+  signal previous_page_addr_int : std_logic_vector(g_page_addr_width -1 downto 0);
 
   -- internal
-  signal ll_write_addr  : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal ll_write_addr  : std_logic_vector(g_page_addr_width - 1 downto 0);
   
   -- internal
-  signal ll_write_data  : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal ll_write_data  : std_logic_vector(g_page_addr_width - 1 downto 0);
   
   -- indicatest that the next address shall be writtent to
   -- Linked List SRAM
@@ -272,7 +282,7 @@ architecture rtl of swc_packet_mem_write_pump is
   signal pgreq_or : std_logic;
   signal pckstart_or : std_logic;  
    
-  signal sync_d    : std_logic_vector(c_swc_packet_mem_multiply - 1 downto 0);
+  signal sync_d    : std_logic_vector(g_packet_mem_multiply - 1 downto 0);
 
 --  signal nasty_wait_full : std_logic;
 
@@ -296,7 +306,7 @@ begin  -- rtl
        else
          
          sync_d(0) <= sync_i;
-         for i in 1 to c_swc_packet_mem_multiply-1 loop
+         for i in 1 to g_packet_mem_multiply-1 loop
            sync_d(i) <= sync_d(i - 1);
          end loop; 
          
@@ -305,7 +315,7 @@ begin  -- rtl
      
   end process;
   
---  before_sync <= sync_d(c_swc_packet_mem_multiply - 2);
+--  before_sync <= sync_d(g_packet_mem_multiply - 2);
   
   write_fsm : process(clk_i, rst_n_i)
   begin
@@ -337,7 +347,7 @@ begin  -- rtl
                state_write   <= S_FLUSH;
                reg_full      <= '1';
                 
-             elsif(cntr = to_unsigned(c_swc_packet_mem_multiply - 2,cntr'length) and drdy_i ='1') then
+             elsif(cntr = to_unsigned(g_packet_mem_multiply - 2,cntr'length) and drdy_i ='1') then
 
                state_write   <= S_READ_LAST_DATA_WORD;       
    --            cnt_last_word <= '1';
@@ -359,7 +369,7 @@ begin  -- rtl
 
                -- during the last address of the page, the Linked list is being written, so we need 
                -- to wait for it to finish
-               elsif(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and ll_idle = '0' ) then
+               elsif(mem_addr(g_page_addr_offset_width-1 downto 0) = allones(g_page_addr_offset_width-1 downto 0) and ll_idle = '0' ) then
                  
                  state_write   <= S_WAIT_LL_READY;
                  reg_full      <= '1';
@@ -394,7 +404,7 @@ begin  -- rtl
 --                 
             else -- synch_i = '0'
                
---               if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length) and drdy_i = '1') then 
+--               if(cntr = to_unsigned(g_packet_mem_multiply -1,cntr'length) and drdy_i = '1') then 
 --               
                  --==== needs test - start ===
                  if (flush_i = '1') then -- when we flush the last word
@@ -422,7 +432,7 @@ begin  -- rtl
              
           when S_NASTY_WAIT =>
              
-            if(drdy_i = '1' and sync_i = '1' and cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
+            if(drdy_i = '1' and sync_i = '1' and cntr = to_unsigned(g_packet_mem_multiply -1,cntr'length)) then
     
               state_write   <= S_WRITE_DATA;
               we_int        <= '1';
@@ -490,7 +500,7 @@ begin  -- rtl
   
              if(sync_i = '1' and pgend = '0') then
                
-               if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) and ll_idle = '0') then
+               if(mem_addr(g_page_addr_offset_width-1 downto 0) = allones(g_page_addr_offset_width-1 downto 0) and ll_idle = '0') then
                  
                  state_write   <= S_WAIT_LL_READY;
                  reg_full      <= '1';
@@ -534,7 +544,7 @@ begin  -- rtl
   
   
   
---  cntr_full <= '1' when cntr = to_unsigned(c_swc_packet_mem_multiply-1, cntr'length) else '0';
+--  cntr_full <= '1' when cntr = to_unsigned(g_packet_mem_multiply-1, cntr'length) else '0';
   
 
   
@@ -549,7 +559,7 @@ begin  -- rtl
         pgend    <= '0';
   --      next_page_loaded <= '0';
         --pckstart <= '0';
-        for i in 0 to c_swc_packet_mem_multiply-1 loop
+        for i in 0 to g_packet_mem_multiply-1 loop
           in_reg(i) <= (others => '0');
         end loop;  -- i 
         
@@ -570,10 +580,10 @@ begin  -- rtl
         
           pgend                <= '0';
           
-        elsif(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then          
+        elsif(mem_addr(g_page_addr_offset_width-1 downto 0) = allones(g_page_addr_offset_width-1 downto 0) ) then          
           
           
-          if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length) and sync_i = '1' and drdy_i = '1') then
+          if(cntr = to_unsigned(g_packet_mem_multiply -1,cntr'length) and sync_i = '1' and drdy_i = '1') then
         
             pgend              <= '1';
             
@@ -587,19 +597,19 @@ begin  -- rtl
          
         if(pgreq_i = '1') then
         
-          mem_addr(c_swc_packet_mem_addr_width-1 downto c_swc_page_offset_width) <= pgaddr_i;
-          mem_addr(c_swc_page_offset_width-1 downto 0)                           <= (others => '0');
+          mem_addr(g_mem_addr_width-1 downto g_page_addr_offset_width) <= pgaddr_i;
+          mem_addr(g_page_addr_offset_width-1 downto 0)                           <= (others => '0');
 --          pgend                                                                  <= '0';
  --         next_page_loaded                                                       <= '1';
           
         elsif(state_write = S_WRITE_DATA) then
           
-          if(mem_addr(c_swc_page_offset_width-1 downto 0) = allones(c_swc_page_offset_width-1 downto 0) ) then
+          if(mem_addr(g_page_addr_offset_width-1 downto 0) = allones(g_page_addr_offset_width-1 downto 0) ) then
 --            pgend            <= '1';
 --            next_page_loaded <= '0';
           else
             
-            mem_addr(c_swc_page_offset_width-1 downto 0) <= std_logic_vector(unsigned(mem_addr(c_swc_page_offset_width-1 downto 0)) + 1);
+            mem_addr(g_page_addr_offset_width-1 downto 0) <= std_logic_vector(unsigned(mem_addr(g_page_addr_offset_width-1 downto 0)) + 1);
                         
           end if;
 
@@ -625,7 +635,7 @@ begin  -- rtl
           end if;
           
           
-          for i in 0 to c_swc_packet_mem_multiply-1 loop
+          for i in 0 to g_packet_mem_multiply-1 loop
             if(i >= to_integer(cntr)) then 
               in_reg(i) <= (others => '0');
             end if;
@@ -637,8 +647,8 @@ begin  -- rtl
           -- entity
 --          if(state_write = S_IDLE) then
 --            cntr <= (others =>'1');
---          elsif(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
-          if(cntr = to_unsigned(c_swc_packet_mem_multiply -1,cntr'length)) then
+--          elsif(cntr = to_unsigned(g_packet_mem_multiply -1,cntr'length)) then
+          if(cntr = to_unsigned(g_packet_mem_multiply -1,cntr'length)) then
             cntr     <= (others => '0');
           elsif((state_write = S_READ_LAST_DATA_WORD) and sync_i = '1') then
             cntr      <= (others => '0');
@@ -879,12 +889,12 @@ begin  -- rtl
 --            (not sync_i)) or(pgend and sync_i));-- or (sync_i and (not drdy_i)));-- and not before_sync;
             
          
-  --addr_o <= pgaddr_i & zeros (c_swc_page_offset_width-1 downto 0) when (we_int = '1' and pgreq_i = '1') else mem_addr;
+  --addr_o <= pgaddr_i & zeros (g_page_addr_offset_width-1 downto 0) when (we_int = '1' and pgreq_i = '1') else mem_addr;
   addr_o <= mem_addr;
   pgend_o <= pgend;
   
-  gen_q1 : for i in 0 to c_swc_packet_mem_multiply-1 generate
-    q_o(c_swc_pump_width * (i+1) - 1 downto c_swc_pump_width * i) <= in_reg(i);
+  gen_q1 : for i in 0 to g_packet_mem_multiply-1 generate
+    q_o(g_pump_data_width * (i+1) - 1 downto g_pump_data_width * i) <= in_reg(i);
   end generate gen_q1;
   
   ll_addr_o   <= ll_write_addr;
