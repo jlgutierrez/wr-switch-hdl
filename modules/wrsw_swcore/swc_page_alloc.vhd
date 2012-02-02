@@ -107,10 +107,10 @@ entity swc_page_allocator_new is
     g_num_pages : integer := 2048;
 
     -- number of bits of the page address
-    g_page_addr_bits : integer := 11;
+    g_page_addr_width: integer := 11; --g_page_addr_bits 
 
     -- number of bits of the user count value
-    g_use_count_bits : integer := 4
+    g_usecount_width: integer := 4 --g_usecount_width 
     );
 
   port (
@@ -149,11 +149,11 @@ entity swc_page_allocator_new is
     -- "Use count" value for the page to be allocated. If the page is to be
     -- used by multiple output queues, each of them will attempt to free it.
 
-    usecnt_i : in std_logic_vector(g_use_count_bits-1 downto 0);
+    usecnt_i : in std_logic_vector(g_usecount_width-1 downto 0);
 
-    pgaddr_i : in std_logic_vector(g_page_addr_bits -1 downto 0);
+    pgaddr_i : in std_logic_vector(g_page_addr_width -1 downto 0);
 
-    pgaddr_o       : out std_logic_vector(g_page_addr_bits -1 downto 0);
+    pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
     pgaddr_valid_o : out std_logic;
 
     idle_o : out std_logic;
@@ -173,25 +173,25 @@ architecture syn of swc_page_allocator_new is
 
   signal nomem : std_logic;
 
-  signal rd_ptr, wr_ptr : unsigned(g_page_addr_bits-1 downto 0);
-  signal free_pages     : unsigned(g_page_addr_bits downto 0);
+  signal rd_ptr, wr_ptr : unsigned(g_page_addr_width-1 downto 0);
+  signal free_pages     : unsigned(g_page_addr_width downto 0);
 
   signal q_write , q_read : std_logic;
   signal pending_free     : std_logic;
-  signal read_usecnt      : std_logic_vector(g_use_count_bits-1 downto 0);
-  signal q_init_data      : unsigned(g_page_addr_bits -1 downto 0);
+  signal read_usecnt      : std_logic_vector(g_usecount_width-1 downto 0);
+  signal q_init_data      : unsigned(g_page_addr_width -1 downto 0);
 
   signal initializing : std_logic;
 
   signal usecnt_write                 : std_logic;
-  signal usecnt_addr                  : std_logic_vector(g_page_addr_bits-1 downto 0);
-  signal usecnt_rddata, usecnt_wrdata : std_logic_vector(g_use_count_bits-1 downto 0);
+  signal usecnt_addr                  : std_logic_vector(g_page_addr_width-1 downto 0);
+  signal usecnt_rddata, usecnt_wrdata : std_logic_vector(g_usecount_width-1 downto 0);
   
-  signal q_output_addr                : std_logic_vector(g_page_addr_bits-1 downto 0);
+  signal q_output_addr                : std_logic_vector(g_page_addr_width-1 downto 0);
   signal alloc_d0                     : std_logic;
   signal free_d0                      : std_logic;
   signal done_int                     : std_logic;
-   signal ram_ones     : std_logic_vector(g_page_addr_bits + g_use_count_bits -1 downto 0);
+   signal ram_ones     : std_logic_vector(g_page_addr_width + g_usecount_width -1 downto 0);
    
   
 
@@ -200,20 +200,20 @@ ram_ones  <=(others => '1');
 
   U_Queue_RAM : generic_dpram
     generic map (
-      g_data_width       => g_page_addr_bits,
-      g_size             => 2**g_page_addr_bits,
+      g_data_width       => g_page_addr_width,
+      g_size             => 2**g_page_addr_width,
       g_with_byte_enable => false,
       g_dual_clock       => false)
     port map (
       rst_n_i => rst_n_i,
       clka_i  => clk_i,
-      bwea_i => ram_ones((g_page_addr_bits+7)/8 - 1 downto 0),
+      bwea_i => ram_ones((g_page_addr_width+7)/8 - 1 downto 0),
       wea_i   => q_write,
       aa_i    => std_logic_vector(wr_ptr),
       da_i    => pgaddr_i,
 
       clkb_i => clk_i,
-      bweb_i => ram_ones((g_page_addr_bits+7)/8 - 1 downto 0),
+      bweb_i => ram_ones((g_page_addr_width+7)/8 - 1 downto 0),
       web_i  => initializing,
       ab_i   => std_logic_vector(rd_ptr),
       db_i   => std_logic_vector(rd_ptr),
@@ -225,30 +225,30 @@ ram_ones  <=(others => '1');
   usecnt_write <= (alloc_d0 or set_usecnt_i or free_d0 or force_free_i) and not initializing;
 
   usecnt_wrdata <= usecnt_i when (set_usecnt_i = '1' or alloc_d0 = '1') else
-                   f_gen_dummy_vec('0', g_use_count_bits) when force_free_i = '1' else
+                   f_gen_dummy_vec('0', g_usecount_width) when force_free_i = '1' else
                    std_logic_vector(unsigned(usecnt_rddata) - 1);
   
   
   U_UseCnt_RAM : generic_dpram
     generic map (
-      g_data_width       => g_use_count_bits,
-      g_size             => 2**g_page_addr_bits,
+      g_data_width       => g_usecount_width,
+      g_size             => 2**g_page_addr_width,
       g_with_byte_enable => false,
       g_dual_clock       => false)
     port map (
       rst_n_i => rst_n_i,
       clka_i  => clk_i,
       wea_i   => usecnt_write,
-       bwea_i => ram_ones((g_use_count_bits+7)/8 - 1 downto 0),
+       bwea_i => ram_ones((g_usecount_width+7)/8 - 1 downto 0),
       aa_i    => usecnt_addr,
       da_i    => usecnt_wrdata,
       qa_o    => usecnt_rddata,
 
       clkb_i => clk_i,
-       bweb_i => ram_ones((g_use_count_bits+7)/8 - 1 downto 0),
+       bweb_i => ram_ones((g_usecount_width+7)/8 - 1 downto 0),
       web_i  => initializing,
       ab_i   => std_logic_vector(rd_ptr),
-      db_i   => f_gen_dummy_vec('0', g_use_count_bits));
+      db_i   => f_gen_dummy_vec('0', g_usecount_width));
 
   p_pointers : process(clk_i)
   begin

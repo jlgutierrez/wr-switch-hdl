@@ -89,18 +89,22 @@ architecture rtl of xswc_core is
 
  component swc_core is
   generic( 
-    g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
-    g_prio_width                       : integer ;--:= c_swc_prio_width;
+    g_mem_size                         : integer ;--:= c_swc_packet_mem_size
+    g_page_size                        : integer ;--:= c_swc_page_size
+    g_prio_num                         : integer ;--:= c_swc_output_prio_num;
     g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width    
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_data_width                       : integer ;--:= c_swc_data_width
     g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
+    g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+
     -- probably useless with new memory
     g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
     g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
-    g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance (xswc_input_block)
+    g_input_block_fifo_full_in_advance : integer --:=c_swc_fifo_full_in_advance (xswc_input_block)
+
     );
   port (
     clk_i   : in std_logic;
@@ -141,14 +145,17 @@ begin
 
   U_swc_core: swc_core
     generic map( 
-      g_page_addr_width                  => c_swc_page_addr_width,
-      g_prio_width                       => c_swc_prio_width,
+      g_mem_size                         => c_swc_packet_mem_size,
+      g_page_size                        => c_swc_page_size,
+      g_prio_num                         => c_swc_output_prio_num,
       g_max_pck_size_width               => c_swc_max_pck_size_width,
       g_num_ports                        => c_swc_num_ports,
       g_data_width                       => c_swc_data_width,
       g_ctrl_width                       => c_swc_ctrl_width,
       g_pck_pg_free_fifo_size            => c_swc_freeing_fifo_size,
       g_input_block_cannot_accept_data   => "drop_pck", --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
+      g_output_block_per_prio_fifo_size  => c_swc_output_fifo_size,
+      -- probably useless with new memory      
       g_packet_mem_multiply              => c_swc_packet_mem_multiply,
       g_input_block_fifo_size            => c_swc_input_fifo_size,     
       g_input_block_fifo_full_in_advance => c_swc_fifo_full_in_advance

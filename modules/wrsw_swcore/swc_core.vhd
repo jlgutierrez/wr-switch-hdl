@@ -54,18 +54,22 @@ use work.wrsw_shared_types_pkg.all;
 
 entity swc_core is
   generic( 
-    g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
-    g_prio_width                       : integer ;--:= c_swc_prio_width;
+    g_mem_size                         : integer ;--:= c_swc_packet_mem_size
+    g_page_size                        : integer ;--:= c_swc_page_size
+    g_prio_num                         : integer ;--:= c_swc_output_prio_num;
     g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width    
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_data_width                       : integer ;--:= c_swc_data_width
     g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
+    g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+
     -- probably useless with new memory
     g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
     g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
-    g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance (xswc_input_block)
+    g_input_block_fifo_full_in_advance : integer --:=c_swc_fifo_full_in_advance (xswc_input_block)
+
     );
   port (
     clk_i   : in std_logic;
@@ -97,19 +101,22 @@ end swc_core;
 
 architecture rtl of swc_core is
    constant c_usecount_width        : integer := integer(CEIL(LOG2(real(g_num_ports-1))));
+   constant c_prio_width            : integer := integer(CEIL(LOG2(real(g_prio_num-1)))); -- g_prio_width
 
+   constant c_page_num              : integer := (g_mem_size / g_page_size); -- 65536/64 = 1024 -- c_swc_packet_mem_num_pages
+   constant c_page_addr_width       : integer := integer(CEIL(LOG2(real(c_page_num-1)))); --c_swc_page_addr_width
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Memory Management Unit<<
    ----------------------------------------------------------------------------------------------------
    -- Input Block -> Memory Management Unit
    signal ib_page_alloc_req   : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ib_pageaddr_output  : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+   signal ib_pageaddr_output  : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
    signal ib_set_usecnt       : std_logic_vector(g_num_ports - 1 downto 0);
    signal ib_usecnt           : std_logic_vector(g_num_ports * c_usecount_width - 1 downto 0);
    
    -- Memory Management Unit -> Input Block 
    signal mmu_page_alloc_done  : std_logic_vector(g_num_ports - 1 downto 0);
-   signal mmu_pageaddr_input   : std_logic_vector(      1         * g_page_addr_width - 1 downto 0);   
+   signal mmu_pageaddr_input   : std_logic_vector(      1         * c_page_addr_width - 1 downto 0);   
    signal mmu_set_usecnt_done  : std_logic_vector(g_num_ports - 1 downto 0);
    signal mmu_nomem            : std_logic;
 
@@ -118,7 +125,7 @@ architecture rtl of swc_core is
    ----------------------------------------------------------------------------------------------------
    -- Input Block -> Multiport Memory
    signal ib_pckstart         : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ib_pageaddr_to_mpm  : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+   signal ib_pageaddr_to_mpm  : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
    signal ib_pagereq          : std_logic_vector(g_num_ports - 1 downto 0);
    signal ib_data             : std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
    signal ib_ctrl             : std_logic_vector(g_num_ports * g_ctrl_width - 1 downto 0);
@@ -135,9 +142,9 @@ architecture rtl of swc_core is
    -- Input Block -> Pck Transfer Arbiter
    signal ib_transfer_pck     : std_logic_vector(g_num_ports - 1 downto 0);
 
-   signal ib_pageaddr_to_pta  : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+   signal ib_pageaddr_to_pta  : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
    signal ib_mask             : std_logic_vector(g_num_ports * g_num_ports - 1 downto 0);
-   signal ib_prio             : std_logic_vector(g_num_ports * g_prio_width - 1 downto 0);
+   signal ib_prio             : std_logic_vector(g_num_ports * c_prio_width - 1 downto 0);
    signal ib_pck_size         : std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0);
    
    -- Pck Transfer Arbiter -> Input Block       
@@ -149,8 +156,8 @@ architecture rtl of swc_core is
    ----------------------------------------------------------------------------------------------------
    -- Input Block -> Pck Transfer Arbiter
    signal pta_data_valid             : std_logic_vector(g_num_ports -1 downto 0);
-   signal pta_pageaddr               : std_logic_vector(g_num_ports * g_page_addr_width    - 1 downto 0);
-   signal pta_prio                   : std_logic_vector(g_num_ports * g_prio_width         - 1 downto 0);
+   signal pta_pageaddr               : std_logic_vector(g_num_ports * c_page_addr_width    - 1 downto 0);
+   signal pta_prio                   : std_logic_vector(g_num_ports * c_prio_width         - 1 downto 0);
    signal pta_pck_size               : std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0);
 
    -- Input Block -> Pck Transfer Arbiter
@@ -162,7 +169,7 @@ architecture rtl of swc_core is
    ----------------------------------------------------------------------------------------------------
    -- Output Block -> Multiport Memory
    signal ob_pgreq                 : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ob_pgaddr                : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+   signal ob_pgaddr                : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
    signal ob_dreq                  : std_logic_vector(g_num_ports - 1 downto 0);
 
    -- Multiport Memory -> Output Block 
@@ -179,17 +186,17 @@ architecture rtl of swc_core is
    ----------------------------------------------------------------------------------------------------   
    -- Multiport Memory -> Linked List 
    signal mpm_write               : std_logic_vector(g_num_ports - 1 downto 0);
-   signal mpm_write_addr          : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-   signal mpm_write_data          : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+   signal mpm_write_addr          : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
+   signal mpm_write_data          : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
   
    signal mpm_read_pump_read      : std_logic_vector(g_num_ports - 1 downto 0);
-   signal mpm_read_pump_addr      : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+   signal mpm_read_pump_addr      : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
    
    -- Linked List -> Multiport memory
 --   signal ll_free_done            : std_logic_vector(g_num_ports - 1 downto 0);
    signal ll_write_done           : std_logic_vector(g_num_ports - 1 downto 0);
    signal ll_read_pump_read_done  : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ll_data                 : std_logic_vector(g_page_addr_width - 1 downto 0);
+   signal ll_data                 : std_logic_vector(c_page_addr_width - 1 downto 0);
    
   
    ----------------------------------------------------------------------------------------------------
@@ -197,7 +204,7 @@ architecture rtl of swc_core is
    ----------------------------------------------------------------------------------------------------   
    -- Input block -> Lost pck dealloc
    signal ib_force_free         : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ib_force_free_pgaddr  : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+   signal ib_force_free_pgaddr  : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
       
    -- lost pck dealloc -> input block
    signal ppfm_force_free_done_to_ib  : std_logic_vector(g_num_ports - 1 downto 0);
@@ -208,7 +215,7 @@ architecture rtl of swc_core is
    ----------------------------------------------------------------------------------------------------   
    -- output block -> Lost pck dealloc
    signal ob_free         : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ob_free_pgaddr  : std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+   signal ob_free_pgaddr  : std_logic_vector(g_num_ports * c_page_addr_width - 1 downto 0);
       
    -- lost pck dealloc -> output block
    signal ppfm_free_done_to_ob  : std_logic_vector(g_num_ports - 1 downto 0);
@@ -217,7 +224,7 @@ architecture rtl of swc_core is
    -- signals connecting >>Pck's pages freeeing module<< with >>Linkded List<<
    ----------------------------------------------------------------------------------------------------   
    -- LPD -> LL
-   signal ppfm_read_addr         : std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
+   signal ppfm_read_addr         : std_logic_vector(g_num_ports * c_page_addr_width -1 downto 0);
    signal ppfm_read_req          : std_logic_vector(g_num_ports-1 downto 0);
 
    -- LL -> LPD
@@ -228,9 +235,9 @@ architecture rtl of swc_core is
    ----------------------------------------------------------------------------------------------------   
   -- PPFM -> MMU
    signal ppfm_force_free        : std_logic_vector(g_num_ports-1 downto 0);
-   signal ppfm_force_free_pgaddr : std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
+   signal ppfm_force_free_pgaddr : std_logic_vector(g_num_ports * c_page_addr_width -1 downto 0);
    signal ppfm_free              : std_logic_vector(g_num_ports-1 downto 0);
-   signal ppfm_free_pgaddr       : std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
+   signal ppfm_free_pgaddr       : std_logic_vector(g_num_ports * c_page_addr_width -1 downto 0);
    
    -- MMU -> PPFM
    signal mmu_force_free_done   : std_logic_vector(g_num_ports-1 downto 0);
@@ -248,9 +255,9 @@ architecture rtl of swc_core is
   gen_blocks : for i in 0 to g_num_ports-1 generate
     INPUT_BLOCK : xswc_input_block
     generic map( 
-        g_page_addr_width                  => g_page_addr_width,
+        g_page_addr_width                  => c_page_addr_width,
         g_num_ports                        => g_num_ports,
-        g_prio_width                       => g_prio_width,
+        g_prio_width                       => c_prio_width,
         g_max_pck_size_width               => g_max_pck_size_width,
         g_usecount_width                   => c_usecount_width,
         g_data_width                       => g_data_width,
@@ -281,14 +288,14 @@ architecture rtl of swc_core is
         mmu_set_usecnt_done_i    => mmu_set_usecnt_done(i),
         mmu_usecnt_o             => ib_usecnt((i + 1) * c_usecount_width -1 downto i * c_usecount_width),
         mmu_nomem_i              => mmu_nomem,
-        mmu_pageaddr_o           => ib_pageaddr_output((i + 1) * g_page_addr_width - 1 downto i * g_page_addr_width),
+        mmu_pageaddr_o           => ib_pageaddr_output((i + 1) * c_page_addr_width - 1 downto i * c_page_addr_width),
                 
         -------------------------------------------------------------------------------
         -- I/F with Pck's Pages Freeing Module (PPFM)
         -------------------------------------------------------------------------------      
         mmu_force_free_o         => ib_force_free(i),
         mmu_force_free_done_i    => ppfm_force_free_done_to_ib(i),
-        mmu_force_free_addr_o    => ib_force_free_pgaddr((i + 1) * g_page_addr_width - 1 downto i * g_page_addr_width),
+        mmu_force_free_addr_o    => ib_force_free_pgaddr((i + 1) * c_page_addr_width - 1 downto i * c_page_addr_width),
 
         -------------------------------------------------------------------------------
         -- I/F with Routing Table Unit (RTU)
@@ -303,7 +310,7 @@ architecture rtl of swc_core is
         -- I/F with Multiport Memory (MPU)
         -------------------------------------------------------------------------------    
         mpm_pckstart_o           => ib_pckstart(i),
-        mpm_pageaddr_o           => ib_pageaddr_to_mpm((i + 1) * g_page_addr_width - 1 downto i * g_page_addr_width),
+        mpm_pageaddr_o           => ib_pageaddr_to_mpm((i + 1) * c_page_addr_width - 1 downto i * c_page_addr_width),
         mpm_pagereq_o            => ib_pagereq(i),
         mpm_pageend_i            => mpm_pageend(i),
         mpm_data_o               => ib_data((i + 1) * g_data_width - 1 downto i * g_data_width),
@@ -317,9 +324,9 @@ architecture rtl of swc_core is
         -------------------------------------------------------------------------------     
         pta_transfer_pck_o       => ib_transfer_pck(i),
         pta_transfer_ack_i       => pta_transfer_ack(i),
-        pta_pageaddr_o           => ib_pageaddr_to_pta((i + 1) * g_page_addr_width    -1 downto i * g_page_addr_width),
+        pta_pageaddr_o           => ib_pageaddr_to_pta((i + 1) * c_page_addr_width    -1 downto i * c_page_addr_width),
         pta_mask_o               => ib_mask           ((i + 1) * g_num_ports          -1 downto i * g_num_ports),
-        pta_prio_o               => ib_prio           ((i + 1) * g_prio_width         -1 downto i * g_prio_width),
+        pta_prio_o               => ib_prio           ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
         pta_pck_size_o           => ib_pck_size       ((i + 1) * g_max_pck_size_width -1 downto i * g_max_pck_size_width)
        
         );
@@ -327,6 +334,15 @@ architecture rtl of swc_core is
         
 --    OUTPUT_BLOCK: swc_output_block 
     OUTPUT_BLOCK: xswc_output_block
+      generic map( 
+        g_page_addr_width                  => c_page_addr_width,
+        g_max_pck_size_width               => g_max_pck_size_width,
+        g_data_width                       => g_data_width,
+        g_ctrl_width                       => g_ctrl_width,
+        g_output_block_per_prio_fifo_size  => g_output_block_per_prio_fifo_size,
+        g_prio_width                       => c_prio_width,
+        g_prio_num                         => g_prio_num
+      )
       port map (
         clk_i                    => clk_i,
         rst_n_i                  => rst_n_i,
@@ -334,15 +350,15 @@ architecture rtl of swc_core is
         -- I/F with Page Transfer Arbiter (PTA)
         -------------------------------------------------------------------------------  
         pta_transfer_data_valid_i=> pta_data_valid(i),
-        pta_pageaddr_i           => pta_pageaddr((i + 1) * g_page_addr_width    -1 downto i * g_page_addr_width),
-        pta_prio_i               => pta_prio    ((i + 1) * g_prio_width         -1 downto i * g_prio_width),
+        pta_pageaddr_i           => pta_pageaddr((i + 1) * c_page_addr_width    -1 downto i * c_page_addr_width),
+        pta_prio_i               => pta_prio    ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
         pta_pck_size_i           => pta_pck_size((i + 1) * g_max_pck_size_width -1 downto i * g_max_pck_size_width),
         pta_transfer_data_ack_o  => ob_ack(i),
         -------------------------------------------------------------------------------
         -- I/F with Multiport Memory (MPM)
         -------------------------------------------------------------------------------        
         mpm_pgreq_o              => ob_pgreq(i),
-        mpm_pgaddr_o             => ob_pgaddr((i + 1) * g_page_addr_width    -1 downto i * g_page_addr_width),
+        mpm_pgaddr_o             => ob_pgaddr((i + 1) * c_page_addr_width    -1 downto i * c_page_addr_width),
         mpm_pckend_i             => mpm_pckend(i),
         mpm_pgend_i              => mpm_pgend(i),
         mpm_drdy_i               => mpm_drdy(i),
@@ -355,7 +371,7 @@ architecture rtl of swc_core is
         -------------------------------------------------------------------------------  
         ppfm_free_o              => ob_free(i),
         ppfm_free_done_i         => ppfm_free_done_to_ob(i),
-        ppfm_free_pgaddr_o       => ob_free_pgaddr((i + 1) * g_page_addr_width    -1 downto i * g_page_addr_width),
+        ppfm_free_pgaddr_o       => ob_free_pgaddr((i + 1) * c_page_addr_width    -1 downto i * c_page_addr_width),
 
         -------------------------------------------------------------------------------
         -- pWB : output (goes to the Endpoint)
@@ -371,7 +387,7 @@ architecture rtl of swc_core is
   PCK_PAGES_FREEEING_MODULE: swc_multiport_pck_pg_free_module
     generic map( 
       g_num_ports             => g_num_ports,
-      g_page_addr_width       => g_page_addr_width,
+      g_page_addr_width       => c_page_addr_width,
       g_pck_pg_free_fifo_size => g_pck_pg_free_fifo_size
       )
     port map(
@@ -403,6 +419,11 @@ architecture rtl of swc_core is
 
  
  LINKED_LIST:  swc_multiport_linked_list
+   generic map( 
+    g_num_ports                 => g_num_ports,
+    g_page_addr_width           => c_page_addr_width,
+    g_page_num                  => c_page_num
+    )
    port map(
      rst_n_i                    => rst_n_i,
      clk_i                      => clk_i,
@@ -434,6 +455,12 @@ architecture rtl of swc_core is
  -- Memory Mangement Unit (MMU) 
  ----------------------------------------------------------------------
   MEMORY_MANAGEMENT_UNIT: swc_multiport_page_allocator 
+    generic map( 
+      g_page_addr_width         => c_page_addr_width,
+      g_num_ports               => g_num_ports,
+      g_page_num                => c_page_num,
+      g_usecount_width          => c_usecount_width
+    )
     port map (
       rst_n_i                    => rst_n_i,   
       clk_i                      => clk_i,
@@ -516,8 +543,8 @@ architecture rtl of swc_core is
   ----------------------------------------------------------------------
   TRANSER_ARBITER: swc_pck_transfer_arbiter 
     generic map(
-      g_page_addr_width    => g_page_addr_width,
-      g_prio_width         => g_prio_width,    
+      g_page_addr_width    => c_page_addr_width,
+      g_prio_width         => c_prio_width,    
       g_max_pck_size_width => g_max_pck_size_width,
       g_num_ports          => g_num_ports
       )

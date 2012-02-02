@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-01-24
+-- Last update: 2012-02-02
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -37,12 +37,14 @@
 -- 2010-11-09  1.0      mlipinsk created
 -- 2012-01-19  2.0      mlipinsk wisbonized (pipelined WB)
 -- 2012-01-19  2.0      twlostow added buffer-FIFO
+-- 2012-02-02  3.0      mlipinsk generic-azed
 -------------------------------------------------------------------------------
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
+use ieee.math_real.CEIL;
+use ieee.math_real.log2;
 
 library work;
 use work.swc_swcore_pkg.all;
@@ -52,7 +54,15 @@ use work.endpoint_private_pkg.all; -- Tom
 use work.ep_wbgen2_pkg.all; -- tom
 
 entity xswc_output_block is
-
+  generic ( 
+    g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
+    g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
+    g_data_width                       : integer ;--:= c_swc_data_width
+    g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
+    g_output_block_per_prio_fifo_size  : integer ;--:= c_swc_output_fifo_size
+    g_prio_width                       : integer ;--:= c_swc_prio_width;, c_swc_output_prio_num_width
+    g_prio_num                         : integer  --:= c_swc_output_prio_num
+  );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -62,9 +72,9 @@ entity xswc_output_block is
 -------------------------------------------------------------------------------
 
     pta_transfer_data_valid_i : in   std_logic;
-    pta_pageaddr_i            : in   std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-    pta_prio_i                : in   std_logic_vector(c_swc_prio_width - 1 downto 0);
-    pta_pck_size_i            : in   std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+    pta_pageaddr_i            : in   std_logic_vector(g_page_addr_width - 1 downto 0);
+    pta_prio_i                : in   std_logic_vector(g_prio_width - 1 downto 0);
+    pta_pck_size_i            : in   std_logic_vector(g_max_pck_size_width - 1 downto 0);
     pta_transfer_data_ack_o   : out  std_logic;
 
 -------------------------------------------------------------------------------
@@ -72,13 +82,13 @@ entity xswc_output_block is
 -------------------------------------------------------------------------------
 
     mpm_pgreq_o  : out std_logic;
-    mpm_pgaddr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    mpm_pgaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
     mpm_pckend_i : in  std_logic;
     mpm_pgend_i  : in  std_logic;
     mpm_drdy_i   : in  std_logic;
     mpm_dreq_o   : out std_logic;
-    mpm_data_i   : in  std_logic_vector(c_swc_data_width - 1 downto 0);
-    mpm_ctrl_i   : in  std_logic_vector(c_swc_ctrl_width - 1 downto 0);
+    mpm_data_i   : in  std_logic_vector(g_data_width - 1 downto 0);
+    mpm_ctrl_i   : in  std_logic_vector(g_ctrl_width - 1 downto 0);
     mpm_sync_i   : in  std_logic; 
    
 -------------------------------------------------------------------------------
@@ -87,7 +97,7 @@ entity xswc_output_block is
     -- correctly read pck
     ppfm_free_o            : out  std_logic;
     ppfm_free_done_i       : in   std_logic;
-    ppfm_free_pgaddr_o     : out  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ppfm_free_pgaddr_o     : out  std_logic_vector(g_page_addr_width - 1 downto 0);
 
 -------------------------------------------------------------------------------
 -- pWB : output (goes to the Endpoint)
@@ -101,25 +111,27 @@ end xswc_output_block;
 
 architecture behavoural of xswc_output_block is
   
+  constant c_per_prio_fifo_size_width : integer := integer(CEIL(LOG2(real(g_output_block_per_prio_fifo_size-1)))); -- c_swc_output_fifo_addr_width
+  
   signal pta_transfer_data_ack : std_logic;
 
-  signal wr_addr               : std_logic_vector(c_swc_output_prio_num_width + c_swc_output_fifo_addr_width -1 downto 0);
-  signal rd_addr               : std_logic_vector(c_swc_output_prio_num_width + c_swc_output_fifo_addr_width -1 downto 0);
-  signal wr_prio               : std_logic_vector(c_swc_output_prio_num_width - 1 downto 0);
-  signal rd_prio               : std_logic_vector(c_swc_output_prio_num_width - 1 downto 0);
-  signal not_full_array        : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
-  signal not_empty_array       : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
-  signal read_array            : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
-  signal read                  : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
-  signal write_array           : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
-  signal write                 : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
+  signal wr_addr               : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal rd_addr               : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal wr_prio               : std_logic_vector(g_prio_width - 1 downto 0);
+  signal rd_prio               : std_logic_vector(g_prio_width - 1 downto 0);
+  signal not_full_array        : std_logic_vector(g_prio_num - 1 downto 0);
+  signal not_empty_array       : std_logic_vector(g_prio_num - 1 downto 0);
+  signal read_array            : std_logic_vector(g_prio_num - 1 downto 0);
+  signal read                  : std_logic_vector(g_prio_num - 1 downto 0);
+  signal write_array           : std_logic_vector(g_prio_num - 1 downto 0);
+  signal write                 : std_logic_vector(g_prio_num - 1 downto 0);
   signal wr_en                 : std_logic;
   signal rd_data_valid         : std_logic;
-  signal zeros                 : std_logic_vector(c_swc_output_prio_num - 1 downto 0);
+  signal zeros                 : std_logic_vector(g_prio_num - 1 downto 0);
 
-  subtype t_head_and_head      is std_logic_vector(c_swc_output_fifo_addr_width - 1  downto 0);
+  subtype t_head_and_head      is std_logic_vector(c_per_prio_fifo_size_width - 1  downto 0);
 
-  type t_addr_array      is array (c_swc_output_prio_num - 1 downto 0) of t_head_and_head;  
+  type t_addr_array      is array (g_prio_num - 1 downto 0) of t_head_and_head;  
 
   signal wr_array    : t_addr_array;
   signal rd_array    : t_addr_array;
@@ -127,19 +139,19 @@ architecture behavoural of xswc_output_block is
   type t_state is (IDLE, SET_PAGE, WAIT_READ, READ_MPM, READ_LAST_WORD, WAIT_FREE_PCK);
   signal state       : t_state;
   
-  signal wr_data            : std_logic_vector(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto 0);
-  signal rd_data            : std_logic_vector(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto 0);
-  signal rd_pck_size        : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
-  signal current_pck_size   : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
-  signal cnt_pck_size       : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+  signal wr_data            : std_logic_vector(g_max_pck_size_width + g_page_addr_width - 1 downto 0);
+  signal rd_data            : std_logic_vector(g_max_pck_size_width + g_page_addr_width - 1 downto 0);
+  signal rd_pck_size        : std_logic_vector(g_max_pck_size_width - 1 downto 0);
+  signal current_pck_size   : std_logic_vector(g_max_pck_size_width - 1 downto 0);
+  signal cnt_pck_size       : std_logic_vector(g_max_pck_size_width - 1 downto 0);
   
   signal dreq              : std_logic;  -- control of dreq_o from FSM
   signal pgreq             : std_logic;
     
   signal ppfm_free        : std_logic;
-  signal ppfm_free_pgaddr       : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal ppfm_free_pgaddr       : std_logic_vector(g_page_addr_width - 1 downto 0);
   
-  signal pck_start_pgaddr       : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal pck_start_pgaddr       : std_logic_vector(g_page_addr_width - 1 downto 0);
   
   signal cnt_last_word     : std_logic;
   signal cnt_one_but_last_word     : std_logic;
@@ -148,8 +160,8 @@ architecture behavoural of xswc_output_block is
   signal waiting_pck_start : std_logic;
   
 
-  signal ram_zeros                 : std_logic_vector(c_swc_page_addr_width + c_swc_max_pck_size_width - 1 downto 0);
-  signal ram_ones                  : std_logic_vector((c_swc_page_addr_width + c_swc_max_pck_size_width+7)/8 - 1 downto 0);
+  signal ram_zeros                 : std_logic_vector(g_page_addr_width + g_max_pck_size_width - 1 downto 0);
+  signal ram_ones                  : std_logic_vector((g_page_addr_width + g_max_pck_size_width+7)/8 - 1 downto 0);
 
 
   -- pipelined WB
@@ -236,8 +248,8 @@ begin  --  behavoural
   
   RD_ENCODE : swc_prio_encoder
     generic map (
-      g_num_inputs  => 8,
-      g_output_bits => 3)
+      g_num_inputs  => g_prio_num,
+      g_output_bits => g_prio_width)
     port map (
       in_i     => not_empty_array,
       onehot_o => read_array,
@@ -273,7 +285,7 @@ begin  --  behavoural
                              not_full_array(7)  when wr_prio = "111" else                 
                             '0';
   
-   prio_ctrl : for i in 0 to c_swc_output_prio_num - 1 generate 
+   prio_ctrl : for i in 0 to g_prio_num - 1 generate 
     
     write(i)        <= write_array(i) and pta_transfer_data_valid_i ;
     read(i)         <= read_array(i)  when (state = SET_PAGE) else '0';--rx_dreq_i;
@@ -294,8 +306,8 @@ begin  --  behavoural
   
    PRIO_QUEUE : generic_dpram
      generic map (
-       g_data_width       => c_swc_page_addr_width + c_swc_max_pck_size_width,
-       g_size        => (c_swc_output_prio_num * c_swc_output_fifo_size) 
+       g_data_width       => g_page_addr_width + g_max_pck_size_width,
+       g_size        => (g_prio_num * g_output_block_per_prio_fifo_size) 
                  )
      port map (
      -- Port A -- writing
@@ -429,7 +441,7 @@ begin  --  behavoural
 	-- registering parameters of the currently read frame
         if(pgreq = '1') then
           current_pck_size <= rd_pck_size;
-          pck_start_pgaddr <= rd_data(c_swc_page_addr_width - 1 downto 0);
+          pck_start_pgaddr <= rd_data(g_page_addr_width - 1 downto 0);
         end if;
 
 	--------------------------------------------------------------------------------------------
@@ -564,12 +576,12 @@ begin  --  behavoural
     end if;
     
   end process free;
-  rd_pck_size         <= rd_data(c_swc_max_pck_size_width + c_swc_page_addr_width - 1 downto c_swc_page_addr_width);  
+  rd_pck_size         <= rd_data(g_max_pck_size_width + g_page_addr_width - 1 downto g_page_addr_width);  
 
   -------------- MPM ---------------------
   mpm_dreq_o          <= dreq and out_dreq;--((not src_stall_int) and dreq);
   mpm_pgreq_o         <= pgreq;
-  mpm_pgaddr_o        <= rd_data(c_swc_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;  
+  mpm_pgaddr_o        <= rd_data(g_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;  
   -------------- pWB ----------------------
 --tom
   out_fab.dvalid  <= stab and mpm_drdy_i;

@@ -12,7 +12,7 @@ files = [
 "swc_block_alloc.vhd",
 "swc_core.vhd",
 "swc_input_block.vhd",
-"swc_lost_pck_dealloc.vhd",
+#"swc_lost_pck_dealloc.vhd",
 "swc_multiport_linked_list.vhd",
 "swc_multiport_page_allocator.vhd",
 "swc_multiport_pck_pg_free_module.vhd",

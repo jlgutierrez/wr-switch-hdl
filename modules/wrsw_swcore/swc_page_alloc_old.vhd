@@ -107,10 +107,10 @@ entity swc_page_allocator is
     g_num_pages : integer := 2048;
 
     -- number of bits of the page address
-    g_page_addr_bits : integer := 11;
+    g_page_addr_width: integer := 11; --g_page_addr_bits 
 
     -- number of bits of the user count value
-    g_use_count_bits : integer := 4
+    g_usecount_width: integer := 4 --g_use_count_bits 
     );
 
   port (
@@ -149,11 +149,11 @@ entity swc_page_allocator is
     -- "Use count" value for the page to be allocated. If the page is to be
     -- used by multiple output queues, each of them will attempt to free it.
 
-    usecnt_i : in std_logic_vector(g_use_count_bits-1 downto 0);
+    usecnt_i : in std_logic_vector(g_usecount_width-1 downto 0);
 
-    pgaddr_i : in std_logic_vector(g_page_addr_bits -1 downto 0);
+    pgaddr_i : in std_logic_vector(g_page_addr_width -1 downto 0);
 
-    pgaddr_o       : out std_logic_vector(g_page_addr_bits -1 downto 0);
+    pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
     pgaddr_valid_o : out std_logic;
 
     idle_o : out std_logic;
@@ -187,7 +187,7 @@ architecture syn of swc_page_allocator is
 
 
   constant c_l1_bitmap_size     : integer := g_num_pages/32;
-  constant c_l1_bitmap_addrbits : integer := g_page_addr_bits - 5;
+  constant c_l1_bitmap_addrbits : integer := g_page_addr_width - 5;
 
   type t_state is (IDLE, ALLOC_LOOKUP_L1, ALLOC_LOOKUP_L0_UPDATE,
                    FREE_CHECK_USECNT, FREE_RELEASE_PAGE, FREE_DECREASE_UCNT,
@@ -210,7 +210,7 @@ architecture syn of swc_page_allocator is
 
 
   signal state       : t_state;
-  signal free_blocks : unsigned(g_page_addr_bits downto 0);
+  signal free_blocks : unsigned(g_page_addr_width downto 0);
 
   -- address decoded from l1_bitmap, we read data from this address 
   -- to decode the low part of  the page address
@@ -219,19 +219,19 @@ architecture syn of swc_page_allocator is
   signal l0_wr                  : std_logic;
 
   -- this is used for storing user count
-  signal usecnt_mem_wraddr : std_logic_vector(g_page_addr_bits-1 downto 0);
-  signal usecnt_mem_rdaddr : std_logic_vector(g_page_addr_bits-1 downto 0);
+  signal usecnt_mem_wraddr : std_logic_vector(g_page_addr_width-1 downto 0);
+  signal usecnt_mem_rdaddr : std_logic_vector(g_page_addr_width-1 downto 0);
   signal usecnt_mem_wr     : std_logic;
 
-  signal usecnt_mem_rddata : std_logic_vector(g_use_count_bits-1 downto 0);
-  signal usecnt_mem_wrdata : std_logic_vector(g_use_count_bits-1 downto 0);
+  signal usecnt_mem_rddata : std_logic_vector(g_usecount_width-1 downto 0);
+  signal usecnt_mem_wrdata : std_logic_vector(g_usecount_width-1 downto 0);
 
-  signal pgaddr_to_free : std_logic_vector(g_page_addr_bits -1 downto 0);
+  signal pgaddr_to_free : std_logic_vector(g_page_addr_width -1 downto 0);
 
   signal page_freeing_in_last_operation : std_logic;
-  signal previously_freed_page          : std_logic_vector(g_page_addr_bits -1 downto 0);
+  signal previously_freed_page          : std_logic_vector(g_page_addr_width -1 downto 0);
 
-  signal tmp_page : std_logic_vector(g_page_addr_bits -1 downto 0);
+  signal tmp_page : std_logic_vector(g_page_addr_width -1 downto 0);
 
 --  signal tmp_pgs   : std_logic_vector(1023 downto 0);
 
@@ -297,8 +297,8 @@ begin  -- syn
 
   L0_UCNTMEM : generic_dpram
     generic map (
-      g_data_width => g_use_count_bits,
---      g_addr_bits => g_page_addr_bits,
+      g_data_width => g_usecount_width,
+--      g_addr_bits => g_page_addr_width,
       g_size       => g_num_pages)
     port map (
       clka_i => clk_i,
@@ -308,12 +308,12 @@ begin  -- syn
       aa_i   => usecnt_mem_wraddr,
       qa_o   => open,
       wea_i  => usecnt_mem_wr,
-      bwea_i => ones((g_use_count_bits+7)/8 -1 downto 0),--ones((g_use_count_bits+7)/8 -1 downto 0),
+      bwea_i => ones((g_usecount_width+7)/8 -1 downto 0),--ones((g_usecount_width+7)/8 -1 downto 0),
 
       ab_i   => usecnt_mem_rdaddr,
       qb_o   => usecnt_mem_rddata,
-      db_i   => ones(g_use_count_bits-1 downto 0),
-      bweb_i => ones((g_use_count_bits+7)/8-1 downto 0), --ones((g_use_count_bits+7)/8-1 downto 0),
+      db_i   => ones(g_usecount_width-1 downto 0),
+      bweb_i => ones((g_usecount_width+7)/8-1 downto 0), --ones((g_usecount_width+7)/8-1 downto 0),
       web_i  => '0'
       );
 
@@ -432,8 +432,8 @@ begin  -- syn
 
                 state             <= FREE_CHECK_USECNT;
                 -- decoding of provided code into low and high part
-                l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
-                l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+                l0_wr_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
+                l0_rd_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
                 --usecnt_mem_rdaddr <= pgaddr_i;
                 usecnt_mem_wraddr <= pgaddr_i;
                 done_o            <= '1';  -- assert the done signal early enough
@@ -456,8 +456,8 @@ begin  -- syn
 
               state             <= DUMMY;  -- FREE_RELEASE_PAGE;
               -- decoding of provided code into low and high part
-              l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
-              l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+              l0_wr_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
+              l0_rd_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
               --usecnt_mem_rdaddr <= pgaddr_i;
               usecnt_mem_wraddr <= pgaddr_i;
               done_o            <= '1';  -- assert the done signal early enough
@@ -489,8 +489,8 @@ begin  -- syn
 
             state             <= FREE_CHECK_USECNT;
             -- decoding of provided code into low and high part
-            l0_wr_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
-            l0_rd_addr        <= pgaddr_i(g_page_addr_bits-1 downto 5);
+            l0_wr_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
+            l0_rd_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
             --usecnt_mem_rdaddr <= pgaddr_i;
             usecnt_mem_wraddr <= pgaddr_i;
             done_o            <= '1';   -- assert the done signal early enough
@@ -565,8 +565,8 @@ begin  -- syn
             l0_wr_data <= l0_rd_data or f_onehot_decode(pgaddr_to_free(4 downto 0));
             l0_wr      <= '1';
 
-            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_to_free(g_page_addr_bits-1 downto 5));
---            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_i(g_page_addr_bits-1 downto 5));
+            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_to_free(g_page_addr_width-1 downto 5));
+--            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_i(g_page_addr_width-1 downto 5));
             free_blocks       <= free_blocks+ 1;
             usecnt_mem_wrdata <= (others => '0');
             usecnt_mem_wr     <= '1';

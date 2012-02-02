@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-15
--- Last update: 2011-03-15
+-- Last update: 2012-02-02
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -37,6 +37,7 @@
 -- Revisions  :
 -- Date        Version  Author   Description
 -- 2010-11-15  1.0      mlipinsk Created
+-- 2012-02-02  2.0      mlipinsk generic-azed
 -------------------------------------------------------------------------------
 
 
@@ -47,32 +48,34 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library work;
-use work.swc_swcore_pkg.all;
+--use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
 
 
 entity swc_lost_pck_dealloc is
-
+  generic ( 
+    g_page_addr_width                  : integer --:= c_swc_page_addr_width;
+  );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
 
     ib_force_free_i      : in  std_logic;
     ib_force_free_done_o : out std_logic;
-    ib_force_free_pgaddr_i     : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ib_force_free_pgaddr_i     : in  std_logic_vector(g_page_addr_width - 1 downto 0);
 
     ob_force_free_i      : in  std_logic;
     ob_force_free_done_o : out std_logic;
-    ob_force_free_pgaddr_i     : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ob_force_free_pgaddr_i     : in  std_logic_vector(g_page_addr_width - 1 downto 0);
     
-    ll_read_addr_o       : out std_logic_vector(c_swc_page_addr_width -1 downto 0);
-    ll_read_data_i       : in std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ll_read_addr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
+    ll_read_data_i       : in std_logic_vector(g_page_addr_width - 1 downto 0);
     ll_read_req_o        : out std_logic;
     ll_read_valid_data_i : in std_logic;
     
     mmu_force_free_o        : out std_logic;
     mmu_force_free_done_i   : in std_logic;
-    mmu_force_free_pgaddr_o : out std_logic_vector(c_swc_page_addr_width -1 downto 0)
+    mmu_force_free_pgaddr_o : out std_logic_vector(g_page_addr_width -1 downto 0)
 
        
     );
@@ -96,20 +99,20 @@ architecture syn of swc_lost_pck_dealloc is
   signal ob_force_free_done : std_logic;
   
   signal fifo_wr            : std_logic;
-  signal fifo_data_in       : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal fifo_data_in       : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal fifo_full          : std_logic;
   signal fifo_empty         : std_logic;
-  signal fifo_data_out      : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal fifo_data_out      : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal fifo_rd            : std_logic;
   signal fifo_clean         : std_logic;
   
-  signal current_page       : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal next_page          : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal current_page       : std_logic_vector(g_page_addr_width - 1 downto 0);
+  signal next_page          : std_logic_vector(g_page_addr_width - 1 downto 0);
   
   
   signal ll_read_req        : std_logic;    
   signal mmu_force_free     : std_logic;  
-  signal ones               : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal ones               : std_logic_vector(g_page_addr_width - 1 downto 0);
 
   
   
@@ -161,7 +164,7 @@ begin  -- syn
 
 U_FIFO: generic_sync_fifo
   generic map(
-    g_data_width      => c_swc_page_addr_width,
+    g_data_width      => g_page_addr_width,
     g_size      => 16
     )
   port map   (

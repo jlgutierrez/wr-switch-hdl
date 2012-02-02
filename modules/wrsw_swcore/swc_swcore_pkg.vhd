@@ -124,8 +124,8 @@ package swc_swcore_pkg is
   component swc_page_allocator
     generic (
       g_num_pages      : integer;
-      g_page_addr_bits : integer;
-      g_use_count_bits : integer);
+      g_page_addr_width : integer;
+      g_usecount_width : integer);
     port (
       clk_i          : in  std_logic;
       rst_n_i        : in  std_logic;
@@ -133,9 +133,9 @@ package swc_swcore_pkg is
       free_i         : in  std_logic;
       force_free_i   : in std_logic;
       set_usecnt_i   : in std_logic;
-      usecnt_i       : in  std_logic_vector(g_use_count_bits-1 downto 0);
-      pgaddr_i       : in  std_logic_vector(g_page_addr_bits -1 downto 0);
-      pgaddr_o       : out std_logic_vector(g_page_addr_bits -1 downto 0);
+      usecnt_i       : in  std_logic_vector(g_usecount_width-1 downto 0);
+      pgaddr_i       : in  std_logic_vector(g_page_addr_width -1 downto 0);
+      pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
       pgaddr_valid_o : out std_logic;
       idle_o         : out std_logic;
       done_o         : out std_logic;
@@ -146,8 +146,8 @@ package swc_swcore_pkg is
   component swc_page_allocator_new
     generic (
       g_num_pages      : integer;
-      g_page_addr_bits : integer;
-      g_use_count_bits : integer);
+      g_page_addr_width : integer;
+      g_usecount_width : integer);
     port (
       clk_i          : in  std_logic;
       rst_n_i        : in  std_logic;
@@ -155,9 +155,9 @@ package swc_swcore_pkg is
       free_i         : in  std_logic;
       force_free_i   : in std_logic;
       set_usecnt_i   : in std_logic;
-      usecnt_i       : in  std_logic_vector(g_use_count_bits-1 downto 0);
-      pgaddr_i       : in  std_logic_vector(g_page_addr_bits -1 downto 0);
-      pgaddr_o       : out std_logic_vector(g_page_addr_bits -1 downto 0);
+      usecnt_i       : in  std_logic_vector(g_usecount_width-1 downto 0);
+      pgaddr_i       : in  std_logic_vector(g_page_addr_width -1 downto 0);
+      pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
       pgaddr_valid_o : out std_logic;
       idle_o         : out std_logic;
       done_o         : out std_logic;
@@ -221,6 +221,11 @@ package swc_swcore_pkg is
   end component;
   
   component swc_multiport_linked_list is
+  generic ( 
+    g_num_ports                        : integer; --:= c_swc_num_ports
+    g_page_addr_width                  : integer; --:= c_swc_page_addr_width;
+    g_page_num                         : integer  --:= c_swc_packet_mem_num_pages
+    );
     port (
       rst_n_i               : in  std_logic;
       clk_i                 : in  std_logic;
@@ -386,6 +391,12 @@ package swc_swcore_pkg is
 
 
   component swc_multiport_page_allocator is
+    generic ( 
+      g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
+      g_num_ports                        : integer ;--:= c_swc_num_ports
+      g_page_num                         : integer ;--:= c_swc_packet_mem_num_pages
+      g_usecount_width                   : integer --:= c_swc_usecount_width
+    );  
     port (
       rst_n_i             : in std_logic;
       clk_i               : in std_logic;
@@ -547,7 +558,15 @@ package swc_swcore_pkg is
   end component;
   
   component xswc_output_block is
-
+    generic ( 
+      g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
+      g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
+      g_data_width                       : integer ;--:= c_swc_data_width
+      g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
+      g_output_block_per_prio_fifo_size  : integer ;--:= c_swc_output_fifo_size
+      g_prio_width                       : integer ;--:= c_swc_prio_width;, c_swc_output_prio_num_width
+      g_prio_num                         : integer  --:= c_swc_output_prio_num
+    );
     port (
       clk_i   : in std_logic;
       rst_n_i : in std_logic;
@@ -676,6 +695,7 @@ component  swc_multiport_pck_pg_free_module is
          
       );
   end component;
+
   
 end swc_swcore_pkg;
 

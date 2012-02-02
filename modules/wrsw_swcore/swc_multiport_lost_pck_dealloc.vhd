@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-13
--- Last update: 2010-11-13
+-- Last update: 2012-02-02
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -35,6 +35,7 @@
 -- Revisions  :
 -- Date        Version  Author   Description
 -- 2010-11-13  1.0      mlipinsk Created
+-- 2012-02-02  2.0      mlipinsk generic-azed
 -------------------------------------------------------------------------------
 
 
@@ -48,27 +49,31 @@ use work.swc_swcore_pkg.all;
 
 
 entity swc_multiport_lost_pck_dealloc is
+  generic ( 
+    g_num_ports                        : integer  --:= c_swc_num_ports
+    g_page_addr_width                  : integer --:= c_swc_page_addr_width;
+  );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
 
-    ib_force_free_i         : in  std_logic_vector(c_swc_num_ports-1 downto 0);
-    ib_force_free_done_o    : out std_logic_vector(c_swc_num_ports-1 downto 0);
-    ib_force_free_pgaddr_i  : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
+    ib_force_free_i         : in  std_logic_vector(g_num_ports-1 downto 0);
+    ib_force_free_done_o    : out std_logic_vector(g_num_ports-1 downto 0);
+    ib_force_free_pgaddr_i  : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
 
-    ob_force_free_i         : in  std_logic_vector(c_swc_num_ports-1 downto 0);
-    ob_force_free_done_o    : out std_logic_vector(c_swc_num_ports-1 downto 0);
-    ob_force_free_pgaddr_i  : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
+    ob_force_free_i         : in  std_logic_vector(g_num_ports-1 downto 0);
+    ob_force_free_done_o    : out std_logic_vector(g_num_ports-1 downto 0);
+    ob_force_free_pgaddr_i  : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
     
-    ll_read_addr_o          : out std_logic_vector(c_swc_num_ports * c_swc_page_addr_width -1 downto 0);
-    --ll_read_data_i          : in  std_logic_vector(c_swc_num_ports * c_swc_page_addr_width - 1 downto 0);
-    ll_read_data_i          : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-    ll_read_req_o           : out std_logic_vector(c_swc_num_ports-1 downto 0);
-    ll_read_valid_data_i    : in  std_logic_vector(c_swc_num_ports-1 downto 0);
+    ll_read_addr_o          : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
+    --ll_read_data_i          : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+    ll_read_data_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+    ll_read_req_o           : out std_logic_vector(g_num_ports-1 downto 0);
+    ll_read_valid_data_i    : in  std_logic_vector(g_num_ports-1 downto 0);
     
-    mmu_force_free_o        : out std_logic_vector(c_swc_num_ports-1 downto 0);
-    mmu_force_free_done_i   : in  std_logic_vector(c_swc_num_ports-1 downto 0);
-    mmu_force_free_pgaddr_o : out std_logic_vector(c_swc_num_ports * c_swc_page_addr_width -1 downto 0)
+    mmu_force_free_o        : out std_logic_vector(g_num_ports-1 downto 0);
+    mmu_force_free_done_i   : in  std_logic_vector(g_num_ports-1 downto 0);
+    mmu_force_free_pgaddr_o : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0)
     );
 
 end swc_multiport_lost_pck_dealloc;
@@ -80,7 +85,7 @@ begin  -- syn
 
 
 
-  lpd_gen : for i in 0 to c_swc_num_ports-1 generate
+  lpd_gen : for i in 0 to g_num_ports-1 generate
   
     LPD:  swc_lost_pck_dealloc 
     port map(
@@ -89,21 +94,21 @@ begin  -- syn
 
       ib_force_free_i         => ib_force_free_i(i),
       ib_force_free_done_o    => ib_force_free_done_o(i),
-      ib_force_free_pgaddr_i  => ib_force_free_pgaddr_i((i+1)*c_swc_page_addr_width - 1 downto i * c_swc_page_addr_width),
+      ib_force_free_pgaddr_i  => ib_force_free_pgaddr_i((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width),
   
       ob_force_free_i         => ob_force_free_i(i),
       ob_force_free_done_o    => ob_force_free_done_o(i),
-      ob_force_free_pgaddr_i  => ob_force_free_pgaddr_i((i+1)*c_swc_page_addr_width - 1 downto i * c_swc_page_addr_width),
+      ob_force_free_pgaddr_i  => ob_force_free_pgaddr_i((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width),
       
-      ll_read_addr_o          => ll_read_addr_o((i+1)*c_swc_page_addr_width - 1 downto i * c_swc_page_addr_width),
-      --ll_read_data_i          => ll_read_data_i((i+1)*c_swc_num_ports - 1 downto i * c_swc_num_ports),
+      ll_read_addr_o          => ll_read_addr_o((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width),
+      --ll_read_data_i          => ll_read_data_i((i+1)*g_num_ports - 1 downto i * g_num_ports),
       ll_read_data_i          => ll_read_data_i,
       ll_read_req_o           => ll_read_req_o(i),
       ll_read_valid_data_i    => ll_read_valid_data_i(i),
       
       mmu_force_free_o        => mmu_force_free_o(i),
       mmu_force_free_done_i   => mmu_force_free_done_i(i),
-      mmu_force_free_pgaddr_o => mmu_force_free_pgaddr_o((i+1)*c_swc_page_addr_width - 1 downto i * c_swc_page_addr_width)
+      mmu_force_free_pgaddr_o => mmu_force_free_pgaddr_o((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width)
   
          
       );
