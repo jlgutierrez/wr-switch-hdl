@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-15
--- Last update: 2011-03-15
+-- Last update: 2012-02-02
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -37,6 +37,7 @@
 -- Revisions  :
 -- Date        Version  Author   Description
 -- 2010-11-16  1.0      mlipinsk Created
+-- 2012-02-02  2.0      mlipinsk generic-azed
 -------------------------------------------------------------------------------
 
 
@@ -47,35 +48,38 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library work;
-use work.swc_swcore_pkg.all;
+--use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
 
 entity swc_pck_pg_free_module is
-
+  generic( 
+    g_page_addr_width       : integer ;--:= c_swc_page_addr_width;
+    g_pck_pg_free_fifo_size : integer  --:= c_swc_freeing_fifo_size
+    );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
 
     ib_force_free_i         : in  std_logic;
     ib_force_free_done_o    : out std_logic;
-    ib_force_free_pgaddr_i  : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ib_force_free_pgaddr_i  : in  std_logic_vector(g_page_addr_width - 1 downto 0);
 
     ob_free_i               : in  std_logic;
     ob_free_done_o          : out std_logic;
-    ob_free_pgaddr_i        : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ob_free_pgaddr_i        : in  std_logic_vector(g_page_addr_width - 1 downto 0);
     
-    ll_read_addr_o          : out std_logic_vector(c_swc_page_addr_width -1 downto 0);
-    ll_read_data_i          : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ll_read_addr_o          : out std_logic_vector(g_page_addr_width -1 downto 0);
+    ll_read_data_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
     ll_read_req_o           : out std_logic;
     ll_read_valid_data_i    : in  std_logic;
 
     mmu_free_o              : out std_logic;
     mmu_free_done_i         : in  std_logic;
-    mmu_free_pgaddr_o       : out std_logic_vector(c_swc_page_addr_width -1 downto 0);
+    mmu_free_pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
         
     mmu_force_free_o        : out std_logic;
     mmu_force_free_done_i   : in  std_logic;
-    mmu_force_free_pgaddr_o : out std_logic_vector(c_swc_page_addr_width -1 downto 0)
+    mmu_force_free_pgaddr_o : out std_logic_vector(g_page_addr_width -1 downto 0)
 
        
     );
@@ -100,15 +104,15 @@ architecture syn of swc_pck_pg_free_module is
   signal ob_free_done       : std_logic;
   
   signal fifo_wr            : std_logic;
-  signal fifo_data_in       : std_logic_vector(c_swc_page_addr_width + 2 - 1 downto 0);
+  signal fifo_data_in       : std_logic_vector(g_page_addr_width + 2 - 1 downto 0);
   signal fifo_full          : std_logic;
   signal fifo_empty         : std_logic;
-  signal fifo_data_out      : std_logic_vector(c_swc_page_addr_width + 2 - 1 downto 0);
+  signal fifo_data_out      : std_logic_vector(g_page_addr_width + 2 - 1 downto 0);
   signal fifo_rd            : std_logic;
   signal fifo_clean         : std_logic;
   
-  signal current_page       : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal next_page          : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal current_page       : std_logic_vector(g_page_addr_width - 1 downto 0);
+  signal next_page          : std_logic_vector(g_page_addr_width - 1 downto 0);
   
   
   signal ll_read_req        : std_logic;
@@ -116,7 +120,7 @@ architecture syn of swc_pck_pg_free_module is
   signal mmu_force_free     : std_logic;
   signal mmu_free           : std_logic;
   
-  signal ones               : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal ones               : std_logic_vector(g_page_addr_width - 1 downto 0);
     
   signal freeing_mode       : std_logic_vector(1 downto 0);
   signal fifo_clear_n : std_logic;
@@ -144,9 +148,9 @@ begin  -- syn
           
             fifo_wr                                          <= '1';
             
-            fifo_data_in(c_swc_page_addr_width - 1 downto 0) <= ib_force_free_pgaddr_i;
-            fifo_data_in(c_swc_page_addr_width)              <= '1';
-            fifo_data_in(c_swc_page_addr_width + 1)          <= '0';
+            fifo_data_in(g_page_addr_width - 1 downto 0) <= ib_force_free_pgaddr_i;
+            fifo_data_in(g_page_addr_width)              <= '1';
+            fifo_data_in(g_page_addr_width + 1)          <= '0';
             
             ib_force_free_done                               <= '1';
             ob_free_done                                     <= '0';
@@ -155,9 +159,9 @@ begin  -- syn
   
             fifo_wr                                          <= '1';           
   
-            fifo_data_in(c_swc_page_addr_width - 1 downto 0) <= ob_free_pgaddr_i;
-            fifo_data_in(c_swc_page_addr_width)              <= '0';
-            fifo_data_in(c_swc_page_addr_width + 1)          <= '1';
+            fifo_data_in(g_page_addr_width - 1 downto 0) <= ob_free_pgaddr_i;
+            fifo_data_in(g_page_addr_width)              <= '0';
+            fifo_data_in(g_page_addr_width + 1)          <= '1';
 
             ob_free_done                                     <= '1';
             ib_force_free_done                               <= '0';
@@ -181,8 +185,8 @@ begin  -- syn
   -- replaced by GenRams component: TW
   U_FIFO: generic_sync_fifo
     generic map (
-      g_data_width      => c_swc_page_addr_width + 2,
-      g_size      => c_swc_freeing_fifo_size
+      g_data_width      => g_page_addr_width + 2,
+      g_size      => g_pck_pg_free_fifo_size
       )
     port map (
       rst_n_i        => fifo_clear_n,
@@ -237,8 +241,8 @@ fsm_force_free : process(clk_i, rst_n_i)
         
          when S_READ_FIFO =>
            
-            freeing_mode <= fifo_data_out(c_swc_page_addr_width + 2 - 1 downto c_swc_page_addr_width);
-            current_page <= fifo_data_out(c_swc_page_addr_width - 1 downto 0);
+            freeing_mode <= fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width);
+            current_page <= fifo_data_out(g_page_addr_width - 1 downto 0);
             ll_read_req  <= '1';
             state        <= S_READ_NEXT_PAGE_ADDR;
                         

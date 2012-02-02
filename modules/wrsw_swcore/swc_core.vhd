@@ -54,12 +54,18 @@ use work.wrsw_shared_types_pkg.all;
 
 entity swc_core is
   generic( 
-    g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
-    g_prio_width         : integer ;--:= c_swc_prio_width;
-    g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
-    g_num_ports          : integer ;--:= c_swc_num_ports
-    g_data_width         : integer ;--:= c_swc_data_width
-    g_ctrl_width         : integer  --:= c_swc_ctrl_width
+    g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
+    g_prio_width                       : integer ;--:= c_swc_prio_width;
+    g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width    
+    g_num_ports                        : integer ;--:= c_swc_num_ports
+    g_data_width                       : integer ;--:= c_swc_data_width
+    g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
+    g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
+    g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
+    -- probably useless with new memory
+    g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
+    g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
+    g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance (xswc_input_block)
     );
   port (
     clk_i   : in std_logic;
@@ -241,6 +247,19 @@ architecture rtl of swc_core is
    
   gen_blocks : for i in 0 to g_num_ports-1 generate
     INPUT_BLOCK : xswc_input_block
+    generic map( 
+        g_page_addr_width                  => g_page_addr_width,
+        g_num_ports                        => g_num_ports,
+        g_prio_width                       => g_prio_width,
+        g_max_pck_size_width               => g_max_pck_size_width,
+        g_usecount_width                   => c_usecount_width,
+        g_data_width                       => g_data_width,
+        g_ctrl_width                       => g_ctrl_width,
+        g_input_block_cannot_accept_data   => g_input_block_cannot_accept_data,
+        g_packet_mem_multiply              => g_packet_mem_multiply,
+        g_input_block_fifo_size            => g_input_block_fifo_size,
+        g_input_block_fifo_full_in_advance => g_input_block_fifo_full_in_advance
+      )
       port map (
         clk_i                    => clk_i,
         rst_n_i                  => rst_n_i,
@@ -350,6 +369,11 @@ architecture rtl of swc_core is
 
 
   PCK_PAGES_FREEEING_MODULE: swc_multiport_pck_pg_free_module
+    generic map( 
+      g_num_ports             => g_num_ports,
+      g_page_addr_width       => g_page_addr_width,
+      g_pck_pg_free_fifo_size => g_pck_pg_free_fifo_size
+      )
     port map(
       clk_i                   => clk_i,
       rst_n_i                 => rst_n_i,

@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-28
--- Last update: 2011-03-16
+-- Last update: 2012-02-02
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -51,7 +51,7 @@
 -- 2010-11-01  1.0      mlipinsk created
 -- 2010-11-29  2.0      mlipinsk added FIFO, major changes
 -- 2012-01-20  3.0      mlipinsk wisbhonized
---
+-- 2012-02-02  4.0      mlipinsk generic-azed
 -------------------------------------------------------------------------------
 -- TODO: 
 -- 1) dreq HIGH in idle ?
@@ -61,6 +61,8 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use ieee.math_real.CEIL;
+use ieee.math_real.log2;
 
 library work;
 use work.swc_swcore_pkg.all;
@@ -68,9 +70,20 @@ use work.genram_pkg.all;
 use work.wr_fabric_pkg.all;
 
 entity xswc_input_block is
-  generic (
-    g_when_cannot_accept_data : string := "drop_pck" --"stall_o", "rty_o" -- Don't CHANGE !
-  
+  generic ( 
+    g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
+    g_num_ports                        : integer ;--:= c_swc_num_ports
+    g_prio_width                       : integer ;--:= c_swc_prio_width;
+    g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
+    g_usecount_width                   : integer ;--:= c_swc_usecount_width
+    g_data_width                       : integer ;--:= c_swc_data_width
+    g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
+    g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- Don't CHANGE !
+
+    -- probably useless with new memory
+    g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply
+    g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size
+    g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance
   );
   port (
     clk_i   : in std_logic;
@@ -94,16 +107,16 @@ entity xswc_input_block is
     mmu_page_alloc_done_i : in std_logic;
 
     -- array of pages' addresses to which ports want to write
-    mmu_pageaddr_i : in std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    mmu_pageaddr_i : in std_logic_vector(g_page_addr_width - 1 downto 0);
 
-    mmu_pageaddr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    mmu_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
 
     -- force freeing package starting with page outputed on mmu_pageaddr_o
     mmu_force_free_o : out std_logic;
 
     mmu_force_free_done_i : in std_logic;
 
-    mmu_force_free_addr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    mmu_force_free_addr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
 
     -- set user count to the already allocated page (on mmu_pageaddr_o)
     mmu_set_usecnt_o : out std_logic;
@@ -113,7 +126,7 @@ entity xswc_input_block is
     -- user count to be set (associated with an allocated page) in two cases:
     -- * mmu_pagereq_o    is HIGH - normal allocation
     -- * mmu_set_usecnt_o is HIGH - force user count to existing page alloc
-    mmu_usecnt_o : out std_logic_vector(c_swc_usecount_width - 1 downto 0);
+    mmu_usecnt_o : out std_logic_vector(g_usecount_width - 1 downto 0);
 
     -- memory full
     mmu_nomem_i : in std_logic;
@@ -123,9 +136,9 @@ entity xswc_input_block is
 
     rtu_rsp_valid_i     : in  std_logic;
     rtu_rsp_ack_o       : out std_logic;
-    rtu_dst_port_mask_i : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
     rtu_drop_i          : in  std_logic;
-    rtu_prio_i          : in  std_logic_vector(c_swc_prio_width - 1 downto 0);
+    rtu_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
 
 
 -------------------------------------------------------------------------------
@@ -136,18 +149,18 @@ entity xswc_input_block is
     mpm_pckstart_o : out std_logic;
 
     -- array of pages' addresses to which ports want to write
-    mpm_pageaddr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    mpm_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
 
 
     mpm_pagereq_o : out std_logic;
     -- indicator that the current page is about to be full (the last FB SRAM word
-    -- is being pumped in currently), after ~c_swc_packet_mem_multiply cycles 
+    -- is being pumped in currently), after ~g_packet_mem_multiply cycles 
     -- from the rising edge of this signal this page will finish
     mpm_pageend_i : in  std_logic;
 
-    mpm_data_o : out std_logic_vector(c_swc_data_width - 1 downto 0);
+    mpm_data_o : out std_logic_vector(g_data_width - 1 downto 0);
 
-    mpm_ctrl_o : out std_logic_vector(c_swc_ctrl_width - 1 downto 0);
+    mpm_ctrl_o : out std_logic_vector(g_ctrl_width - 1 downto 0);
 
     -- data ready - request from each port to write data to port's pump
     mpm_drdy_o : out std_logic;
@@ -172,63 +185,65 @@ entity xswc_input_block is
     pta_transfer_ack_i : in std_logic;
 
     -- array of pages' addresses to which ports want to write
-    pta_pageaddr_o : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    pta_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
 
     -- destination mask - indicates to which ports the packet should be
     -- forwarded
-    pta_mask_o : out std_logic_vector(c_swc_num_ports - 1 downto 0);
+    pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
 
-    pta_pck_size_o : out std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+    pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
 
-    pta_prio_o : out std_logic_vector(c_swc_prio_width - 1 downto 0)
+    pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0)
 
     );
 end xswc_input_block;
 
 architecture syn of xswc_input_block is
 
-  signal fifo_data_in  : std_logic_vector(c_swc_data_width + c_swc_ctrl_width + 2 - 1 downto 0);
+  constant c_input_fifo_size_log2  : integer := integer(CEIL(LOG2(real(g_input_block_fifo_size - 1))));
+  
+  signal fifo_data_in  : std_logic_vector(g_data_width + g_ctrl_width + 2 - 1 downto 0);
   signal fifo_wr       : std_logic;
   signal fifo_clean    : std_logic;
   signal fifo_clear_n    : std_logic;
   signal fifo_rd       : std_logic;
-  signal fifo_data_out : std_logic_vector(c_swc_data_width + c_swc_ctrl_width + 2 - 1 downto 0);
+  signal fifo_data_out : std_logic_vector(g_data_width + g_ctrl_width + 2 - 1 downto 0);
   signal fifo_empty    : std_logic;
   signal fifo_full     : std_logic;
   --signal fifo_usedw    : std_logic_vector(5 -1 downto 0);
-  signal fifo_usedw    : std_logic_vector(c_swc_input_fifo_size_log2 -1 downto 0);
+  signal fifo_usedw    : std_logic_vector(c_input_fifo_size_log2 -1 downto 0);
 
-  signal tx_ctrl_trans : std_logic_vector(c_swc_ctrl_width - 1 downto 0);
+  signal tx_ctrl_trans : std_logic_vector(g_ctrl_width - 1 downto 0);
 
   signal transfering_pck : std_logic;
-  signal pta_pageaddr    : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-  signal pta_mask        : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal pta_prio        : std_logic_vector(c_swc_prio_width - 1 downto 0);
-  signal pta_pck_size    : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+  signal pta_pageaddr    : std_logic_vector(g_page_addr_width - 1 downto 0);
+  signal pta_mask        : std_logic_vector(g_num_ports - 1 downto 0);
+  signal pta_prio        : std_logic_vector(g_prio_width - 1 downto 0);
+  signal pta_pck_size    : std_logic_vector(g_max_pck_size_width - 1 downto 0);
 
 
 
   signal write_ctrl_in  : std_logic_vector(1 downto 0);
   signal write_ctrl_out : std_logic_vector(1 downto 0);
 
-  signal write_ctrl : std_logic_vector(c_swc_ctrl_width - 1 downto 0);
-  signal write_data : std_logic_vector(c_swc_data_width - 1 downto 0);
+  signal write_ctrl : std_logic_vector(g_ctrl_width - 1 downto 0);
+  signal write_data : std_logic_vector(g_data_width - 1 downto 0);
 
 
-  signal read_mask   : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal read_prio   : std_logic_vector(c_swc_prio_width - 1 downto 0);
+  signal read_mask   : std_logic_vector(g_num_ports - 1 downto 0);
+  signal read_prio   : std_logic_vector(g_prio_width - 1 downto 0);
   signal read_drop   : std_logic;
-  signal read_usecnt : std_logic_vector(c_swc_usecount_width - 1 downto 0);
+  signal read_usecnt : std_logic_vector(g_usecount_width - 1 downto 0);
 
-  signal write_mask   : std_logic_vector(c_swc_num_ports - 1 downto 0);
-  signal write_prio   : std_logic_vector(c_swc_prio_width - 1 downto 0);
-  signal write_usecnt : std_logic_vector(c_swc_usecount_width - 1 downto 0);
+  signal write_mask   : std_logic_vector(g_num_ports - 1 downto 0);
+  signal write_prio   : std_logic_vector(g_prio_width - 1 downto 0);
+  signal write_usecnt : std_logic_vector(g_usecount_width - 1 downto 0);
 
-  signal pck_size                  : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
-  signal current_pckstart_pageaddr : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+  signal pck_size                  : std_logic_vector(g_max_pck_size_width - 1 downto 0);
+  signal current_pckstart_pageaddr : std_logic_vector(g_page_addr_width - 1 downto 0);
 
 
-  signal usecnt_d0 : std_logic_vector(c_swc_usecount_width - 1 downto 0);
+  signal usecnt_d0 : std_logic_vector(g_usecount_width - 1 downto 0);
 
  type t_rcv_rtu_state is (S_IDLE,             
                        S_RTU_DECISION_AVAILABLE); 
@@ -284,27 +299,27 @@ type t_write_state is (S_IDLE,
  
  -- pckstart page allocation in advance
  signal pckstart_page_in_advance  : std_logic;
- signal pckstart_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal pckstart_pageaddr         : std_logic_vector(g_page_addr_width - 1 downto 0);
  signal pckstart_page_alloc_req   : std_logic;
  signal pckstart_usecnt_req       : std_logic;
- signal pckstart_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);  
+ signal pckstart_usecnt_in_advance: std_logic_vector(g_usecount_width - 1 downto 0);  
 
    
  -- interpck page allocation in advance
  signal interpck_page_in_advance  : std_logic;  
  signal interpck_page_in_advance_d0: std_logic;  
  signal interpck_page_in_advance_d1: std_logic;  
- signal interpck_pageaddr         : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal interpck_pageaddr         : std_logic_vector(g_page_addr_width - 1 downto 0);
  signal interpck_page_alloc_req   : std_logic;  
  signal interpck_usecnt_req       : std_logic;  
- signal interpck_usecnt_in_advance: std_logic_vector(c_swc_usecount_width - 1 downto 0);       
+ signal interpck_usecnt_in_advance: std_logic_vector(g_usecount_width - 1 downto 0);       
 
  -- pck usecnt setting
  signal need_pckstart_usecnt_set  : std_logic;
  signal need_interpck_usecnt_set  : std_logic; 
 
  -- errored pck freeing 
- signal mmu_force_free_addr       : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal mmu_force_free_addr       : std_logic_vector(g_page_addr_width - 1 downto 0);
  signal mmu_force_free            : std_logic;     
  
  -- error signal handling 
@@ -317,7 +332,7 @@ type t_write_state is (S_IDLE,
   
  -- multiport memory I/F
  signal mpm_pckstart              : std_logic;
- signal mpm_pageaddr              : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+ signal mpm_pageaddr              : std_logic_vector(g_page_addr_width - 1 downto 0);
  signal mpm_pagereq               : std_logic;
  signal mpm_flush                 : std_logic;
  -- help signal for MPM I/F
@@ -414,10 +429,10 @@ begin  --arch
 --==================================================================================================
 
 
-  write_ctrl_out <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width + 1 downto c_swc_data_width +
-                                  c_swc_ctrl_width); 
-  write_data     <= fifo_data_out(c_swc_data_width - 1 downto 0);
-  write_ctrl     <= fifo_data_out(c_swc_data_width + c_swc_ctrl_width - 1 downto c_swc_data_width);
+  write_ctrl_out <= fifo_data_out(g_data_width + g_ctrl_width + 1 downto g_data_width +
+                                  g_ctrl_width); 
+  write_data     <= fifo_data_out(g_data_width - 1 downto 0);
+  write_ctrl     <= fifo_data_out(g_data_width + g_ctrl_width - 1 downto g_data_width);
 
   fifo_rd        <= ((not fifo_empty) and (not mpm_full_i)) when (write_state = S_WRITE_MPM or
                                                                   write_state = S_START_FIFO_RD)    else
@@ -426,19 +441,19 @@ begin  --arch
 
 
   fifo_populated_enough <= '1' when
-                           ((fifo_usedw > std_logic_vector(to_unsigned(c_swc_packet_mem_multiply, c_swc_input_fifo_size_log2)))
+                           ((fifo_usedw > std_logic_vector(to_unsigned(g_packet_mem_multiply, c_input_fifo_size_log2)))
                             or fifo_full = '1') else '0';    
 
   fifo_full_in_advance <= '1'
-                      when ((fifo_usedw > std_logic_vector(to_unsigned(c_swc_fifo_full_in_advance, c_swc_input_fifo_size_log2)))
+                      when ((fifo_usedw > std_logic_vector(to_unsigned(g_input_block_fifo_full_in_advance, c_input_fifo_size_log2)))
                                  or fifo_full = '1') else '0';
 
 
   fifo_clear_n <= (not fifo_clean) and rst_n_i;
   U_FIFO : generic_sync_fifo
     generic map(
-      g_data_width      => c_swc_data_width + c_swc_ctrl_width + 2,
-      g_size      => c_swc_input_fifo_size,
+      g_data_width      => g_data_width + g_ctrl_width + 2,
+      g_size      => g_input_block_fifo_size,
       g_with_count => true
       )
     port map (
@@ -563,10 +578,10 @@ begin  --arch
                                                           -- (in_fifo_full_on_eof is HIGH when (fifo_full & in_pck_eof), gets LOW 
                                                           -- 1 cycle after fifo_full gets LOW
 
-  fifo_data_in(c_swc_data_width - 1    downto 0)                     <= snk_dat_int;
-  fifo_data_in(c_swc_data_width + 2 -1 downto c_swc_data_width)      <= snk_adr_int;
-  fifo_data_in(c_swc_data_width + 4 -1 downto c_swc_data_width + 2)  <= snk_sel_int;
-  fifo_data_in(c_swc_data_width + 6 -1 downto c_swc_data_width + 4)  <= write_ctrl_in;
+  fifo_data_in(g_data_width - 1    downto 0)                     <= snk_dat_int;
+  fifo_data_in(g_data_width + 2 -1 downto g_data_width)      <= snk_adr_int;
+  fifo_data_in(g_data_width + 4 -1 downto g_data_width + 2)  <= snk_sel_int;
+  fifo_data_in(g_data_width + 6 -1 downto g_data_width + 4)  <= write_ctrl_in;
 
 
   read_helper : process(clk_i, rst_n_i)
@@ -696,12 +711,12 @@ begin  --arch
             stall_when_stuck <= '0';
 	    snk_rty_int      <= '0';
             
-            if((fifo_populated_enough = '1'             ) and   -- at least on "c_swc_packet_mem_multiply"
+            if((fifo_populated_enough = '1'             ) and   -- at least on "g_packet_mem_multiply"
                (pckstart_page_in_advance = '1'          ) and   -- needed to write first page
                (rcv_rtu_state = S_RTU_DECISION_AVAILABLE) and   -- there is RTU decision avaible (TODO: *)
                (mpm_full_i = '0'                        )) then -- obvious, no write to full MPM
 
-               if(read_drop = '1' or read_mask = zeros(c_swc_num_ports - 1 downto 0)) then
+               if(read_drop = '1' or read_mask = zeros(g_num_ports - 1 downto 0)) then
                  
                  --droping pcks
                  --
@@ -782,7 +797,7 @@ begin  --arch
           when S_STUCK_WITH_DATA =>
             --========================================================================================
 
-                if(g_when_cannot_accept_data = "drop_pck") then 
+                if(g_input_block_cannot_accept_data = "drop_pck") then 
 
                    if(mmu_force_free_done_i = '1') then
                
@@ -941,12 +956,12 @@ begin  --arch
                write_state <= S_IDLE;
                rtu_data_read_by_write_process <= '1';
                
-            elsif((fifo_populated_enough = '1'             ) and   -- at least on "c_swc_packet_mem_multiply"
+            elsif((fifo_populated_enough = '1'             ) and   -- at least on "g_packet_mem_multiply"
                (pckstart_page_in_advance = '1'          ) and   -- needed to write first page
                (rcv_rtu_state = S_RTU_DECISION_AVAILABLE) and   -- there is RTU decision avaible (TODO: !!!)
                (mpm_full_i = '0'                        )) then -- obvious, no write to full MPM
 
-               if(read_drop = '1' or read_mask = zeros(c_swc_num_ports - 1 downto 0)) then
+               if(read_drop = '1' or read_mask = zeros(g_num_ports - 1 downto 0)) then
 
                   --droping pcks
                   write_state <= S_DROP_PCK;
