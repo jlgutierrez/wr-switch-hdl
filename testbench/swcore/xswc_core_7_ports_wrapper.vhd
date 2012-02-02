@@ -237,12 +237,14 @@ end xswc_core_7_ports_wrapper;
 architecture rtl of xswc_core_7_ports_wrapper is
 
 component xswc_core is
-  generic
-	( 
-	  g_swc_num_ports      : integer := g_swc_num_ports;
-	  g_swc_prio_width     : integer := g_swc_prio_width
-	  
-        );
+  generic( 
+    g_page_addr_width    : integer := c_swc_page_addr_width;
+    g_prio_width         : integer := c_swc_prio_width;
+    g_max_pck_size_width : integer := c_swc_max_pck_size_width;
+    g_num_ports          : integer := c_swc_num_ports;
+    g_data_width         : integer := c_swc_data_width;
+    g_ctrl_width         : integer := c_swc_ctrl_width
+    );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -284,11 +286,6 @@ end component;
 begin
 
 U_xswc_core: xswc_core
-  generic map
-	( 
-	  g_swc_num_ports      => g_swc_num_ports,
-	  g_swc_prio_width     => g_swc_prio_width
-        )
   port map(
     clk_i               => clk_i,
     rst_n_i             => rst_n_i,

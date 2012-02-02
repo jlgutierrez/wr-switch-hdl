@@ -436,6 +436,12 @@ package swc_swcore_pkg is
   
   
   component swc_pck_transfer_input is
+    generic(
+      g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
+      g_prio_width         : integer ;--:= c_swc_prio_width;
+      g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
+      g_num_ports          : integer  --:= c_swc_num_ports
+    );
     port (
       clk_i              : in std_logic;
       rst_n_i            : in std_logic;
@@ -460,26 +466,37 @@ package swc_swcore_pkg is
   
   
   component swc_pck_transfer_output is
+    generic(
+      g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
+      g_prio_width         : integer ;--:= c_swc_prio_width;
+      g_max_pck_size_width : integer --:= c_swc_max_pck_size_width
+      );
     port (
       clk_i                    : in  std_logic;
       rst_n_i                  : in  std_logic;
       
       ob_transfer_data_valid_o : out std_logic;
-      ob_pageaddr_o            : out std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-      ob_prio_o                : out std_logic_vector(c_swc_prio_width - 1 downto 0);
-      ob_pck_size_o            : out std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+      ob_pageaddr_o            : out std_logic_vector(g_page_addr_width - 1 downto 0);
+      ob_prio_o                : out std_logic_vector(g_prio_width - 1 downto 0);
+      ob_pck_size_o            : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
       ob_transfer_data_ack_i   : in  std_logic;
       
       pti_transfer_data_valid_i: in  std_logic;
       pti_transfer_data_ack_o  : out std_logic;
-      pti_pageaddr_i           : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-      pti_prio_i               : in  std_logic_vector(c_swc_prio_width - 1 downto 0);
-      pti_pck_size_i           : in  std_logic_vector(c_swc_max_pck_size_width - 1 downto 0)
+      pti_pageaddr_i           : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+      pti_prio_i               : in  std_logic_vector(g_prio_width - 1 downto 0);
+      pti_pck_size_i           : in  std_logic_vector(g_max_pck_size_width - 1 downto 0)
       
       );
   end component;
   
   component swc_pck_transfer_arbiter is
+    generic(
+      g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
+      g_prio_width         : integer ;--:= c_swc_prio_width;
+      g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
+      g_num_ports          : integer  --:= c_swc_num_ports
+      );
     port (
       clk_i              : in  std_logic;
       rst_n_i            : in  std_logic;

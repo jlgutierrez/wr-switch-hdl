@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2010-11-03
+-- Last update: 2012-02-02
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -35,7 +35,7 @@
 -- Revisions  :
 -- Date        Version  Author   Description
 -- 2010-11-03  1.0      mlipinsk created
-
+-- 2012-02-02  2.0      mlipinsk generic-azed
 -------------------------------------------------------------------------------
 
 
@@ -48,7 +48,12 @@ use work.swc_swcore_pkg.all;
 
 
 entity swc_pck_transfer_input is
-
+  generic(
+     g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
+     g_prio_width         : integer ;--:= c_swc_prio_width;
+     g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
+     g_num_ports          : integer  --:= c_swc_num_ports
+  );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -59,15 +64,15 @@ entity swc_pck_transfer_input is
 
     pto_transfer_pck_o : out  std_logic;
        
-    pto_pageaddr_o : out  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    pto_pageaddr_o : out  std_logic_vector(g_page_addr_width - 1 downto 0);
     
-    pto_output_mask_o     : out  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    pto_output_mask_o     : out  std_logic_vector(g_num_ports - 1 downto 0);
     
-    pto_read_mask_i     : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    pto_read_mask_i     : in  std_logic_vector(g_num_ports - 1 downto 0);
 
-    pto_prio_o     : out  std_logic_vector(c_swc_prio_width - 1 downto 0);
+    pto_prio_o     : out  std_logic_vector(g_prio_width - 1 downto 0);
 
-    pto_pck_size_o : out  std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+    pto_pck_size_o : out  std_logic_vector(g_max_pck_size_width - 1 downto 0);
 
 -------------------------------------------------------------------------------
 -- I/F with Input Block (IB)
@@ -76,15 +81,15 @@ entity swc_pck_transfer_input is
     ib_transfer_pck_i : in  std_logic;
        
     -- array of pages' addresses to which ports want to write
-    ib_pageaddr_i : in  std_logic_vector(c_swc_page_addr_width - 1 downto 0);
+    ib_pageaddr_i : in  std_logic_vector(g_page_addr_width - 1 downto 0);
     
     -- destination mask - indicates to which ports the packet should be
     -- forwarded
-    ib_mask_i     : in  std_logic_vector(c_swc_num_ports - 1 downto 0);
+    ib_mask_i     : in  std_logic_vector(g_num_ports - 1 downto 0);
 
-    ib_prio_i     : in  std_logic_vector(c_swc_prio_width - 1 downto 0);
+    ib_prio_i     : in  std_logic_vector(g_prio_width - 1 downto 0);
     
-    ib_pck_size_i : in  std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
+    ib_pck_size_i : in  std_logic_vector(g_max_pck_size_width - 1 downto 0);
     
     ib_transfer_ack_o : out std_logic;
     
@@ -96,13 +101,13 @@ end swc_pck_transfer_input;
 architecture syn of swc_pck_transfer_input is   
 
     signal ib_transfer_ack: std_logic;
-    signal ib_pageaddr    : std_logic_vector(c_swc_page_addr_width - 1 downto 0);
-    signal ib_prio        : std_logic_vector(c_swc_prio_width - 1      downto 0);
-    signal ib_pck_size    : std_logic_vector(c_swc_max_pck_size_width - 1 downto 0);
-    signal ib_mask        : std_logic_vector(c_swc_num_ports - 1       downto 0);
-    --signal pto_read_mask    : std_logic_vector(c_swc_num_ports - 1       downto 0);
-    signal pto_output_mask  : std_logic_vector(c_swc_num_ports - 1       downto 0);
-    signal zeros           : std_logic_vector(c_swc_num_ports - 1       downto 0);
+    signal ib_pageaddr    : std_logic_vector(g_page_addr_width - 1 downto 0);
+    signal ib_prio        : std_logic_vector(g_prio_width - 1      downto 0);
+    signal ib_pck_size    : std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    signal ib_mask        : std_logic_vector(g_num_ports - 1       downto 0);
+    --signal pto_read_mask    : std_logic_vector(g_num_ports - 1       downto 0);
+    signal pto_output_mask  : std_logic_vector(g_num_ports - 1       downto 0);
+    signal zeros           : std_logic_vector(g_num_ports - 1       downto 0);
 
 begin --arch
 

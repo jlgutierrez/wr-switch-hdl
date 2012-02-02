@@ -52,11 +52,14 @@ use work.wrsw_shared_types_pkg.all;
 
 entity xswc_core is
   generic
-	( 
-	  g_swc_num_ports      : integer := c_swc_num_ports;
-	  g_swc_prio_width     : integer := c_swc_prio_width
-	  
-        );
+    ( 
+    g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
+    g_prio_width         : integer ;--:= c_swc_prio_width;
+    g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
+    g_num_ports          : integer ;--:= c_swc_num_ports
+    g_data_width         : integer ;--:= c_swc_data_width
+    g_ctrl_width         : integer  --:= c_swc_ctrl_width	  
+    );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -65,24 +68,24 @@ entity xswc_core is
 -- pWB  : input (comes from the Endpoint)
 -------------------------------------------------------------------------------
 
-    snk_i : in  t_wrf_sink_in_array(g_swc_num_ports-1 downto 0);
-    snk_o : out t_wrf_sink_out_array(g_swc_num_ports-1 downto 0);
+    snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
+    snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
 
  
 -------------------------------------------------------------------------------
 -- pWB : output (goes to the Endpoint)
 -------------------------------------------------------------------------------  
 
-    src_i : in  t_wrf_source_in_array(g_swc_num_ports-1 downto 0);
-    src_o : out t_wrf_source_out_array(g_swc_num_ports-1 downto 0);
+    src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
+    src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
 
     
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
     
-    rtu_rsp_i           : in t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
-    rtu_ack_o            : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
+    rtu_rsp_i           : in t_rtu_response_array(g_num_ports  - 1 downto 0);
+    rtu_ack_o            : out std_logic_vector(g_num_ports  - 1 downto 0)
 
     );
 end xswc_core;
@@ -90,7 +93,14 @@ end xswc_core;
 architecture rtl of xswc_core is
 
  component swc_core is
-
+  generic( 
+    g_page_addr_width    : integer := c_swc_page_addr_width;
+    g_prio_width         : integer := c_swc_prio_width;
+    g_max_pck_size_width : integer := c_swc_max_pck_size_width;    
+    g_num_ports          : integer := c_swc_num_ports;
+    g_data_width         : integer := c_swc_data_width;
+    g_ctrl_width         : integer := c_swc_ctrl_width
+    );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -99,23 +109,23 @@ architecture rtl of xswc_core is
     -- pWB  : input (comes from the Endpoint)
     -------------------------------------------------------------------------------
 
-    snk_i : in  t_wrf_sink_in_array(g_swc_num_ports-1 downto 0);
-    snk_o : out t_wrf_sink_out_array(g_swc_num_ports-1 downto 0);
+    snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
+    snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
 
 
     -------------------------------------------------------------------------------
     -- pWB : output (goes to the Endpoint)
     -------------------------------------------------------------------------------  
 
-    src_i : in  t_wrf_source_in_array(g_swc_num_ports-1 downto 0);
-    src_o : out t_wrf_source_out_array(g_swc_num_ports-1 downto 0);
+    src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
+    src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
     
     -------------------------------------------------------------------------------
     -- I/F with Routing Table Unit (RTU)
     -------------------------------------------------------------------------------      
     
-    rtu_rsp_i           : in t_rtu_response_array(c_swc_num_ports  - 1 downto 0);
-    rtu_ack_o            : out std_logic_vector(c_swc_num_ports  - 1 downto 0)
+    rtu_rsp_i           : in t_rtu_response_array(g_num_ports  - 1 downto 0);
+    rtu_ack_o            : out std_logic_vector(g_num_ports  - 1 downto 0)
 
     );
    end component;
@@ -129,6 +139,14 @@ begin
 
 
   U_swc_core: swc_core
+    generic map( 
+      g_page_addr_width    => g_page_addr_width,
+      g_prio_width         => g_prio_width,
+      g_max_pck_size_width => g_max_pck_size_width,
+      g_num_ports          => g_num_ports,
+      g_data_width         => g_data_width,
+      g_ctrl_width         => g_ctrl_width
+    )
     port map (
       clk_i               => clk_i,
       rst_n_i             => rst_n_i,
