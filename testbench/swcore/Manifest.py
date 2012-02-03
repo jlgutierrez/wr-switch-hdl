@@ -8,7 +8,9 @@ action = "simulation"
 files = [
   "xswc_core_7_ports_wrapper.vhd",
   "xswcore_wrapper.svh",
-  "xswc_core.sv"
+  "xswc_core.sv",
+  "xswcore_wrapper.v2.svh",
+  "xswc_core.v2.sv"
   ]
 
 #vlog_opt="+incdir+../../../sim "

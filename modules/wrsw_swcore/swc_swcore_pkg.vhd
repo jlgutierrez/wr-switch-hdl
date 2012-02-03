@@ -46,6 +46,7 @@ use ieee.math_real.log2;
 
 library work;
 use work.wr_fabric_pkg.all;
+use work.wrsw_shared_types_pkg.all;
 
 package swc_swcore_pkg is
 
@@ -567,6 +568,38 @@ component  swc_multiport_pck_pg_free_module is
       );
   end component;
   
+  component xswc_core is
+    generic( 
+      g_mem_size                         : integer ;--:= c_swc_packet_mem_size
+      g_page_size                        : integer ;--:= c_swc_page_size
+      g_prio_num                         : integer ;--:= c_swc_output_prio_num;
+      g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
+      g_num_ports                        : integer ;--:= c_swc_num_ports
+      g_data_width                       : integer ;--:= c_swc_data_width
+      g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
+      g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
+      g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
+      g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+      -- probably useless with new memory
+      g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
+      g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
+      g_input_block_fifo_full_in_advance : integer --:=c_swc_fifo_full_in_advance (xswc_input_block)
+      );
+      port (
+      clk_i   : in std_logic;
+      rst_n_i : in std_logic;
+  
+      snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
+      snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
+  
+      src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
+      src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
+      
+      rtu_rsp_i           : in t_rtu_response_array(g_num_ports  - 1 downto 0);
+      rtu_ack_o          : out std_logic_vector(g_num_ports  - 1 downto 0)
+      );
+  end component;
+
 end swc_swcore_pkg;
 
 package body swc_swcore_pkg is

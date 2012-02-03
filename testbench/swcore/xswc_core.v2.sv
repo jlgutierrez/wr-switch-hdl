@@ -1,11 +1,6 @@
 // Fabric emulator example, showing 2 fabric emulators connected together and exchanging packets.
 
 `define c_clock_period        8
-`define c_wrsw_prio_width     3
-`define c_swc_ctrl_width      4
-`define c_swc_data_width      16
-//`define c_wrsw_num_ports      11
-`define c_wrsw_num_ports      7
 
 `define c_n_pcks_to_send      10
 
@@ -16,7 +11,8 @@
 `include "wb_packet_source.svh"
 `include "wb_packet_sink.svh"
 
-`include "xswcore_wrapper.svh"
+`include "xswcore_wrapper.v2.svh"
+`include "swc_param_defs.svh"   // all swcore parameters here
 
 
 typedef struct {
@@ -37,9 +33,9 @@ int pg_dealloc_cnt[1024][20];
 
 
 
-EthPacket swc_matrix[`c_wrsw_num_ports][`c_n_pcks_to_send];
+EthPacket swc_matrix[`c_num_ports][`c_n_pcks_to_send];
 
-module main;
+module main_v2;
 
 
    
@@ -57,28 +53,18 @@ module main;
    WBPacketSource src[];
    WBPacketSink   sink[];
 
-   IWishboneMaster #(2,16) U_wrf_source_0 (clk,rst_n);
-   IWishboneMaster #(2,16) U_wrf_source_1 (clk,rst_n);
-   IWishboneMaster #(2,16) U_wrf_source_2 (clk,rst_n);
-   IWishboneMaster #(2,16) U_wrf_source_3 (clk,rst_n);
-   IWishboneMaster #(2,16) U_wrf_source_4 (clk,rst_n);
-   IWishboneMaster #(2,16) U_wrf_source_5 (clk,rst_n);
-   IWishboneMaster #(2,16) U_wrf_source_6 (clk,rst_n);
-      
-   IWishboneSlave #(2,16)  U_wrf_sink_0   (clk,rst_n);
-   IWishboneSlave #(2,16)  U_wrf_sink_1   (clk,rst_n);
-   IWishboneSlave #(2,16)  U_wrf_sink_2   (clk,rst_n);
-   IWishboneSlave #(2,16)  U_wrf_sink_3   (clk,rst_n);
-   IWishboneSlave #(2,16)  U_wrf_sink_4   (clk,rst_n);
-   IWishboneSlave #(2,16)  U_wrf_sink_5   (clk,rst_n);
-   IWishboneSlave #(2,16)  U_wrf_sink_6   (clk,rst_n);
-           
+   IWishboneMaster #(2,16) U_wrf_source[`c_num_ports] (clk,rst_n);
+   IWishboneSlave #(2,16)  U_wrf_sink[`c_num_ports]   (clk,rst_n);
+         
+   virtual IWishboneMaster #(2,16) v_wrf_source[`c_num_ports];
+   virtual IWishboneSlave  #(2,16) v_wrf_sink[`c_num_ports];
    
-   reg  [`c_wrsw_num_ports-1:0]                         rtu_rsp_valid        = 0;     
-   wire [`c_wrsw_num_ports-1:0]                         rtu_rsp_ack;       
-   reg  [`c_wrsw_num_ports * `c_wrsw_num_ports - 1 : 0] rtu_dst_port_mask    = 0; 
-   reg  [`c_wrsw_num_ports-1:0]                         rtu_drop             = 0;          
-   reg  [`c_wrsw_num_ports * `c_wrsw_prio_width -1 : 0] rtu_prio             = 0;     
+   
+   reg  [`c_num_ports-1:0]                         rtu_rsp_valid        = 0;     
+   wire [`c_num_ports-1:0]                         rtu_rsp_ack;       
+   reg  [`c_num_ports * `c_num_ports - 1 : 0] rtu_dst_port_mask    = 0; 
+   reg  [`c_num_ports-1:0]                         rtu_drop             = 0;          
+   reg  [`c_num_ports * `c_prio_num_width -1 : 0] rtu_prio             = 0;     
  
    //for verification (counting txed and rxed frames)
    int tx_cnt_by_port[11][11];
@@ -93,7 +79,7 @@ module main;
   
  
   
-   xswcore_wrapper
+   xswcore_wrapper_v2
     DUT_xswcore_wrapper (
     .clk_i                 (clk),
     .rst_n_i               (rst_n),
@@ -101,25 +87,13 @@ module main;
 //-- pWB slave - this is output of the swcore (internally connected to the source)
 //-------------------------------------------------------------------------------  
 
-      .snk_0 (U_wrf_sink_0.slave),
-      .snk_1 (U_wrf_sink_1.slave), 
-      .snk_2 (U_wrf_sink_2.slave), 
-      .snk_3 (U_wrf_sink_3.slave), 
-      .snk_4 (U_wrf_sink_4.slave), 
-      .snk_5 (U_wrf_sink_5.slave), 
-      .snk_6 (U_wrf_sink_6.slave), 	 
+      .snk (U_wrf_sink),
 
 //-------------------------------------------------------------------------------
 //-- pWB master - this is an input of the swcore (internally connected to the sink)
 //-------------------------------------------------------------------------------  
 
-      .src_0(U_wrf_source_0.master),
-      .src_1(U_wrf_source_1.master),
-      .src_2(U_wrf_source_2.master),
-      .src_3(U_wrf_source_3.master),
-      .src_4(U_wrf_source_4.master),
-      .src_5(U_wrf_source_5.master),
-      .src_6(U_wrf_source_6.master),	 
+      .src(U_wrf_source),
        
 //-------------------------------------------------------------------------------
 //-- I/F with Routing Table Unit (RTU)
@@ -153,20 +127,22 @@ module main;
        input [31:0]                    chan;
        input                           valid;
        input                           drop;
-       input [`c_wrsw_prio_width - 1:0] prio;
-       input [`c_wrsw_num_ports - 1:0] mask;
+       input [`c_prio_num_width - 1:0] prio;
+       input [`c_num_ports - 1:0] mask;
        
-       begin : wait_body
-    integer i;
-    integer k; // for the macro array_copy()
-
-    `array_copy(rtu_dst_port_mask,(chan+1)*`c_wrsw_num_ports  - 1, chan*`c_wrsw_num_ports,  mask ,0); 
-    `array_copy(rtu_prio         ,(chan+1)*`c_wrsw_prio_width - 1, chan*`c_wrsw_prio_width, prio, 0); 
+    begin : wait_body
     
-    rtu_drop         [ chan ]                                                = drop;          
-    rtu_rsp_valid    [ chan ]                                                = valid;
+      
+      integer i;
+      integer k; // for the macro array_copy()
+      if(portNumberCheck(chan) != 0) return;
+      `array_copy(rtu_dst_port_mask,(chan+1)*`c_num_ports  - 1, chan*`c_num_ports,  mask ,0); 
+      `array_copy(rtu_prio         ,(chan+1)*`c_prio_num_width - 1, chan*`c_prio_num_width, prio, 0); 
+    
+      rtu_drop         [ chan ]                                                = drop;          
+      rtu_rsp_valid    [ chan ]                                                = valid;
  
-       end
+      end
     endtask // wait_cycles 
 
 /*
@@ -177,14 +153,15 @@ module main;
 	ref  				EthPacket q[$], 
 	input [31:0]                    port,
 	input                           drop,
-	input [`c_wrsw_num_ports - 1:0] prio,
-	input [`c_wrsw_num_ports - 1:0] mask
+	input [`c_num_ports - 1:0] prio,
+	input [`c_num_ports - 1:0] mask
       );
       
       int i, j, seed = global_seed;
       integer index;
       EthPacket pkt, tmpl;
       EthPacketGenerator gen  = new;
+      if(portNumberCheck(port) != 0) return;
       global_seed ++;     
       tmpl                   = new;
       tmpl.src               = '{1,2,3,4,5,6};
@@ -210,7 +187,7 @@ module main;
       
       if(drop == 0 && mask != 0)
        begin
-         for(j=0;j<`c_wrsw_num_ports;j++)
+         for(j=0;j<`c_num_ports;j++)
          begin
            if(mask[j]) 
 	     begin 
@@ -233,13 +210,14 @@ module main;
       input [31:0]              port;
       input integer             n_packets;
       begin : load_port_body
-                 
+                
         EthPacket      txed[$];         
         int i,j, seed = global_seed;
         int cnt = 0;
         //bit [10:0] mask ;
 	int mask;
         int drop;
+	if(portNumberCheck(port) != 0) return;
 	global_seed ++;
         if(dbg) $display("Initial waiting: %d cycles",((port*50)%11)*50);
         wait_cycles(((port*50)%11)*50);
@@ -251,7 +229,7 @@ module main;
 	  j = $dist_uniform(seed,0,20);
           if(j > 15) drop = 1; else drop = 0;
           
-          mask=1<<$dist_uniform(seed,0,`c_wrsw_num_ports);
+          mask=1<<$dist_uniform(seed,0,`c_num_ports);
           
 	  send_random_packet(src,txed, port, drop,$dist_uniform(seed,0,7) , mask);          
           
@@ -266,12 +244,12 @@ module main;
 /*
  *  check statistics of the received frames (vs sent)
  */		
-  task automatic check_transfer;
+  function automatic void check_transfer;
     begin
     
       int i,j, cnt;
       int sum_rx=0, sum_tx=1, sum_tx_by_port[11],sum_rx_by_port[11];
-wait_cycles(80000);
+//wait_cycles(80000);
 //      while(sum_tx != sum_rx)
 //	begin 
 		for(i=0;i<11;i++)
@@ -292,7 +270,7 @@ wait_cycles(80000);
 		for(i=0;i<11;i++) sum_tx += sum_tx_by_port[i];
 		for(i=0;i<11;i++) sum_rx += sum_rx_by_port[i];
 	
-		wait_cycles(50);
+//		wait_cycles(50);
 	
 //	end
       
@@ -342,184 +320,84 @@ wait_cycles(80000);
      if(cnt == 22)
        $display("%4d pages allocated in advance (port X start_of_pck + port X pck_internal pages)", cnt);
      else
-       $display("MEM LEAKGE Report:  number of lost pages = %2d", (cnt - (2*`c_wrsw_num_ports)));
+       $display("MEM LEAKGE Report:  number of lost pages = %2d", (cnt - (2*`c_num_ports)));
      $display("=================================== DBG ===============================");
 
-
- $fatal("dupa");
-      
-      
-     end
-   endtask // check_transfer	
-	
-	
-/*
- *  generate faked RTU responses
- */	
-   always @(posedge clk) 
-     begin
-       int i;
-       for(i = 0;i<`c_wrsw_num_ports ;i++)
-       begin
-         rtu_rsp_valid[i] = rtu_rsp_valid[i] & !rtu_rsp_ack[i];
-         rtu_drop[i]      = rtu_drop[i]      & !rtu_rsp_ack[i];
-       end
-     end	    
+    end
+   endfunction // check_transfer	
         
-        
-      
   // and the party starts here....      
   initial begin        
       EthPacket      pkt, tmpl;
       EthPacket      txed[$];
       EthPacketGenerator gen;
       int i;
-      src = new[7];
-      sink = new[7];
+      int n_ports = `c_num_ports;
       
-      src[0]  = new(U_wrf_source_0.get_accessor());
-      src[1]  = new(U_wrf_source_1.get_accessor());
-      src[2]  = new(U_wrf_source_2.get_accessor());
-      src[3]  = new(U_wrf_source_3.get_accessor());
-      src[4]  = new(U_wrf_source_4.get_accessor());
-      src[5]  = new(U_wrf_source_5.get_accessor());
-      src[6]  = new(U_wrf_source_6.get_accessor());
-       
-//      U_wrf_sink_1.permanent_stall_enable();
- 
-      sink[0]   = new(U_wrf_sink_0.get_accessor()); 
-      sink[1]   = new(U_wrf_sink_1.get_accessor()); 
-      sink[2]   = new(U_wrf_sink_2.get_accessor()); 
-      sink[3]   = new(U_wrf_sink_3.get_accessor()); 
-      sink[4]   = new(U_wrf_sink_4.get_accessor()); 
-      sink[5]   = new(U_wrf_sink_5.get_accessor()); 
-      sink[6]   = new(U_wrf_sink_6.get_accessor()); 
-      
-     
-      
+      // initialization
+      initPckSrcAndSink(src, sink, n_ports);
       gen       = new;
       
-//       for(i = 0;i<`c_wrsw_num_ports ;i++)
-// 	rtu_rsp_valid[i] = 1;
+      //ports_ready  = 1;
       
       @(posedge rst_n);
       @(posedge clk);
       wait_cycles(500);
       
-//      ports_ready  	= 1; // let now the ports to start sending
-      
-      //load_port(src, 0, n_packets_to_send);
       send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 2 /*mask*/);    
-//      send_random_packet(src,txed, 0, 0,7 , 3);    
-//      send_random_packet(src,txed, 0, 1,7 , 3);    
-//      send_random_packet(src,txed, 0, 0,7 , 3);    
-//      send_random_packet(src,txed, 0, 0,7 , 3);    
-        for(i=0; i<1000; i++)
- 	begin  
- 	  send_random_packet(src,txed, i%7, 0,7 , 7);  
-//  	  if(! i%10)  U_wrf_source_0.error_on_byte(10);
-// 	  else      U_wrf_source_0.error_on_byte(0);
-	  wait_cycles(500);
-/* 	  if(i==80)
- 	    U_wrf_sink_1.permanent_stall_disable();*/
-         end 
-      
-      wait_cycles(500);
-      
-      check_transfer(); // here we wait for all pcks to be received and then make statistics
-      
+  
+       for(i=0; i<1000; i++) begin  
+         send_random_packet(src,txed, i%7, 0,7 , 7);  
+         wait_cycles(500);
+       end 
+   
+  
+  wait_cycles(80000); 
+  check_transfer(); // here we wait for all pcks to be received and then make statistics
+  
   end // initial
   
+  
    ////////////////////////// sending frames /////////////////////////////////////////
-     
-   initial begin
-      int i;
-      wait(ports_ready);
-      load_port(src, 0, n_packets_to_send);
-   end
-   
-   initial begin
-      wait(ports_ready);
-      load_port(src, 1, n_packets_to_send);
-   end
-   
-   initial begin
-      wait(ports_ready);
-      load_port(src, 2, n_packets_to_send);
-   end
+   genvar n;
+   generate
+   for (n=0;n<`c_num_ports;n++) begin
+     initial begin
+         int i;
+         wait(ports_ready);
+         load_port(src, n, n_packets_to_send);
+         end //initial
+      end //for
+    endgenerate
 
-   initial begin
-      wait(ports_ready);
-      load_port(src, 3, n_packets_to_send);
-   end
-
-   initial begin
-      wait(ports_ready);
-      load_port(src, 4, n_packets_to_send);
-   end
-   initial begin
-     wait(ports_ready);
-     load_port(src, 5, n_packets_to_send);
-   end
-   initial begin
-       wait(ports_ready);
-      load_port(src, 6, n_packets_to_send);
-   end
-     
-     
    ////////////////////////// receiving frames ///////////////////////////////////
-     
-   always @(posedge clk) if (sink[0].poll())
+
+   generate 
+   for (n=0;n<`c_num_ports;n++) begin
+     always @(posedge clk) if (sink[n].poll())
+       begin
+         EthPacket pkt;
+         sink[n].recv(pkt);
+         rx_cnt_by_port[pkt.src[0]][n]++;
+         if(dbg) $display("Received @ port_%1d from port_%1d [pkt nr=%4d]",n, pkt.src[0],rx_cnt_by_port[pkt.src[0]][n]);
+       end // always
+     end //for
+   endgenerate
+        
+
+   //////////////////////////  generate faked RTU responses //////////////////////////
+  always @(posedge clk) 
      begin
-       EthPacket pkt;
-       sink[0].recv(pkt);
-       rx_cnt_by_port[pkt.src[0]][0]++;
-       if(dbg) $display("Received @ port_%1d from port_%1d [pkt nr=%4d]",0, pkt.src[0],rx_cnt_by_port[pkt.src[0]][0]);
-     end
-   always @(posedge clk) if(sink[1].poll())
-     begin
-       EthPacket pkt;
-       sink[1].recv(pkt);
-       rx_cnt_by_port[pkt.src[0]][1]++;
-       if(dbg) $display("Received @ port_%1d from port_%1d [pkt nr=%4d]",1, pkt.src[0],rx_cnt_by_port[pkt.src[0]][1]);
-     end
-   always @(posedge clk) if (sink[2].poll())
-     begin
-       EthPacket pkt;
-       sink[2].recv(pkt);
-       rx_cnt_by_port[pkt.src[0]][2]++;
-       if(dbg) $display("Received @ port_%1d from port_%1d [pkt nr=%4d]",2, pkt.src[0],rx_cnt_by_port[pkt.src[0]][2]);
-     end
-   always @(posedge clk) if (sink[3].poll())
-     begin
-       EthPacket pkt;
-       sink[3].recv(pkt);
-       rx_cnt_by_port[pkt.src[0]][3]++;
-       if(dbg) $display("Received @ port_%1d from port_%1d [pkt nr=%4d]",3, pkt.src[0],rx_cnt_by_port[pkt.src[0]][3]);
-     end
-   always @(posedge clk) if (sink[4].poll())
-     begin
-       EthPacket pkt;
-       sink[4].recv(pkt);
-       rx_cnt_by_port[pkt.src[0]][4]++;
-       if(dbg) $display("Received @ port_%1d from port_%1d [pkt nr=%4d]",4, pkt.src[0],rx_cnt_by_port[pkt.src[0]][4]);
-     end
-   always @(posedge clk) if (sink[5].poll())
-     begin
-       EthPacket pkt;
-       sink[5].recv(pkt);
-       rx_cnt_by_port[pkt.src[0]][5]++;
-       if(dbg) $display("Received @ port_%1d from port_%1d [pkt nr=%4d]",5, pkt.src[0],rx_cnt_by_port[pkt.src[0]][5]);
-     end     
-   always @(posedge clk) if (sink[5].poll())
-     begin
-       EthPacket pkt;
-       sink[6].recv(pkt);
-       rx_cnt_by_port[pkt.src[0]][6]++;
-       if(dbg) $display("Received @ port_%1d from port_%1d [pkt nr=%4d]",6, pkt.src[0],rx_cnt_by_port[pkt.src[0]][6]);
-     end      
-  
-  
+       int i;
+       for(i = 0;i<`c_num_ports ;i++)
+       begin
+         rtu_rsp_valid[i] = rtu_rsp_valid[i] & !rtu_rsp_ack[i];
+         rtu_drop[i]      = rtu_drop[i]      & !rtu_rsp_ack[i];
+       end
+     end	    
+        
+//   
+/*  
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////// Monitoring allocation of pages  /////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -603,6 +481,60 @@ wait_cycles(80000);
      alloc_table[address].usecnt[alloc_table[address].cnt - 1]   = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_usecnt;;
 
        
-     end 	  
-  
+     end 	 */ 
+    function automatic void initPckSrcAndSink(ref WBPacketSource src[],ref  WBPacketSink   sink[], int port_n) ;
+    
+      /* no idea how to do it automatically  */
+    
+      src = new[`c_num_ports];
+      sink = new[`c_num_ports];
+      src[0]    = new(U_wrf_source[0].get_accessor());
+      src[1]    = new(U_wrf_source[1].get_accessor());
+      src[2]    = new(U_wrf_source[2].get_accessor());
+ /*      src[3]    = new(U_wrf_source[3].get_accessor());
+      src[4]    = new(U_wrf_source[4].get_accessor());
+      src[5]    = new(U_wrf_source[5].get_accessor());
+      src[6]    = new(U_wrf_source[6].get_accessor());
+     
+      src[7]    = new(U_wrf_source[7].get_accessor());
+      src[8]    = new(U_wrf_source[8].get_accessor());
+      src[9]    = new(U_wrf_source[9].get_accessor());
+      src[10]   = new(U_wrf_source[10].get_accessor());
+      src[11]   = new(U_wrf_source[11].get_accessor());
+      src[12]   = new(U_wrf_source[12].get_accessor());
+      src[13]   = new(U_wrf_source[13].get_accessor());
+      src[14]   = new(U_wrf_source[14].get_accessor());
+      src[15]   = new(U_wrf_source[15].get_accessor());
+      src[16]   = new(U_wrf_source[16].get_accessor());
+      src[17]   = new(U_wrf_source[17].get_accessor());
+      */
+      
+      sink[0]   = new(U_wrf_sink[0].get_accessor()); 
+      sink[1]   = new(U_wrf_sink[1].get_accessor()); 
+      sink[2]   = new(U_wrf_sink[2].get_accessor()); 
+/*      sink[3]   = new(U_wrf_sink[3].get_accessor()); 
+      sink[4]   = new(U_wrf_sink[4].get_accessor()); 
+      sink[5]   = new(U_wrf_sink[5].get_accessor()); 
+      sink[6]   = new(U_wrf_sink[6].get_accessor()); 
+      
+      sink[7]   = new(U_wrf_sink[7].get_accessor()); 
+      sink[8]   = new(U_wrf_sink[8].get_accessor()); 
+      sink[9]   = new(U_wrf_sink[9].get_accessor()); 
+      sink[10]  = new(U_wrf_sink[10].get_accessor()); 
+      sink[11]  = new(U_wrf_sink[11].get_accessor()); 
+      sink[12]  = new(U_wrf_sink[12].get_accessor()); 
+      sink[13]  = new(U_wrf_sink[13].get_accessor()); 
+      sink[14]  = new(U_wrf_sink[14].get_accessor()); 
+      sink[15]  = new(U_wrf_sink[15].get_accessor()); 
+      sink[16]  = new(U_wrf_sink[16].get_accessor()); 
+      sink[17]  = new(U_wrf_sink[17].get_accessor()); 
+      */
+      
+    endfunction
+   function automatic int portNumberCheck(int port_n);
+        if(port_n < `c_num_ports) return 0;
+        $display("Accessing port number (%3d) out of the configured range (%3d)",port_n, `c_num_ports);
+        return -1;
+   endfunction
+
 endmodule // main

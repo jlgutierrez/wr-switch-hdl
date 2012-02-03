@@ -1,7 +1,8 @@
 `define PORT_NUMBER 7
 `define PORT_PRIO_W 3
 
-
+`define array_copy(a, ah, al, b, bl) \
+   for (k=al; k<=ah; k=k+1) a[k] <= b[bl+k-al];
 
 `define WIRE_WB_SINK(iface, nr, prefix) \
 .prefix``_adr_``nr``_i(iface.adr), \
@@ -33,22 +34,22 @@ module xswcore_wrapper
    input rst_n_i,
 
    // input to the wrapper, this is connected to the sink of the xswc_core
-   IWishboneMaster.master src_0,
-   IWishboneMaster.master src_1,
-   IWishboneMaster.master src_2,
-   IWishboneMaster.master src_3,
-   IWishboneMaster.master src_4,
-   IWishboneMaster.master src_5,
-   IWishboneMaster.master src_6,
+    IWishboneMaster.master src_0,
+    IWishboneMaster.master src_1,
+    IWishboneMaster.master src_2,
+    IWishboneMaster.master src_3,
+    IWishboneMaster.master src_4,
+    IWishboneMaster.master src_5,
+    IWishboneMaster.master src_6,
 
    // output of the wrapper, this is connected to the source of the xswc_core
-   IWishboneSlave.slave   snk_0,
-   IWishboneSlave.slave   snk_1,
-   IWishboneSlave.slave   snk_2,
-   IWishboneSlave.slave   snk_3,
-   IWishboneSlave.slave   snk_4,
-   IWishboneSlave.slave   snk_5,
-   IWishboneSlave.slave   snk_6,
+    IWishboneSlave.slave   snk_0,
+    IWishboneSlave.slave   snk_1,
+    IWishboneSlave.slave   snk_2,
+    IWishboneSlave.slave   snk_3,
+    IWishboneSlave.slave   snk_4,
+    IWishboneSlave.slave   snk_5,
+    IWishboneSlave.slave   snk_6,
    
    
    input  [`PORT_NUMBER-1 :0]              rtu_rsp_valid_i,
@@ -69,21 +70,21 @@ module xswcore_wrapper
               .rst_n_i (rst_n_i),
 
 
-	      `WIRE_WB_SINK(src_0, 0, snk),
-	      `WIRE_WB_SINK(src_1, 1, snk),
-	      `WIRE_WB_SINK(src_2, 2, snk),
-	      `WIRE_WB_SINK(src_3, 3, snk),
-	      `WIRE_WB_SINK(src_4, 4, snk),
-	      `WIRE_WB_SINK(src_5, 5, snk),
-	      `WIRE_WB_SINK(src_6, 6, snk),
+	      `WIRE_WB_SINK(src[0], 0, snk),
+	      `WIRE_WB_SINK(src[1], 1, snk),
+	      `WIRE_WB_SINK(src[2], 2, snk),
+	      `WIRE_WB_SINK(src[3], 3, snk),
+	      `WIRE_WB_SINK(src[4], 4, snk),
+	      `WIRE_WB_SINK(src[5], 5, snk),
+	      `WIRE_WB_SINK(src[6], 6, snk),
 	     
-	      `WIRE_WB_SOURCE(snk_0, 0, src),
-	      `WIRE_WB_SOURCE(snk_1, 1, src),
-	      `WIRE_WB_SOURCE(snk_2, 2, src),
-	      `WIRE_WB_SOURCE(snk_3, 3, src),
-	      `WIRE_WB_SOURCE(snk_4, 4, src),
-	      `WIRE_WB_SOURCE(snk_5, 5, src),
-	      `WIRE_WB_SOURCE(snk_6, 6, src),
+	      `WIRE_WB_SOURCE(snk[0], 0, src),
+	      `WIRE_WB_SOURCE(snk[1], 1, src),
+	      `WIRE_WB_SOURCE(snk[2], 2, src),
+	      `WIRE_WB_SOURCE(snk[3], 3, src),
+	      `WIRE_WB_SOURCE(snk[4], 4, src),
+	      `WIRE_WB_SOURCE(snk[5], 5, src),
+	      `WIRE_WB_SOURCE(snk[6], 6, src),
 
 	      .rtu_rsp_valid_i     (rtu_rsp_valid_i),
 	      .rtu_rsp_ack_o       (rtu_rsp_ack_o),
