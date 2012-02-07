@@ -44,6 +44,8 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use ieee.math_real.CEIL;
+use ieee.math_real.log2;
 
 library work;
 use work.swc_swcore_pkg.all;
@@ -84,6 +86,9 @@ end swc_multiport_page_allocator;
 
 architecture syn of swc_multiport_page_allocator is
 
+  constant c_arbiter_vec_width        : integer := 4*g_num_ports;
+  constant c_arbiter_vec_width_log2   : integer := integer(CEIL(LOG2(real(4*g_num_ports-1))));
+
   signal pg_alloc      : std_logic;
   signal pg_free       : std_logic;
   signal pg_force_free : std_logic;
@@ -106,14 +111,14 @@ architecture syn of swc_multiport_page_allocator is
   -- the address of the bit :
   -- * representing alloc request - is even [i*2]
   -- * representing free  request - is odd  [i*2 + 1]
-  signal request_vec   : std_logic_vector(g_num_ports*4-1 downto 0);
+  signal request_vec   : std_logic_vector(c_arbiter_vec_width-1 downto 0);
   
   -- address of the request which has been granted access 
   -- to page alloation core. the LSB bit indicates the kind of
   -- operation:
   -- * '0' - even address, so alloc operation
   -- * '1' - odd  address, so free  operation
-  signal request_grant : std_logic_vector(5 downto 0);
+  signal request_grant : std_logic_vector(c_arbiter_vec_width_log2-1 downto 0);
 
   -- used to indicate to the RR arbiter to start
   -- processing next request,
@@ -201,8 +206,8 @@ begin  -- syn
   -- unnecessary delays
   ARB : swc_rr_arbiter
     generic map (
-      g_num_ports      => g_num_ports * 4,
-      g_num_ports_log2 => 6)
+      g_num_ports      => c_arbiter_vec_width,
+      g_num_ports_log2 => c_arbiter_vec_width_log2)
     port map (
       clk_i         => clk_i,
       rst_n_i       => rst_n_i,

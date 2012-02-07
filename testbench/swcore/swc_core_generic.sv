@@ -1,4 +1,46 @@
-// Fabric emulator example, showing 2 fabric emulators connected together and exchanging packets.
+/*-------------------------------------------------------------------------------
+-- Title      : Switch Core Generic Testbench 
+-- Project    : WhiteRabbit switch
+-------------------------------------------------------------------------------
+-- File       : swc_core_generic.sv
+-- Author     : Maciej Lipinski
+-- Company    : CERN BE-Co-HT
+-- Created    : 2012-02-07
+-- Last update: 2012-02-07
+-- Platform   : FPGA-generic
+-- Standard   : 
+-------------------------------------------------------------------------------
+-- Description: This is a testbench for SWcore, it is generic port_number-wise
+-- It adapts to the port number set in the swc_param_defs.svh file. 
+-- Use DBG_ALLOC to turn off/on debugging of the page allocator (useful when you
+-- start loosing pages)
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+-- 
+-------------------------------------------------------------------------------
+--
+-- Copyright (c) 2010 Maciej Lipinski / CERN
+--
+-- This source file is free software; you can redistribute it   
+-- and/or modify it under the terms of the GNU Lesser General   
+-- Public License as published by the Free Software Foundation; 
+-- either version 2.1 of the License, or (at your option) any   
+-- later version.                                               
+--
+-- This source is distributed in the hope that it will be       
+-- useful, but WITHOUT ANY WARRANTY; without even the implied   
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      
+-- PURPOSE.  See the GNU Lesser General Public License for more 
+-- details.                                                     
+--
+-- You should have received a copy of the GNU Lesser General    
+-- Public License along with this source; if not, download it   
+-- from http://www.gnu.org/licenses/lgpl-2.1.html
+--
+-------------------------------------------------------------------------------
+-- Revisions  :
+-- Date        Version  Author   Description
+-- 2012-02-07  1.0      mlipinsk Created
+------------------------------------------------------------------------------*/
 
 `define c_clock_period        8
 `define c_n_pcks_to_send      10
@@ -284,7 +326,7 @@ module main_generic;
       src[4]    = new(U_wrf_source[4].get_accessor());
       src[5]    = new(U_wrf_source[5].get_accessor());
       src[6]    = new(U_wrf_source[6].get_accessor());
-/*     
+   
       src[7]    = new(U_wrf_source[7].get_accessor());
       src[8]    = new(U_wrf_source[8].get_accessor());
       src[9]    = new(U_wrf_source[9].get_accessor());
@@ -294,7 +336,7 @@ module main_generic;
       src[13]   = new(U_wrf_source[13].get_accessor());
       src[14]   = new(U_wrf_source[14].get_accessor());
       src[15]   = new(U_wrf_source[15].get_accessor());
-      src[16]   = new(U_wrf_source[16].get_accessor());
+/*        src[16]   = new(U_wrf_source[16].get_accessor());
       src[17]   = new(U_wrf_source[17].get_accessor());
       */
       
@@ -305,7 +347,7 @@ module main_generic;
       sink[4]   = new(U_wrf_sink[4].get_accessor()); 
       sink[5]   = new(U_wrf_sink[5].get_accessor()); 
       sink[6]   = new(U_wrf_sink[6].get_accessor()); 
-/*      
+    
       sink[7]   = new(U_wrf_sink[7].get_accessor()); 
       sink[8]   = new(U_wrf_sink[8].get_accessor()); 
       sink[9]   = new(U_wrf_sink[9].get_accessor()); 
@@ -315,7 +357,7 @@ module main_generic;
       sink[13]  = new(U_wrf_sink[13].get_accessor()); 
       sink[14]  = new(U_wrf_sink[14].get_accessor()); 
       sink[15]  = new(U_wrf_sink[15].get_accessor()); 
-      sink[16]  = new(U_wrf_sink[16].get_accessor()); 
+ /*       sink[16]  = new(U_wrf_sink[16].get_accessor()); 
       sink[17]  = new(U_wrf_sink[17].get_accessor()); 
       */
       
@@ -341,7 +383,7 @@ module main_generic;
       EthPacketGenerator gen;
       int i;
       int n_ports = `c_num_ports;
-      
+      bit [`c_num_ports:0] mask;
       // initialization
       initPckSrcAndSink(src, sink, n_ports);
       gen       = new;
@@ -354,8 +396,9 @@ module main_generic;
       
       send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 2 /*mask*/);    
   
-       for(i=0; i<10; i++) begin  
-         send_random_packet(src,txed, i%7, 0,7 , 7);  
+       for(i=0; i<(2*`c_num_ports - 1); i++) begin  
+	 mask = mask^(1<<(i%(`c_num_ports)));
+         send_random_packet(src,txed, i%(`c_num_ports), 0,7 , mask);  
          wait_cycles(500);
        end 
   
@@ -491,23 +534,6 @@ module main_generic;
               s = "";
               for(j=0;j<`c_num_ports;j++)  s = {s, $psprintf("%2d:%2d|",alloc_table[i].usecnt[j],alloc_table[i].port[j])};
               $display("Page %4d: alloc = %4d [%s]",i,alloc_table[i].cnt,s);
-             
-             //$display("Page %4d: alloc = %4d [%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d]<=|=>dealloc = %4d [%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b]  ",
-//               i,
-//               alloc_table[i].cnt,
-//               alloc_table[i].usecnt[0], alloc_table[i].port[0], 
-//               alloc_table[i].usecnt[1], alloc_table[i].port[1],
-//               alloc_table[i].usecnt[2], alloc_table[i].port[2],
-//               alloc_table[i].usecnt[3], alloc_table[i].port[3],
-//               alloc_table[i].usecnt[4], alloc_table[i].port[4],
-//               alloc_table[i].usecnt[5], alloc_table[i].port[5],
-//               dealloc_table[i].cnt,
-//               dealloc_table[i].usecnt[0], dealloc_table[i].port[0],
-//               dealloc_table[i].usecnt[1], dealloc_table[i].port[1],
-//               dealloc_table[i].usecnt[2], dealloc_table[i].port[2],
-//               dealloc_table[i].usecnt[3], dealloc_table[i].port[3],
-//               dealloc_table[i].usecnt[4], dealloc_table[i].port[4],
-//               dealloc_table[i].usecnt[5], dealloc_table[i].port[5]);
               cnt++;
             end
         

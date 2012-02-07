@@ -42,6 +42,8 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+library work;
+use work.swc_swcore_pkg.all;
 
 entity swc_rr_arbiter is
   
@@ -63,18 +65,6 @@ entity swc_rr_arbiter is
 end swc_rr_arbiter;
 
 architecture syn of swc_rr_arbiter is
-
-  component swc_prio_encoder
-    generic (
-      g_num_inputs  : integer range 2 to 64;
-      g_output_bits : integer range 1 to 6);
-    port (
-      in_i     : in  std_logic_vector(g_num_inputs-1 downto 0);
-      out_o    : out std_logic_vector(g_output_bits-1 downto 0);
-      onehot_o : out std_logic_vector(g_num_inputs-1 downto 0);
-      mask_o   : out std_logic_vector(g_num_inputs-1 downto 0);
-      zero_o   : out std_logic);
-  end component;
 
   signal request_mask       : std_logic_vector(g_num_ports -1 downto 0);
   signal request_mask_saved : std_logic_vector(g_num_ports -1 downto 0);

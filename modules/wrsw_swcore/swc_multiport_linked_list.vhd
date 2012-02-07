@@ -42,7 +42,8 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
+use ieee.math_real.CEIL;
+use ieee.math_real.log2;
 
 library work;
 use work.swc_swcore_pkg.all;
@@ -83,6 +84,8 @@ end swc_multiport_linked_list;
 
 architecture syn of swc_multiport_linked_list is
 
+   constant c_arbiter_vec_width        : integer := 2*g_num_ports;
+   constant c_arbiter_vec_width_log2   : integer := integer(CEIL(LOG2(real(2*g_num_ports-1))));
 
    component generic_ssram_dualport_singleclock
      generic (
@@ -117,13 +120,13 @@ architecture syn of swc_multiport_linked_list is
 
   signal ll_wr_data      : std_logic_vector(g_page_addr_width -1 downto 0);
 
-  signal write_request_vec   : std_logic_vector(g_num_ports*2-1 downto 0);
+  signal write_request_vec   : std_logic_vector(c_arbiter_vec_width-1 downto 0);
 
-  signal read_request_vec    : std_logic_vector(g_num_ports*2-1 downto 0);
+  signal read_request_vec    : std_logic_vector(c_arbiter_vec_width-1 downto 0);
   
-  signal write_request_grant : std_logic_vector(4 downto 0);
+  signal write_request_grant : std_logic_vector(c_arbiter_vec_width_log2 - 1 downto 0);
 
-  signal read_request_grant  : std_logic_vector(4 downto 0);
+  signal read_request_grant  : std_logic_vector(c_arbiter_vec_width_log2 - 1 downto 0);
   
 
   -- indicates that the granted request is valid
@@ -216,8 +219,9 @@ begin  -- syn
   -- unnecessary delays
   WRITE_ARB : swc_rr_arbiter
     generic map (
-      g_num_ports      => g_num_ports * 2,
-      g_num_ports_log2 => 5)
+      g_num_ports      => c_arbiter_vec_width,
+      g_num_ports_log2 => c_arbiter_vec_width_log2 --5
+      )
     port map (
       clk_i         => clk_i,
       rst_n_i       => rst_n_i,
@@ -228,8 +232,8 @@ begin  -- syn
 
   READ_ARB : swc_rr_arbiter
     generic map (
-      g_num_ports      => g_num_ports * 2,
-      g_num_ports_log2 => 5
+      g_num_ports      => c_arbiter_vec_width,
+      g_num_ports_log2 => c_arbiter_vec_width_log2 -- 5
       )
     port map (
       clk_i         => clk_i,
