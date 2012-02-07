@@ -1,9 +1,7 @@
 // Fabric emulator example, showing 2 fabric emulators connected together and exchanging packets.
 
 `define c_clock_period        8
-
 `define c_n_pcks_to_send      10
-
 `timescale 1ns / 1ps
 
 `include "if_wb_master.svh"
@@ -14,11 +12,13 @@
 `include "xswcore_wrapper.v2.svh"
 `include "swc_param_defs.svh"   // all swcore parameters here
 
+`define DBG_ALLOC //if defined, the allocation debugging is active: we track the number of allocated
+                  //and de-allocated pages
 
 typedef struct {
    int cnt;
-   int usecnt[10];
-   int port[10];
+   int usecnt[`c_num_ports];
+   int port[`c_num_ports];
 
 } alloc_info_t;
 
@@ -28,17 +28,13 @@ alloc_info_t dealloc_table[1024];
 int stack_bastard = 0;
 int global_seed = 0;
 
-int pg_alloc_cnt[1024][20];
-int pg_dealloc_cnt[1024][20];
-
-
+int pg_alloc_cnt[1024][2*`c_num_ports];
+int pg_dealloc_cnt[1024][2*`c_num_ports];
 
 EthPacket swc_matrix[`c_num_ports][`c_n_pcks_to_send];
 
 module main_v2;
-
-
-   
+  
    reg clk  = 1'b0;
    reg rst_n = 1'b0;
    // generate clock and reset signals
@@ -67,8 +63,8 @@ module main_v2;
    reg  [`c_num_ports * `c_prio_num_width -1 : 0] rtu_prio             = 0;     
  
    //for verification (counting txed and rxed frames)
-   int tx_cnt_by_port[11][11];
-   int rx_cnt_by_port[11][11];
+   int tx_cnt_by_port[`c_num_ports][`c_num_ports];
+   int rx_cnt_by_port[`c_num_ports][`c_num_ports];
 
   integer ports_ready  = 0;
   
@@ -76,40 +72,22 @@ module main_v2;
   integer n_packets_to_send = `c_n_pcks_to_send;
   integer dbg               = 1;
    
-  
- 
-  
    xswcore_wrapper_v2
     DUT_xswcore_wrapper (
     .clk_i                 (clk),
     .rst_n_i               (rst_n),
-//-------------------------------------------------------------------------------
-//-- pWB slave - this is output of the swcore (internally connected to the source)
-//-------------------------------------------------------------------------------  
-
-      .snk (U_wrf_sink),
-
-//-------------------------------------------------------------------------------
-//-- pWB master - this is an input of the swcore (internally connected to the sink)
-//-------------------------------------------------------------------------------  
-
-      .src(U_wrf_source),
-       
-//-------------------------------------------------------------------------------
-//-- I/F with Routing Table Unit (RTU)
-//-------------------------------------------------------------------------------      
-    
-      .rtu_rsp_valid_i       (rtu_rsp_valid),
-      .rtu_rsp_ack_o         (rtu_rsp_ack),
-      .rtu_dst_port_mask_i   (rtu_dst_port_mask),
-      .rtu_drop_i            (rtu_drop),
-      .rtu_prio_i            (rtu_prio)
+    .snk (U_wrf_sink),
+    .src(U_wrf_source),
+    .rtu_rsp_valid_i       (rtu_rsp_valid),
+    .rtu_rsp_ack_o         (rtu_rsp_ack),
+    .rtu_dst_port_mask_i   (rtu_dst_port_mask),
+    .rtu_drop_i            (rtu_drop),
+    .rtu_prio_i            (rtu_prio)
     );
 
 /*
  *  wait ncycles
  */	
-    
     task automatic wait_cycles;
        input [31:0] ncycles;
        begin : wait_body
@@ -131,7 +109,6 @@ module main_v2;
        input [`c_num_ports - 1:0] mask;
        
     begin : wait_body
-    
       
       integer i;
       integer k; // for the macro array_copy()
@@ -197,9 +174,6 @@ module main_v2;
 	     end
          end
        end
-      
-      
-      
    endtask // send_random_packets
 	
 /*
@@ -239,92 +213,126 @@ module main_v2;
       end
    endtask  //load_port
 
-	
-	
 /*
  *  check statistics of the received frames (vs sent)
- */		
-  function automatic void check_transfer;
+ */
+  function automatic void transferReport;
     begin
-    
+     
+      string s,d1,d2;
       int i,j, cnt;
-      int sum_rx=0, sum_tx=1, sum_tx_by_port[11],sum_rx_by_port[11];
-//wait_cycles(80000);
-//      while(sum_tx != sum_rx)
-//	begin 
-		for(i=0;i<11;i++)
-		  begin
-		    sum_tx_by_port[i] = 0;
-		    sum_rx_by_port[i] = 0;
-		  end
-		  
-		sum_tx = 0;
-		sum_rx = 0;
-		  
-		for(i=0;i<11;i++)
-		  begin
-		    for(j=0;j<11;j++) sum_tx_by_port[i] += tx_cnt_by_port[j][i];
-		    for(j=0;j<11;j++) sum_rx_by_port[i] += rx_cnt_by_port[i][j];
-		  end
-
-		for(i=0;i<11;i++) sum_tx += sum_tx_by_port[i];
-		for(i=0;i<11;i++) sum_rx += sum_rx_by_port[i];
-	
-//		wait_cycles(50);
-	
-//	end
-      
-      $display("=============================================== DBG =================================================");
-      $display("Rx Ports   :  P 0  |  P 1  |  P 2  |  P 3  |  P 4  |  P 5  |  P 6  |  P 7  |  P 8  |  P 9  |  P10  | ");
-      $display("-----------------------------------------------------------------------------------------------------");
-      $display(" (number of pcks sent from port Rx to port Tx) > (number of pcks received on port Tx from port Rx) | ");
-      $display("-----------------------------------------------------------------------------------------------------");
+      int sum_rx=0, sum_tx=1, sum_tx_by_port[`c_num_ports],sum_rx_by_port[`c_num_ports];
+      for(i=0;i<`c_num_ports;i++)
+        begin
+        sum_tx_by_port[i] = 0;
+        sum_rx_by_port[i] = 0;
+      end
+  
+      sum_tx = 0;
+      sum_rx = 0;
+  
       for(i=0;i<11;i++)
+        begin
+          for(j=0;j<`c_num_ports;j++) sum_tx_by_port[i] += tx_cnt_by_port[j][i];
+          for(j=0;j<`c_num_ports;j++) sum_rx_by_port[i] += rx_cnt_by_port[i][j];
+        end
 
-	  $display("TX Port %2d : %2d>%2d | %2d>%2d | %2d>%2d | %2d>%2d | %2d>%2d | %2d>%2d | %2d>%2d | %2d>%2d | %2d>%2d | %2d>%2d | %2d>%2d |",i,
-	  tx_cnt_by_port[i][0],rx_cnt_by_port[i][0],tx_cnt_by_port[i][1],rx_cnt_by_port[i][1],tx_cnt_by_port[i][2],rx_cnt_by_port[i][2],tx_cnt_by_port[i][3],rx_cnt_by_port[i][3],
-	  tx_cnt_by_port[i][4],rx_cnt_by_port[i][4],tx_cnt_by_port[i][5],rx_cnt_by_port[i][5],tx_cnt_by_port[i][6],rx_cnt_by_port[i][6],tx_cnt_by_port[i][7],rx_cnt_by_port[i][7],
-	  tx_cnt_by_port[i][8],rx_cnt_by_port[i][8],tx_cnt_by_port[i][9],rx_cnt_by_port[i][9],tx_cnt_by_port[i][10],rx_cnt_by_port[i][10]);
-	  
+      for(i=0;i<`c_num_ports;i++) sum_tx += sum_tx_by_port[i];
+      for(i=0;i<`c_num_ports;i++) sum_rx += sum_rx_by_port[i];
+
+      s = "";
+      d1 = "================";
+      d2 = "----------------";
+      for(i=0;i<`c_num_ports;i++) s = {s, $psprintf(" P %2d  |",i)};
+      for(i=0;i<`c_num_ports;i++) d1 = {d1, "========"};
+      for(i=0;i<`c_num_ports;i++) d2 = {d2, "--------"};
       
-      $display("=============================================== DBG =================================================");
+      $display("%s",d1);
+      $display("Rx Ports   :  %s",s);
+      $display("%s",d2);
+      $display(" (n_pcks sent from Tx to Rx) > (n_pcks received on Tx from Rx) ");
+      $display("%s",d2);
       
-      $display("=======================================================================");
+      for(i=0;i<`c_num_ports;i++)
+        begin
+          s = $psprintf("",i);
+          for(int j=0;j<`c_num_ports;j++) s = {s, $psprintf(" %2d>%2d |",tx_cnt_by_port[i][j],rx_cnt_by_port[i][j])};
+          $display("TX Port %2d : %s",i,s);
+        end
+      
+      $display("%s",d1);
+      
       $display("SUM    :  sent pcks = %2d, received pcks = %2d", sum_tx,sum_rx);
-      $display("=================================== DBG ===============================");
+      $display("%s",d1);
 
-     cnt =0;
-     for(i=0;i<1024;i++)
-       if(dealloc_table[i].cnt!= alloc_table[i].cnt)
-         begin
-           $display("Page %4d: alloc = %4d [%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d]<=|=>dealloc = %4d [%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b]  ",
-           i,
-           alloc_table[i].cnt,
-           alloc_table[i].usecnt[0], alloc_table[i].port[0], 
-           alloc_table[i].usecnt[1], alloc_table[i].port[1],
-           alloc_table[i].usecnt[2], alloc_table[i].port[2],
-           alloc_table[i].usecnt[3], alloc_table[i].port[3],
-           alloc_table[i].usecnt[4], alloc_table[i].port[4],
-           alloc_table[i].usecnt[5], alloc_table[i].port[5],
-           dealloc_table[i].cnt,
-           dealloc_table[i].usecnt[0], dealloc_table[i].port[0],
-           dealloc_table[i].usecnt[1], dealloc_table[i].port[1],
-           dealloc_table[i].usecnt[2], dealloc_table[i].port[2],
-           dealloc_table[i].usecnt[3], dealloc_table[i].port[3],
-           dealloc_table[i].usecnt[4], dealloc_table[i].port[4],
-           dealloc_table[i].usecnt[5], dealloc_table[i].port[5]);
-           cnt++;
-         end
-        
-     $display("=======================================================================");
-     if(cnt == 22)
-       $display("%4d pages allocated in advance (port X start_of_pck + port X pck_internal pages)", cnt);
-     else
-       $display("MEM LEAKGE Report:  number of lost pages = %2d", (cnt - (2*`c_num_ports)));
-     $display("=================================== DBG ===============================");
 
     end
    endfunction // check_transfer	
+/*
+ *  initialize  sources and sinks, we need some clever way to make it configurable (port_number-wise)
+ */
+   function automatic void initPckSrcAndSink(ref WBPacketSource src[],ref  WBPacketSink   sink[], int port_n) ;
+    
+      /* no idea how to do it automatically  */
+    
+      src = new[`c_num_ports];
+      sink = new[`c_num_ports];
+      src[0]    = new(U_wrf_source[0].get_accessor());
+      src[1]    = new(U_wrf_source[1].get_accessor());
+      src[2]    = new(U_wrf_source[2].get_accessor());
+      src[3]    = new(U_wrf_source[3].get_accessor());
+      src[4]    = new(U_wrf_source[4].get_accessor());
+      src[5]    = new(U_wrf_source[5].get_accessor());
+      src[6]    = new(U_wrf_source[6].get_accessor());
+/*     
+      src[7]    = new(U_wrf_source[7].get_accessor());
+      src[8]    = new(U_wrf_source[8].get_accessor());
+      src[9]    = new(U_wrf_source[9].get_accessor());
+      src[10]   = new(U_wrf_source[10].get_accessor());
+      src[11]   = new(U_wrf_source[11].get_accessor());
+      src[12]   = new(U_wrf_source[12].get_accessor());
+      src[13]   = new(U_wrf_source[13].get_accessor());
+      src[14]   = new(U_wrf_source[14].get_accessor());
+      src[15]   = new(U_wrf_source[15].get_accessor());
+      src[16]   = new(U_wrf_source[16].get_accessor());
+      src[17]   = new(U_wrf_source[17].get_accessor());
+      */
+      
+      sink[0]   = new(U_wrf_sink[0].get_accessor()); 
+      sink[1]   = new(U_wrf_sink[1].get_accessor()); 
+      sink[2]   = new(U_wrf_sink[2].get_accessor()); 
+      sink[3]   = new(U_wrf_sink[3].get_accessor()); 
+      sink[4]   = new(U_wrf_sink[4].get_accessor()); 
+      sink[5]   = new(U_wrf_sink[5].get_accessor()); 
+      sink[6]   = new(U_wrf_sink[6].get_accessor()); 
+/*      
+      sink[7]   = new(U_wrf_sink[7].get_accessor()); 
+      sink[8]   = new(U_wrf_sink[8].get_accessor()); 
+      sink[9]   = new(U_wrf_sink[9].get_accessor()); 
+      sink[10]  = new(U_wrf_sink[10].get_accessor()); 
+      sink[11]  = new(U_wrf_sink[11].get_accessor()); 
+      sink[12]  = new(U_wrf_sink[12].get_accessor()); 
+      sink[13]  = new(U_wrf_sink[13].get_accessor()); 
+      sink[14]  = new(U_wrf_sink[14].get_accessor()); 
+      sink[15]  = new(U_wrf_sink[15].get_accessor()); 
+      sink[16]  = new(U_wrf_sink[16].get_accessor()); 
+      sink[17]  = new(U_wrf_sink[17].get_accessor()); 
+      */
+      
+    endfunction
+    
+/*
+ * Check if the requested action is on a valid port number
+ * this way, we don't have to care whether the test is refering
+ * to the proper range of ports, if it refers to greater port number
+ * then available, it will just inform about this
+ */   
+   function automatic int portNumberCheck(int port_n);
+        if(port_n < `c_num_ports) return 0;
+        $display("Accessing port number (%3d) out of the configured range (%3d)",port_n, `c_num_ports);
+        return -1;
+   endfunction        
+        
         
   // and the party starts here....      
   initial begin        
@@ -346,17 +354,17 @@ module main_v2;
       
       send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 2 /*mask*/);    
   
-       for(i=0; i<1000; i++) begin  
+       for(i=0; i<10; i++) begin  
          send_random_packet(src,txed, i%7, 0,7 , 7);  
          wait_cycles(500);
        end 
-   
   
   wait_cycles(80000); 
-  check_transfer(); // here we wait for all pcks to be received and then make statistics
+  
+  transferReport(); // here we wait for all pcks to be received and then make statistics
+  memoryLeakageReport();
   
   end // initial
-  
   
    ////////////////////////// sending frames /////////////////////////////////////////
    genvar n;
@@ -396,73 +404,63 @@ module main_v2;
        end
      end	    
         
-//   
-/*  
+`ifdef DBG_ALLOC   // alloc debugging not yet 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////// Monitoring allocation of pages  /////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 //   always @(posedge clk) if(DUT.memory_management_unit.pg_addr_valid)
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_alloc & DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_done)
+   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_alloc & DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_done)
 
      begin
      int address;  
      int usecnt;
      
-     usecnt = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_usecnt;
+     usecnt = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_usecnt;
      
-     wait(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_addr_valid);
+     wait(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_addr_valid);
      
-     address =  DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_addr_alloc;
+     address =  DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_addr_alloc;
      pg_alloc_cnt[address][pg_alloc_cnt[address][0]+1]= usecnt;
      pg_alloc_cnt[address][0]++;
      
      alloc_table[address].usecnt[alloc_table[address].cnt]   = usecnt;
-     alloc_table[address].port[alloc_table[address].cnt]     = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.in_sel;
+     alloc_table[address].port[alloc_table[address].cnt]     = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.in_sel;
      alloc_table[address].cnt++;
-
-
      
-	   end   
-
+   end   
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////// Monitoring deallocation of pages  /////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
    	   
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.alloc_core.tmp_dbg_dealloc)
+   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.tmp_dbg_dealloc)
      begin
      int address;  
     
-     address =  DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.alloc_core.tmp_page;  
-
+     address =  DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.tmp_page;  
      pg_dealloc_cnt[address][0]++;
-       
      dealloc_table[address].cnt++;  
        
      end 	   
-
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////// Monitoring freeing of pages  /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////// 
           
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_free & DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_done)
+   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_free & DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_done)
      begin
      int address;  
      int port_mask;
      int port;
      
-     port      = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.in_sel;    
-     address   = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_addr;  
+     port      = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.in_sel;    
+     address   = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_addr;  
      port_mask = dealloc_table[address].port[dealloc_table[address].cnt ] ;
      
      pg_dealloc_cnt[address][pg_dealloc_cnt[address][0] + 1]++;
      
      dealloc_table[address].port[dealloc_table[address].cnt ] = ((1 << port) | port_mask) & 'h7FF;     
      dealloc_table[address].usecnt[dealloc_table[address].cnt ]++;
-     
-     
        
      end 	      
  
@@ -470,71 +468,54 @@ module main_v2;
 ///////// Monitoring setting of pages' usecnt /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////     
      
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_set_usecnt & DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_done)
+   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_set_usecnt & DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_done)
      begin
      int address;  
 
-     address =  DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_addr;  
+     address =  DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_addr;  
+     pg_alloc_cnt[address][pg_alloc_cnt[address][0] + 1] =  DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_usecnt;
+     alloc_table[address].usecnt[alloc_table[address].cnt - 1]   = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_usecnt;;
        
-     pg_alloc_cnt[address][pg_alloc_cnt[address][0] + 1] =  DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_usecnt;
-     
-     alloc_table[address].usecnt[alloc_table[address].cnt - 1]   = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_usecnt;;
-
-       
-     end 	 */ 
-    function automatic void initPckSrcAndSink(ref WBPacketSource src[],ref  WBPacketSink   sink[], int port_n) ;
-    
-      /* no idea how to do it automatically  */
-    
-      src = new[`c_num_ports];
-      sink = new[`c_num_ports];
-      src[0]    = new(U_wrf_source[0].get_accessor());
-      src[1]    = new(U_wrf_source[1].get_accessor());
-      src[2]    = new(U_wrf_source[2].get_accessor());
- /*      src[3]    = new(U_wrf_source[3].get_accessor());
-      src[4]    = new(U_wrf_source[4].get_accessor());
-      src[5]    = new(U_wrf_source[5].get_accessor());
-      src[6]    = new(U_wrf_source[6].get_accessor());
-     
-      src[7]    = new(U_wrf_source[7].get_accessor());
-      src[8]    = new(U_wrf_source[8].get_accessor());
-      src[9]    = new(U_wrf_source[9].get_accessor());
-      src[10]   = new(U_wrf_source[10].get_accessor());
-      src[11]   = new(U_wrf_source[11].get_accessor());
-      src[12]   = new(U_wrf_source[12].get_accessor());
-      src[13]   = new(U_wrf_source[13].get_accessor());
-      src[14]   = new(U_wrf_source[14].get_accessor());
-      src[15]   = new(U_wrf_source[15].get_accessor());
-      src[16]   = new(U_wrf_source[16].get_accessor());
-      src[17]   = new(U_wrf_source[17].get_accessor());
-      */
-      
-      sink[0]   = new(U_wrf_sink[0].get_accessor()); 
-      sink[1]   = new(U_wrf_sink[1].get_accessor()); 
-      sink[2]   = new(U_wrf_sink[2].get_accessor()); 
-/*      sink[3]   = new(U_wrf_sink[3].get_accessor()); 
-      sink[4]   = new(U_wrf_sink[4].get_accessor()); 
-      sink[5]   = new(U_wrf_sink[5].get_accessor()); 
-      sink[6]   = new(U_wrf_sink[6].get_accessor()); 
-      
-      sink[7]   = new(U_wrf_sink[7].get_accessor()); 
-      sink[8]   = new(U_wrf_sink[8].get_accessor()); 
-      sink[9]   = new(U_wrf_sink[9].get_accessor()); 
-      sink[10]  = new(U_wrf_sink[10].get_accessor()); 
-      sink[11]  = new(U_wrf_sink[11].get_accessor()); 
-      sink[12]  = new(U_wrf_sink[12].get_accessor()); 
-      sink[13]  = new(U_wrf_sink[13].get_accessor()); 
-      sink[14]  = new(U_wrf_sink[14].get_accessor()); 
-      sink[15]  = new(U_wrf_sink[15].get_accessor()); 
-      sink[16]  = new(U_wrf_sink[16].get_accessor()); 
-      sink[17]  = new(U_wrf_sink[17].get_accessor()); 
-      */
-      
-    endfunction
-   function automatic int portNumberCheck(int port_n);
-        if(port_n < `c_num_ports) return 0;
-        $display("Accessing port number (%3d) out of the configured range (%3d)",port_n, `c_num_ports);
-        return -1;
+     end 	
+`endif
+   
+   function automatic void memoryLeakageReport;
+   
+`ifdef DBG_ALLOC
+        string s;
+        int i,j, cnt;
+        cnt =0;
+        for(i=0;i<1024;i++)
+          if(dealloc_table[i].cnt!= alloc_table[i].cnt)
+            begin
+              s = "";
+              for(j=0;j<`c_num_ports;j++)  s = {s, $psprintf("%2d:%2d|",alloc_table[i].usecnt[j],alloc_table[i].port[j])};
+              $display("Page %4d: alloc = %4d [%s]",i,alloc_table[i].cnt,s);
+             
+             //$display("Page %4d: alloc = %4d [%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d|%2d:%2d]<=|=>dealloc = %4d [%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b|%2d:%11b]  ",
+//               i,
+//               alloc_table[i].cnt,
+//               alloc_table[i].usecnt[0], alloc_table[i].port[0], 
+//               alloc_table[i].usecnt[1], alloc_table[i].port[1],
+//               alloc_table[i].usecnt[2], alloc_table[i].port[2],
+//               alloc_table[i].usecnt[3], alloc_table[i].port[3],
+//               alloc_table[i].usecnt[4], alloc_table[i].port[4],
+//               alloc_table[i].usecnt[5], alloc_table[i].port[5],
+//               dealloc_table[i].cnt,
+//               dealloc_table[i].usecnt[0], dealloc_table[i].port[0],
+//               dealloc_table[i].usecnt[1], dealloc_table[i].port[1],
+//               dealloc_table[i].usecnt[2], dealloc_table[i].port[2],
+//               dealloc_table[i].usecnt[3], dealloc_table[i].port[3],
+//               dealloc_table[i].usecnt[4], dealloc_table[i].port[4],
+//               dealloc_table[i].usecnt[5], dealloc_table[i].port[5]);
+              cnt++;
+            end
+        
+        $display("=======================================================================");
+        $display("MEM LEAKGE Report:  number of lost pages = %2d", (cnt - (2*`c_num_ports)));
+        $display("=================================== DBG ===============================");
+ `endif
+   
    endfunction
 
 endmodule // main

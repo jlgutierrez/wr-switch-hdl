@@ -129,7 +129,7 @@ architecture rtl of swc_core is
   begin --rtl
  
 
-  theSWCore: xswc_core
+  xswcore: xswc_core
     generic map( 
       g_mem_size                         => g_mem_size,
       g_page_size                        => g_page_size,
