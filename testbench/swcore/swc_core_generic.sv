@@ -9,7 +9,7 @@
 `include "wb_packet_source.svh"
 `include "wb_packet_sink.svh"
 
-`include "xswcore_wrapper.v2.svh"
+`include "swc_core_wrapper_generic.svh"
 `include "swc_param_defs.svh"   // all swcore parameters here
 
 `define DBG_ALLOC //if defined, the allocation debugging is active: we track the number of allocated
@@ -33,7 +33,7 @@ int pg_dealloc_cnt[1024][2*`c_num_ports];
 
 EthPacket swc_matrix[`c_num_ports][`c_n_pcks_to_send];
 
-module main_v2;
+module main_generic;
   
    reg clk  = 1'b0;
    reg rst_n = 1'b0;
@@ -72,7 +72,7 @@ module main_v2;
   integer n_packets_to_send = `c_n_pcks_to_send;
   integer dbg               = 1;
    
-   xswcore_wrapper_v2
+   swc_core_wrapper_generic
     DUT_xswcore_wrapper (
     .clk_i                 (clk),
     .rst_n_i               (rst_n),

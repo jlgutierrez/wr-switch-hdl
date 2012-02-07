@@ -16,7 +16,7 @@
 `include "wb_packet_source.svh"
 `include "wb_packet_sink.svh"
 
-`include "xswcore_wrapper.svh"
+`include "xswc_core_wrapper_7ports.svh"
 
 
 typedef struct {
@@ -39,7 +39,7 @@ int pg_dealloc_cnt[1024][20];
 
 EthPacket swc_matrix[`c_wrsw_num_ports][`c_n_pcks_to_send];
 
-module main;
+module main_7ports;
 
 
    
@@ -93,8 +93,8 @@ module main;
   
  
   
-   xswcore_wrapper
-    DUT_xswcore_wrapper (
+   xswc_core_wrapper_7ports
+    DUT_xswc_core_wrapper(
     .clk_i                 (clk),
     .rst_n_i               (rst_n),
 //-------------------------------------------------------------------------------
@@ -524,22 +524,22 @@ wait_cycles(80000);
 ///////// Monitoring allocation of pages  /////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 //   always @(posedge clk) if(DUT.memory_management_unit.pg_addr_valid)
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_alloc & DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_done)
+   always @(posedge clk) if(DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_alloc & DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_done)
 
      begin
      int address;  
      int usecnt;
      
-     usecnt = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_usecnt;
+     usecnt = DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_usecnt;
      
-     wait(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_addr_valid);
+     wait(DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_addr_valid);
      
-     address =  DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_addr_alloc;
+     address =  DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_addr_alloc;
      pg_alloc_cnt[address][pg_alloc_cnt[address][0]+1]= usecnt;
      pg_alloc_cnt[address][0]++;
      
      alloc_table[address].usecnt[alloc_table[address].cnt]   = usecnt;
-     alloc_table[address].port[alloc_table[address].cnt]     = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.in_sel;
+     alloc_table[address].port[alloc_table[address].cnt]     = DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.in_sel;
      alloc_table[address].cnt++;
 
 
@@ -551,11 +551,11 @@ wait_cycles(80000);
 ///////// Monitoring deallocation of pages  /////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
    	   
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.alloc_core.tmp_dbg_dealloc)
+   always @(posedge clk) if(DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.alloc_core.tmp_dbg_dealloc)
      begin
      int address;  
     
-     address =  DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.alloc_core.tmp_page;  
+     address =  DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.alloc_core.tmp_page;  
 
      pg_dealloc_cnt[address][0]++;
        
@@ -569,14 +569,14 @@ wait_cycles(80000);
 ///////// Monitoring freeing of pages  /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////// 
           
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_free & DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_done)
+   always @(posedge clk) if(DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_free & DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_done)
      begin
      int address;  
      int port_mask;
      int port;
      
-     port      = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.in_sel;    
-     address   = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_addr;  
+     port      = DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.in_sel;    
+     address   = DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_addr;  
      port_mask = dealloc_table[address].port[dealloc_table[address].cnt ] ;
      
      pg_dealloc_cnt[address][pg_dealloc_cnt[address][0] + 1]++;
@@ -592,15 +592,15 @@ wait_cycles(80000);
 ///////// Monitoring setting of pages' usecnt /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////     
      
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_set_usecnt & DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_done)
+   always @(posedge clk) if(DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_set_usecnt & DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_done)
      begin
      int address;  
 
-     address =  DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_addr;  
+     address =  DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_addr;  
        
-     pg_alloc_cnt[address][pg_alloc_cnt[address][0] + 1] =  DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_usecnt;
+     pg_alloc_cnt[address][pg_alloc_cnt[address][0] + 1] =  DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_usecnt;
      
-     alloc_table[address].usecnt[alloc_table[address].cnt - 1]   = DUT_xswcore_wrapper.DUT_xswc_core_7_ports_wrapper.u_xswc_core.u_swc_core.memory_management_unit.pg_usecnt;;
+     alloc_table[address].usecnt[alloc_table[address].cnt - 1]   = DUT_xswc_core_wrapper.DUT_swc_core_7ports_wrapper.U_xswc_core.memory_management_unit.pg_usecnt;;
 
        
      end 	  

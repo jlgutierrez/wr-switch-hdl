@@ -5,7 +5,7 @@
 `define array_assign(a, ah, al, b, bl) \
    for (k=al; k<=ah; k=k+1) begin assign a[k] = b[bl+k-al]; end
 
-module xswcore_wrapper_v2
+module swc_core_wrapper_generic
   (
    clk_i,
    rst_n_i,

@@ -2,11 +2,11 @@
 -- Title      : Switch Core V3
 -- Project    : WhiteRabbit switch
 -------------------------------------------------------------------------------
--- File       : xswc_core.vhd
+-- File       : swc_core_wrapper_7ports.vhd
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2012-01-15
--- Last update: 2012-01-15
+-- Last update: 2012-02-07
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -38,6 +38,7 @@
 -- Revisions  :
 -- Date        Version  Author   Description
 -- 2012-01-15  1.0      mlipinsk Created
+-- 2012-02-07  1.1      mlipinsk changed name
 
 -------------------------------------------------------------------------------
 
@@ -50,7 +51,7 @@ use work.swc_swcore_pkg.all;
 use work.wr_fabric_pkg.all;
 use work.wrsw_shared_types_pkg.all;
 
-entity xswc_core_7_ports_wrapper is
+entity swc_core_wrapper_7ports is
   generic
 	( 
 	  g_swc_num_ports      : integer := 7;
@@ -232,44 +233,10 @@ entity xswc_core_7_ports_wrapper is
     rtu_prio_i          : in  std_logic_vector(g_swc_num_ports * g_swc_prio_width - 1 downto 0)
 
     );
-end xswc_core_7_ports_wrapper;
+end swc_core_wrapper_7ports;
 
-architecture rtl of xswc_core_7_ports_wrapper is
+architecture rtl of swc_core_wrapper_7ports is
 
-component xswc_core is
-  generic
-    ( 
-    g_num_ports             : integer := g_swc_num_ports
-    );
-  port (
-    clk_i   : in std_logic;
-    rst_n_i : in std_logic;
-
--------------------------------------------------------------------------------
--- Fabric I/F : input (comes from the Endpoint)
--------------------------------------------------------------------------------
-
-    snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
-    snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
-
- 
--------------------------------------------------------------------------------
--- Fabric I/F : output (goes to the Endpoint)
--------------------------------------------------------------------------------  
-
-    src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
-    src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
-
-    
--------------------------------------------------------------------------------
--- I/F with Routing Table Unit (RTU)
--------------------------------------------------------------------------------      
-    
-    rtu_rsp_i           : in t_rtu_response_array(g_num_ports  - 1 downto 0);
-    rtu_ack_o           : out std_logic_vector(g_num_ports  - 1 downto 0)
-
-    );
-end component;
 
     signal snk_i : t_wrf_sink_in_array(g_swc_num_ports-1 downto 0);
     signal snk_o : t_wrf_sink_out_array(g_swc_num_ports-1 downto 0);
@@ -282,6 +249,21 @@ end component;
 begin
 
 U_xswc_core: xswc_core
+  generic map(
+    g_mem_size                         => 65536,
+    g_page_size                        => 64,
+    g_prio_num                         => 8,
+    g_max_pck_size                     => 10 * 1024,
+    g_num_ports                        => 7,
+    g_data_width                       => 16,
+    g_ctrl_width                       => 4,
+    g_pck_pg_free_fifo_size            => ((65536/64)/2) ,
+    g_input_block_cannot_accept_data   => "drop_pck",
+    g_output_block_per_prio_fifo_size  => 64,
+    g_packet_mem_multiply              => 16,
+    g_input_block_fifo_size            => (2 * 16),
+    g_input_block_fifo_full_in_advance => ((2 * 16) - 3)
+  )
   port map(
     clk_i               => clk_i,
     rst_n_i             => rst_n_i,

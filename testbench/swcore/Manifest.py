@@ -6,11 +6,11 @@ action = "simulation"
 #files = "swc_core.v4.sv"
 
 files = [
-  "xswc_core_7_ports_wrapper.vhd",
-  "xswcore_wrapper.svh",
-  "xswc_core.sv",
-  "xswcore_wrapper.v2.svh",
-  "xswc_core.v2.sv"
+  "swc_core_wrapper_7ports.vhd",
+  "xswc_core_wrapper_7ports.svh",
+  "swc_core_7ports.sv",
+  "swc_core_wrapper_generic.svh",
+  "swc_core_generic.sv"
   ]
 
 #vlog_opt="+incdir+../../../sim "
