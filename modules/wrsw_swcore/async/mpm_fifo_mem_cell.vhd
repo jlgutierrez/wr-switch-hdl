@@ -4,7 +4,7 @@ use IEEE.numeric_std.all;
 
 use work.genram_pkg.all;
 
-entity swc_fifo_mem_cell is
+entity mpm_fifo_mem_cell is
   
   generic (
     g_width : integer;
@@ -19,9 +19,9 @@ entity swc_fifo_mem_cell is
     ra_i : in  std_logic_vector(f_log2_size(g_size)-1 downto 0);
     rd_o : out std_logic_vector(g_width-1 downto 0));
 
-end swc_fifo_mem_cell;
+end mpm_fifo_mem_cell;
 
-architecture rtl of swc_fifo_mem_cell is
+architecture rtl of mpm_fifo_mem_cell is
   type t_mem_array is array(0 to g_size-1) of std_logic_vector(g_width-1 downto 0);
 
   signal mem : t_mem_array;

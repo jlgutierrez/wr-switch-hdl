@@ -1,7 +1,13 @@
-files = ["swc_async_grow_fifo.vhd", 
-         "swc_async_fifo_ctrl.vhd", 
-         "swc_fifo_mem_cell.vhd",
-         "swc_async_shrink_fifo.vhd", 
-         "swc_private_pkg.vhd", 
-         "swc_pipelined_mux.vhd",
-         "swc_async_multiport_mem.vhd"]
+files = ["mpm_async_grow_fifo.vhd", 
+         "mpm_async_fifo_ctrl.vhd", 
+         "mpm_fifo_mem_cell.vhd",
+         "mpm_async_shrink_fifo.vhd", 
+         "mpm_private_pkg.vhd", 
+         "mpm_pipelined_mux.vhd",
+         "mpm_top.vhd",
+         "mpm_write_path.vhd",
+         "mpm_read_path.vhd",
+         "mpm_async_fifo.vhd",
+         "mpm_rpath_io_block.vhd"]
+
+
