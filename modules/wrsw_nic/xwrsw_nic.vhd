@@ -18,37 +18,37 @@ entity xwrsw_nic is
       g_interface_mode      : t_wishbone_interface_mode      := CLASSIC;
       g_address_granularity : t_wishbone_address_granularity := WORD
       );
-    port (
-      clk_sys_i : in std_logic;
-      rst_n_i   : in std_logic;
+  port (
+    clk_sys_i : in std_logic;
+    rst_n_i   : in std_logic;
 
 -------------------------------------------------------------------------------
 -- WRF sink
 -------------------------------------------------------------------------------
 
-      snk_i : in  t_wrf_sink_in;
-      snk_o : out t_wrf_sink_out;
+    snk_i : in  t_wrf_sink_in;
+    snk_o : out t_wrf_sink_out;
 
-      src_i : in  t_wrf_source_in;
-      src_o : out t_wrf_source_out;
+    src_i : in  t_wrf_source_in;
+    src_o : out t_wrf_source_out;
 
 -------------------------------------------------------------------------------
 -- "Fake" RTU interface
 -------------------------------------------------------------------------------
 
-      rtu_dst_port_mask_o : out std_logic_vector(31 downto 0);
-      rtu_prio_o          : out std_logic_vector(2 downto 0);
-      rtu_drop_o          : out std_logic;
-      rtu_rsp_valid_o     : out std_logic;
-      rtu_rsp_ack_i       : in  std_logic;
+    rtu_dst_port_mask_o : out std_logic_vector(31 downto 0);
+    rtu_prio_o          : out std_logic_vector(2 downto 0);
+    rtu_drop_o          : out std_logic;
+    rtu_rsp_valid_o     : out std_logic;
+    rtu_rsp_ack_i       : in  std_logic;
 
 -------------------------------------------------------------------------------
 -- Wishbone bus
 -------------------------------------------------------------------------------
 
-      wb_i : in  t_wishbone_slave_in;
-      wb_o : out t_wishbone_slave_out
-      );
+    wb_i : in  t_wishbone_slave_in;
+    wb_o : out t_wishbone_slave_out
+    );
 
 end xwrsw_nic;
 
@@ -90,6 +90,7 @@ architecture rtl of xwrsw_nic is
       snk_o                 : out t_wrf_sink_out;
       regs_i                : in  t_nic_out_registers;
       regs_o                : out t_nic_in_registers;
+      bna_i                 : in  std_logic;
       irq_rcomp_o           : out std_logic;
       irq_rcomp_ack_i       : in  std_logic;
       rxdesc_request_next_o : out std_logic;
@@ -258,26 +259,29 @@ architecture rtl of xwrsw_nic is
   signal wb_rdata_slave : std_logic_vector(31 downto 0);
   signal wb_rdata_buf   : std_logic_vector(31 downto 0);
 
-  signal wb_in : t_wishbone_master_out;
+  signal wb_in  : t_wishbone_master_out;
   signal wb_out : t_wishbone_master_in;
   
 begin  -- rtl
 
-  U_Adapter: wb_slave_adapter
+  U_Adapter : wb_slave_adapter
     generic map (
       g_master_use_struct  => true,
       g_master_mode        => CLASSIC,
-      g_master_granularity =>WORD,
+      g_master_granularity => WORD,
       g_slave_use_struct   => true,
       g_slave_mode         => g_interface_mode,
       g_slave_granularity  => g_address_granularity)
     port map (
-      clk_sys_i  => clk_sys_i,
-      rst_n_i    => rst_n_i,
-      slave_i    => wb_i,
-      slave_o    => wb_o,
-      master_i   => wb_out,
-      master_o   => wb_in);
+      clk_sys_i => clk_sys_i,
+      rst_n_i   => rst_n_i,
+      slave_i   => wb_i,
+      slave_o   => wb_o,
+      master_i  => wb_out,
+      master_o  => wb_in);
+
+  wb_out.err <= '0';
+  wb_out.rty <= '0';
 
   nic_reset_n <= rst_n_i and (not regs_fromwb.reset_wr_o);
 
@@ -285,17 +289,17 @@ begin  -- rtl
 
   U_WB_SLAVE : nic_wishbone_slave
     port map (
-      rst_n_i  => rst_n_i,
-      wb_clk_i => clk_sys_i,
+      rst_n_i   => rst_n_i,
+      wb_clk_i  => clk_sys_i,
       wb_addr_i => wb_in.adr(6 downto 0),
       wb_data_i => wb_in.dat,
       wb_data_o => wb_rdata_slave,
-      wb_cyc_i => wb_cyc_slave,
-      wb_sel_i => wb_in.sel,
-      wb_stb_i => wb_in.stb,
-      wb_we_i  => wb_in.we,
-      wb_ack_o => wb_ack_slave,
-      wb_irq_o => wb_out.int,
+      wb_cyc_i  => wb_cyc_slave,
+      wb_sel_i  => wb_in.sel,
+      wb_stb_i  => wb_in.stb,
+      wb_we_i   => wb_in.we,
+      wb_ack_o  => wb_ack_slave,
+      wb_irq_o  => wb_out.int,
 
 
       regs_o => regs_fromwb,
@@ -428,6 +432,8 @@ begin  -- rtl
       snk_i => snk_i,
       snk_o => snk_o,
 
+      bna_i => regs_towb_main.sr_bna_i,
+
       regs_i => regs_fromwb,
       regs_o => regs_towb_rx,
 
@@ -461,7 +467,7 @@ begin  -- rtl
       enable_i       => regs_fromwb.cr_tx_en_o,
       bna_o          => tx_bna,
       bna_clear_i    => '0',
-      cur_desc_idx_o => regs_towb_main.sr_cur_tx_desc_i,  
+      cur_desc_idx_o => regs_towb_main.sr_cur_tx_desc_i,
       dtbl_addr_o    => nic_dtx_addr,
       dtbl_data_i    => nic_dtx_rd_data,
       dtbl_rd_o      => nic_dtx_rd,
