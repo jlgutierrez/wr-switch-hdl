@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-24
--- Last update: 2012-01-12
+-- Last update: 2012-01-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -106,7 +106,7 @@ end nic_tx_fsm;
 
 architecture behavioral of nic_tx_fsm is
 
-  type t_tx_fsm_state is (TX_DISABLED, TX_REQUEST_DESCRIPTOR, TX_MEM_FETCH, TX_START_PACKET, TX_HWORD, TX_LWORD, TX_END_PACKET, TX_OOB1, TX_OOB2, TX_PAD, TX_UPDATE_DESCRIPTOR, TX_ERROR);
+  type t_tx_fsm_state is (TX_DISABLED, TX_REQUEST_DESCRIPTOR, TX_MEM_FETCH, TX_START_PACKET, TX_HWORD, TX_LWORD, TX_END_PACKET, TX_OOB1, TX_OOB2, TX_PAD, TX_UPDATE_DESCRIPTOR, TX_ERROR, TX_STATUS);
 
   signal cur_tx_desc : t_tx_descriptor;
 
@@ -156,10 +156,15 @@ architecture behavioral of nic_tx_fsm is
   signal fab_out  : t_ep_internal_fabric;
 
   signal tx_err : std_logic;
-  
+  signal default_status_reg : t_wrf_status_reg;
 begin  -- behavioral
 
 
+  default_status_reg.has_smac <= '1';
+  default_status_reg.has_crc <= '0';
+  default_status_reg.error <= '0';
+  default_status_reg.is_hp <= '0';
+  
   tx_err <= src_i.err or src_i.rty;
 
   buf_addr_o <= std_logic_vector(tx_buf_addr);
@@ -238,6 +243,9 @@ begin  -- behavioral
         rtu_valid_int        <= '0';
         irq_txerr_o          <= '0';
         regs_o.sr_tx_error_i <= '0';
+
+        rtu_dst_port_mask_o <= (others => '0');
+        rtu_drop_o          <= '0';
         
       else
         case state is
@@ -288,7 +296,7 @@ begin  -- behavioral
 
               tx_buf_addr        <= tx_buf_addr + 1;
               ignore_first_hword <= '1';
-              state              <= TX_HWORD;
+              state              <= TX_STATUS;
               if(is_runt_frame = '1' and cur_tx_desc.pad_e = '1') then
                 odd_length    <= '0';
                 needs_padding <= '1';
@@ -303,6 +311,18 @@ begin  -- behavioral
               end if;
 
               tx_data_reg <= f_buf_swap_endian_32(buf_data_i);
+            end if;
+
+          when TX_STATUS =>
+            fab_out.sof <= '0';
+            
+            if(fab_dreq = '1' and buf_grant_i = '0') then
+              fab_out.dvalid <= '1';
+              fab_out.addr <= c_WRF_STATUS;
+              fab_out.data <= f_marshall_wrf_status(default_status_reg);
+              state <= TX_HWORD;
+            else
+              fab_out.dvalid <= '0';
             end if;
             
           when TX_HWORD =>
@@ -446,8 +466,8 @@ begin  -- behavioral
             fab_out.bytesel <= '0';
 
             if(fab_dreq = '1') then
-              fab_out.eof     <= '1';
-              state           <= TX_UPDATE_DESCRIPTOR;
+              fab_out.eof <= '1';
+              state       <= TX_UPDATE_DESCRIPTOR;
             end if;
 
           when TX_UPDATE_DESCRIPTOR =>
