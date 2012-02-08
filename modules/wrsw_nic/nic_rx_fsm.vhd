@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-24
--- Last update: 2012-01-19
+-- Last update: 2012-01-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -48,7 +48,8 @@ entity nic_rx_fsm is
 -------------------------------------------------------------------------------
 -- Wishbone regs
 -------------------------------------------------------------------------------           
-
+        bna_i: in std_logic;
+        
         regs_i : in  t_nic_out_registers;
         regs_o : out t_nic_in_registers;
 
@@ -243,7 +244,7 @@ begin
               state                 <= RX_WAIT_SOF;  -- and start waiting for
                                                      -- incoming traffic
             else
-              rx_dreq_mask <= '0';      -- disable RX (/dev/null)
+              rx_dreq_mask <= bna_i;      -- enable RX (but to /dev/null)
             end if;
 
 -------------------------------------------------------------------------------
@@ -367,7 +368,7 @@ begin
               -- the descriptor
 
               if(oob_sreg (0) = '1') then  -- 1st OOB word
-                cur_rx_desc.port_id <= '0' & fab_in.data(15 downto 11);
+                cur_rx_desc.port_id <= '0' & fab_in.data(4 downto 0);
               end if;
 
               if(oob_sreg (1) = '1') then  -- 2nd OOB word
@@ -478,7 +479,7 @@ begin
 
 -- the condition below forces the RX FSM to go into RX_MEM_RESYNC state. Don't
 -- receive anything during the RESYNC cycle.
-    elsif(rx_rdreg_toggle = '1' and buf_grant_i = '1' and state /= RX_WAIT_SOF) then
+    elsif(rx_rdreg_toggle = '1' and buf_grant_i = '1' and (state /= RX_WAIT_SOF) and (state /= RX_REQUEST_DESCRIPTOR)) then
       fab_dreq <= '0';
     else
       fab_dreq <= '1';
