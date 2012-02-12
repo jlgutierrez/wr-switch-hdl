@@ -166,11 +166,11 @@ begin  -- rtl
 
   p_gen_going_full : process(wr_i, wcb, rcb)
   begin
-    if ((wcb.bin (wcb.bin'left-2 downto 0) = rcb.bin_x(rcb.bin_x'left-2 downto 0))
+    if ((wcb.bin (wcb.bin'left-1 downto 0) = rcb.bin_x(rcb.bin_x'left-1 downto 0))
         and (wcb.bin(wcb.bin'left) /= rcb.bin_x(wcb.bin_x'left))) then
       going_full <= '1';
     elsif (wr_i = '1'
-           and (wcb.bin_next(wcb.bin'left-2 downto 0) = rcb.bin_x(rcb.bin_x'left-2 downto 0))
+           and (wcb.bin_next(wcb.bin'left-1 downto 0) = rcb.bin_x(rcb.bin_x'left-1 downto 0))
            and (wcb.bin_next(wcb.bin'left) /= rcb.bin_x(rcb.bin_x'left))) then
       going_full <= '1';
     else

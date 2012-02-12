@@ -1,3 +1,46 @@
+-------------------------------------------------------------------------------
+-- Title        : Dual clock (asynchronous) asymmetric (N:1) FIFO
+-- Project      : White Rabbit Switch
+-------------------------------------------------------------------------------
+-- File         : mpm_async_shrink_fifo.vhd
+-- Author       : Tomasz Włostowski
+-- Company      : CERN BE-CO-HT
+-- Created      : 2012-01-30
+-- Last update  : 2012-01-30
+-- Platform     : FPGA-generic
+-- Standard     : VHDL'93
+-- Dependencies : mpm_fifo_mem_cell, mpm_async_fifo_ctrl, genram_pkg
+-------------------------------------------------------------------------------
+-- Description: Asynchronous FIFO with asymmetric (serializing) read/write
+-- ports. Single (g_ratio * g_width)-wide word written to input port d_i produces
+-- a sequence of g_ratio words (g_width wide) on the output port q_o.
+-- An additional sideband channel (side_i/side_o) is provided for passing auxillary data.
+-------------------------------------------------------------------------------
+--
+-- Copyright (c) 2012 CERN
+--
+-- This source file is free software; you can redistribute it   
+-- and/or modify it under the terms of the GNU Lesser General   
+-- Public License as published by the Free Software Foundation; 
+-- either version 2.1 of the License, or (at your option) any   
+-- later version.                                               
+--
+-- This source is distributed in the hope that it will be       
+-- useful, but WITHOUT ANY WARRANTY; without even the implied   
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      
+-- PURPOSE.  See the GNU Lesser General Public License for more 
+-- details.                                                     
+--
+-- You should have received a copy of the GNU Lesser General    
+-- Public License along with this source; if not, download it   
+-- from http://www.gnu.org/licenses/lgpl-2.1.html
+--
+-------------------------------------------------------------------------------
+-- Revisions  :
+-- Date        Version  Author          Description
+-- 2012-01-30  1.0      twlostow        Created
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -11,22 +54,30 @@ entity mpm_async_shrink_fifo is
     g_ratio          : integer;
     g_size           : integer;
     g_sideband_width : integer);
-
   port (
     rst_n_a_i : in std_logic;
     clk_wr_i  : in std_logic;
     clk_rd_i  : in std_logic;
 
+    -- 1: write word available on (d_i) to the FIFO
     we_i : in std_logic;
+     -- data input
     d_i  : in std_logic_vector(g_width*g_ratio-1 downto 0);
 
+    -- 1: performs a read of a single wide word, outputted on q_o
     rd_i : in  std_logic;
+    -- registered data output
     q_o  : out std_logic_vector(g_width-1 downto 0);
 
+    -- "Sideband" channel (for passing auxillary data, such as page indices)
     side_i : in  std_logic_vector(g_sideband_width-1 downto 0);
     side_o : out std_logic_vector(g_sideband_width-1 downto 0);
 
+    -- Flush input. When 1, flushes the remaining narrow words of the currently
+    -- processed wide word and proceeds immediately to the next wide word.
+    -- Used usually for flushing rubbish at the end of the last page of a packet.
     flush_i : in  std_logic := '0';
+   
     full_o  : out std_logic;
     empty_o : out std_logic);
 
@@ -121,7 +172,7 @@ begin  -- rtl
     if rst_n_a_i = '0' then
       rd_count     <= (others => '0');
       q_reg        <= (others => '0');
-      line_flushed <= real_rd;
+      line_flushed <= '1';--real_rd;
       empty_narrow <= '1';
     elsif rising_edge(clk_rd_i) then
 
@@ -151,7 +202,7 @@ begin  -- rtl
   end process;
 
 
-  real_rd <= '1'                       when (rd_count = 0) and rd_i = '1' else '0';
+  real_rd <= '1'                       when (rd_count = 0) and rd_i = '1'  else '0';
   q_o     <= q_reg(g_width-1 downto 0) when line_flushed = '1'            else q_muxed;
   empty_o <= empty_narrow;
   

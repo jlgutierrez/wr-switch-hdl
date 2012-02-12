@@ -10,11 +10,11 @@ use work.mpm_private_pkg.all;
 entity mpm_top is
   generic (
     g_data_width           : integer := 18;
-    g_ratio                : integer := 8;
+    g_ratio                : integer := 2;
     g_page_size            : integer := 64;
     g_num_pages            : integer := 2048;
-    g_num_ports            : integer := 18;
-    g_fifo_size            : integer := 8;
+    g_num_ports            : integer := 8;
+    g_fifo_size            : integer := 4;
     g_page_addr_width      : integer := 11;
     g_partial_select_width : integer := 1;
     g_max_packet_size      : integer := 10000
@@ -39,7 +39,7 @@ entity mpm_top is
     rport_d_o        : out std_logic_vector (g_num_ports * g_data_width -1 downto 0);
     rport_dvalid_o   : out std_logic_vector (g_num_ports-1 downto 0);
     rport_dlast_o    : out std_logic_vector (g_num_ports-1 downto 0);
-    rport_dsel_o     : out std_logic_vector(g_partial_select_width -1 downto 0);
+    rport_dsel_o     : out std_logic_vector (g_num_ports * g_partial_select_width -1 downto 0);
     rport_dreq_i     : in  std_logic_vector (g_num_ports-1 downto 0);
     rport_abort_i    : in  std_logic_vector (g_num_ports-1 downto 0);
     rport_pg_addr_i  : in  std_logic_vector (g_num_ports * g_page_addr_width -1 downto 0);
@@ -97,11 +97,12 @@ architecture rtl of mpm_top is
     port (
       clk_io_i         : in  std_logic;
       clk_core_i       : in  std_logic;
-      rst_n_i          : in  std_logic;
+      rst_n_io_i       : in  std_logic;
+      rst_n_core_i     : in  std_logic;
       rport_d_o        : out std_logic_vector (g_num_ports * g_data_width -1 downto 0);
       rport_dvalid_o   : out std_logic_vector (g_num_ports-1 downto 0);
       rport_dlast_o    : out std_logic_vector (g_num_ports-1 downto 0);
-      rport_dsel_o     : out std_logic_vector(g_partial_select_width -1 downto 0);
+      rport_dsel_o     : out std_logic_vector(g_num_ports * g_partial_select_width -1 downto 0);
       rport_dreq_i     : in  std_logic_vector (g_num_ports-1 downto 0);
       rport_abort_i    : in  std_logic_vector (g_num_ports-1 downto 0);
       rport_pg_addr_i  : in  std_logic_vector (g_num_ports * g_page_addr_width -1 downto 0);
@@ -170,7 +171,8 @@ begin  -- rtl
     port map (
       clk_io_i         => clk_io_i,
       clk_core_i       => clk_core_i,
-      rst_n_i          => rst_n_i,
+      rst_n_core_i          => rst_n_core,
+      rst_n_io_i => rst_n_io,
       rport_d_o        => rport_d_o,
       rport_dvalid_o   => rport_dvalid_o,
       rport_dlast_o    => rport_dlast_o,
@@ -186,7 +188,7 @@ begin  -- rtl
       fbm_data_i       => fbm_rd_data);
 
 
-  -- The memory itself.
+  -- The Frame Buffer Memory (F.B.M.), Formerly known as F.... Big Memory
   U_F_B_Memory : generic_dpram
     generic map (
       g_data_width => g_data_width * g_ratio,

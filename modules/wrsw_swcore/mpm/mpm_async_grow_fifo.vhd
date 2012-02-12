@@ -3,7 +3,7 @@
 -- Title        : Dual clock (asynchronous) asymmetric (1:N) FIFO
 -- Project      : White Rabbit Switch
 -------------------------------------------------------------------------------
--- File         : swc_async_grow_fifo.vhd
+-- File         : mpm_async_grow_fifo.vhd
 -- Author       : Tomasz Włostowski
 -- Company      : CERN BE-CO-HT
 -- Created      : 2012-01-30

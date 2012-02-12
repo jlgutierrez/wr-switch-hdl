@@ -30,11 +30,22 @@ architecture rtl of mpm_pipelined_mux is
   type t_generic_slv_array is array (integer range <>, integer range <>) of std_logic;
 
   constant c_first_stage_muxes : integer := (g_inputs+2)/3;
+  constant c_num_inputs_floor3 : integer := ((g_inputs+2)/3) * 3;
 
   signal first_stage : t_generic_slv_array(0 to c_first_stage_muxes-1, g_width-1 downto 0);
 
+
+
+  signal d_extended   : std_logic_vector(c_num_inputs_floor3 * g_width - 1 downto 0);
+  signal sel_extended : std_logic_vector(c_num_inputs_floor3 - 1 downto 0) := (others => '0');
+  
+  
 begin  -- rtl
 
+  d_extended (d_i'left downto 0) <= d_i;
+  sel_extended (sel_i'left downto 0) <= sel_i;
+
+  
   -- 1st stage, optimized for 5-input LUTs: mux each 3-input groups or 0
   -- if (sel == 11)
   gen_1st_stage : for i in 0 to c_first_stage_muxes-1 generate
@@ -45,12 +56,12 @@ begin  -- rtl
           if rst_n_i = '0' then
             first_stage(i, j) <= '0';
           else
-            if(sel_i(3*i + 2 downto 3*i) = "001") then
-              first_stage(i, j) <= d_i(i * 3 * g_width + j);
-            elsif (sel_i(3*i + 2 downto 3*i) = "010") then
-              first_stage(i, j) <= d_i(i * 3 * g_width + g_width + j);
-            elsif (sel_i(3*i + 2 downto 3*i) = "100") then
-              first_stage(i, j) <= d_i(i * 3 * g_width + 2*g_width + j);
+            if(sel_extended(3*i + 2 downto 3*i) = "001") then
+              first_stage(i, j) <= d_extended(i * 3 * g_width + j);
+            elsif (sel_extended(3*i + 2 downto 3*i) = "010") then
+              first_stage(i, j) <= d_extended(i * 3 * g_width + g_width + j);
+            elsif (sel_extended(3*i + 2 downto 3*i) = "100") then
+              first_stage(i, j) <= d_extended(i * 3 * g_width + 2*g_width + j);
             else
               first_stage(i, j) <= '0';
             end if;
