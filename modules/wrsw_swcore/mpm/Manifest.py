@@ -9,6 +9,7 @@ files = ["mpm_async_grow_fifo.vhd",
          "mpm_read_path.vhd",
          "mpm_async_fifo.vhd",
          "mpm_rpath_io_block.vhd",
-         "mpm_rpath_core_block.vhd"]
+         "mpm_rpath_core_block.vhd",
+         "mpm_pkg.vhd"]
 
 

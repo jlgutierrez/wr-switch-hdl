@@ -31,6 +31,7 @@
 module xswc_core_wrapper_7ports
   (
    input clk_i,
+   input clk_mpm_core_i,
    input rst_n_i,
 
    // input to the wrapper, this is connected to the sink of the xswc_core
@@ -67,6 +68,7 @@ module xswc_core_wrapper_7ports
        .g_swc_prio_width(`PORT_PRIO_W)
        ) DUT_swc_core_7ports_wrapper (
               .clk_i (clk_i),
+              .clk_mpm_core_i(clk_mpm_core_i),
               .rst_n_i (rst_n_i),
 
 

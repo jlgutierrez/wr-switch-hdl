@@ -218,7 +218,7 @@ package swc_swcore_pkg is
   
   end component;
   
-  component xswc_input_block is
+  component xswc_input_block_old is
     generic ( 
       g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
       g_num_ports                        : integer ;--:= c_swc_num_ports
@@ -289,6 +289,72 @@ package swc_swcore_pkg is
       );
   end component;
 
+  component xswc_input_block is
+  generic ( 
+    g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
+    g_num_ports                        : integer ;--:= c_swc_num_ports
+    g_prio_width                       : integer ;--:= c_swc_prio_width;
+    g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
+    g_usecount_width                   : integer ;--:= c_swc_usecount_width
+    g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- Don't CHANGE !
+
+    -- new
+    g_mpm_data_width                   : integer ; -- it needs to be wb_data_width + wb_addr_width
+    g_page_size                        : integer ;
+    g_partial_select_width             : integer ;
+
+    -- probably useless with new memory
+    g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
+    g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply
+    g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size
+    g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance
+  );
+  port (
+    clk_i   : in std_logic;
+    rst_n_i : in std_logic;
+
+    snk_i : in  t_wrf_sink_in;
+    snk_o : out t_wrf_sink_out;
+
+    mmu_page_alloc_req_o : out std_logic;
+    mmu_page_alloc_done_i : in std_logic;
+    mmu_pageaddr_i : in std_logic_vector(g_page_addr_width - 1 downto 0);
+    mmu_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
+    mmu_force_free_o     : out std_logic;
+    mmu_force_free_done_i : in std_logic;
+    mmu_force_free_addr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
+    mmu_set_usecnt_o     : out std_logic;
+    mmu_set_usecnt_done_i : in std_logic;
+    mmu_usecnt_o        : out std_logic_vector(g_usecount_width - 1 downto 0);
+    mmu_nomem_i         : in std_logic;
+
+    rtu_rsp_valid_i     : in  std_logic;
+    rtu_rsp_ack_o       : out std_logic;
+    rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
+    rtu_drop_i          : in  std_logic;
+    rtu_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
+
+    mpm_data_o           : out std_logic_vector(g_mpm_data_width - 1 downto 0);
+    mpm_dvalid_o         : out std_logic;
+    mpm_dlast_o          : out std_logic;
+    mpm_pg_addr_o        : out std_logic_vector(g_page_addr_width - 1 downto 0);
+    mpm_pg_req_i         : in std_logic;
+    mpm_dreq_i           : in std_logic;
+
+    ll_addr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
+    ll_data_o    : out std_logic_vector(g_page_addr_width + 1 downto 0);
+    ll_wr_req_o   : out std_logic;
+    ll_wr_done_i  : in std_logic;
+
+    pta_transfer_pck_o : out std_logic;
+    pta_transfer_ack_i : in std_logic;
+    pta_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
+    pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
+    pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0)
+
+    );
+  end component;
 
   component swc_multiport_page_allocator is
     generic ( 
@@ -570,33 +636,41 @@ component  swc_multiport_pck_pg_free_module is
   
   component xswc_core is
     generic( 
-      g_mem_size                         : integer ;--:= c_swc_packet_mem_size
-      g_page_size                        : integer ;--:= c_swc_page_size
       g_prio_num                         : integer ;--:= c_swc_output_prio_num;
       g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
       g_num_ports                        : integer ;--:= c_swc_num_ports
-      g_data_width                       : integer ;--:= c_swc_data_width
-      g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
       g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
       g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
       g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+
+      -- new
+      g_wb_data_width                    : integer ;
+      g_wb_addr_width                    : integer ;
+      g_wb_sel_width                     : integer ;
+      g_mpm_mem_size                     : integer ;
+      g_mpm_page_size                    : integer ;
+      g_mpm_ratio                        : integer ;
+      g_mpm_fifo_size                    : integer ;
+    
       -- probably useless with new memory
+      g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
       g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
       g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
-      g_input_block_fifo_full_in_advance : integer --:=c_swc_fifo_full_in_advance (xswc_input_block)
+      g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance (xswc_input_block)
       );
-      port (
-      clk_i   : in std_logic;
-      rst_n_i : in std_logic;
+   port (
+      clk_i          : in std_logic;
+      clk_mpm_core_i : in std_logic;
+      rst_n_i        : in std_logic;
   
-      snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
-      snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
+      snk_i          : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
+      snk_o          : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
   
-      src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
-      src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
+      src_i          : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
+      src_o          : out t_wrf_source_out_array(g_num_ports-1 downto 0);
       
-      rtu_rsp_i           : in t_rtu_response_array(g_num_ports  - 1 downto 0);
-      rtu_ack_o          : out std_logic_vector(g_num_ports  - 1 downto 0)
+      rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
+      rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)
       );
   end component;
 

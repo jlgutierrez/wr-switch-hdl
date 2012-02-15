@@ -103,13 +103,13 @@ architecture syn of swc_pck_transfer_arbiter is
 
 
   subtype t_pageaddr is std_logic_vector(g_page_addr_width - 1 downto 0);
-  subtype t_prio is std_logic_vector(g_prio_width - 1 downto 0);
-  subtype t_mask is std_logic_vector(g_num_ports - 1 downto 0);
+  subtype t_prio     is std_logic_vector(g_prio_width - 1 downto 0);
+  subtype t_mask     is std_logic_vector(g_num_ports - 1 downto 0);
   subtype t_pck_size is std_logic_vector(g_max_pck_size_width - 1 downto 0);
 
   type t_pageaddr_array is array (g_num_ports - 1 downto 0) of t_pageaddr;
-  type t_prio_array is array (g_num_ports - 1 downto 0) of t_prio;
-  type t_mask_array is array (g_num_ports - 1 downto 0) of t_mask;
+  type t_prio_array     is array (g_num_ports - 1 downto 0) of t_prio;
+  type t_mask_array     is array (g_num_ports - 1 downto 0) of t_mask;
   type t_pck_size_array is array (g_num_ports - 1 downto 0) of t_pck_size;
 
 ---------------------------------------------------------------------------
@@ -178,9 +178,9 @@ begin  --arch
     
     for i in 0 to g_num_ports - 1 loop
       pti_transfer_data_valid(i) <= pto_output_mask(f_modulo_numports(sync_cntr + i))(i);
-      pti_pageaddr (i)           <= pto_pageaddr (f_modulo_numports(sync_cntr + i));
-      pti_prio (i)               <= pto_prio (f_modulo_numports(sync_cntr + i));
-      pti_pck_size (i)           <= pto_pck_size (f_modulo_numports(sync_cntr + i));
+      pti_pageaddr (i)           <= pto_pageaddr   (f_modulo_numports(sync_cntr + i));
+      pti_prio (i)               <= pto_prio       (f_modulo_numports(sync_cntr + i));
+      pti_pck_size (i)           <= pto_pck_size   (f_modulo_numports(sync_cntr + i));
     end loop;
     
   end process;
@@ -240,9 +240,9 @@ begin  --arch
         pto_prio_o         => pto_prio (i),
         pto_pck_size_o     => pto_pck_size (i),
         ib_transfer_pck_i  => ib_transfer_pck_i (i),
-        ib_pageaddr_i      => ib_pageaddr_i ((i + 1)*g_page_addr_width - 1 downto i*g_page_addr_width),
-        ib_mask_i          => ib_mask_i ((i + 1)*g_num_ports - 1 downto i*g_num_ports),
-        ib_prio_i          => ib_prio_i ((i + 1)*g_prio_width - 1 downto i*g_prio_width),
+        ib_pageaddr_i      => ib_pageaddr_i ((i + 1)*g_page_addr_width    - 1 downto i*g_page_addr_width),
+        ib_mask_i          => ib_mask_i     ((i + 1)*g_num_ports          - 1 downto i*g_num_ports),
+        ib_prio_i          => ib_prio_i     ((i + 1)*g_prio_width         - 1 downto i*g_prio_width),
         ib_pck_size_i      => ib_pck_size_i ((i + 1)*g_max_pck_size_width - 1 downto i*g_max_pck_size_width),
         ib_transfer_ack_o  => ib_transfer_ack_o (i),
         ib_busy_o          => ib_busy_o (i)
@@ -261,8 +261,8 @@ begin  --arch
         clk_i                     => clk_i,
         rst_n_i                   => rst_n_i,
         ob_transfer_data_valid_o  => ob_data_valid_o (i),
-        ob_pageaddr_o             => ob_pageaddr_o ((i + 1)*g_page_addr_width - 1 downto i*g_page_addr_width),
-        ob_prio_o                 => ob_prio_o ((i + 1)*g_prio_width - 1 downto i*g_prio_width),
+        ob_pageaddr_o             => ob_pageaddr_o ((i + 1)*g_page_addr_width    - 1 downto i*g_page_addr_width),
+        ob_prio_o                 => ob_prio_o     ((i + 1)*g_prio_width         - 1 downto i*g_prio_width),
         ob_pck_size_o             => ob_pck_size_o ((i + 1)*g_max_pck_size_width - 1 downto i*g_max_pck_size_width),
         ob_transfer_data_ack_i    => ob_ack_i (i),
         pti_transfer_data_valid_i => pti_transfer_data_valid(i),

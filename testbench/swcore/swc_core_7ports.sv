@@ -1,6 +1,7 @@
 // Fabric emulator example, showing 2 fabric emulators connected together and exchanging packets.
 
-`define c_clock_period        8
+`define c_clock_period        16
+`define c_core_clock_period   (`c_clock_period/5)
 `define c_wrsw_prio_width     3
 `define c_swc_ctrl_width      4
 `define c_swc_data_width      16
@@ -43,10 +44,12 @@ module main_7ports;
 
 
    
-   reg clk  = 1'b0;
-   reg rst_n = 1'b0;
+   reg clk           = 1'b0;
+   reg clk_mpm_core  = 1'b0;
+   reg rst_n         = 1'b0;
    // generate clock and reset signals
-   always #(`c_clock_period/2) clk <= ~clk;
+   always #(`c_clock_period/2)     clk <= ~clk;
+   always #(`c_core_clock_period/2) clk_mpm_core <= ~clk_mpm_core;
    initial begin 
       repeat(3) @(posedge clk);
       rst_n <= 1'b1;
@@ -96,6 +99,7 @@ module main_7ports;
    xswc_core_wrapper_7ports
     DUT_xswc_core_wrapper(
     .clk_i                 (clk),
+    .clk_mpm_core_i        (clk_mpm_core),
     .rst_n_i               (rst_n),
 //-------------------------------------------------------------------------------
 //-- pWB slave - this is output of the swcore (internally connected to the source)

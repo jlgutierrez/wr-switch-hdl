@@ -8,6 +8,7 @@
 module swc_core_wrapper_generic
   (
    clk_i,
+   clk_mpm_core_i,
    rst_n_i,
    src,
    snk,
@@ -21,6 +22,7 @@ module swc_core_wrapper_generic
    );
 
    input clk_i;
+   input clk_mpm_core_i;
    input rst_n_i;
 
    IWishboneMaster  #(2,16) src[`c_num_ports] (clk_i,rst_n_i);
@@ -55,22 +57,30 @@ module swc_core_wrapper_generic
    
    swc_core
      #(
-       .g_mem_size                         (`c_mem_size),
-       .g_page_size                        (`c_page_size),
        .g_prio_num                         (`c_prio_num),
        .g_max_pck_size                     (`c_max_pck_size),
        .g_num_ports                        (`c_num_ports),
-       .g_data_width                       (`c_data_width),
-       .g_ctrl_width                       (`c_ctrl_width),
        .g_pck_pg_free_fifo_size            (`c_pck_pg_free_fifo_size),
        .g_input_block_cannot_accept_data   (`c_input_block_cannot_accept_data),
        .g_output_block_per_prio_fifo_size  (`c_output_block_per_prio_fifo_size),
+
+       .g_wb_data_width                    (`c_wb_data_width),
+       .g_wb_addr_width                    (`c_wb_addr_width),
+       .g_wb_sel_width                     (`c_wb_sel_width),
+
+       .g_mpm_mem_size                     (`c_mpm_mem_size),
+       .g_mpm_page_size                    (`c_mpm_page_size),
+       .g_mpm_ratio                        (`c_mpm_ratio),
+       .g_mpm_fifo_size                    (`c_mpm_fifo_size),
+
+       .g_ctrl_width                       (`c_ctrl_width),
        .g_packet_mem_multiply              (`c_packet_mem_multiply),
        .g_input_block_fifo_size            (`c_input_block_fifo_size),
        .g_input_block_fifo_full_in_advance (`c_input_block_fifo_full_in_advance)
        ) DUT_swc_core(
-              .clk_i (clk_i),
-              .rst_n_i (rst_n_i),
+              .clk_i               (clk_i),
+              .clk_mpm_core_i      (clk_mpm_core_i),
+              .rst_n_i             (rst_n_i),
 
               .snk_dat_i           (snk_dat),
               .snk_adr_i           (snk_adr),

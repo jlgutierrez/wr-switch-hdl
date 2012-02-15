@@ -42,7 +42,8 @@
 -- 2012-02-07  1.0      mlipinsk Created
 ------------------------------------------------------------------------------*/
 
-`define c_clock_period        8
+`define c_clock_period        16
+`define c_core_clock_period   (`c_clock_period/5)
 `define c_n_pcks_to_send      10
 `timescale 1ns / 1ps
 
@@ -77,10 +78,12 @@ EthPacket swc_matrix[`c_num_ports][`c_n_pcks_to_send];
 
 module main_generic;
   
-   reg clk  = 1'b0;
-   reg rst_n = 1'b0;
+   reg clk          = 1'b0;
+   reg clk_mpm_core = 1'b0;
+   reg rst_n        = 1'b0;
    // generate clock and reset signals
-   always #(`c_clock_period/2) clk <= ~clk;
+   always #(`c_clock_period/2)     clk <= ~clk;
+   always #(`c_core_clock_period/2) clk_mpm_core <= ~clk_mpm_core;
    initial begin 
       repeat(3) @(posedge clk);
       rst_n <= 1'b1;
@@ -117,6 +120,7 @@ module main_generic;
    swc_core_wrapper_generic
     DUT_xswcore_wrapper (
     .clk_i                 (clk),
+    .clk_mpm_core_i        (clk_mpm_core),
     .rst_n_i               (rst_n),
     .snk (U_wrf_sink),
     .src(U_wrf_source),
@@ -381,7 +385,7 @@ module main_generic;
       EthPacket      pkt, tmpl;
       EthPacket      txed[$];
       EthPacketGenerator gen;
-      int i;
+      int i,j;
       int n_ports = `c_num_ports;
       bit [`c_num_ports:0] mask;
       // initialization
@@ -394,12 +398,23 @@ module main_generic;
       @(posedge clk);
       wait_cycles(500);
       
-      send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 2 /*mask*/);    
-  
-       for(i=0; i<(2*`c_num_ports - 1); i++) begin  
-	 mask = mask^(1<<(i%(`c_num_ports)));
-         send_random_packet(src,txed, i%(`c_num_ports), 0,7 , mask);  
-         wait_cycles(500);
+      for(j=0;j<100;j++)
+        send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 2 /*mask*/);    
+
+      //for(j=0;j<`c_num_ports;j++) begin
+      for(j=0;j<16;j++) begin
+	fork 
+	  automatic int  p = j;
+          for(i=0; i<20; i++) begin  
+	    //mask = mask^(1<<(i%(`c_num_ports)));
+	    mask =1<<p;
+            //send_random_packet(src,txed, 0 , 0,7 , mask);  
+            //send_random_packet(src,txed, j, 0,7 , 16'hFFFF);
+            //$display("in fork %d",p);
+	    send_random_packet(src,txed, p, 0,7 , mask);  
+          end
+        join
+         //wait_cycles(500);
        end 
   
   wait_cycles(80000); 

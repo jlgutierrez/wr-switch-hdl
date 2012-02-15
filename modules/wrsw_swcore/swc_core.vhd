@@ -54,54 +54,62 @@ use work.wrsw_shared_types_pkg.all;
 
 entity swc_core is
   generic( 
-    g_mem_size                         : integer ;--:= c_swc_packet_mem_size
-    g_page_size                        : integer ;--:= c_swc_page_size
     g_prio_num                         : integer ;--:= c_swc_output_prio_num;
     g_max_pck_size                     : integer ;--:= 2^c_swc_max_pck_size
     g_num_ports                        : integer ;--:= c_swc_num_ports
-    g_data_width                       : integer ;--:= c_swc_data_width
-    g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
     g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
-
+    -- new
+    g_wb_data_width                    : integer ;
+    g_wb_addr_width                    : integer ;
+    g_wb_sel_width                     : integer ;
+    g_mpm_mem_size                     : integer ;
+    g_mpm_page_size                    : integer ;
+    g_mpm_ratio                        : integer ;
+    g_mpm_fifo_size                    : integer ;
     -- probably useless with new memory
+    g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
+    -- g_data_width                       : integer ;--:= c_swc_data_width
+    -- g_mem_size                         : integer ;--:= c_swc_packet_mem_size
+    -- g_page_size                        : integer ;--:= c_swc_page_size   
     g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
     g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
     g_input_block_fifo_full_in_advance : integer --:=c_swc_fifo_full_in_advance (xswc_input_block)
 
     );
   port (
-    clk_i   : in std_logic;
-    rst_n_i : in std_logic;
+    clk_i          : in std_logic;
+    clk_mpm_core_i : in std_logic;
+    rst_n_i        : in std_logic;
 
 -------------------------------------------------------------------------------
 -- pWB  : input (comes from the Endpoint)
 -------------------------------------------------------------------------------
 
-    snk_dat_i   : in  std_logic_vector(g_data_width*g_num_ports-1 downto 0);
-    snk_adr_i   : in  std_logic_vector(           2*g_num_ports-1 downto 0);
-    snk_sel_i   : in  std_logic_vector(           2*g_num_ports-1 downto 0);
-    snk_cyc_i   : in  std_logic_vector(             g_num_ports-1 downto 0);
-    snk_stb_i   : in  std_logic_vector(             g_num_ports-1 downto 0);
-    snk_we_i    : in  std_logic_vector(             g_num_ports-1 downto 0);
-    snk_stall_o : out std_logic_vector(             g_num_ports-1 downto 0);
-    snk_ack_o   : out std_logic_vector(             g_num_ports-1 downto 0);
-    snk_err_o   : out std_logic_vector(             g_num_ports-1 downto 0);
-    snk_rty_o   : out std_logic_vector(             g_num_ports-1 downto 0);
+    snk_dat_i   : in  std_logic_vector(g_wb_data_width*g_num_ports-1 downto 0);
+    snk_adr_i   : in  std_logic_vector(g_wb_addr_width*g_num_ports-1 downto 0);
+    snk_sel_i   : in  std_logic_vector(g_wb_sel_width *g_num_ports-1 downto 0);
+    snk_cyc_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
+    snk_stb_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
+    snk_we_i    : in  std_logic_vector(                g_num_ports-1 downto 0);
+    snk_stall_o : out std_logic_vector(                g_num_ports-1 downto 0);
+    snk_ack_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+    snk_err_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+    snk_rty_o   : out std_logic_vector(                g_num_ports-1 downto 0);
    
 -------------------------------------------------------------------------------
 -- pWB : output (goes to the Endpoint)
 -------------------------------------------------------------------------------  
-    src_dat_o   : out std_logic_vector(g_data_width*g_num_ports-1  downto 0);
-    src_adr_o   : out std_logic_vector(           2*g_num_ports-1 downto 0);
-    src_sel_o   : out std_logic_vector(           2*g_num_ports-1 downto 0);
-    src_cyc_o   : out std_logic_vector(             g_num_ports-1 downto 0);
-    src_stb_o   : out std_logic_vector(             g_num_ports-1 downto 0);
-    src_we_o    : out std_logic_vector(             g_num_ports-1 downto 0);
-    src_stall_i : in  std_logic_vector(             g_num_ports-1 downto 0);
-    src_ack_i   : in  std_logic_vector(             g_num_ports-1 downto 0);
-    src_err_i   : in  std_logic_vector(             g_num_ports-1 downto 0);
+    src_dat_o   : out std_logic_vector(g_wb_data_width*g_num_ports-1  downto 0);
+    src_adr_o   : out std_logic_vector(g_wb_addr_width*g_num_ports-1 downto 0);
+    src_sel_o   : out std_logic_vector(g_wb_sel_width *g_num_ports-1 downto 0);
+    src_cyc_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+    src_stb_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+    src_we_o    : out std_logic_vector(                g_num_ports-1 downto 0);
+    src_stall_i : in  std_logic_vector(                g_num_ports-1 downto 0);
+    src_ack_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
+    src_err_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
 
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
@@ -131,39 +139,47 @@ architecture rtl of swc_core is
 
   xswcore: xswc_core
     generic map( 
-      g_mem_size                         => g_mem_size,
-      g_page_size                        => g_page_size,
       g_prio_num                         => g_prio_num,
       g_max_pck_size                     => g_max_pck_size,
       g_num_ports                        => g_num_ports,
-      g_data_width                       => g_data_width,
-      g_ctrl_width                       => g_ctrl_width,
       g_pck_pg_free_fifo_size            => g_pck_pg_free_fifo_size,
       g_input_block_cannot_accept_data   => g_input_block_cannot_accept_data,
       g_output_block_per_prio_fifo_size  => g_output_block_per_prio_fifo_size,
+
+      g_wb_data_width                    => g_wb_data_width,
+      g_wb_addr_width                    => g_wb_addr_width,
+      g_wb_sel_width                     => g_wb_sel_width,
+
+      g_mpm_mem_size                     => g_mpm_mem_size,
+      g_mpm_page_size                    => g_mpm_page_size,
+      g_mpm_ratio                        => g_mpm_ratio,
+      g_mpm_fifo_size                    => g_mpm_fifo_size,
+
+      g_ctrl_width                       => g_ctrl_width,
       g_packet_mem_multiply              => g_packet_mem_multiply,
       g_input_block_fifo_size            => g_input_block_fifo_size,
       g_input_block_fifo_full_in_advance => g_input_block_fifo_full_in_advance
       )
     port map(
-      clk_i      => clk_i,
-      rst_n_i    => rst_n_i,
+      clk_i          => clk_i,
+      clk_mpm_core_i => clk_mpm_core_i,
+      rst_n_i        => rst_n_i,
 
-      snk_i      => snk_i,
-      snk_o      => snk_o,
+      snk_i          => snk_i,
+      snk_o          => snk_o,
   
-      src_i      => src_i,
-      src_o      => src_o,
+      src_i          => src_i,
+      src_o          => src_o,
       
-      rtu_rsp_i  => rtu_rsp_i,
-      rtu_ack_o  => rtu_rsp_ack_o
+      rtu_rsp_i      => rtu_rsp_i,
+      rtu_ack_o      => rtu_rsp_ack_o
       );
 
 
     vectorize : for i in 0 to g_num_ports-1 generate
-      snk_i(i).dat  <= snk_dat_i((i+1)*16 - 1 downto i*16);   
-      snk_i(i).adr  <= snk_adr_i((i+1)*2  - 1 downto i*2);   
-      snk_i(i).sel  <= snk_sel_i((i+1)*2  - 1 downto i*2);   
+      snk_i(i).dat  <= snk_dat_i((i+1)*g_wb_data_width - 1 downto i*g_wb_data_width);   
+      snk_i(i).adr  <= snk_adr_i((i+1)*g_wb_addr_width - 1 downto i*g_wb_addr_width);   
+      snk_i(i).sel  <= snk_sel_i((i+1)*g_wb_sel_width  - 1 downto i*g_wb_sel_width);   
       snk_i(i).cyc  <= snk_cyc_i(i);   
       snk_i(i).stb  <= snk_stb_i(i);   
       snk_i(i).we   <= snk_we_i(i);    
@@ -172,9 +188,9 @@ architecture rtl of swc_core is
       snk_err_o(i)  <= snk_o(i).err;
       snk_rty_o(i)  <= snk_o(i).rty;
   
-      src_dat_o((i+1)*16 - 1 downto i*16) <= src_o(i).dat;   
-      src_adr_o((i+1)*2  - 1 downto i*2)  <= src_o(i).adr;
-      src_sel_o((i+1)*2  - 1 downto i*2)  <= src_o(i).sel;   
+      src_dat_o((i+1)*g_wb_data_width - 1 downto i*g_wb_data_width) <= src_o(i).dat;   
+      src_adr_o((i+1)*g_wb_addr_width - 1 downto i*g_wb_addr_width)  <= src_o(i).adr;
+      src_sel_o((i+1)*g_wb_sel_width  - 1 downto i*g_wb_sel_width )  <= src_o(i).sel;   
       src_cyc_o(i)                        <= src_o(i).cyc;   
       src_stb_o(i)                        <= src_o(i).stb;   
       src_we_o(i)                         <= src_o(i).we;    

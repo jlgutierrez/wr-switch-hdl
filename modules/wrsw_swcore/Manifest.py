@@ -31,3 +31,4 @@ files = [
 "xswc_input_block.vhd",
 "../wrsw_shared_types_pkg.vhd",
 ]
+modules = modules = {"local": ["mpm"]}

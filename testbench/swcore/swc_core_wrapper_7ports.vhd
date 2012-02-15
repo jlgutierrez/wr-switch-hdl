@@ -59,8 +59,9 @@ entity swc_core_wrapper_7ports is
 	  
         );
   port (
-    clk_i   : in std_logic;
-    rst_n_i : in std_logic;
+    clk_i          : in std_logic;
+    clk_mpm_core_i : in std_logic;
+    rst_n_i        : in std_logic;
 
 -------------------------------------------------------------------------------
 -- Fabric I/F : input (comes from the Endpoint)
@@ -250,22 +251,30 @@ begin
 
 U_xswc_core: xswc_core
   generic map(
-    g_mem_size                         => 65536,
-    g_page_size                        => 64,
     g_prio_num                         => 8,
     g_max_pck_size                     => 10 * 1024,
     g_num_ports                        => 7,
-    g_data_width                       => 16,
-    g_ctrl_width                       => 4,
     g_pck_pg_free_fifo_size            => ((65536/64)/2) ,
     g_input_block_cannot_accept_data   => "drop_pck",
     g_output_block_per_prio_fifo_size  => 64,
+    
+    g_wb_data_width                    => 16,
+    g_wb_addr_width                    => 2,
+    g_wb_sel_width                     => 2,
+    
+    g_mpm_mem_size                     => 65536,
+    g_mpm_page_size                    => 64,
+    g_mpm_ratio                        => 2,
+    g_mpm_fifo_size                    => 4,
+
+    g_ctrl_width                       => 4,
     g_packet_mem_multiply              => 16,
     g_input_block_fifo_size            => (2 * 16),
     g_input_block_fifo_full_in_advance => ((2 * 16) - 3)
   )
   port map(
     clk_i               => clk_i,
+    clk_mpm_core_i      => clk_mpm_core_i,
     rst_n_i             => rst_n_i,
 
     snk_i               => snk_i,
