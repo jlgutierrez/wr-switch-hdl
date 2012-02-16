@@ -538,30 +538,34 @@ package swc_swcore_pkg is
       g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
       g_output_block_per_prio_fifo_size  : integer ;--:= c_swc_output_fifo_size
       g_prio_width                       : integer ;--:= c_swc_prio_width;, c_swc_output_prio_num_width
-      g_prio_num                         : integer  --:= c_swc_output_prio_num
+      g_prio_num                         : integer ;--:= c_swc_output_prio_num
+      g_partial_select_width             : integer;
+      g_wb_data_width                    : integer ;
+      g_wb_addr_width                    : integer ;
+      g_wb_sel_width                     : integer          
     );
     port (
       clk_i   : in std_logic;
       rst_n_i : in std_logic;
-      pta_transfer_data_valid_i : in   std_logic;
-      pta_pageaddr_i            : in   std_logic_vector(g_page_addr_width - 1 downto 0);
-      pta_prio_i                : in   std_logic_vector(g_prio_width - 1 downto 0);
-      pta_pck_size_i            : in   std_logic_vector(g_max_pck_size_width - 1 downto 0);
-      pta_transfer_data_ack_o   : out  std_logic;
-      mpm_pgreq_o  : out std_logic;
-      mpm_pgaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
-      mpm_pckend_i : in  std_logic;
-      mpm_pgend_i  : in  std_logic;
-      mpm_drdy_i   : in  std_logic;
-      mpm_dreq_o   : out std_logic;
-      mpm_data_i   : in  std_logic_vector(g_data_width - 1 downto 0);
-      mpm_ctrl_i   : in  std_logic_vector(g_ctrl_width - 1 downto 0);
-      mpm_sync_i   : in  std_logic; 
-      ppfm_free_o            : out  std_logic;
-      ppfm_free_done_i       : in   std_logic;
-      ppfm_free_pgaddr_o     : out  std_logic_vector(g_page_addr_width - 1 downto 0);
-      src_i : in  t_wrf_source_in;
-      src_o : out t_wrf_source_out
+      pta_transfer_data_valid_i : in  std_logic;
+      pta_pageaddr_i            : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+      pta_prio_i                : in  std_logic_vector(g_prio_width - 1 downto 0);
+      pta_pck_size_i            : in  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+      pta_transfer_data_ack_o   : out std_logic;
+      mpm_d_i                   : in  std_logic_vector (g_data_width -1 downto 0);
+      mpm_dvalid_i              : in  std_logic;
+      mpm_dlast_i               : in  std_logic;
+      mpm_dsel_i                : in  std_logic_vector (g_partial_select_width -1 downto 0);
+      mpm_dreq_o                : out std_logic;
+      mpm_abort_o               : out std_logic;
+      mpm_pg_addr_o             : out std_logic_vector (g_page_addr_width -1 downto 0);
+      mpm_pg_valid_o            : out std_logic;
+      mpm_pg_req_i              : in  std_logic;  
+      ppfm_free_o               : out std_logic;
+      ppfm_free_done_i          : in  std_logic;
+      ppfm_free_pgaddr_o        : out std_logic_vector(g_page_addr_width - 1 downto 0);
+      src_i                     : in  t_wrf_source_in;
+      src_o                     : out t_wrf_source_out
       );
   end component;
 

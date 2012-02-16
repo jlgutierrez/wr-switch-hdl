@@ -210,6 +210,18 @@ architecture rtl of xswc_core is
    signal mpm_ctrl                  : std_logic_vector(g_num_ports * g_ctrl_width - 1 downto 0); 
       
    signal mpm_rd_sync               : std_logic_vector(g_num_ports - 1 downto 0);  
+   
+   
+   signal mpm2ob_d                  : std_logic_vector (g_num_ports * c_mpm_data_width -1 downto 0);
+   signal mpm2ob_dvalid             : std_logic_vector (g_num_ports-1 downto 0);
+   signal mpm2ob_dlast              : std_logic_vector (g_num_ports-1 downto 0);
+   signal mpm2ob_dsel               : std_logic_vector (g_num_ports * c_partial_select_width -1 downto 0);
+   signal mpm2ob_pg_req             : std_logic_vector (g_num_ports-1 downto 0);   
+   signal ob2mpm_dreq               : std_logic_vector (g_num_ports-1 downto 0);
+   signal ob2mpm_abort              : std_logic_vector (g_num_ports-1 downto 0);
+   signal ob2mpm_pg_addr            : std_logic_vector (g_num_ports * c_page_addr_width -1 downto 0);
+   signal ob2mpm_pg_valid           : std_logic_vector (g_num_ports-1 downto 0);
+
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Muliport Memory<< with >>Linked List<< (old)
    ----------------------------------------------------------------------------------------------------   
@@ -395,7 +407,12 @@ architecture rtl of xswc_core is
         g_ctrl_width                       => g_ctrl_width,
         g_output_block_per_prio_fifo_size  => g_output_block_per_prio_fifo_size,
         g_prio_width                       => c_prio_width,
-        g_prio_num                         => g_prio_num
+        g_prio_num                         => g_prio_num,
+        
+        g_partial_select_width             => c_partial_select_width,
+        g_wb_data_width                    => g_wb_data_width,
+        g_wb_addr_width                    => g_wb_addr_width,
+        g_wb_sel_width                     => g_wb_sel_width
       )
       port map (
         clk_i                    => clk_i,
@@ -420,6 +437,16 @@ architecture rtl of xswc_core is
         mpm_data_i               => mpm_data((i + 1) * g_wb_data_width - 1 downto i * g_wb_data_width),
         mpm_ctrl_i               => mpm_ctrl((i + 1) * g_ctrl_width - 1 downto i * g_ctrl_width),
         mpm_sync_i               => mpm_rd_sync(i),
+
+        mpm_d_i                  => mpm2ob_d((i+1)*c_mpm_data_width-1 downto i*c_mpm_data_width),
+        mpm_dvalid_i             => mpm2ob_dvalid(i),
+        mpm_dlast_i              => mpm2ob_dlast(i),
+        mpm_dsel_i               => mpm2ob_dsel((i+1)*c_partial_select_width -1 downto i*c_partial_select_width),
+        mpm_dreq_o               => ob2mpm_dreq(i),
+        mpm_abort_o              => ob2mpm_abort(i),
+        mpm_pg_addr_o            => ob2mpm_pg_addr((i+1)*c_page_addr_width downto i*c_page_addr_width),
+        mpm_pg_valid_o           => ob2mpm_pg_valid(i),
+        mpm_pg_req_i             => mpm2ob_pg_req(i),
         -------------------------------------------------------------------------------
         -- I/F with Pck's Pages Freeing Module (PPFM)
         -------------------------------------------------------------------------------  
@@ -623,20 +650,20 @@ architecture rtl of xswc_core is
     wport_pg_req_o         => mpm2ib_pg_req,
     wport_dreq_o           => mpm2ib_dreq,
 
-    rport_d_o               => open,
-    rport_dvalid_o          => open,
-    rport_dlast_o           => open,
-    rport_dsel_o            => open,
-    rport_dreq_i            => (others => '0'),
-    rport_abort_i           => (others => '0'),
-    rport_pg_addr_i         => (others => '0'),
-    rport_pg_valid_i        => (others => '0'),
-    rport_pg_req_o          => open,
+    rport_d_o               => mpm2ob_d,
+    rport_dvalid_o          => mpm2ob_dvalid,
+    rport_dlast_o           => mpm2ob_dlast,
+    rport_dsel_o            => mpm2ob_dsel,
+    rport_dreq_i            => ob2mpm_dreq,
+    rport_abort_i           => ob2mpm_abort,
+    rport_pg_addr_i         => ob2mpm_pg_addr,
+    rport_pg_valid_i        => ob2mpm_pg_valid,
+    rport_pg_req_o          => mpm2ob_pg_req,
 
-    ll_addr_o               => open, -- tmp mpm2ll_addr,
+    ll_addr_o               => mpm2ll_addr, -- tmp mpm2ll_addr,
     ll_data_i               => ll2mpm_data
     );
-  mpm2ll_addr <= (others => '0');
+  --mpm2ll_addr <= (others => '0');
   ----------------------------------------------------------------------
   -- Page Transfer Arbiter [ 1 module]
   ----------------------------------------------------------------------

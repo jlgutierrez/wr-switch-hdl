@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-02-02
+-- Last update: 2012-02-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -38,6 +38,11 @@
 -- 2012-01-19  2.0      mlipinsk wisbonized (pipelined WB)
 -- 2012-01-19  2.0      twlostow added buffer-FIFO
 -- 2012-02-02  3.0      mlipinsk generic-azed
+-- 2012-02-16  4.0      mlipinsk adapted to the new (async) MPM
+-------------------------------------------------------------------------------
+-- TODO:
+-- 1) mpm_dsel_i - needs to be made it generic
+-- 2) mpm_abort_o - implement
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -55,13 +60,20 @@ use work.ep_wbgen2_pkg.all; -- tom
 
 entity xswc_output_block is
   generic ( 
-    g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
+
     g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
-    g_data_width                       : integer ;--:= c_swc_data_width
-    g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
     g_output_block_per_prio_fifo_size  : integer ;--:= c_swc_output_fifo_size
     g_prio_width                       : integer ;--:= c_swc_prio_width;, c_swc_output_prio_num_width
-    g_prio_num                         : integer  --:= c_swc_output_prio_num
+    g_prio_num                         : integer ;--:= c_swc_output_prio_num
+    -- new stuff
+    g_mpm_page_addr_width              : integer ;--:= c_swc_page_addr_width;
+    g_mpm_data_width                   : integer ;--:= c_swc_page_addr_width;
+    g_mpm_partial_select_width         : integer ;
+    g_mpm_fetch_next_pg_in_advance     : boolean := false;
+    g_wb_data_width                    : integer ;
+    g_wb_addr_width                    : integer ;
+    g_wb_sel_width                     : integer ;
+    g_wb_ob_ignore_ack                 : boolean := true
   );
   port (
     clk_i   : in std_logic;
@@ -72,32 +84,31 @@ entity xswc_output_block is
 -------------------------------------------------------------------------------
 
     pta_transfer_data_valid_i : in   std_logic;
-    pta_pageaddr_i            : in   std_logic_vector(g_page_addr_width - 1 downto 0);
+    pta_pageaddr_i            : in   std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
     pta_prio_i                : in   std_logic_vector(g_prio_width - 1 downto 0);
-    pta_pck_size_i            : in   std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--    pta_pck_size_i            : in   std_logic_vector(g_max_pck_size_width - 1 downto 0);
     pta_transfer_data_ack_o   : out  std_logic;
 
 -------------------------------------------------------------------------------
 -- I/F with Multiport Memory's Read Pump (MMP)
 -------------------------------------------------------------------------------
-
-    mpm_pgreq_o  : out std_logic;
-    mpm_pgaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
-    mpm_pckend_i : in  std_logic;
-    mpm_pgend_i  : in  std_logic;
-    mpm_drdy_i   : in  std_logic;
-    mpm_dreq_o   : out std_logic;
-    mpm_data_i   : in  std_logic_vector(g_data_width - 1 downto 0);
-    mpm_ctrl_i   : in  std_logic_vector(g_ctrl_width - 1 downto 0);
-    mpm_sync_i   : in  std_logic; 
    
+    mpm_d_i        : in  std_logic_vector (g_mpm_data_width -1 downto 0);
+    mpm_dvalid_i   : in  std_logic;
+    mpm_dlast_i    : in  std_logic;
+    mpm_dsel_i     : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
+    mpm_dreq_o     : out std_logic;
+    mpm_abort_o    : out std_logic;
+    mpm_pg_addr_o  : out std_logic_vector (g_mpm_page_addr_width -1 downto 0);
+    mpm_pg_valid_o : out std_logic;
+    mpm_pg_req_i   : in  std_logic;   
 -------------------------------------------------------------------------------
 -- I/F with Pck's Pages Free Module(PPFM)
 -------------------------------------------------------------------------------      
     -- correctly read pck
     ppfm_free_o            : out  std_logic;
     ppfm_free_done_i       : in   std_logic;
-    ppfm_free_pgaddr_o     : out  std_logic_vector(g_page_addr_width - 1 downto 0);
+    ppfm_free_pgaddr_o     : out  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
 
 -------------------------------------------------------------------------------
 -- pWB : output (goes to the Endpoint)
@@ -135,87 +146,80 @@ architecture behavoural of xswc_output_block is
 
   signal wr_array    : t_addr_array;
   signal rd_array    : t_addr_array;
+
+  type t_prep_to_send is (S_IDLE, 
+                          S_NEWPCK_PAGE_READY, 
+                          S_NEWPCK_PAGE_SET_IN_ADVANCE, 
+                          S_RETRY_PREPARE,
+                          S_RETRY_READY
+                          );
+  type t_send_pck     is (S_IDLE, 
+                          S_DATA, 
+                          S_FLUSH_STALL, 
+                          S_FINISH_CYCLE, 
+                          S_EOF,
+                          S_RETRY,
+                          S_WAIT_FREE_PCK                          
+                          );
+
+  signal s_send_pck     : t_send_pck;
+  signal s_prep_to_send : t_prep_to_send;
   
-  type t_state is (IDLE, SET_PAGE, WAIT_READ, READ_MPM, READ_LAST_WORD, WAIT_FREE_PCK);
-  signal state       : t_state;
-  
-  signal wr_data            : std_logic_vector(g_max_pck_size_width + g_page_addr_width - 1 downto 0);
-  signal rd_data            : std_logic_vector(g_max_pck_size_width + g_page_addr_width - 1 downto 0);
-  signal rd_pck_size        : std_logic_vector(g_max_pck_size_width - 1 downto 0);
-  signal current_pck_size   : std_logic_vector(g_max_pck_size_width - 1 downto 0);
-  signal cnt_pck_size       : std_logic_vector(g_max_pck_size_width - 1 downto 0);
-  
-  signal dreq              : std_logic;  -- control of dreq_o from FSM
-  signal pgreq             : std_logic;
+--  signal wr_data            : std_logic_vector(g_max_pck_size_width + g_mpm_page_addr_width - 1 downto 0);
+--  signal rd_data            : std_logic_vector(g_max_pck_size_width + g_mpm_page_addr_width - 1 downto 0);
+
+  signal wr_data            : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+  signal rd_data            : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
     
-  signal ppfm_free        : std_logic;
-  signal ppfm_free_pgaddr       : std_logic_vector(g_page_addr_width - 1 downto 0);
+  signal ppfm_free         : std_logic;
+  signal ppfm_free_pgaddr       : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
   
-  signal pck_start_pgaddr       : std_logic_vector(g_page_addr_width - 1 downto 0);
-  
-  signal cnt_last_word     : std_logic;
-  signal cnt_one_but_last_word     : std_logic;
+  signal pck_start_pgaddr       : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
   
   signal start_free_pck          : std_logic;
-  signal waiting_pck_start : std_logic;
-  
 
-  signal ram_zeros                 : std_logic_vector(g_page_addr_width + g_max_pck_size_width - 1 downto 0);
-  signal ram_ones                  : std_logic_vector((g_page_addr_width + g_max_pck_size_width+7)/8 - 1 downto 0);
+  signal ram_zeros                 : std_logic_vector(g_mpm_page_addr_width- 1 downto 0);
+  signal ram_ones                  : std_logic_vector((g_mpm_page_addr_width+7)/8 - 1 downto 0);
 
-
-  -- pipelined WB
-  
+  signal request_retry : std_logic;
+  -- pipelined WB  
   -- source out
   signal src_adr_int : std_logic_vector(1 downto 0);
   signal src_dat_int : std_logic_vector(15 downto 0);
+  signal src_dat_d   : std_logic_vector(15 downto 0);
+  signal src_stb_d   : std_logic;
   signal src_cyc_int : std_logic;
   signal src_stb_int : std_logic;
   signal src_we_int  : std_logic;
   signal src_sel_int : std_logic_vector(1 downto 0);
-
+  signal out_dat_err : std_logic;
   -- source in
-  signal stab          : std_logic; -- control of src_stb from FSM 
   signal src_ack_int   : std_logic;
   signal src_stall_int : std_logic;
   signal src_err_int   : std_logic;
   signal src_rty_int   : std_logic;
  
-  -- counting acks
-  signal snk_ack_count : unsigned(2 downto 0); -- size?
+  signal mpm_pg_addr_memorized : std_logic_vector(g_mpm_page_addr_width -1 downto 0);
+  signal mpm_pg_addr_memorized_valid: std_logic;
 
-  signal out_fab, buf_fab  : t_ep_internal_fabric;
-  signal out_dreq, buf_dreq : std_logic;
-  signal t_regs   : t_ep_out_registers;
+  signal mpm_dreq     : std_logic;
+  signal mpm_abort    : std_logic;
+  signal mpm_pg_addr  : std_logic_vector (g_mpm_page_addr_width -1 downto 0);
+  signal mpm_pg_valid : std_logic;
+  
+  signal mpm2wb_dat_int  : std_logic_vector (g_wb_data_width -1 downto 0);
+  signal mpm2wb_sel_int  : std_logic_vector (g_wb_sel_width  -1 downto 0);
+  signal mpm2wb_adr_int  : std_logic_vector (g_wb_addr_width -1 downto 0);
 
-    component ep_rx_wb_master
-    generic (
-      g_ignore_ack : boolean);
-    port (
-      clk_sys_i  : in  std_logic;
-      rst_n_i    : in  std_logic;
-      snk_fab_i  : in  t_ep_internal_fabric;
-      snk_dreq_o : out std_logic;
-      src_wb_i   : in  t_wrf_source_in;
-      src_wb_o   : out t_wrf_source_out);
-  end component;
-
-  component ep_rx_buffer
-    generic (
-      g_size : integer);
-    port (
-      clk_sys_i  : in  std_logic;
-      rst_n_i    : in  std_logic;
-      snk_fab_i  : in  t_ep_internal_fabric;
-      snk_dreq_o : out std_logic;
-      src_fab_o  : out t_ep_internal_fabric;
-      src_dreq_i : in  std_logic;
-      level_o    : out std_logic_vector(7 downto 0);
-      regs_i     : in  t_ep_out_registers;
-      rmon_o     : out    t_rmon_triggers);
-  end component;
-
-
+  signal src_out_int : t_wrf_source_out;
+  signal tmp_sel : std_logic_vector(g_wb_sel_width  - 1 downto 0);
+  signal tmp_dat : std_logic_vector(g_wb_data_width - 1 downto 0);
+  signal tmp_adr : std_logic_vector(g_wb_addr_width - 1 downto 0);
+  
+  signal ack_count   : unsigned(3 downto 0);
+  
+  signal set_next_pg_addr : std_logic;
+  signal not_set_next_pg_addr : std_logic;
 begin  --  behavoural
   
   zeros     <=(others => '0');
@@ -224,7 +228,8 @@ begin  --  behavoural
     
   wr_prio <= not pta_prio_i;
     
-  wr_data <= pta_pck_size_i & pta_pageaddr_i;
+--  wr_data <= pta_pck_size_i & pta_pageaddr_i;
+  wr_data <= pta_pageaddr_i;
     
   wr_addr <= wr_prio & wr_array(0) when wr_prio = "000" else
              wr_prio & wr_array(1) when wr_prio = "001" else
@@ -274,7 +279,7 @@ begin  --  behavoural
                  write(6) and not_full_array(6) when wr_prio = "110" else
                  write(7) and not_full_array(7) when wr_prio = "111" else
                  '0';
-                 
+  -- I don't like this                 
   pta_transfer_data_ack_o <= not_full_array(0)  when wr_prio = "000" else
                              not_full_array(1)  when wr_prio = "001" else
                              not_full_array(2)  when wr_prio = "010" else
@@ -285,10 +290,10 @@ begin  --  behavoural
                              not_full_array(7)  when wr_prio = "111" else                 
                             '0';
   
-   prio_ctrl : for i in 0 to g_prio_num - 1 generate 
+  prio_ctrl : for i in 0 to g_prio_num - 1 generate 
     
     write(i)        <= write_array(i) and pta_transfer_data_valid_i ;
-    read(i)         <= read_array(i)  when (state = SET_PAGE) else '0';--rx_dreq_i;
+    read(i)         <= read_array(i)  and mpm_pg_valid;-- ???  when (state = SET_PAGE) else '0';--rx_dreq_i;
       
     PRIO_QUEUE_CTRL : swc_ob_prio_queue
       generic map(
@@ -309,13 +314,13 @@ begin  --  behavoural
   
    PRIO_QUEUE : generic_dpram
      generic map (
-       g_data_width       => g_page_addr_width + g_max_pck_size_width,
+       g_data_width       => g_mpm_page_addr_width, -- + g_max_pck_size_width,
        g_size        => (g_prio_num * g_output_block_per_prio_fifo_size) 
                  )
      port map (
      -- Port A -- writing
        clka_i => clk_i,
-       bwea_i => ram_ones,
+       bwea_i => (others => '1'), --ram_ones,
        wea_i  => wr_en,
        aa_i   => wr_addr,
        da_i   => wr_data,
@@ -323,10 +328,10 @@ begin  --  behavoural
  
       -- Port B  -- reading
        clkb_i => clk_i,
-       bweb_i => ram_ones, 
+       bweb_i => (others => '1'), --ram_ones, 
        web_i  => '0',
        ab_i   => rd_addr,
-       db_i   => ram_zeros,
+       db_i   => (others => '0'), --ram_zeros,
        qb_o   => rd_data
       );
   
@@ -348,223 +353,307 @@ begin  --  behavoural
      end if;
    end if;
  end process;
-            
-  -- tracks the number of bytes already sent in order to indicate
-  -- when the sending is about to finish and the finish
-  pck_size_cnt : process(clk_i, rst_n_i)
-  begin
-     if rising_edge(clk_i) then
-       if(rst_n_i = '0') then
-       
-         cnt_last_word         <= '0';
-         cnt_pck_size          <= (others => '0');
-	 cnt_pck_size(0)        <= '1';
-         cnt_one_but_last_word <= '0';
-         
-       else
-  
-          if(state = SET_PAGE) then
-       
-            cnt_pck_size           <= (others =>'0');
-	    cnt_pck_size(0)        <= '1';
-            cnt_one_but_last_word  <= '0';
-            cnt_last_word          <= '0';
 
-          --elsif(src_stb_int = '1' and src_stall_int = '0') then
-          elsif(out_fab.dvalid = '1') then -- tom
-
-            cnt_last_word         <= '0';
-            cnt_one_but_last_word <= '0';
-          
-            if(current_pck_size = std_logic_vector(unsigned(cnt_pck_size) + 1)) then
-               cnt_last_word             <= '1';   
-            elsif(current_pck_size = std_logic_vector(unsigned(cnt_pck_size) + 2)) then
-               cnt_one_but_last_word     <= '1';
-            end if;
-           
-            cnt_pck_size <= std_logic_vector(unsigned(cnt_pck_size) + 1);
-         
-          end if;
-      end if;
-    end if;
-  end process;
-
-  -- sending frame (pipelined WB)
-  -- it controls the process of sending out the data from the MultiPortMemory (which works like FIFO)
-  -- into pipelined WB. This includes:
-  -- 1. requesting first page of pck from MPM
-  -- 2. requesting freeing pages allocated to read out pck
-  -- 3. reading data from MPM and sending it through pWB, 
-  --    in fact, it only controls :
-  --            pWB(src.stb_o)   <-> MPM(mpm_drdy_i)
-  --            pWB(src.stall_i) <-> MPM(mpm_dreq_o)
-  --            pWB(src.cyc_o)
-  --    all the outputs/intputs of pWB (except cyc_o and we_o) are not registered !
-  --    
-  src_fsm: process(clk_i, rst_n_i)
+ --==================================================================================================
+  -- FSM to prepare next pck to be send
+  --==================================================================================================
+  -- This state machine takes data, if available) from the output queue. The data is only the 
+  -- pckfirst_page address (this is all we need).
+  -- It dane makes the page available for the MPM, once it's set to the MPM, the FSM waits until
+  -- the MPM is ready to set pckstart_page for the next pck (in current implementation, this can
+  -- happen when reading the last word). The pckstart_page is made available to the MPM, and 
+  -- so again and again...
+  -- The fun starts when the Endpoint requests retry of sending. we need to abort the current 
+  -- MPM readout (currently not implemented in the MPM) and set again the same pckstart_page
+  -- (this needs we need to put aside and remember the page which we've already read from the 
+  -- output queue, if any). once, done, we need to come to the rememberd pckstart_page.
+  -- 
+  -- REMARK:
+  -- we don't want to get a new pckpage_start from the output queue as soon as it has been 
+  -- set to MPM, this is becuase, during the transmission of the current pck, a higher 
+  -- priority frame can be transfered.... so doing so at the end of pck sending should be better
+  -- 
+  p_prep_to_send_fsm : process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
+      --========================================
+        s_prep_to_send              <= S_IDLE;
+        mpm_pg_addr                 <= (others => '0');
+        mpm_pg_valid                <= '0';
+        mpm_abort                   <= '0';
+        mpm_pg_addr_memorized_valid <= '0';
+        mpm_pg_addr_memorized       <= (others => '0');
+      --========================================
+      else 
+        -- default values
+        mpm_pg_valid <= '0';
+        mpm_abort    <= '0';
 
-	  -- pWB <-> MPM
-	  out_fab.eof    <= '0';  -- tom
-          out_fab.error    <= '0';  -- tom
-	  
-	  src_cyc_int       <= '0';
-	  stab              <= '0';
-	  dreq              <= '0';
-	                            
-	  start_free_pck    <= '0';
-	  ppfm_free_pgaddr  <= (others => '0');
-
-	  pgreq             <= '0';
-          current_pck_size  <= (others => '0');
-	  pck_start_pgaddr  <= (others => '0');
-
-	  waiting_pck_start <= '0';
-
-      else
-
-	--------------------------------------------------------------------------------------------
-	-- some helpers to the state machines
-        --------------------------------------------------------------------------------------------
-
-	-- traccking ACKs from the sink
------------------- tom commented below --------------------------
--- 	if (src_cyc_int = '0' or src_err_int = '1') then
--- 	  snk_ack_count <= (others => '0');
--- 	else
--- 	  if(src_ack_int = '0' and src_stb_int = '1' and src_stall_int = '0') then
--- 	      snk_ack_count <= snk_ack_count + 1;
--- 	  elsif(src_ack_int = '1' and not(src_stb_int = '1' and src_stall_int = '0')) then
--- 	      snk_ack_count <= snk_ack_count - 1;
--- 	  end if;
--- 	end if;
-------------------------------------------
-	-- registering parameters of the currently read frame
-        if(pgreq = '1') then
-          current_pck_size <= rd_pck_size;
-          pck_start_pgaddr <= rd_data(g_page_addr_width - 1 downto 0);
-        end if;
-
-	--------------------------------------------------------------------------------------------
-	-- main finite state machine
-        --------------------------------------------------------------------------------------------
-        case state is
-
-          when IDLE =>
-	    
-	    --src_cyc_int       <= '0'; -- tom
-	    stab              <= '0';
-
-	    start_free_pck    <= '0';
-	    pgreq             <= '0';
-	    dreq              <= '0';
-	    waiting_pck_start <= '0';
-
---             if(rd_data_valid = '1' and   -- there is data in an output QUEUE
---                src_stall_int = '0' and   -- sink can read
---                src_err_int   = '0') then
---tom
-            if(rd_data_valid = '1' and  -- there is data in an output QUEUE
-               out_dreq = '1') then
-
-	      state             <= SET_PAGE;
-	    end if;
-            
-	  -- requesting from MPM the next frame (inputting the starting page address)
-          when SET_PAGE =>
-	    
-	    pgreq                <= '1';
-	    waiting_pck_start    <= '1';
-	    state                <= WAIT_READ;
-   
-	  -- waiting for the indication that the data is ready (the first page has been retrieved
-	  -- from the MPM
-          when WAIT_READ => 
-	    
-	    pgreq                 <= '0';
-	    
-	    if(mpm_sync_i        = '1'  and  -- indicates that there should be valid data on MPM output in the next cycle
-	       waiting_pck_start = '1') then -- start reading new frame
-
-	      state               <= READ_MPM;
--- tom	      src_cyc_int         <= '1';
-	      stab                <= '1';
-	      waiting_pck_start   <= '0';
-	      dreq                <= '1';                          -- we enable stall-to-dreq 
-	                                                           -- conversion here
-	    end if;
-
-	  -- reading process (FIFO-to-pWB): this just controls the src.cyc_o, src_stb_o and mpm_dreq_o
-	  -- the rest of signals is assigned directly
-          when READ_MPM =>
-
---tom	    src_cyc_int         <= '1';
---tom	    stab                <= '1';
---tom	    dreq                <= '1';
-	    
-	    -- the end of frame
-	    if(cnt_last_word = '1' and   -- last word is expected *and*
-	       mpm_drdy_i    = '1') then -- this last word is valid
-	    
-	      state              <= READ_LAST_WORD;
-	      dreq               <= '0';
-
--- 	      if(src_stall_int = '0') then
--- 		stab               <= '0';
--- 	      end if;
---tom
-              if(out_dreq = '1') then
-                stab <= '0';
+       case s_prep_to_send is
+          --===========================================================================================
+          when S_IDLE =>
+          --===========================================================================================   
+            if(request_retry = '1') then      
+              mpm_abort      <= '1';
+              s_prep_to_send <= S_RETRY_PREPARE;
+            --elsif(rd_data_valid = '1' and mpm_pg_req_i = '1') then 
+            elsif(set_next_pg_addr = '1') then 
+              mpm_pg_addr    <= rd_data(g_mpm_page_addr_width - 1 downto 0);
+              mpm_pg_valid   <= '1';
+              if(s_send_pck = S_DATA or s_send_pck = S_FINISH_CYCLE) then
+                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;             
+              else
+                s_prep_to_send <= S_NEWPCK_PAGE_READY;             
               end if;
-
-            else
-              stab <= '1';
-              dreq <= '1';
-            end if;              
-
-          when READ_LAST_WORD =>
-        
--- 	    if(src_stall_int = '0') then
--- 	      stab               <= '0';
--- 	    end if;
---tom
-            if(out_dreq = '1') then
-              stab <= '0';
             end if;
-	    
-	    -- the ack is the last needed, output data is valid, so we can finish cycle
--- 	    if(snk_ack_count = 1 and src_stb_int = '0' and src_ack_int = '1') then
--- 	      src_cyc_int <= '0';
--- 	      state       <= WAIT_FREE_PCK;
--- 	    end if;
---tom
-            if(out_fab.dvalid = '0') then
-              out_fab.eof <= '1';
-              state       <= WAIT_FREE_PCK;
+          --===========================================================================================
+          when S_NEWPCK_PAGE_SET_IN_ADVANCE =>
+          --===========================================================================================        
+            if(request_retry = '1') then   
+              mpm_abort                   <= '1';
+              s_prep_to_send              <= S_RETRY_PREPARE;
+              mpm_pg_addr_memorized       <= mpm_pg_addr;     
+              mpm_pg_addr_memorized_valid <= '1';      
+            elsif(mpm_dlast_i = '1') then
+              s_prep_to_send              <= S_NEWPCK_PAGE_READY;
             end if;
-               
-          when WAIT_FREE_PCK => 
-            out_fab.eof <='0'; --tom
-              if(ppfm_free = '0') then
-                
-                 ppfm_free_pgaddr <= pck_start_pgaddr;  
-                 start_free_pck   <= '1';
-                 state            <= IDLE;
-               
+          --===========================================================================================
+          when S_NEWPCK_PAGE_READY =>
+          --===========================================================================================        
+            if(request_retry = '1') then      
+              mpm_abort                   <= '1';
+              s_prep_to_send              <= S_RETRY_PREPARE;
+            --elsif(rd_data_valid = '1' and mpm_pg_req_i = '1') then
+            elsif(set_next_pg_addr = '1') then  
+              mpm_pg_addr    <= rd_data(g_mpm_page_addr_width - 1 downto 0);
+              mpm_pg_valid   <= '1';
+              if(s_send_pck = S_DATA or s_send_pck = S_FINISH_CYCLE) then
+                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;             
+              else
+                s_prep_to_send <= S_NEWPCK_PAGE_READY;             
               end if;
-              
+            elsif(not_set_next_pg_addr = '1') then 
+              s_prep_to_send <= S_IDLE;
+            end if;
+          --===========================================================================================
+          when S_RETRY_PREPARE =>
+          --=========================================================================================== 
+            if(mpm_pg_req_i = '1') then 
+              mpm_pg_addr    <= pck_start_pgaddr;
+              mpm_pg_valid   <= '1';
+              s_prep_to_send <= S_RETRY_READY;
+            end if;
+          --===========================================================================================
+          when S_RETRY_READY =>
+          --=========================================================================================== 
+            --if(mpm_pg_addr_memorized_valid = '1' and mpm_pg_req_i = '1') then 
+            if(mpm_pg_addr_memorized_valid = '1' and set_next_pg_addr = '1') then 
+              mpm_pg_addr_memorized_valid <= '0';    
+              mpm_pg_addr    <= mpm_pg_addr_memorized;
+              mpm_pg_valid   <= '1';              
+              if(s_send_pck = S_DATA or s_send_pck = S_FINISH_CYCLE) then
+                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;             
+              else
+                s_prep_to_send <= S_NEWPCK_PAGE_READY;             
+              end if;
+            --elsif(rd_data_valid = '1' and mpm_pg_req_i = '1') then
+            elsif(set_next_pg_addr = '1') then  
+              mpm_pg_addr    <= rd_data(g_mpm_page_addr_width - 1 downto 0);
+              mpm_pg_valid   <= '1';
+              if(s_send_pck = S_DATA) then
+                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;             
+              else
+                s_prep_to_send <= S_NEWPCK_PAGE_READY;             
+              end if;
+            elsif(not_set_next_pg_addr = '1') then 
+              s_prep_to_send <= S_IDLE;
+            end if;            
+
+          --===========================================================================================
           when others =>
-	    state       <= IDLE;
-        end case; -- src_fsm
-      end if; -- (rst_n_i = '0') 
-    end if; -- rising_edge(clk_i)
-  end process src_fsm;
+          --=========================================================================================== 
+            s_prep_to_send <= S_IDLE;                      
+        end case;
+      end if;
+    end if;
+  end process p_prep_to_send_fsm;
+
+  next_page_set_in_advance: if (g_mpm_fetch_next_pg_in_advance = TRUE) generate
+    set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0') else '0';  
+    not_set_next_pg_addr <= '1' when (rd_data_valid = '0' and mpm_pg_req_i = '1') else '0';  
+  end generate next_page_set_in_advance;
+
+  next_page_set_after_pck_transmision: if (g_mpm_fetch_next_pg_in_advance = FALSE) generate
+    set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0' and s_send_pck = S_IDLE) else '0'; 
+    not_set_next_pg_addr <= '1' when (mpm_pg_req_i  = '1' and mpm_pg_valid = '0' ) else '0';  
+  end generate next_page_set_after_pck_transmision;
+
+
+ --==================================================================================================
+  -- FSM send pck with pWB I/F
+  --==================================================================================================
+  -- Forwarding pck read from MPM to pWB interface.
+  -- 1) we make a 1 cycle or greater gap between pWB cycles (S_EOF)
+  -- 2) when the transfer is finished, we request freeing (decrementing usecnt) the page
+  --    (this is done by separate module)
+  -- 3) if freeing from the previously sent pck has not finished when we reached the end 
+  --    (or error/retry happend) of the current pck, we wait patiently. This should not happen
+  -- 4) We re-try sending the same pck if asked for (not implemented yet in the MPM)
+  -- 
+  p_send_pck_fsm : process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+      --========================================
+        s_send_pck        <= S_IDLE;
+        src_out_int.stb <= '0';
+        src_out_int.we  <= '1';
+        src_out_int.adr <= c_WRF_DATA;
+        src_out_int.cyc <= '0';
+      --========================================
+      else 
+        -- default values
+        start_free_pck   <= '0';
+
+       case s_send_pck is
+          --===========================================================================================
+          when S_IDLE =>
+          --===========================================================================================   
+            src_out_int.adr    <= mpm2wb_adr_int;
+            src_out_int.dat    <= mpm2wb_dat_int;
+
+            if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
+              src_out_int.cyc  <= '1';
+              s_send_pck       <= S_DATA;
+              pck_start_pgaddr <= mpm_pg_addr;
+            end if;       
+     
+          --===========================================================================================
+          when S_DATA =>
+          --===========================================================================================        
+            if(src_i.stall = '0') then
+              src_out_int.adr    <= mpm2wb_adr_int;
+              src_out_int.dat    <= mpm2wb_dat_int;
+              src_out_int.stb    <= mpm_dvalid_i;
+              src_out_int.sel    <= mpm2wb_sel_int;
+            end if;            
+            
+            if(src_i.err = '1') then
+              s_send_pck      <= S_EOF; -- we free page in EOF
+              src_out_int.cyc <= '0';
+              src_out_int.stb <= '0';
+            elsif(out_dat_err = '1') then
+              s_send_pck      <= S_FINISH_CYCLE; 
+            elsif(src_i.rty = '1') then
+              src_out_int.cyc  <= '0';
+              src_out_int.stb  <= '0';   
+              request_retry    <= '1';
+              s_send_pck       <= S_RETRY;              
+            elsif(src_i.stall = '1' and mpm_dvalid_i = '1') then
+              s_send_pck       <= S_FLUSH_STALL;
+            end if;
+
+            if(mpm_dlast_i = '1')then
+              s_send_pck      <= S_FINISH_CYCLE; -- we free page in EOF
+            end if;            
+
+            tmp_adr <= mpm2wb_adr_int;
+            tmp_dat <= mpm2wb_dat_int;
+            tmp_sel <= mpm2wb_sel_int;
+
+          --===========================================================================================
+          when S_FLUSH_STALL =>
+          --===========================================================================================        
+            if(src_i.err = '1') then
+              s_send_pck         <= S_EOF; -- we free page in EOF
+              src_out_int.cyc    <= '0';
+              src_out_int.stb    <= '0';
+            elsif(src_i.stall = '0') then
+              src_out_int.dat    <= tmp_dat;
+              src_out_int.adr    <= tmp_adr;
+              src_out_int.stb    <= '1';
+              src_out_int.sel    <= mpm2wb_sel_int;
+              s_send_pck         <= S_DATA;
+            end if;
+          --===========================================================================================
+          when S_FINISH_CYCLE =>
+          --===========================================================================================        
+            if(src_i.stall = '0') then
+              src_out_int.stb <= '0';
+            end if;
+
+            if(((ack_count = 0) or g_wb_ob_ignore_ack) and src_out_int.stb = '0') then
+              src_out_int.cyc <= '0';
+              s_send_pck      <= S_EOF; -- we free page in EOF
+            end if;
+
+          --===========================================================================================
+          when S_EOF =>
+          --===========================================================================================        
+            if(ppfm_free = '0') then
+              start_free_pck <= '1';
+              
+              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
+                src_out_int.cyc  <= '1';
+                s_send_pck       <= S_DATA;
+                pck_start_pgaddr <= mpm_pg_addr;             
+              else
+                s_send_pck       <= S_IDLE;
+              end if;
+            else
+              s_send_pck         <= S_WAIT_FREE_PCK;
+            end if;            
+          --===========================================================================================
+          when S_RETRY =>
+          --===========================================================================================        
+             if(s_prep_to_send = S_RETRY_READY) then
+                src_out_int.cyc  <= '1';
+                s_send_pck       <= S_DATA;
+                pck_start_pgaddr <= mpm_pg_addr;            
+             end if;
+          --===========================================================================================
+          when S_WAIT_FREE_PCK =>
+          --===========================================================================================        
+            if(ppfm_free = '0') then
+              start_free_pck <= '1';
+              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
+                src_out_int.cyc  <= '1';
+                s_send_pck       <= S_DATA;
+                pck_start_pgaddr <= mpm_pg_addr;
+                src_out_int.adr    <= mpm2wb_adr_int;
+                src_out_int.dat    <= mpm2wb_dat_int;                   
+              else
+                s_send_pck       <= S_IDLE;
+              end if;
+            end if;  
+          --===========================================================================================
+          when others =>
+          --=========================================================================================== 
+            s_send_pck <= S_IDLE;                      
+        end case;
+      end if;
+    end if;
+  end process p_send_pck_fsm;
+
+  p_count_acks : process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0' or src_out_int.cyc = '0') then
+        ack_count <= (others => '0');
+      else
+        if(src_out_int.stb = '1' and src_i.stall = '0' and src_i.ack = '0') then
+          ack_count <= ack_count + 1;
+        elsif(src_i.ack = '1' and not(src_out_int.stb = '1' and src_i.stall = '0')) then
+          ack_count <= ack_count - 1;
+        end if;
+      end if;
+    end if;
+  end process p_count_acks;
 
   -- here we perform the "free pages of the pck" process, 
   -- we do it while reading already the next pck
-  free : process(clk_i, rst_n_i)
+  free : process(clk_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
@@ -579,68 +668,29 @@ begin  --  behavoural
     end if;
     
   end process free;
-  rd_pck_size         <= rd_data(g_max_pck_size_width + g_page_addr_width - 1 downto g_page_addr_width);  
 
   -------------- MPM ---------------------
-  mpm_dreq_o          <= dreq and out_dreq;--((not src_stall_int) and dreq);
-  mpm_pgreq_o         <= pgreq;
-  mpm_pgaddr_o        <= rd_data(g_page_addr_width - 1 downto 0) when (pgreq = '1') else pck_start_pgaddr;  
-  -------------- pWB ----------------------
---tom
-  out_fab.dvalid  <= stab and mpm_drdy_i;
-  out_fab.addr    <= mpm_ctrl_i(1 downto 0);
-  out_fab.bytesel <= not mpm_ctrl_i(2);
-  out_fab.data    <= mpm_data_i;
+  mpm_dreq_o     <= not src_i.stall when (s_send_pck = S_DATA or s_send_pck = S_FLUSH_STALL) else '0';
+  mpm_abort_o    <= mpm_abort;
+  mpm_pg_addr_o  <= mpm_pg_addr;
+  mpm_pg_valid_o <= mpm_pg_valid;
 
---tom
---   src_stb_int         <= stab and mpm_drdy_i;
---   src_adr_int         <= mpm_ctrl_i(1 downto 0);
---   src_sel_int         <= mpm_ctrl_i(3 downto 2);
---   src_dat_int         <= mpm_data_i;
--- 
---   -- source out
---   src_o.adr     <= src_adr_int; 
---   src_o.dat     <= src_dat_int;
---   src_o.cyc     <= src_cyc_int;
---   src_o.stb     <= src_stb_int;
---   src_o.we      <= '1'; 
---   src_o.sel     <= src_sel_int; 
---   -- source in
---   src_ack_int   <= src_i.ack; 
---   src_stall_int <= src_i.stall; 
---   src_err_int   <= src_i.err;
---   src_rty_int   <= src_i.rty;
+  -------------- pWB ----------------------
+  out_dat_err    <= '1' when src_out_int.stb = '1'   and                                -- we have valid data           *and*
+                            (src_out_int.adr = c_WRF_STATUS) and                        -- the address indicates status *and*
+                            (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else -- the status indicates error       
+                     '0';
+
+  mpm2wb_adr_int    <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
+  mpm2wb_sel_int    <= mpm_dsel_i & '1'; -- TODO: something generic
+  mpm2wb_dat_int    <= mpm_d_i(g_wb_data_width -1 downto 0);
+ 
+  -- source out
+  src_o     <= src_out_int;
   -------------- PPFM ----------------------
   ppfm_free_o         <= ppfm_free;
   ppfm_free_pgaddr_o  <= ppfm_free_pgaddr;
   
-  t_regs.ecr_rx_en_o <= '1';
 
-  out_fab.sof <= '1' when (mpm_sync_i = '1') and (waiting_pck_start = '1') and (state = WAIT_READ) else '0';
-
-  U_Rx_Buffer : ep_rx_buffer
-    generic map (
-      g_size => 512)
-    port map (
-      clk_sys_i  => clk_i,
-      rst_n_i    => rst_n_i,
-      snk_fab_i  => out_fab,
-      snk_dreq_o => out_dreq,
-      src_fab_o  => buf_fab,
-      src_dreq_i => buf_dreq,
-      regs_i  => t_regs,
-      rmon_o  => open);
-
-  U_RX_Wishbone_Master : ep_rx_wb_master
-    generic map (
-      g_ignore_ack => true)
-    port map (
-      clk_sys_i  => clk_i,
-      rst_n_i    => rst_n_i,
-      snk_fab_i  => buf_fab,
-      snk_dreq_o => buf_dreq,
-      src_wb_i   => src_i,
-      src_wb_o   => src_o
-      );
 
 end behavoural;
