@@ -12,18 +12,34 @@
 -------------------------------------------------------------------------------
 -- Description: This block controls input to SW Core. It consists of a three 
 -- Finite State Machines (FSMs):
--- 1) Read FSM - read information from Fabric Interface and stores it in FIFO
+-- 1) p_page_alloc_fsm - it allocates in advance pages and sets usecnt (once it's known):
+--    - it allocates pckstart_page - the address used for the first page of the pck, 
+--      it is important because:
+--      -> the address of the first page is used to refer to the entire pck - it is passed to the
+--         output ports
+--      -> the proper usecnt (number of output ports by which the pck should be read from MPM and
+--         sent) is set only on the first page address (pckstart_page), the usecnt of the 
+--         intermedaite pages (interpck_page) are set always to 1
+--    - it allocatest interpck_page - the address used for the intermediate pages (not first), 
+--      the usecnt of this pages is always set to 1
+--    - it sets the usecnt of the pckfirst_page once it is know (the RTU decision has been received)
 -- 
--- 2) Write FSM - reads data from FIFO and writes it into write pump
+-- 2) p_transfer_pck_fsm - it receives the RTU decision and transmits it to the output ports 
+--    (if the pck is not to be dropped)
 -- 
--- 3) Page FSM - allocates pages in advance and sets usecnt of pages, i.e
---    * it allocates in advance one page to be used as the first page 
---      of the pck (pckstart)
---    * it allocates in advnace one page to be used within the pck (interpck)
---    * it sets usecnt of pckstart page if it's different then the one set 
---      durring allocation
---    * it sets usecnt of interpck page if it's different then the one set 
---      durring allocation
+-- 3) p_rcv_pck_fsm - it is a translator between pWB and MPM, it does the following:
+--    - receives info from pWB (implements sink) and pipelines (1 stage) the data/valid/sel/addr 
+--    - the pipelining is done to detect EOF and assert it for MPM on the last word/error/RTU drop 
+--      decision. Since we detect EOF on end_of_cycle, it comes after the valid last word, on 
+--      the other hand, we need to indicate to MPM the last valid word. so we need to pipeline to 
+--      do so.
+--    - it also implements "dummy reception" of a pck that is to be dropped (on the RTU decision or
+--      when the SWCORE is stuck, if configured so, TODO)
+--    - it takes care to release pages allocated for a pck which was not transfered to outputs 
+--      (due to error/drop RTU decision)
+--    - it stalls the input if the SWCORE is stuck within pck reception (e.g.: due to full output
+--      queue -- transfer not possible, or MPM full -- no new pages)
+--   
 -- 
 -------------------------------------------------------------------------------
 --
@@ -59,6 +75,7 @@
 --    this requires changing interaction between p_transfer_pck_fsm and p_rcv_pck_fsm
 -- 2) make the dsel more generic
 -- 3) test with mpm_dreq_i = LOW
+-- 4) implement drop_on_SWCORE_stuck
 --    
 -------------------------------------------------------------------------------
 
