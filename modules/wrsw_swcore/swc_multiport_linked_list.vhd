@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-26
--- Last update: 2012-02-02
+-- Last update: 2012-02-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -36,6 +36,7 @@
 -- Date        Version  Author   Description
 -- 2010-10-26  1.0      mlipinsk Created
 -- 2012-02-02  2.0      mlipinsk generic-azed
+-- 2012-02-16  3.0      mlipinsk speeded up & adapted to cut-through & adapted to new MPM
 -------------------------------------------------------------------------------
 
 
@@ -48,284 +49,315 @@ use ieee.math_real.log2;
 library work;
 use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
+use work.gencores_pkg.all;
 
 entity swc_multiport_linked_list is
   generic ( 
     g_num_ports                        : integer; --:= c_swc_num_ports
-    g_page_addr_width                  : integer; --:= c_swc_page_addr_width;
-    g_page_num                         : integer  --:= c_swc_packet_mem_num_pages
+    g_addr_width                       : integer; --:= c_swc_page_addr_width;
+    g_page_num                         : integer;  --:= c_swc_packet_mem_num_pages
+    -- new stuff
+    g_size_width                       : integer ;
+    g_partial_select_width             : integer ;
+    g_data_width                       : integer   --:= c_swc_packet_mem_num_pages    + 2
+
+  ----------------------------------------------------------------------------------------
+  -- the following relation is needed for the things to work
+  -- g_data_width >= 2 + g_addr_width
+  -- g_data_width >= 2 + g_partial_select_width + g_size_width
+  -- 
+  -- this is because the format of the LL entry (data) is the following:
+  -- 
+  -- |---------------------------------------------------------------------------------------|
+  -- |1[bit]|1[bit]|                      g_data_width - 2 [bits]                            |
+  -- |---------------------------------------------------------------------------------------|
+  -- |      |      |                   next_page_addr (g_addr_width bits)                    | eof=0
+  -- |valid | eof  |                                                                         |
+  -- |      |      |dsel(g_partial_select_width [bits]) | words in page (g_size_width [bits])| eof=1
+  ---|---------------------------------------------------------------------------------------|
   );
   port (
     rst_n_i               : in std_logic;
     clk_i                 : in std_logic;
 
+    -- write request
     write_i               : in  std_logic_vector(g_num_ports - 1 downto 0);
-    free_i                : in  std_logic_vector(g_num_ports - 1 downto 0);
-    read_pump_read_i      : in  std_logic_vector(g_num_ports - 1 downto 0);
-    free_pck_read_i       : in  std_logic_vector(g_num_ports - 1 downto 0);
-     
+    -- indicates that the data was written
     write_done_o          : out std_logic_vector(g_num_ports - 1 downto 0);
-    free_done_o           : out std_logic_vector(g_num_ports - 1 downto 0);
-    read_pump_read_done_o : out std_logic_vector(g_num_ports - 1 downto 0);
+    -- write address, needs to be valid till write_done_o=HIGH
+    write_addr_i          : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
+    -- 
+    write_data_i          : in  std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
+
+    ------------ reading from the Linked List by freeing module ----------
+    -- request reading
+    free_pck_rd_req_i     : in  std_logic_vector(g_num_ports - 1 downto 0);
+    -- requested address,  needs to be valid till write_done_o=HIGH
+    free_pck_addr_i       : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
+    -- data available on data_o
     free_pck_read_done_o  : out std_logic_vector(g_num_ports - 1 downto 0);
-
-    read_pump_addr_i      : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-    free_pck_addr_i       : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-
-    write_addr_i          : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-    free_addr_i           : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-    write_data_i          : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
+    -- requested data
+    free_pck_data_o       : out std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
     
-    data_o                : out  std_logic_vector(g_page_addr_width - 1 downto 0)
-
+    -------- reading by Multiport Memory (direct access, different clock domain) -------
+    -- clock of the MPM's core
+    mpm_rpath_clk_i       : in std_logic;
+    -- requested address,  needs to be valid till write_done_o=HIGH
+    mpm_rpath_addr_i      : in  std_logic_vector(g_addr_width - 1 downto 0);
+    -- requested data
+    mpm_rpath_data_o      : out std_logic_vector(g_data_width - 1 downto 0)
     );
 
 end swc_multiport_linked_list;
 
 architecture syn of swc_multiport_linked_list is
-
-   constant c_arbiter_vec_width        : integer := 2*g_num_ports;
-   constant c_arbiter_vec_width_log2   : integer := integer(CEIL(LOG2(real(2*g_num_ports-1))));
-
-   component generic_ssram_dualport_singleclock
-     generic (
-       g_width     : natural;
-       g_addr_bits : natural;
-       g_size      : natural);
-     port (
-       data_i    : in  std_logic_vector (g_width-1 downto 0);
-       clk_i     : in  std_logic;
-       rd_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
-       wr_addr_i : in  std_logic_vector (g_addr_bits-1 downto 0);
-       wr_en_i   : in  std_logic := '1';
-       q_o       : out std_logic_vector (g_width-1 downto 0));
-   end component;
   
+  ---------------------- writing process --------------------------------
+  -- arbitrating writing process
+  signal write_request_vec        : std_logic_vector(g_num_ports-1 downto 0);
+  signal write_grant_vec          : std_logic_vector(g_num_ports-1 downto 0);
+  signal write_grant_vec_d0       : std_logic_vector(g_num_ports-1 downto 0);
+  signal write_grant_vec_d1       : std_logic_vector(g_num_ports-1 downto 0);
+  signal write_grant_index        : integer range 0 to g_num_ports-1;
+  signal write_grant_index_d0     : integer range 0 to g_num_ports-1;
+  signal write_request_noempty    : std_logic;
+
+  signal write_done               : std_logic_vector(g_num_ports-1 downto 0);
+
+  signal in_sel_write             : integer range 0 to g_num_ports-1;
+  -- signals used by writing process  
+  signal ll_write_ena             : std_logic;
+  signal ll_write_ena_next        : std_logic;
+  signal ll_write_addr            : std_logic_vector(g_addr_width - 1 downto 0);
+  signal ll_write_addr_next       : std_logic_vector(g_addr_width - 1 downto 0);
+  signal ll_write_data            : std_logic_vector(g_data_width - 1 downto 0);
+  signal ll_write_data_valid      : std_logic;
+  signal ll_write_end_of_list     : std_logic;
+
+  signal tmp_write_end_of_list    : std_logic_vector(g_num_ports-1 downto 0);
+  -- signal connected directly to DPRAM (driven/multiplexd by the above
+  signal ll_wr_addr               : std_logic_vector(g_addr_width - 1 downto 0);
+  signal ll_wr_data               : std_logic_vector(g_data_width - 1 downto 0);
+  signal ll_wr_ena                : std_logic;
+
+  ---------------------- reading process (free pck module) --------------------------------
+  -- arbitrating access
+  signal free_pck_request_vec     : std_logic_vector(g_num_ports-1 downto 0);
+  signal free_pck_request_noempty : std_logic;
+  signal free_pck_grant_vec       : std_logic_vector(g_num_ports-1 downto 0); 
+  signal free_pck_grant_vec_d0    : std_logic_vector(g_num_ports-1 downto 0);
+  signal free_pck_grant_vec_d1    : std_logic_vector(g_num_ports-1 downto 0);
+  signal free_pck_grant_index     : integer range 0 to g_num_ports-1;
+  signal free_pck_grant_index_d0  : integer range 0 to g_num_ports-1;
+  signal free_pck_grant_valid     : std_logic;
+  signal free_pck_grant_valid_d0  : std_logic;
+
+  signal free_pck_read                : std_logic_vector(g_num_ports -1 downto 0);
+  signal free_pck_read_done           : std_logic_vector(g_num_ports -1 downto 0);
+
+  -- interface to DPRAM
+  signal ll_free_pck_ena         : std_logic;
+  signal ll_free_pck_addr        : std_logic_vector(g_addr_width - 1 downto 0);
+  signal ll_free_pck_data        : std_logic_vector(g_data_width - 1 downto 0);
   
-  signal ll_write_enable   : std_logic;
-  
-  -- not needed for the SSRAM, needed for the valid/done signal 
-  signal ll_read_enable    : std_logic;
-  
-  signal ll_write_addr     : std_logic_vector(g_page_addr_width - 1 downto 0);
-  signal ll_free_addr      : std_logic_vector(g_page_addr_width - 1 downto 0);
+  -- output
+  type t_ll_data_array is array (g_num_ports-1 downto 0) of std_logic_vector(g_data_width - 1 downto 0);
+  signal free_pck_data          : t_ll_data_array;
+  signal free_pck_data_out      : t_ll_data_array;
+  -- helper
+  signal zeros       : std_logic_vector(g_num_ports-1 downto 0); 
+  ----------------- translate one hot to binary --------------------------
+  function f_one_hot_to_binary (
+      One_Hot : std_logic_vector 
+     ) return integer  is
+  variable Bin_Vec_Var : integer range 0 to One_Hot'length -1;
+  begin
+    Bin_Vec_Var := 0;
 
-  signal ll_wr_addr        : std_logic_vector(g_page_addr_width - 1 downto 0);
-  signal ll_rd_addr        : std_logic_vector(g_page_addr_width - 1 downto 0);
+     for I in 0 to (One_Hot'length - 1) loop
+       if One_Hot(I) = '1' then
+         Bin_Vec_Var := I;
+       end if;
+     end loop;
+    return Bin_Vec_Var;
+  end function;
+  -----------------------------------------------------------------------
 
-  signal ll_read_pump_addr : std_logic_vector(g_page_addr_width - 1 downto 0);
-  signal ll_free_pck_addr  : std_logic_vector(g_page_addr_width - 1 downto 0);
-  signal ll_write_data     : std_logic_vector(g_page_addr_width -1 downto 0);
-  signal ll_read_data      : std_logic_vector(g_page_addr_width -1 downto 0);
-
-  signal ll_wr_data      : std_logic_vector(g_page_addr_width -1 downto 0);
-
-  signal write_request_vec   : std_logic_vector(c_arbiter_vec_width-1 downto 0);
-
-  signal read_request_vec    : std_logic_vector(c_arbiter_vec_width-1 downto 0);
-  
-  signal write_request_grant : std_logic_vector(c_arbiter_vec_width_log2 - 1 downto 0);
-
-  signal read_request_grant  : std_logic_vector(c_arbiter_vec_width_log2 - 1 downto 0);
-  
-
-  -- indicates that the granted request is valid
-  signal write_request_grant_valid : std_logic;
-  signal read_request_grant_valid  : std_logic;
-  
-
-  -- the number of the port to which request has been granted
-  signal in_sel_write              : integer range 0 to g_num_ports-1;
-  signal in_sel_read               : integer range 0 to g_num_ports-1;
-
-  signal write_done_feedback : std_logic_vector(g_num_ports-1 downto 0);
-  signal write_done          : std_logic_vector(g_num_ports-1 downto 0);
-
-  -- indicates that an free has been performed successfully for the 
-  -- given port. Used to prevent considering the currently process
-  -- port for request to RR arbiter
-  signal free_done_feedback  : std_logic_vector(g_num_ports-1 downto 0);
-  signal free_done           : std_logic_vector(g_num_ports-1 downto 0);
-
-
-
-  signal read_pump_read_done_feedback  : std_logic_vector(g_num_ports-1 downto 0);
-  signal read_pump_read_done           : std_logic_vector(g_num_ports-1 downto 0);
-
-
-  signal free_pck_read_done_feedback  : std_logic_vector(g_num_ports-1 downto 0);
-  signal free_pck_read_done           : std_logic_vector(g_num_ports-1 downto 0);
-
-  signal ram_zeros                 : std_logic_vector( g_page_addr_width - 1 downto 0);
-  signal ram_ones                  : std_logic_vector((g_page_addr_width+7)/8 - 1 downto 0);
-  
 begin  -- syn
 
+  zeros     <= (others => '0');
 
-  ram_zeros <=(others => '0');
-  ram_ones  <=(others => '1');
-
---    PAGE_INDEX_LINKED_LIST : generic_ssram_dualport_singleclock
---      generic map (
---        g_width     => g_page_addr_width,
---        g_addr_bits => g_page_addr_width,
---        g_size      => g_page_num --c_swc_packet_mem_size / c_swc_packet_mem_multiply
---        )
---      port map (
---        clk_i     => clk_i,
---        rd_addr_i => ll_rd_addr,
---        wr_addr_i => ll_wr_addr,
---        data_i    => ll_wr_data, 
---        wr_en_i   => ll_write_enable ,
---        q_o       => ll_read_data);
-
-
-   PAGE_INDEX_LINKED_LIST : generic_dpram
+   -- this memory is read by the output of the MPM (called read pump)
+   PAGE_INDEX_LINKED_LIST_READ_PUMP : generic_dpram
      generic map (
-       g_data_width  => g_page_addr_width,
+       g_data_width  => g_data_width,-- one bit for validating the data
        g_size        => g_page_num
                  )
      port map (
        -- Port A -- writing
        clka_i => clk_i,
-       bwea_i => ram_ones,
-       wea_i  => ll_write_enable,
+       bwea_i => (others => '1'),
+       wea_i  => ll_wr_ena,
+       aa_i   => ll_wr_addr,
+       da_i   => ll_wr_data,
+       qa_o   => open,   
+ 
+       -- Port B  -- reading
+       clkb_i => mpm_rpath_clk_i,
+       bweb_i => (others => '1'), 
+       web_i  => '0',
+       ab_i   => mpm_rpath_addr_i,
+       db_i   => (others => '0'),
+       qb_o   => mpm_rpath_data_o
+       );
+
+   -- this memory is read by the process that force-frees pck on error
+   PAGE_INDEX_LINKED_LIST_FREE_PCK : generic_dpram
+     generic map (
+       g_data_width  => g_data_width,-- one bit for validating the data
+       g_size        => g_page_num
+                 )
+     port map (
+       -- Port A -- writing
+       clka_i => clk_i,
+       bwea_i => (others => '1'),
+       wea_i  => ll_wr_ena,
        aa_i   => ll_wr_addr,
        da_i   => ll_wr_data,
        qa_o   => open,   
  
        -- Port B  -- reading
        clkb_i => clk_i,
-       bweb_i => ram_ones, 
+       bweb_i => (others => '1'),
        web_i  => '0',
-       ab_i   => ll_rd_addr,
-       db_i   => ram_zeros,
-       qb_o   => ll_read_data
+       ab_i   => ll_free_pck_addr,
+       db_i   => (others => '0'),
+       qb_o   => ll_free_pck_data
        );
 
-
   gen_write_request_vec : for i in 0 to g_num_ports - 1 generate
-    write_request_vec(2 * i + 0) <= write_i(i) and (not (write_done_feedback(i) or write_done(i)));
-    write_request_vec(2 * i + 1) <= free_i(i)  and (not (free_done_feedback(i)  or free_done(i)));
-  end generate gen_write_request_vec;
+    tmp_write_end_of_list(i) <= write_data_i((i + 1) * g_data_width - 2);
+    write_request_vec(i)     <= write_i(i)  and (not ((tmp_write_end_of_list(i) and write_grant_vec_d0(i)) or write_grant_vec_d1(i)));
+  end generate;
 
-  gen_read_request_vec : for i in 0 to g_num_ports - 1 generate
-    read_request_vec(2 * i + 0) <= read_pump_read_i(i) and (not (read_pump_read_done_feedback(i) or read_pump_read_done(i)));
-    read_request_vec(2 * i + 1) <= free_pck_read_i(i)  and (not (free_pck_read_done_feedback(i)  or free_pck_read_done(i)));
-  end generate gen_read_request_vec;
+  gen_free_pck_request_vec : for i in 0 to g_num_ports - 1 generate
+    free_pck_request_vec(i) <= free_pck_read(i) and (not (free_pck_grant_vec_d0(i) or free_pck_grant_vec_d1(i)));
+  end generate;
 
-  -- Round Robin arbiter, quite specific for the usage, since it has the "next" 
-  -- input. It is used to start processing next request well in advance, to prevent
-  -- unnecessary delays
-  WRITE_ARB : swc_rr_arbiter
-    generic map (
-      g_num_ports      => c_arbiter_vec_width,
-      g_num_ports_log2 => c_arbiter_vec_width_log2 --5
-      )
-    port map (
-      clk_i         => clk_i,
-      rst_n_i       => rst_n_i,
-      next_i        => '1',
-      request_i     => write_request_vec,
-      grant_o       => write_request_grant,
-      grant_valid_o => write_request_grant_valid);
+  -- writing
+  f_rr_arbitrate(req      => write_request_vec,
+                 pre_grant=> write_grant_vec_d0,
+                 grant    => write_grant_vec);
 
-  READ_ARB : swc_rr_arbiter
-    generic map (
-      g_num_ports      => c_arbiter_vec_width,
-      g_num_ports_log2 => c_arbiter_vec_width_log2 -- 5
-      )
-    port map (
-      clk_i         => clk_i,
-      rst_n_i       => rst_n_i,
-      next_i        => '1',
-      request_i     => read_request_vec,
-      grant_o       => read_request_grant,
-      grant_valid_o => read_request_grant_valid);
+  write_grant_index     <= f_one_hot_to_binary(write_grant_vec_d0) ;
+  write_request_noempty <= '1' when (write_request_vec /= zeros) else '0';
 
+  -- reading
+  f_rr_arbitrate(req      => free_pck_request_vec,
+                 pre_grant=> free_pck_grant_vec_d0,
+                 grant    => free_pck_grant_vec);
 
-  -- port number to which request has been granted.
-  in_sel_write <= to_integer(unsigned(write_request_grant(write_request_grant'length-1 downto 1)));
-  in_sel_read  <= to_integer(unsigned( read_request_grant( read_request_grant'length-1 downto 1)));
-  
+  free_pck_grant_index     <= f_one_hot_to_binary(free_pck_grant_vec_d0) ;
+  free_pck_request_noempty <= '1' when (free_pck_request_vec /= zeros) else '0';
 
-  ll_write_enable       <= write_request_grant_valid;
-  ll_read_enable       <= read_request_grant_valid;
-  data_o                <= ll_read_data;
-
-  -- Getting the address of the page we want to free
   
   -- ======= writing =======
-  -- data
-  ll_write_data     <= write_data_i(in_sel_write * g_page_addr_width + g_page_addr_width - 1 downto in_sel_write * g_page_addr_width);
-  ll_wr_data        <= ll_write_data     when (write_request_grant(0) = '0') else (others=>'1');
-    
-  -- address
-  ll_write_addr     <= write_addr_i(in_sel_write * g_page_addr_width + g_page_addr_width - 1 downto in_sel_write * g_page_addr_width);
-  ll_free_addr      <= free_addr_i (in_sel_write * g_page_addr_width + g_page_addr_width - 1 downto in_sel_write * g_page_addr_width);
-  ll_wr_addr        <= ll_write_addr     when (write_request_grant(0) = '0') else ll_free_addr;
+  -- mux input data for the port to which access is granted
+  ll_write_data       <= write_data_i((write_grant_index + 1) * g_data_width - 1 downto write_grant_index * g_data_width);
+  ll_write_addr       <= write_addr_i((write_grant_index + 1) * g_addr_width - 1 downto write_grant_index * g_addr_width);
+  ll_write_data_valid <= write_data_i((write_grant_index + 1) * g_data_width - 1); -- MSB    bit
+  ll_write_end_of_list<= write_data_i((write_grant_index + 1) * g_data_width - 2); -- MSB -1 bit
+  ll_write_addr_next  <= ll_write_data(g_addr_width - 1 downto 0);
 
-  -- ======= reading =======    
+  -- create data and address to be written to memory (both DPRAMs)
+  ll_wr_data          <= (others => '0')    when (ll_write_ena_next = '1' ) else ll_write_data;   
+  ll_wr_addr          <= ll_write_addr_next when (ll_write_ena_next = '1' ) else ll_write_addr;
+  ll_write_ena        <= (write_grant_vec   (write_grant_index) and write_grant_vec_d0(write_grant_index) and not ll_write_end_of_list) or 
+                         (write_grant_vec_d0(write_grant_index)                                           and     ll_write_end_of_list);
+  ll_write_ena_next   <=  write_grant_vec_d0(write_grant_index) and write_grant_vec_d1(write_grant_index);
+  -- ======= reading (read pump) =======    
   -- address
-  ll_read_pump_addr <= read_pump_addr_i(in_sel_read * g_page_addr_width + g_page_addr_width - 1 downto in_sel_read * g_page_addr_width);  
-  ll_free_pck_addr  <= free_pck_addr_i (in_sel_read * g_page_addr_width + g_page_addr_width - 1 downto in_sel_read * g_page_addr_width);  
-  ll_rd_addr        <= ll_read_pump_addr when ( read_request_grant(0) = '0') else ll_free_pck_addr;
-  
+  ll_free_pck_addr <= free_pck_addr_i((free_pck_grant_index + 1) * g_addr_width - 1 downto free_pck_grant_index * g_addr_width);  
+    
   process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        write_done_feedback           <= (others => '0');
-        free_done_feedback            <= (others => '0');
-        read_pump_read_done_feedback  <= (others => '0');
-        free_pck_read_done_feedback   <= (others => '0');
+
+        free_pck_grant_vec_d0        <= (others => '0' );
+        free_pck_grant_vec_d1        <= (others => '0' );
+        free_pck_grant_valid         <= '0';
+        free_pck_grant_valid_d0      <= '0';
+        free_pck_grant_index_d0      <=  0;
+        
+        write_grant_vec_d0           <= (others => '0' );
+        write_grant_vec_d1           <= (others => '0' );
+        write_grant_index_d0         <=  0;
+
       else
 
-        -- recognizing on which port the allocation/deallocation/freeing process
-        -- is about to finish. It's solely for request vector composition purpose
-        for i in 0 to g_num_ports-1 loop
-          if(ll_write_enable = '1' and (in_sel_write = i)) then
-          --if(in_sel_write = i) then
-          
-            write_done_feedback(i)          <= not write_request_grant(0);   
-            free_done_feedback(i)           <= write_request_grant(0);   
+        free_pck_grant_vec_d0        <= free_pck_grant_vec;
+        free_pck_grant_vec_d1        <= free_pck_grant_vec_d0;   
+        free_pck_grant_index_d0      <= free_pck_grant_index;
+        free_pck_grant_valid         <= free_pck_request_noempty; -- we always get grant in 1-cycle
+        free_pck_grant_valid_d0      <= free_pck_grant_valid;
 
-          else
-            
-            write_done_feedback(i)          <= '0';
-            free_done_feedback(i)           <= '0';
-            
-          end if;
-        end loop;  -- i
+        write_grant_vec_d0           <= write_grant_vec;
+        write_grant_vec_d1           <= write_grant_vec_d0;   
+        write_grant_index_d0         <= write_grant_index;
 
-        for i in 0 to g_num_ports-1 loop
-          if(ll_read_enable = '1' and (in_sel_read = i)) then
-          --if(in_sel_read = i) then
-          
-            read_pump_read_done_feedback(i) <= not read_request_grant(0);   
-            free_pck_read_done_feedback(i)  <= read_request_grant(0);   
- 
-          else
 
-            read_pump_read_done_feedback(i) <= '0';
-            free_pck_read_done_feedback(i)  <= '0';
-            
-          end if;
-        end loop;  -- i
-
-        write_done          <= write_done_feedback;
-        free_done           <= free_done_feedback;
-        read_pump_read_done <= read_pump_read_done_feedback;
-        free_pck_read_done  <= free_pck_read_done_feedback;
-        
       end if;
     end if;
   end process;
 
-  write_done_o          <= write_done_feedback;
-  free_done_o           <= free_done_feedback;
-  read_pump_read_done_o <= read_pump_read_done_feedback;
-  free_pck_read_done_o  <= free_pck_read_done_feedback;
+  read_valid: for i in 0 to g_num_ports -1 generate
 
+    free_pck_data(i) <= ll_free_pck_data  when  (free_pck_grant_index_d0 = i) else (others => '0' );
+
+    read_data_valid: swc_ll_read_data_validation
+    generic map(
+      g_addr_width => g_addr_width,
+      g_data_width => g_data_width
+    )
+    port map(
+      clk_i                => clk_i, 
+      rst_n_i              => rst_n_i,  
+
+      read_req_i           => free_pck_rd_req_i(i),
+      read_req_o           => free_pck_read(i),
+      
+      read_addr_i          => free_pck_addr_i((i+1)*g_addr_width - 1 downto i*g_addr_width ), 
+      read_data_i          => free_pck_data(i),--(g_data_width - 2 downto 0),  
+      read_data_valid_i    => free_pck_data(i)(g_data_width - 1), 
+      read_data_ready_i    => free_pck_grant_vec_d1(i),  
+      
+      write_addr_i         => ll_wr_addr, 
+      write_data_i         => ll_wr_data,--(g_data_width - 2 downto 0), 
+      write_data_valid_i   => ll_wr_data(g_data_width - 1),
+      write_data_ready_i   => ll_write_ena, 
+
+      read_data_o          => free_pck_data_o((i+1)*g_data_width - 1 downto i*g_data_width), --free_pck_data_out(i),--(g_data_width - 2 downto 0),
+      read_data_valid_o    => free_pck_read_done_o(i)                                        --free_pck_read_done(i)
+    );
+
+--    free_pck_data_o     ((i+1)*g_data_width - 1 downto i*g_data_width) <= free_pck_data_out(i)(g_data_width - 1 downto 0);
+--    free_pck_data_o     ((i+1)*g_data_width - 1)                       <= free_pck_read_done(i);
+--    free_pck_read_done_o(i)                                            <= free_pck_read_done(i);
+   end generate;
+
+
+  ll_free_pck_ena       <= free_pck_grant_valid_d0;
+
+  ll_wr_ena             <= ll_write_ena or ll_write_ena_next;
+
+--   write_done_o          <= ((write_grant_vec_d0)                        and     tmp_write_end_of_list) or -- end-of-list, one one write, so write_done faster
+--                            ((write_grant_vec_d0 and write_grant_vec_d1) and not tmp_write_end_of_list);   -- normal write, we write two words, it takes longer
+  wr_done: for i in 0 to g_num_ports -1 generate
+    write_done_o(i)     <= '1' when ((write_grant_vec_d0(i) = '1'                                 and tmp_write_end_of_list(i) = '1')  or  -- end-of-list, one one write, so write_done faster
+                                     (write_grant_vec_d0(i) = '1' and write_grant_vec_d1(i) = '1' and tmp_write_end_of_list(i) = '0')) else -- normal write, we write two words, it takes longer
+                           '0';   
+  end generate;
+ 
   
 end syn;

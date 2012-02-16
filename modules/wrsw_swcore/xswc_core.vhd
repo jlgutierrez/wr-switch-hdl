@@ -117,10 +117,14 @@ architecture rtl of xswc_core is
    constant c_prio_width            : integer := integer(CEIL(LOG2(real(g_prio_num-1)))); -- g_prio_width
    constant c_max_pck_size_width    : integer := integer(CEIL(LOG2(real(g_max_pck_size-1)))); -- c_swc_max_pck_size_width 
 
-   constant c_mpm_page_num          : integer := 1024;--integer := integer(CEIL(real(g_mpm_mem_size / g_mpm_page_size))); -- 65536/64 = 1024 -- c_swc_packet_mem_num_pages
+   constant c_mpm_page_num          : integer := integer(CEIL(real(g_mpm_mem_size / g_mpm_page_size))); -- 65536/64 = 1024 -- c_swc_packet_mem_num_pages
    constant c_mpm_page_addr_width   : integer := integer(CEIL(LOG2(real(c_mpm_page_num-1)))); --c_swc_page_addr_width
    constant c_mpm_data_width        : integer := integer(g_wb_data_width + g_wb_addr_width);
    constant c_mpm_partial_sel_width : integer := integer(g_wb_sel_width-1);
+   constant c_mpm_page_size_width   : integer := integer(CEIL(LOG2(real(g_mpm_page_size-1))));
+
+   constant c_ll_addr_width         : integer := c_mpm_page_addr_width;
+   constant c_ll_data_width         : integer := c_mpm_page_addr_width + 2;
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Memory Management Unit<<
    ----------------------------------------------------------------------------------------------------
@@ -217,6 +221,9 @@ architecture rtl of xswc_core is
    signal mpm_read_pump_read      : std_logic_vector(g_num_ports - 1 downto 0);
    signal mpm_read_pump_addr      : std_logic_vector(g_num_ports * c_mpm_page_addr_width - 1 downto 0);
    
+   signal mpm2ll_addr             : std_logic_vector(c_ll_addr_width - 1 downto 0);
+   signal ll2mpm_data             : std_logic_vector(c_ll_data_width - 1 downto 0);
+
    -- Linked List -> Multiport memory
 --   signal ll_free_done            : std_logic_vector(g_num_ports - 1 downto 0);
    signal ll_write_done           : std_logic_vector(g_num_ports - 1 downto 0);
@@ -226,10 +233,10 @@ architecture rtl of xswc_core is
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Linked List<< (new)
    ----------------------------------------------------------------------------------------------------   
-   signal ib2ll_addr              : std_logic_vector(g_num_ports*(c_mpm_page_addr_width  ) - 1 downto 0);
-   signal ib2ll_data              : std_logic_vector(g_num_ports*(c_mpm_page_addr_width+2) - 1 downto 0);
-   signal ib2ll_wr_req            : std_logic_vector(g_num_ports                           - 1 downto 0);
-   signal ll2ib_wr_done           : std_logic_vector(g_num_ports                           - 1 downto 0);   
+   signal ib2ll_addr              : std_logic_vector(g_num_ports*c_ll_addr_width - 1 downto 0);
+   signal ib2ll_data              : std_logic_vector(g_num_ports*c_ll_data_width - 1 downto 0);
+   signal ib2ll_wr_req            : std_logic_vector(g_num_ports                 - 1 downto 0);
+   signal ll2ib_wr_done           : std_logic_vector(g_num_ports                 - 1 downto 0);   
   
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Pck's pages freeeing module<<
@@ -260,7 +267,13 @@ architecture rtl of xswc_core is
    signal ppfm_read_req          : std_logic_vector(g_num_ports-1 downto 0);
 
    -- LL -> LPD
-     signal ll_read_valid_data    : std_logic_vector(g_num_ports-1 downto 0);
+   signal ll_read_valid_data    : std_logic_vector(g_num_ports-1 downto 0);
+
+   -- new Free Pck (FP) module <-> Linked List (LL)
+   signal fp2ll_rd_req          : std_logic_vector(g_num_ports - 1 downto 0);
+   signal fp2ll_addr            : std_logic_vector(g_num_ports * c_ll_addr_width - 1 downto 0);
+   signal ll2fp_read_done       : std_logic_vector(g_num_ports - 1 downto 0);
+   signal ll2fp_data            : std_logic_vector(g_num_ports * c_ll_data_width - 1 downto 0);
 
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Pck's pages freeing module (PPFM)<< with >>Page allocator (MMU)<<
@@ -280,8 +293,6 @@ architecture rtl of xswc_core is
  
   begin --rtl
    
-  -- tmp
-  ll2ib_wr_done <= (others => '1');
    
   gen_blocks : for i in 0 to g_num_ports-1 generate
 
@@ -293,15 +304,15 @@ architecture rtl of xswc_core is
         g_max_pck_size_width               => c_max_pck_size_width,
         g_usecount_width                   => c_usecount_width,
         g_input_block_cannot_accept_data   => g_input_block_cannot_accept_data,
-
-        g_ctrl_width                       => g_ctrl_width,
-        g_packet_mem_multiply              => g_packet_mem_multiply,
-        g_input_block_fifo_size            => g_input_block_fifo_size,
-        g_input_block_fifo_full_in_advance => g_input_block_fifo_full_in_advance,
         --new
         g_mpm_data_width                   => c_mpm_data_width, 
         g_page_size                        => g_mpm_page_size,
-        g_partial_select_width             => c_mpm_partial_sel_width
+        g_partial_select_width             => c_mpm_partial_sel_width,
+        g_ll_data_width                    => c_ll_data_width,
+        g_ctrl_width                       => g_ctrl_width,
+        g_packet_mem_multiply              => g_packet_mem_multiply,
+        g_input_block_fifo_size            => g_input_block_fifo_size,
+        g_input_block_fifo_full_in_advance => g_input_block_fifo_full_in_advance
       )
       port map (
         clk_i                    => clk_i,
@@ -353,22 +364,12 @@ architecture rtl of xswc_core is
         mpm_pg_req_i             => mpm2ib_pg_req(i),
         mpm_dreq_i               => mpm2ib_dreq(i),
 
---         mpm_pckstart_o           => ib_pckstart(i),
---         mpm_pageaddr_o           => ib_pageaddr_to_mpm((i + 1) * c_mpm_page_addr_width - 1 downto i * c_mpm_page_addr_width),
---         mpm_pagereq_o            => ib_pagereq(i),
---         mpm_pageend_i            => mpm_pageend(i),
---         mpm_data_o               => ib_data((i + 1) * g_wb_data_width - 1 downto i * g_wb_data_width),
---         mpm_ctrl_o               => ib_ctrl((i + 1) * g_ctrl_width - 1 downto i * g_ctrl_width),
---         mpm_drdy_o               => ib_drdy(i),
---         mpm_full_i               => mpm_full(i),
---         mpm_flush_o              => ib_flush(i),
---         mpm_wr_sync_i            => mpm_wr_sync(i),
         -------------------------------------------------------------------------------
         -- I/F with Linked List
         -------------------------------------------------------------------------------     
 
-        ll_addr_o                => ib2ll_addr((i+1)* c_mpm_page_addr_width   -1 downto i* c_mpm_page_addr_width), 
-        ll_data_o                => ib2ll_data((i+1)*(c_mpm_page_addr_width+2)-1 downto i*(c_mpm_page_addr_width+2)),
+        ll_addr_o                => ib2ll_addr((i+1)* c_ll_addr_width - 1 downto i* c_ll_addr_width), 
+        ll_data_o                => ib2ll_data((i+1)* c_ll_data_width - 1 downto i *c_ll_data_width),
         ll_wr_req_o              => ib2ll_wr_req(i),
         ll_wr_done_i             => ll2ib_wr_done(i),
 
@@ -474,42 +475,35 @@ architecture rtl of xswc_core is
  LINKED_LIST:  swc_multiport_linked_list
    generic map( 
     g_num_ports                 => g_num_ports,
-    g_page_addr_width           => c_mpm_page_addr_width,
-    g_page_num                  => c_mpm_page_num
+    g_addr_width                => c_ll_addr_width,
+    g_page_num                  => c_mpm_page_num,
+    g_size_width                => c_mpm_page_size_width,
+    g_partial_select_width      => c_mpm_partial_sel_width,
+    g_data_width                => c_ll_data_width
     )
    port map(
      rst_n_i                    => rst_n_i,
      clk_i                      => clk_i,
  
-     -- new
---      write_i                    => ib2ll_wr_req,
---      write_done_o               => ll2ib_wr_done,
---      write_addr_i               => ib2ll_addr,
---      write_data_i               => ib2ll_data,
-
-     write_i                    => mpm_write,
-     write_done_o               => ll_write_done,
-     write_addr_i               => mpm_write_addr,
-     write_data_i               => mpm_write_data,
+     write_i                    => ib2ll_wr_req,
+     write_done_o               => ll2ib_wr_done,
+     write_addr_i               => ib2ll_addr,
+     write_data_i               => ib2ll_data,
        
-     -- not used for the time being          
-     free_i                     => (others => '0'), 
-     free_done_o                => open,            
-     free_addr_i                => (others => '0'), 
+     mpm_rpath_clk_i            => clk_mpm_core_i,
+     mpm_rpath_addr_i           => mpm2ll_addr,
+     mpm_rpath_data_o           => ll2mpm_data,
 
-     read_pump_read_i           => mpm_read_pump_read,
-     read_pump_read_done_o      => ll_read_pump_read_done,
-     read_pump_addr_i           => mpm_read_pump_addr,
-
-     free_pck_read_i            => ppfm_read_req,
-     free_pck_read_done_o       => ll_read_valid_data,    
-     free_pck_addr_i            => ppfm_read_addr,
-
-     
-     data_o                     => ll_data
- 
+     free_pck_rd_req_i          => fp2ll_rd_req,
+     free_pck_addr_i            => fp2ll_addr,
+     free_pck_read_done_o       => ll2fp_read_done,
+     free_pck_data_o            => ll2fp_data
+      
      );
  
+ -- tmp
+ fp2ll_rd_req <= (others => '0');
+ fp2ll_addr   <= (others => '0');
  ----------------------------------------------------------------------
  -- Memory Mangement Unit (MMU) 
  ----------------------------------------------------------------------
@@ -639,10 +633,10 @@ architecture rtl of xswc_core is
     rport_pg_valid_i        => (others => '0'),
     rport_pg_req_o          => open,
 
-    ll_addr_o               => open,
-    ll_data_i               => (others => '0')
+    ll_addr_o               => open, -- tmp mpm2ll_addr,
+    ll_data_i               => ll2mpm_data
     );
-  
+  mpm2ll_addr <= (others => '0');
   ----------------------------------------------------------------------
   -- Page Transfer Arbiter [ 1 module]
   ----------------------------------------------------------------------

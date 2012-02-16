@@ -187,35 +187,32 @@ package swc_swcore_pkg is
   end component;
   
   component swc_multiport_linked_list is
-  generic ( 
-    g_num_ports                        : integer; --:= c_swc_num_ports
-    g_page_addr_width                  : integer; --:= c_swc_page_addr_width;
-    g_page_num                         : integer  --:= c_swc_packet_mem_num_pages
+    generic ( 
+      g_num_ports                        : integer; --:= c_swc_num_ports
+      g_addr_width                       : integer; --:= c_swc_page_addr_width;
+      g_page_num                         : integer;  --:= c_swc_packet_mem_num_pages
+      g_size_width                       : integer ;
+      g_partial_select_width             : integer ;
+      g_data_width                       : integer  
     );
     port (
-      rst_n_i               : in  std_logic;
-      clk_i                 : in  std_logic;
+      rst_n_i               : in std_logic;
+      clk_i                 : in std_logic;
 
       write_i               : in  std_logic_vector(g_num_ports - 1 downto 0);
       write_done_o          : out std_logic_vector(g_num_ports - 1 downto 0);
-      write_addr_i          : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      write_data_i          : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      
-      free_i                : in  std_logic_vector(g_num_ports - 1 downto 0);
-      free_done_o           : out std_logic_vector(g_num_ports - 1 downto 0);
-      free_addr_i           : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      
-      read_pump_read_i      : in  std_logic_vector(g_num_ports - 1 downto 0);
-      read_pump_read_done_o : out std_logic_vector(g_num_ports - 1 downto 0);
-      read_pump_addr_i      : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-            
-      free_pck_read_i       : in  std_logic_vector(g_num_ports - 1 downto 0);
+      write_addr_i          : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
+      write_data_i          : in  std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
+
+      free_pck_rd_req_i     : in  std_logic_vector(g_num_ports - 1 downto 0);
+      free_pck_addr_i       : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
       free_pck_read_done_o  : out std_logic_vector(g_num_ports - 1 downto 0);
-      free_pck_addr_i       : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      
-      data_o                : out std_logic_vector(g_page_addr_width - 1 downto 0)
-      );
-  
+      free_pck_data_o       : out std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
+    
+      mpm_rpath_clk_i       : in std_logic;
+      mpm_rpath_addr_i      : in  std_logic_vector(g_addr_width - 1 downto 0);
+      mpm_rpath_data_o      : out std_logic_vector(g_data_width - 1 downto 0)
+    );
   end component;
   
   component xswc_input_block_old is
@@ -302,7 +299,7 @@ package swc_swcore_pkg is
     g_mpm_data_width                   : integer ; -- it needs to be wb_data_width + wb_addr_width
     g_page_size                        : integer ;
     g_partial_select_width             : integer ;
-
+    g_ll_data_width                    : integer ;
     -- probably useless with new memory
     g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
     g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply
@@ -672,6 +669,32 @@ component  swc_multiport_pck_pg_free_module is
       rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
       rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)
       );
+  end component;
+
+  component swc_ll_read_data_validation is
+    generic(
+      g_addr_width : integer ;--:= c_swc_page_addr_width;
+      g_data_width : integer --:= c_swc_page_addr_width
+      );
+    port(
+      clk_i                 : in std_logic;
+      rst_n_i               : in std_logic;
+
+      read_req_i            : in std_logic;
+      read_req_o            : out std_logic;
+      read_addr_i           : in std_logic_vector(g_addr_width - 1 downto 0);
+      read_data_i           : in std_logic_vector(g_data_width - 1 downto 0);
+      read_data_valid_i     : in std_logic;
+      read_data_ready_i     : in std_logic;
+     
+      write_addr_i          : in std_logic_vector(g_addr_width - 1 downto 0);
+      write_data_i          : in std_logic_vector(g_data_width - 1 downto 0);
+      write_data_valid_i    : in std_logic;
+      write_data_ready_i    : in std_logic;
+
+      read_data_o          : out std_logic_vector(g_data_width - 1 downto 0);
+      read_data_valid_o    : out std_logic
+  );
   end component;
 
 end swc_swcore_pkg;

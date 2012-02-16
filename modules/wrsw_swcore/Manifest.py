@@ -30,5 +30,6 @@ files = [
 "xswc_output_block.vhd",
 "xswc_input_block.vhd",
 "../wrsw_shared_types_pkg.vhd",
+"swc_ll_read_data_validation.vhd",
 ]
 modules = modules = {"local": ["mpm"]}

@@ -98,15 +98,15 @@ entity xswc_input_block is
     g_prio_width                       : integer ;--:= c_swc_prio_width;
     g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
     g_usecount_width                   : integer ;--:= c_swc_usecount_width
-    g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- Don't CHANGE !
 
     -- new
     g_mpm_data_width                   : integer ; -- it needs to be wb_data_width + wb_addr_width
     g_page_size                        : integer ;
     g_partial_select_width             : integer ;
-
+    g_ll_data_width                    : integer ;
     -- probably useless with new memory
+    g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
     g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply
     g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size
     g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance
@@ -191,7 +191,7 @@ entity xswc_input_block is
 
     -- data output for LL SRAM - it is the address of the next page or 0xF...F
     -- if this is the last page of the package
-    ll_data_o    : out std_logic_vector(g_page_addr_width + 1 downto 0);
+    ll_data_o    : out std_logic_vector(g_ll_data_width - 1 downto 0);
 
     -- request to write to Linked List, should be high until
     -- ll_wr_done_i indicates successfull write
@@ -340,7 +340,7 @@ architecture syn of xswc_input_block is
   signal ll_not_written_at_eop : std_logic;
  
   signal ll_addr          : std_logic_vector(g_page_addr_width - 1 downto 0);
-  signal ll_data          : std_logic_vector(g_page_addr_width + 1 downto 0);
+  signal ll_data          : std_logic_vector(g_ll_data_width   - 1 downto 0);
   signal ll_data_eof      : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal ll_wr_req        : std_logic;
 
@@ -1117,8 +1117,8 @@ architecture syn of xswc_input_block is
   ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others =>'0');
   
   ll_addr_o                               <= ll_entry.addr;
-  ll_data_o(g_page_addr_width+1)          <= ll_entry.valid;
-  ll_data_o(g_page_addr_width)            <= ll_entry.eof; 
+  ll_data_o(g_ll_data_width - 1)          <= ll_entry.valid;
+  ll_data_o(g_ll_data_width - 2)          <= ll_entry.eof; 
   ll_data_o(g_page_addr_width-1 downto 0) <= ll_data_eof when (ll_entry.eof='1') else ll_entry.next_page;
   ll_wr_req_o                             <= ll_wr_req;
 
