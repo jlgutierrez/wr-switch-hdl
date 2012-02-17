@@ -812,6 +812,7 @@ architecture syn of xswc_input_block is
                 snk_stall_force_l         <= '0';
               else  
                 current_pckstart_pageaddr <= pckstart_pageaddr;
+                mpm_pg_addr               <= pckstart_pageaddr;
                 s_rcv_pck                 <= S_RCV_DATA;
                 page_word_cnt             <= (others =>'0');
                 if(in_pck_dvalid = '1') then 
