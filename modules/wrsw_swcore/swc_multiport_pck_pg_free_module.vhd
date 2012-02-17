@@ -52,7 +52,8 @@ entity swc_multiport_pck_pg_free_module is
   generic( 
     g_num_ports             : integer ; --:= c_swc_num_ports
     g_page_addr_width       : integer ;--:= c_swc_page_addr_width;
-    g_pck_pg_free_fifo_size : integer  --:= c_swc_freeing_fifo_size
+    g_pck_pg_free_fifo_size : integer ;--:= c_swc_freeing_fifo_size
+    g_data_width            : integer 
       ); 
   port (
     clk_i   : in std_logic;
@@ -67,15 +68,17 @@ entity swc_multiport_pck_pg_free_module is
     ob_free_pgaddr_i        : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
     
     ll_read_addr_o          : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
-    --ll_read_data_i          : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-    ll_read_data_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+    ll_read_data_i          : in  std_logic_vector(g_num_ports * g_data_width      - 1 downto 0);
+    --ll_read_data_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
     ll_read_req_o           : out std_logic_vector(g_num_ports-1 downto 0);
     ll_read_valid_data_i    : in  std_logic_vector(g_num_ports-1 downto 0);
 
     mmu_free_o              : out std_logic_vector(g_num_ports-1 downto 0);
     mmu_free_done_i         : in  std_logic_vector(g_num_ports-1 downto 0);
+    mmu_free_last_pg_i      : in  std_logic_vector(g_num_ports-1 downto 0);
     mmu_free_pgaddr_o       : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
-    
+        
+
     mmu_force_free_o        : out std_logic_vector(g_num_ports-1 downto 0);
     mmu_force_free_done_i   : in  std_logic_vector(g_num_ports-1 downto 0);
     mmu_force_free_pgaddr_o : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0)
@@ -95,7 +98,8 @@ begin  -- syn
     LPD:  swc_pck_pg_free_module 
     generic map( 
       g_page_addr_width       => g_page_addr_width,
-      g_pck_pg_free_fifo_size => g_pck_pg_free_fifo_size
+      g_pck_pg_free_fifo_size => g_pck_pg_free_fifo_size,
+      g_data_width            => g_data_width
       )
     port map(
       clk_i                   => clk_i,
@@ -110,12 +114,13 @@ begin  -- syn
       ob_free_pgaddr_i        => ob_free_pgaddr_i((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width),
       
       ll_read_addr_o          => ll_read_addr_o((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width),
-      ll_read_data_i          => ll_read_data_i,
+      ll_read_data_i          => ll_read_data_i((i+1)*g_data_width      - 1 downto i * g_data_width),
       ll_read_req_o           => ll_read_req_o(i),
       ll_read_valid_data_i    => ll_read_valid_data_i(i),
       
       mmu_free_o              => mmu_free_o(i),
       mmu_free_done_i         => mmu_free_done_i(i),
+      mmu_free_last_pg_i      => mmu_free_last_pg_i(i),
       mmu_free_pgaddr_o       => mmu_free_pgaddr_o((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width),
 
       mmu_force_free_o        => mmu_force_free_o(i),

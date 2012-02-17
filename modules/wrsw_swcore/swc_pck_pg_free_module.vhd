@@ -54,7 +54,8 @@ use work.genram_pkg.all;
 entity swc_pck_pg_free_module is
   generic( 
     g_page_addr_width       : integer ;--:= c_swc_page_addr_width;
-    g_pck_pg_free_fifo_size : integer  --:= c_swc_freeing_fifo_size
+    g_pck_pg_free_fifo_size : integer ;--:= c_swc_freeing_fifo_size
+    g_data_width            : integer
     );
   port (
     clk_i   : in std_logic;
@@ -69,12 +70,13 @@ entity swc_pck_pg_free_module is
     ob_free_pgaddr_i        : in  std_logic_vector(g_page_addr_width - 1 downto 0);
     
     ll_read_addr_o          : out std_logic_vector(g_page_addr_width -1 downto 0);
-    ll_read_data_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+    ll_read_data_i          : in  std_logic_vector(g_data_width     - 1 downto 0);
     ll_read_req_o           : out std_logic;
     ll_read_valid_data_i    : in  std_logic;
 
     mmu_free_o              : out std_logic;
     mmu_free_done_i         : in  std_logic;
+    mmu_free_last_pg_i      : in  std_logic;
     mmu_free_pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
         
     mmu_force_free_o        : out std_logic;
@@ -124,7 +126,7 @@ architecture syn of swc_pck_pg_free_module is
     
   signal freeing_mode       : std_logic_vector(1 downto 0);
   signal fifo_clear_n : std_logic;
-  
+  signal eof : std_logic;
 begin  -- syn
 
 
@@ -216,6 +218,7 @@ fsm_force_free : process(clk_i, rst_n_i)
        mmu_force_free       <= '0';
        mmu_free             <= '0';
        freeing_mode         <= (others => '0');
+       eof                  <= '0';
        --================================================
      else
 
@@ -227,6 +230,7 @@ fsm_force_free : process(clk_i, rst_n_i)
            fifo_rd        <= '0';
            mmu_force_free <= '0';
            mmu_free       <= '0';
+           eof            <= '0';
            if(fifo_empty = '0') then
            
              fifo_rd <= '1';
@@ -251,8 +255,8 @@ fsm_force_free : process(clk_i, rst_n_i)
             if(ll_read_valid_data_i = '1') then
             
               ll_read_req    <= '0'; 
-              next_page      <= ll_read_data_i;
-              
+              next_page      <= ll_read_data_i(g_page_addr_width-1 downto 0);
+              eof            <= ll_read_data_i(g_data_width     -2 );
               -- force free
               if(freeing_mode = b"01") then
                          
@@ -272,6 +276,7 @@ fsm_force_free : process(clk_i, rst_n_i)
                 fifo_rd              <= '0';
                 current_page         <= (others => '0');
                 next_page            <= (others => '0');
+                eof                  <= '0';
                 ll_read_req          <= '0';
                 mmu_force_free       <= '0';
                 freeing_mode         <= (others => '0');
@@ -286,7 +291,8 @@ fsm_force_free : process(clk_i, rst_n_i)
                
                mmu_force_free <= '0';
                
-               if(next_page = ones ) then
+               --if(next_page = ones ) then
+               if(eof = '1') then
                  state  <= S_IDLE;
                else
                  current_page <= next_page;
@@ -303,7 +309,10 @@ fsm_force_free : process(clk_i, rst_n_i)
                
                mmu_free <= '0';
                
-               if(next_page = ones ) then
+-- TODO: if response from the MMU saying it's not the last to release, finish here                              
+
+               --if(next_page = ones ) then
+               if(eof = '1') then
                  state  <= S_IDLE;
                else
                  current_page <= next_page;
@@ -323,7 +332,7 @@ fsm_force_free : process(clk_i, rst_n_i)
            ll_read_req          <= '0';
            mmu_force_free       <= '0';
            mmu_free             <= '0';
-           
+           eof                  <= '0';
        end case;
 
      end if;
