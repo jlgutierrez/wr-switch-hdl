@@ -67,11 +67,13 @@ entity xswc_core is
     g_wb_data_width                    : integer ;
     g_wb_addr_width                    : integer ;
     g_wb_sel_width                     : integer ;
+    g_wb_ob_ignore_ack                 : boolean := true ;
     g_mpm_mem_size                     : integer ;
     g_mpm_page_size                    : integer ;
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
-    
+    g_mpm_fetch_next_pg_in_advance     : boolean ;
+
     -- probably useless with new memory
     g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
     -- g_data_width                       : integer ;--:= c_swc_data_width
@@ -143,19 +145,6 @@ architecture rtl of xswc_core is
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Multiport Memory<<
    ----------------------------------------------------------------------------------------------------
-   -- Input Block -> Multiport Memory (old)
-   signal ib_pckstart         : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ib_pageaddr_to_mpm  : std_logic_vector(g_num_ports * c_mpm_page_addr_width - 1 downto 0);
-   signal ib_pagereq          : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ib_data             : std_logic_vector(g_num_ports * g_wb_data_width - 1 downto 0);
-   signal ib_ctrl             : std_logic_vector(g_num_ports * g_ctrl_width - 1 downto 0);
-   signal ib_drdy             : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ib_flush            : std_logic_vector(g_num_ports - 1 downto 0);
-   -- Multiport Memory -> Input Block (old)
-   signal mpm_pageend          : std_logic_vector(g_num_ports - 1 downto 0);
-   signal mpm_full             : std_logic_vector(g_num_ports - 1 downto 0);
-   signal mpm_wr_sync          : std_logic_vector(g_num_ports - 1 downto 0);
-   
    -- Input Block -> Multiport Memory (new)
    signal ib2mpm_data         : std_logic_vector(g_num_ports * c_mpm_data_width - 1 downto 0);
    signal ib2mpm_dvalid       : std_logic_vector(g_num_ports - 1 downto 0);
@@ -197,29 +186,14 @@ architecture rtl of xswc_core is
    -- signals connecting >>Output Block<< with >>Multiport Memory<<
    ----------------------------------------------------------------------------------------------------
    -- Output Block -> Multiport Memory
-   signal ob_pgreq                 : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ob_pgaddr                : std_logic_vector(g_num_ports * c_mpm_page_addr_width - 1 downto 0);
-   signal ob_dreq                  : std_logic_vector(g_num_ports - 1 downto 0);
-
-   -- Multiport Memory -> Output Block 
-   signal mpm_pckend                : std_logic_vector(g_num_ports - 1 downto 0);
-   signal mpm_pgend                 : std_logic_vector(g_num_ports - 1 downto 0);
-   signal mpm_drdy                  : std_logic_vector(g_num_ports - 1 downto 0);
-   
-   signal mpm_data                  : std_logic_vector(g_num_ports * g_wb_data_width - 1 downto 0);
-   signal mpm_ctrl                  : std_logic_vector(g_num_ports * g_ctrl_width - 1 downto 0); 
-      
-   signal mpm_rd_sync               : std_logic_vector(g_num_ports - 1 downto 0);  
-   
-   
    signal mpm2ob_d                  : std_logic_vector (g_num_ports * c_mpm_data_width -1 downto 0);
    signal mpm2ob_dvalid             : std_logic_vector (g_num_ports-1 downto 0);
    signal mpm2ob_dlast              : std_logic_vector (g_num_ports-1 downto 0);
-   signal mpm2ob_dsel               : std_logic_vector (g_num_ports * c_partial_select_width -1 downto 0);
+   signal mpm2ob_dsel               : std_logic_vector (g_num_ports * c_mpm_partial_sel_width -1 downto 0);
    signal mpm2ob_pg_req             : std_logic_vector (g_num_ports-1 downto 0);   
    signal ob2mpm_dreq               : std_logic_vector (g_num_ports-1 downto 0);
    signal ob2mpm_abort              : std_logic_vector (g_num_ports-1 downto 0);
-   signal ob2mpm_pg_addr            : std_logic_vector (g_num_ports * c_page_addr_width -1 downto 0);
+   signal ob2mpm_pg_addr            : std_logic_vector (g_num_ports * c_mpm_page_addr_width -1 downto 0);
    signal ob2mpm_pg_valid           : std_logic_vector (g_num_ports-1 downto 0);
 
    ----------------------------------------------------------------------------------------------------
@@ -235,13 +209,6 @@ architecture rtl of xswc_core is
    
    signal mpm2ll_addr             : std_logic_vector(c_ll_addr_width - 1 downto 0);
    signal ll2mpm_data             : std_logic_vector(c_ll_data_width - 1 downto 0);
-
-   -- Linked List -> Multiport memory
---   signal ll_free_done            : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ll_write_done           : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ll_read_pump_read_done  : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ll_data                 : std_logic_vector(c_mpm_page_addr_width - 1 downto 0);
-
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Linked List<< (new)
    ----------------------------------------------------------------------------------------------------   
@@ -299,7 +266,7 @@ architecture rtl of xswc_core is
    -- MMU -> PPFM
    signal mmu_force_free_done   : std_logic_vector(g_num_ports-1 downto 0);
    signal mmu_free_done         : std_logic_vector(g_num_ports-1 downto 0);   
-   
+   signal mmu2ppfm_free_last_pg : std_logic_vector(g_num_ports-1 downto 0);   
   
    ---- end tmp      
  
@@ -401,18 +368,20 @@ architecture rtl of xswc_core is
 --    OUTPUT_BLOCK: swc_output_block 
     OUTPUT_BLOCK: xswc_output_block
       generic map( 
-        g_page_addr_width                  => c_mpm_page_addr_width,
         g_max_pck_size_width               => c_max_pck_size_width,
-        g_data_width                       => g_wb_data_width,
-        g_ctrl_width                       => g_ctrl_width,
         g_output_block_per_prio_fifo_size  => g_output_block_per_prio_fifo_size,
         g_prio_width                       => c_prio_width,
         g_prio_num                         => g_prio_num,
         
-        g_partial_select_width             => c_partial_select_width,
+        g_mpm_page_addr_width              => c_mpm_page_addr_width,
+        g_mpm_data_width                   => c_mpm_data_width,
+        g_mpm_partial_select_width         => c_mpm_partial_sel_width,
+        g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance,
+
         g_wb_data_width                    => g_wb_data_width,
         g_wb_addr_width                    => g_wb_addr_width,
-        g_wb_sel_width                     => g_wb_sel_width
+        g_wb_sel_width                     => g_wb_sel_width,
+        g_wb_ob_ignore_ack                 => g_wb_ob_ignore_ack
       )
       port map (
         clk_i                    => clk_i,
@@ -423,28 +392,19 @@ architecture rtl of xswc_core is
         pta_transfer_data_valid_i=> pta_data_valid(i),
         pta_pageaddr_i           => pta_pageaddr((i + 1) * c_mpm_page_addr_width-1 downto i * c_mpm_page_addr_width),
         pta_prio_i               => pta_prio    ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
-        pta_pck_size_i           => pta_pck_size((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
+--        pta_pck_size_i           => pta_pck_size((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
         pta_transfer_data_ack_o  => ob_ack(i),
         -------------------------------------------------------------------------------
         -- I/F with Multiport Memory (MPM)
         -------------------------------------------------------------------------------        
-        mpm_pgreq_o              => ob_pgreq(i),
-        mpm_pgaddr_o             => ob_pgaddr((i + 1) * c_mpm_page_addr_width    -1 downto i * c_mpm_page_addr_width),
-        mpm_pckend_i             => mpm_pckend(i),
-        mpm_pgend_i              => mpm_pgend(i),
-        mpm_drdy_i               => mpm_drdy(i),
-        mpm_dreq_o               => ob_dreq(i),
-        mpm_data_i               => mpm_data((i + 1) * g_wb_data_width - 1 downto i * g_wb_data_width),
-        mpm_ctrl_i               => mpm_ctrl((i + 1) * g_ctrl_width - 1 downto i * g_ctrl_width),
-        mpm_sync_i               => mpm_rd_sync(i),
 
         mpm_d_i                  => mpm2ob_d((i+1)*c_mpm_data_width-1 downto i*c_mpm_data_width),
         mpm_dvalid_i             => mpm2ob_dvalid(i),
         mpm_dlast_i              => mpm2ob_dlast(i),
-        mpm_dsel_i               => mpm2ob_dsel((i+1)*c_partial_select_width -1 downto i*c_partial_select_width),
+        mpm_dsel_i               => mpm2ob_dsel((i+1)*c_mpm_partial_sel_width -1 downto i*c_mpm_partial_sel_width),
         mpm_dreq_o               => ob2mpm_dreq(i),
         mpm_abort_o              => ob2mpm_abort(i),
-        mpm_pg_addr_o            => ob2mpm_pg_addr((i+1)*c_page_addr_width downto i*c_page_addr_width),
+        mpm_pg_addr_o            => ob2mpm_pg_addr((i+1)*c_mpm_page_addr_width -1 downto i*c_mpm_page_addr_width),
         mpm_pg_valid_o           => ob2mpm_pg_valid(i),
         mpm_pg_req_i             => mpm2ob_pg_req(i),
         -------------------------------------------------------------------------------
@@ -469,7 +429,8 @@ architecture rtl of xswc_core is
     generic map( 
       g_num_ports             => g_num_ports,
       g_page_addr_width       => c_mpm_page_addr_width,
-      g_pck_pg_free_fifo_size => g_pck_pg_free_fifo_size
+      g_pck_pg_free_fifo_size => g_pck_pg_free_fifo_size,
+      g_data_width            => c_ll_data_width
       )
     port map(
       clk_i                   => clk_i,
@@ -483,10 +444,10 @@ architecture rtl of xswc_core is
       ob_free_done_o          => ppfm_free_done_to_ob,
       ob_free_pgaddr_i        => ob_free_pgaddr,
       
-      ll_read_addr_o          => ppfm_read_addr,
-      ll_read_data_i          => ll_data,
-      ll_read_req_o           => ppfm_read_req,
-      ll_read_valid_data_i    => ll_read_valid_data,
+      ll_read_addr_o          => fp2ll_addr, --ppfm_read_addr,
+      ll_read_data_i          => ll2fp_data, --ll_data,
+      ll_read_req_o           => fp2ll_rd_req, --ppfm_read_req,
+      ll_read_valid_data_i    => ll2fp_read_done, --ll_read_valid_data,
       
       mmu_force_free_o        => ppfm_force_free,
       mmu_force_free_done_i   => mmu_force_free_done,
@@ -494,7 +455,8 @@ architecture rtl of xswc_core is
       
       mmu_free_o              => ppfm_free,
       mmu_free_done_i         => mmu_free_done,
-      mmu_free_pgaddr_o       => ppfm_free_pgaddr
+      mmu_free_pgaddr_o       => ppfm_free_pgaddr,
+      mmu_free_last_pg_i      => mmu2ppfm_free_last_pg
 
       );
 
@@ -529,8 +491,8 @@ architecture rtl of xswc_core is
      );
  
  -- tmp
- fp2ll_rd_req <= (others => '0');
- fp2ll_addr   <= (others => '0');
+ --fp2ll_rd_req <= (others => '0');
+ --fp2ll_addr   <= (others => '0');
  ----------------------------------------------------------------------
  -- Memory Mangement Unit (MMU) 
  ----------------------------------------------------------------------
@@ -557,75 +519,16 @@ architecture rtl of xswc_core is
       free_i                     => ppfm_free,
       free_done_o                => mmu_free_done,
       pgaddr_free_i              => ppfm_free_pgaddr,
-      
+      free_last_pg_o             => mmu2ppfm_free_last_pg,
       
       force_free_i               => ppfm_force_free,
       force_free_done_o          => mmu_force_free_done,
       pgaddr_force_free_i        => ppfm_force_free_pgaddr,
       
+      
       nomem_o                    => mmu_nomem
       );
-  
-  
-  ----------------------------------------------------------------------
-  -- MultiPort Memory (MPM) [ 1 module]
-  ----------------------------------------------------------------------
-  MUPTIPORT_MEMORY: swc_packet_mem --(old)
-    generic map( 
-      g_mem_size                 => g_mpm_mem_size,
-      g_num_ports                => g_num_ports,
-      g_page_num                 => c_mpm_page_num,
-      g_page_addr_width          => c_mpm_page_addr_width,
-      g_data_width               => g_wb_data_width,
-      g_ctrl_width               => g_ctrl_width,
-      g_page_size                => g_mpm_page_size,
-      g_packet_mem_multiply      => g_packet_mem_multiply
-      )
-    port map(
-      clk_i                      => clk_i,
-      rst_n_i                    => rst_n_i,
-      -------------------------------------------------------------------------------
-      -- I/F with Input Block (IB)
-      ------------------------------------------------------------------------------- 
-      wr_pagereq_i               => ib_pagereq,
-      wr_pckstart_i              => ib_pckstart,
-      wr_pageaddr_i              => ib_pageaddr_to_mpm,
-      wr_pageend_o               => mpm_pageend,
-      wr_ctrl_i                  => ib_ctrl,
-      wr_data_i                  => ib_data,
-      wr_drdy_i                  => ib_drdy,
-      wr_full_o                  => mpm_full,
-      wr_flush_i                 => ib_flush,
-      wr_sync_o                  => mpm_wr_sync,
-      -------------------------------------------------------------------------------
-      -- I/F with Output Block
-      ------------------------------------------------------------------------------- 
-      rd_pagereq_i               => ob_pgreq,
-      rd_pageaddr_i              => ob_pgaddr,
-      rd_pageend_o               => mpm_pgend,
-      rd_pckend_o                => mpm_pckend,
-      rd_drdy_o                  => mpm_drdy,
-      rd_dreq_i                  => ob_dreq,
-      --!!!!!!!!!!
-      rd_sync_read_i             => ob_pgreq, -- TODO ???
-      --!!!!!!!!!!!!!!!!!!
-      rd_data_o                  => mpm_data,
-      rd_ctrl_o                  => mpm_ctrl,
-      rd_sync_o                  => mpm_rd_sync,
-      
-      write_o                    => mpm_write,
-      write_done_i               => ll_write_done,
-      write_addr_o               => mpm_write_addr,
-      write_data_o               => mpm_write_data,
-      
-      read_pump_read_o           => mpm_read_pump_read,
-      read_pump_read_done_i      => ll_read_pump_read_done,
-      read_pump_addr_o           => mpm_read_pump_addr,
-  
-      data_i                     => ll_data
-  
-      );
-      
+       
   MULTIPORT_MEMORY: mpm_top --(new)
   generic map(
     g_data_width           => c_mpm_data_width,

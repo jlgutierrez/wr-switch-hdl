@@ -64,10 +64,13 @@ entity swc_core is
     g_wb_data_width                    : integer ;
     g_wb_addr_width                    : integer ;
     g_wb_sel_width                     : integer ;
+    g_wb_ob_ignore_ack                 : boolean ;
     g_mpm_mem_size                     : integer ;
     g_mpm_page_size                    : integer ;
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
+    g_mpm_fetch_next_pg_in_advance     : boolean ;
+
     -- probably useless with new memory
     g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
     -- g_data_width                       : integer ;--:= c_swc_data_width
@@ -149,11 +152,12 @@ architecture rtl of swc_core is
       g_wb_data_width                    => g_wb_data_width,
       g_wb_addr_width                    => g_wb_addr_width,
       g_wb_sel_width                     => g_wb_sel_width,
-
+      g_wb_ob_ignore_ack                 => g_wb_ob_ignore_ack,
       g_mpm_mem_size                     => g_mpm_mem_size,
       g_mpm_page_size                    => g_mpm_page_size,
       g_mpm_ratio                        => g_mpm_ratio,
       g_mpm_fifo_size                    => g_mpm_fifo_size,
+      g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance,
 
       g_ctrl_width                       => g_ctrl_width,
       g_packet_mem_multiply              => g_packet_mem_multiply,

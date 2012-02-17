@@ -88,6 +88,7 @@ package swc_swcore_pkg is
       pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
       pgaddr_valid_o : out std_logic;
       idle_o         : out std_logic;
+      free_last_pg_o : out std_logic;
       done_o         : out std_logic;
       nomem_o        : out std_logic);
   end component;
@@ -110,6 +111,7 @@ package swc_swcore_pkg is
       pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
       pgaddr_valid_o : out std_logic;
       idle_o         : out std_logic;
+      free_last_pg_o : out std_logic;
       done_o         : out std_logic;
       nomem_o        : out std_logic);
   end component;
@@ -376,62 +378,12 @@ package swc_swcore_pkg is
       pgaddr_usecnt_i     : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
       usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
       pgaddr_alloc_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
+      free_last_pg_o      : out std_logic_vector(g_num_ports - 1 downto 0);
       nomem_o             : out std_logic
       );
   
   end component;
-  
-  component swc_packet_mem is
-    generic ( 
-      g_mem_size                         : integer ;--:= c_swc_packet_mem_size (in input words: 16 bits)
-      g_num_ports                        : integer ;--:= c_swc_num_ports
-      g_page_num                         : integer ;--:= c_swc_packet_mem_num_pages
-      g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
-      g_data_width                       : integer ;--:= c_swc_data_width
-      g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
-      g_page_size                        : integer ;--:= c_swc_page_size
-
-      -- probably useless with new memory
-      g_packet_mem_multiply              : integer --:= c_swc_packet_mem_multiply
-      );
-    port (
-      clk_i   : in std_logic;
-      rst_n_i : in std_logic;
-      ------------------- writing to the shared memory --------------------------
-      wr_pagereq_i  : in  std_logic_vector(g_num_ports-1 downto 0);
-      wr_pckstart_i : in  std_logic_vector(g_num_ports-1 downto 0);
-      wr_pageaddr_i : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      wr_pageend_o  : out std_logic_vector(g_num_ports -1 downto 0);
-      wr_ctrl_i  : in  std_logic_vector(g_num_ports * g_ctrl_width - 1 downto 0);
-      wr_data_i  : in  std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
-      wr_drdy_i  : in  std_logic_vector(g_num_ports-1 downto 0);
-      wr_full_o  : out std_logic_vector(g_num_ports-1 downto 0);
-      wr_flush_i : in  std_logic_vector(g_num_ports-1 downto 0);
-      wr_sync_o : out std_logic_vector(g_num_ports -1 downto 0);
-      ------------------- reading from the shared memory --------------------------
-      rd_pagereq_i   : in  std_logic_vector(g_num_ports-1 downto 0);
-      rd_pageaddr_i  : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      rd_pageend_o   : out std_logic_vector(g_num_ports -1 downto 0);
-      rd_pckend_o    : out  std_logic_vector(g_num_ports-1 downto 0);
-      rd_drdy_o      : out std_logic_vector(g_num_ports -1 downto 0);
-      rd_dreq_i      : in  std_logic_vector(g_num_ports -1 downto 0);
-      rd_sync_read_i : in std_logic_vector(g_num_ports -1 downto 0);
-      rd_data_o      : out std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
-      rd_ctrl_o      : out std_logic_vector(g_num_ports * g_ctrl_width - 1 downto 0);
-      rd_sync_o      : out std_logic_vector(g_num_ports -1 downto 0);
-      
-      write_o               : out  std_logic_vector(g_num_ports - 1 downto 0);
-      write_done_i          : in   std_logic_vector(g_num_ports - 1 downto 0);
-      write_addr_o          : out  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      write_data_o          : out  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      read_pump_read_o      : out  std_logic_vector(g_num_ports - 1 downto 0);
-      read_pump_read_done_i : in  std_logic_vector(g_num_ports - 1 downto 0);
-      read_pump_addr_o      : out  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      data_i                : in   std_logic_vector(g_page_addr_width - 1 downto 0)
-      );
-      
-    end component;
-  
+    
   component swc_pck_transfer_input is
     generic(
       g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
@@ -532,40 +484,41 @@ package swc_swcore_pkg is
   
   component xswc_output_block is
     generic ( 
-      g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
       g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
-      g_data_width                       : integer ;--:= c_swc_data_width
-      g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
       g_output_block_per_prio_fifo_size  : integer ;--:= c_swc_output_fifo_size
       g_prio_width                       : integer ;--:= c_swc_prio_width;, c_swc_output_prio_num_width
       g_prio_num                         : integer ;--:= c_swc_output_prio_num
-      g_partial_select_width             : integer;
+      -- new stuff
+      g_mpm_page_addr_width              : integer ;--:= c_swc_page_addr_width;
+      g_mpm_data_width                   : integer ;--:= c_swc_page_addr_width;
+      g_mpm_partial_select_width         : integer ;
+      g_mpm_fetch_next_pg_in_advance     : boolean := false;
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;
-      g_wb_sel_width                     : integer          
+      g_wb_sel_width                     : integer ;
+      g_wb_ob_ignore_ack                 : boolean := true                 
     );
     port (
       clk_i   : in std_logic;
       rst_n_i : in std_logic;
-      pta_transfer_data_valid_i : in  std_logic;
-      pta_pageaddr_i            : in  std_logic_vector(g_page_addr_width - 1 downto 0);
-      pta_prio_i                : in  std_logic_vector(g_prio_width - 1 downto 0);
-      pta_pck_size_i            : in  std_logic_vector(g_max_pck_size_width - 1 downto 0);
-      pta_transfer_data_ack_o   : out std_logic;
-      mpm_d_i                   : in  std_logic_vector (g_data_width -1 downto 0);
-      mpm_dvalid_i              : in  std_logic;
-      mpm_dlast_i               : in  std_logic;
-      mpm_dsel_i                : in  std_logic_vector (g_partial_select_width -1 downto 0);
-      mpm_dreq_o                : out std_logic;
-      mpm_abort_o               : out std_logic;
-      mpm_pg_addr_o             : out std_logic_vector (g_page_addr_width -1 downto 0);
-      mpm_pg_valid_o            : out std_logic;
-      mpm_pg_req_i              : in  std_logic;  
-      ppfm_free_o               : out std_logic;
-      ppfm_free_done_i          : in  std_logic;
-      ppfm_free_pgaddr_o        : out std_logic_vector(g_page_addr_width - 1 downto 0);
-      src_i                     : in  t_wrf_source_in;
-      src_o                     : out t_wrf_source_out
+      pta_transfer_data_valid_i : in   std_logic;
+      pta_pageaddr_i            : in   std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+      pta_prio_i                : in   std_logic_vector(g_prio_width - 1 downto 0);
+      pta_transfer_data_ack_o   : out  std_logic;
+      mpm_d_i        : in  std_logic_vector (g_mpm_data_width -1 downto 0);
+      mpm_dvalid_i   : in  std_logic;
+      mpm_dlast_i    : in  std_logic;
+      mpm_dsel_i     : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
+      mpm_dreq_o     : out std_logic;
+      mpm_abort_o    : out std_logic;
+      mpm_pg_addr_o  : out std_logic_vector (g_mpm_page_addr_width -1 downto 0);
+      mpm_pg_valid_o : out std_logic;
+      mpm_pg_req_i   : in  std_logic;   
+      ppfm_free_o            : out  std_logic;
+      ppfm_free_done_i       : in   std_logic;
+      ppfm_free_pgaddr_o     : out  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+      src_i : in  t_wrf_source_in;
+      src_o : out t_wrf_source_out
       );
   end component;
 
@@ -573,7 +526,8 @@ component  swc_multiport_pck_pg_free_module is
   generic( 
     g_num_ports             : integer ; --:= c_swc_num_ports
     g_page_addr_width       : integer ;--:= c_swc_page_addr_width;
-    g_pck_pg_free_fifo_size : integer  --:= c_swc_freeing_fifo_size
+    g_pck_pg_free_fifo_size : integer ;--:= c_swc_freeing_fifo_size
+    g_data_width            : integer
       ); 
   port (
     clk_i   : in std_logic;
@@ -588,15 +542,16 @@ component  swc_multiport_pck_pg_free_module is
     ob_free_pgaddr_i        : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
     
     ll_read_addr_o          : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
-    --ll_read_data_i          : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-    ll_read_data_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+    ll_read_data_i          : in  std_logic_vector(g_num_ports * g_data_width      - 1 downto 0);
+    --ll_read_data_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
     ll_read_req_o           : out std_logic_vector(g_num_ports-1 downto 0);
     ll_read_valid_data_i    : in  std_logic_vector(g_num_ports-1 downto 0);
 
     mmu_free_o              : out std_logic_vector(g_num_ports-1 downto 0);
     mmu_free_done_i         : in  std_logic_vector(g_num_ports-1 downto 0);
     mmu_free_pgaddr_o       : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
-    
+    mmu_free_last_pg_i      : in  std_logic_vector(g_num_ports-1 downto 0);
+
     mmu_force_free_o        : out std_logic_vector(g_num_ports-1 downto 0);
     mmu_force_free_done_i   : in  std_logic_vector(g_num_ports-1 downto 0);
     mmu_force_free_pgaddr_o : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0)
@@ -606,7 +561,8 @@ component  swc_multiport_pck_pg_free_module is
   component swc_pck_pg_free_module is
     generic( 
       g_page_addr_width       : integer ;--:= c_swc_page_addr_width;
-      g_pck_pg_free_fifo_size : integer  --:= c_swc_freeing_fifo_size
+      g_pck_pg_free_fifo_size : integer ;--:= c_swc_freeing_fifo_size
+      g_data_width            : integer
       );  
     port (
       clk_i   : in std_logic;
@@ -621,14 +577,15 @@ component  swc_multiport_pck_pg_free_module is
       ob_free_pgaddr_i        : in  std_logic_vector(g_page_addr_width - 1 downto 0);
       
       ll_read_addr_o          : out std_logic_vector(g_page_addr_width -1 downto 0);
-      ll_read_data_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+      ll_read_data_i          : in  std_logic_vector(g_data_width      - 1 downto 0);
       ll_read_req_o           : out std_logic;
       ll_read_valid_data_i    : in  std_logic;
   
       mmu_free_o              : out std_logic;
       mmu_free_done_i         : in  std_logic;
       mmu_free_pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
-          
+      mmu_free_last_pg_i      : in  std_logic;
+      
       mmu_force_free_o        : out std_logic;
       mmu_force_free_done_i   : in  std_logic;
       mmu_force_free_pgaddr_o : out std_logic_vector(g_page_addr_width -1 downto 0)
@@ -648,10 +605,13 @@ component  swc_multiport_pck_pg_free_module is
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;
       g_wb_sel_width                     : integer ;
+      g_wb_ob_ignore_ack                 : boolean ;
+      
       g_mpm_mem_size                     : integer ;
       g_mpm_page_size                    : integer ;
       g_mpm_ratio                        : integer ;
       g_mpm_fifo_size                    : integer ;
+      g_mpm_fetch_next_pg_in_advance     : boolean ;
     
       -- probably useless with new memory
       g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
