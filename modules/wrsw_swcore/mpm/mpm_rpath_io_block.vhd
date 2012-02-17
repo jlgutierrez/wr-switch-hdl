@@ -177,8 +177,12 @@ begin  -- behavioral
   pf_fbm_addr_o <= std_logic_vector(resize(unsigned(fetch_pg_addr) * to_unsigned(c_lines_per_page, c_page_lines_width), pf_fbm_addr_o'length));
   pf_pg_lines_o <= std_logic_vector(fetch_pg_lines);
 
-  counters_equal <= '1' when (words_total = words_xmitted) else '0';
-  
+  -- ML (bugfix: dreq=LOW on one but last word caused readout problem and dlast to be HIGH
+  --             when dvalid=LOW and not yet the last word)
+  --counters_equal <= '1' when (words_total = words_xmitted) else '0';
+  counters_equal <= '1' when (words_total = words_xmitted and rport_dreq_i = '1') else '0';
+  -- ML
+
   p_count_words : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
@@ -213,6 +217,7 @@ begin  -- behavioral
 
 
   df_rd_int <= rport_dreq_i and not (df_empty_i or d_last_int);
+  
   df_rd_o   <= df_rd_int;
 
   p_gen_d_valid : process(clk_io_i)
@@ -222,14 +227,16 @@ begin  -- behavioral
         d_valid_int <= '0';
       else
         
-        d_valid_int <= df_rd_int;
+        d_valid_int       <= df_rd_int;
+
       end if;
     end if;
   end process;
 
   df_flush_o <= d_last_int;-- counters_equal;
-
+  
   rport_dvalid_o <= d_valid_int;
+
   rport_dlast_o  <= d_last_int;
   rport_d_o      <= df_d_i;
   rport_dsel_o   <= saved_dsel when d_last_int = '1' else (others => '1');
