@@ -79,6 +79,8 @@ entity swc_multiport_page_allocator is
     usecnt_i          : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
     pgaddr_alloc_o    : out std_logic_vector(g_page_addr_width-1 downto 0);
 
+    free_last_pg_o    : out std_logic_vector(g_num_ports - 1 downto 0);
+
     nomem_o           : out std_logic
     );
 
@@ -152,7 +154,8 @@ architecture syn of swc_multiport_page_allocator is
   signal free_done_feedback  : std_logic_vector(g_num_ports-1 downto 0);
   signal free_done           : std_logic_vector(g_num_ports-1 downto 0);
 
-
+  signal free_last_pg      : std_logic_vector(g_num_ports-1 downto 0);
+  signal free_last_pg_feedback      : std_logic_vector(g_num_ports-1 downto 0);
 
   signal force_free_done_feedback  : std_logic_vector(g_num_ports-1 downto 0);
   signal force_free_done           : std_logic_vector(g_num_ports-1 downto 0);
@@ -161,7 +164,7 @@ architecture syn of swc_multiport_page_allocator is
   signal set_usecnt_done_feedback  : std_logic_vector(g_num_ports-1 downto 0);
 --  signal set_usecnt_done           : std_logic_vector(g_num_ports-1 downto 0);
 
-  
+  signal pg_free_last_pg            : std_logic;
 begin  -- syn
 
 
@@ -180,6 +183,7 @@ begin  -- syn
       rst_n_i        => rst_n_i,
       alloc_i        => pg_alloc,
       free_i         => pg_free,
+      free_last_pg_o => pg_free_last_pg,
       force_free_i   => pg_force_free,
       set_usecnt_i   => pg_set_usecnt,
       usecnt_i       => pg_usecnt,
@@ -259,6 +263,8 @@ begin  -- syn
         free_done_feedback        <= (others => '0');
         set_usecnt_done_feedback  <= (others => '0');
         force_free_done_feedback  <= (others => '0');
+        
+        free_last_pg              <= (others => '0');
       else
 
         -- recognizing on which port the allocation/deallocation/freeing process
@@ -274,8 +280,10 @@ begin  -- syn
 
             if(request_grant(1 downto 0) = b"01") then
                free_done_feedback(i)       <= '1';
+               free_last_pg_feedback(i)    <= pg_free_last_pg;                
             else
                free_done_feedback(i)       <= '0';
+               free_last_pg_feedback(i)    <= '0';
             end if;
 
             if(request_grant(1 downto 0) = b"10") then
@@ -293,6 +301,7 @@ begin  -- syn
           else
             alloc_done_feedback(i)       <= '0';
             free_done_feedback(i)        <= '0';
+            free_last_pg_feedback(i)     <= '0';
             set_usecnt_done_feedback(i)  <= '0';
             force_free_done_feedback(i)  <= '0';
           end if;
@@ -300,6 +309,7 @@ begin  -- syn
 
         alloc_done      <= alloc_done_feedback;
         free_done       <= free_done_feedback;
+        free_last_pg    <= free_last_pg_feedback;
        -- set_usecnt_done <= set_usecnt_done_feedback;
         force_free_done <= force_free_done_feedback;
       end if;
@@ -308,6 +318,7 @@ begin  -- syn
 
   alloc_done_o      <= alloc_done;
   free_done_o       <= free_done;
+  free_last_pg_o    <= free_last_pg;
   set_usecnt_done_o <= set_usecnt_done_feedback;--set_usecnt_done;
   force_free_done_o <= force_free_done;
   nomem_o           <= pg_nomem;

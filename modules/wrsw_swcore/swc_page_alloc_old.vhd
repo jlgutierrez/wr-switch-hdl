@@ -157,6 +157,7 @@ entity swc_page_allocator is
 
     pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
     pgaddr_valid_o : out std_logic;
+    free_last_pg_o : out std_logic;
 
     idle_o : out std_logic;
     done_o : out std_logic;             -- "early" done output (active HI).
@@ -614,5 +615,9 @@ begin  -- syn
   usecnt_mem_rdaddr <= pgaddr_i;
 
   nomem_o <= nomem;
+
+  free_last_pg_o <= '1' when (state             = FREE_CHECK_USECNT and 
+                              usecnt_mem_rddata = std_logic_vector(to_unsigned(1, usecnt_mem_rddata'length ))) else
+                    '0';
 
 end syn;
