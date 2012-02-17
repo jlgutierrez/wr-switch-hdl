@@ -399,9 +399,10 @@ module main_generic;
       wait_cycles(500);
       
       for(j=0;j<100;j++)
-        send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 2 /*mask*/);    
+        send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 1 /*mask*/);    
 
       //for(j=0;j<`c_num_ports;j++) begin
+/*      
       for(j=0;j<16;j++) begin
 	fork 
 	  automatic int  p = j;
@@ -416,7 +417,7 @@ module main_generic;
         join
          //wait_cycles(500);
        end 
-  
+*/  
   wait_cycles(80000); 
   
   transferReport(); // here we wait for all pcks to be received and then make statistics

@@ -261,12 +261,13 @@ U_xswc_core: xswc_core
     g_wb_data_width                    => 16,
     g_wb_addr_width                    => 2,
     g_wb_sel_width                     => 2,
+    g_wb_ob_ignore_ack                 => false,
     
     g_mpm_mem_size                     => 65536,
     g_mpm_page_size                    => 64,
     g_mpm_ratio                        => 2,
     g_mpm_fifo_size                    => 4,
-
+    g_mpm_fetch_next_pg_in_advance     => false,
     g_ctrl_width                       => 4,
     g_packet_mem_multiply              => 16,
     g_input_block_fifo_size            => (2 * 16),

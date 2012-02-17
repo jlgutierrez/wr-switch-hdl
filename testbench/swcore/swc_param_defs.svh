@@ -31,11 +31,13 @@
 `define  c_mpm_page_size                     64               //c_swc_page_size,
 `define  c_mpm_ratio                         2
 `define  c_mpm_fifo_size                     4
+`define  c_mpm_fetch_next_pg_in_advance      0
 
 // these are hard-coded into testbench
 `define  c_wb_data_width                     16               //c_swc_data_width,
 `define  c_wb_addr_width                     2                //
 `define  c_wb_sel_width                      2                //
+`define  c_wb_ob_ignore_ack                  0            //
 
 `define  c_pck_pg_free_fifo_size            ((65536/64)/2)    //c_swc_freeing_fifo_size,
 `define  c_input_block_cannot_accept_data    "drop_pck"       //"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !

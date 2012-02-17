@@ -67,11 +67,13 @@ module swc_core_wrapper_generic
        .g_wb_data_width                    (`c_wb_data_width),
        .g_wb_addr_width                    (`c_wb_addr_width),
        .g_wb_sel_width                     (`c_wb_sel_width),
+       .g_wb_ob_ignore_ack                 (`c_wb_ob_ignore_ack),
 
        .g_mpm_mem_size                     (`c_mpm_mem_size),
        .g_mpm_page_size                    (`c_mpm_page_size),
        .g_mpm_ratio                        (`c_mpm_ratio),
        .g_mpm_fifo_size                    (`c_mpm_fifo_size),
+       .g_mpm_fetch_next_pg_in_advance     (`c_mpm_fetch_next_pg_in_advance),
 
        .g_ctrl_width                       (`c_ctrl_width),
        .g_packet_mem_multiply              (`c_packet_mem_multiply),
