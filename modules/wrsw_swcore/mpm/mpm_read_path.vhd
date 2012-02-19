@@ -186,6 +186,8 @@ architecture rtl of mpm_read_path is
 
   signal fbm_data_reg : std_logic_vector(c_fbm_data_width-1 downto 0);
 
+  signal muxed : std_logic_vector(g_page_addr_width-1 downto 0);
+
 begin  -- rtl
 
 -- I/O structure serialization/deserialization
@@ -306,15 +308,23 @@ begin  -- rtl
 
 
   p_ll_mux_addr : process(clk_io_i)
-    variable muxed : std_logic_vector(g_page_addr_width-1 downto 0);
+    -- ML
+    --variable muxed : std_logic_vector(g_page_addr_width-1 downto 0);
+    -- ML
   begin
     if rising_edge(clk_io_i) then
       if rst_n_io_i = '0' then
         ll_addr_o <= (others => '0');
+        -- ML
+        muxed     <= (others => '0');
+        -- ML
       else
         for i in 0 to g_num_ports-1 loop
           if(io(i).ll_grant = '1') then
-            muxed := io(i).ll_addr;
+            -- ML
+            --muxed := io(i).ll_addr;
+            muxed <= io(i).ll_addr;
+            -- ML
           end if;
         end loop;  -- i
         ll_addr_o <= muxed;
