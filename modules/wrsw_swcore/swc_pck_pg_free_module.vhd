@@ -76,7 +76,7 @@ entity swc_pck_pg_free_module is
 
     mmu_free_o              : out std_logic;
     mmu_free_done_i         : in  std_logic;
-    mmu_free_last_pg_i      : in  std_logic;
+    mmu_free_last_usecnt_i  : in  std_logic;
     mmu_free_pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
         
     mmu_force_free_o        : out std_logic;
@@ -308,11 +308,14 @@ fsm_force_free : process(clk_i, rst_n_i)
             if(mmu_free_done_i = '1') then
                
                mmu_free <= '0';
-               
--- TODO: if response from the MMU saying it's not the last to release, finish here                              
-
+                                        
                --if(next_page = ones ) then
-               if(eof = '1') then
+               if(eof                    = '1' or     -- end of pck, all pages of this pck freed :)
+                  mmu_free_last_usecnt_i = '0') then  -- this means that still more readouts of the
+                                                      -- pck is expected, so we just freed the first 
+                                                      -- page (therefore decremented the usecnt)
+                                                      -- and that's all, we free all the pages of the
+                                                      -- pck, only on the last usage
                  state  <= S_IDLE;
                else
                  current_page <= next_page;

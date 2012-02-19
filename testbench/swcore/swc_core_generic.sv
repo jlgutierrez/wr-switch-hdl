@@ -398,17 +398,17 @@ module main_generic;
       @(posedge clk);
       wait_cycles(500);
       
-      for(j=0;j<100;j++)
-        send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 1 /*mask*/);    
+//      for(j=0;j<30;j++)
+//        send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 1 /*mask*/);    
 
       //for(j=0;j<`c_num_ports;j++) begin
-/*      
+      
       for(j=0;j<16;j++) begin
 	fork 
 	  automatic int  p = j;
-          for(i=0; i<20; i++) begin  
-	    //mask = mask^(1<<(i%(`c_num_ports)));
-	    mask =1<<p;
+          for(i=0; i<16; i++) begin  
+	    mask = mask^(1<<(i%(`c_num_ports)));
+	    //mask =1<<p;
             //send_random_packet(src,txed, 0 , 0,7 , mask);  
             //send_random_packet(src,txed, j, 0,7 , 16'hFFFF);
             //$display("in fork %d",p);
@@ -417,7 +417,7 @@ module main_generic;
         join
          //wait_cycles(500);
        end 
-*/  
+  
   wait_cycles(80000); 
   
   transferReport(); // here we wait for all pcks to be received and then make statistics

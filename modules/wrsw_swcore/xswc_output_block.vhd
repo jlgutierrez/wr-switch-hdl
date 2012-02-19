@@ -176,6 +176,7 @@ architecture behavoural of xswc_output_block is
   
   signal pck_start_pgaddr       : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
   
+  signal start_free_pck_addr    : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
   signal start_free_pck          : std_logic;
 
   signal ram_zeros                 : std_logic_vector(g_mpm_page_addr_width- 1 downto 0);
@@ -506,11 +507,18 @@ begin  --  behavoural
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
       --========================================
-        s_send_pck        <= S_IDLE;
-        src_out_int.stb <= '0';
-        src_out_int.we  <= '1';
-        src_out_int.adr <= c_WRF_DATA;
-        src_out_int.cyc <= '0';
+        s_send_pck          <= S_IDLE;
+        src_out_int.stb     <= '0';
+        src_out_int.we      <= '1';
+        src_out_int.adr     <= c_WRF_DATA;
+        src_out_int.dat     <= (others => '0');
+        src_out_int.cyc     <= '0';
+        src_out_int.sel     <= (others => '0');
+        start_free_pck      <= '0';
+        start_free_pck_addr <= (others =>'0');
+        tmp_adr             <= (others =>'0');
+        tmp_dat             <= (others =>'0');
+        tmp_sel             <= (others =>'0');
       --========================================
       else 
         -- default values
@@ -520,8 +528,6 @@ begin  --  behavoural
           --===========================================================================================
           when S_IDLE =>
           --===========================================================================================   
-            src_out_int.adr    <= mpm2wb_adr_int;
-            src_out_int.dat    <= mpm2wb_dat_int;
 
             if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
               src_out_int.cyc  <= '1';
@@ -533,10 +539,13 @@ begin  --  behavoural
           when S_DATA =>
           --===========================================================================================        
             if(src_i.stall = '0') then
-              src_out_int.adr    <= mpm2wb_adr_int;
-              src_out_int.dat    <= mpm2wb_dat_int;
+              if(mpm_dvalid_i = '1') then -- a avoid copying crap (i.e. XXX)
+                src_out_int.adr    <= mpm2wb_adr_int;
+                src_out_int.dat    <= mpm2wb_dat_int;
+                src_out_int.sel    <= mpm2wb_sel_int;
+              end if;
               src_out_int.stb    <= mpm_dvalid_i;
-              src_out_int.sel    <= mpm2wb_sel_int;
+              
             end if;            
             
             if(src_i.err = '1') then
@@ -557,10 +566,11 @@ begin  --  behavoural
             if(mpm_dlast_i = '1')then
               s_send_pck      <= S_FINISH_CYCLE; -- we free page in EOF
             end if;            
-
-            tmp_adr <= mpm2wb_adr_int;
-            tmp_dat <= mpm2wb_dat_int;
-            tmp_sel <= mpm2wb_sel_int;
+            if(mpm_dvalid_i = '1') then -- a avoid copying crap (i.e. XXX)
+              tmp_adr <= mpm2wb_adr_int;
+              tmp_dat <= mpm2wb_dat_int;
+              tmp_sel <= mpm2wb_sel_int;
+            end if;
 
           --===========================================================================================
           when S_FLUSH_STALL =>
@@ -573,7 +583,7 @@ begin  --  behavoural
               src_out_int.dat    <= tmp_dat;
               src_out_int.adr    <= tmp_adr;
               src_out_int.stb    <= '1';
-              src_out_int.sel    <= mpm2wb_sel_int;
+              src_out_int.sel    <= tmp_sel;
               s_send_pck         <= S_DATA;
             end if;
           --===========================================================================================
@@ -592,7 +602,8 @@ begin  --  behavoural
           when S_EOF =>
           --===========================================================================================        
             if(ppfm_free = '0') then
-              start_free_pck <= '1';
+              start_free_pck      <= '1';
+              start_free_pck_addr <= pck_start_pgaddr;
               
               if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
                 src_out_int.cyc  <= '1';
@@ -616,13 +627,13 @@ begin  --  behavoural
           when S_WAIT_FREE_PCK =>
           --===========================================================================================        
             if(ppfm_free = '0') then
-              start_free_pck <= '1';
+              start_free_pck      <= '1';
+              start_free_pck_addr <= pck_start_pgaddr;
+              
               if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
-                src_out_int.cyc  <= '1';
-                s_send_pck       <= S_DATA;
-                pck_start_pgaddr <= mpm_pg_addr;
-                src_out_int.adr    <= mpm2wb_adr_int;
-                src_out_int.dat    <= mpm2wb_dat_int;                   
+                src_out_int.cyc    <= '1';
+                s_send_pck         <= S_DATA;
+                pck_start_pgaddr   <= mpm_pg_addr;                
               else
                 s_send_pck       <= S_IDLE;
               end if;
@@ -657,12 +668,15 @@ begin  --  behavoural
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        ppfm_free                <= '0';
+        ppfm_free           <= '0';
+        ppfm_free_pgaddr    <= (others => '0');
       else
         if(start_free_pck = '1') then
-          ppfm_free <= '1';
+          ppfm_free         <= '1';
+          ppfm_free_pgaddr  <=  start_free_pck_addr;
         elsif(ppfm_free_done_i = '1') then
-          ppfm_free  <='0';
+          ppfm_free         <='0';
+          ppfm_free_pgaddr  <= (others => '0');
         end if;
       end if;
     end if;
@@ -682,7 +696,7 @@ begin  --  behavoural
                      '0';
 
   mpm2wb_adr_int    <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
-  mpm2wb_sel_int    <= mpm_dsel_i & '1'; -- TODO: something generic
+  mpm2wb_sel_int    <= '1' &  mpm_dsel_i ; -- TODO: something generic
   mpm2wb_dat_int    <= mpm_d_i(g_wb_data_width -1 downto 0);
  
   -- source out

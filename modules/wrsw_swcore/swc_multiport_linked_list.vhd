@@ -188,7 +188,7 @@ begin  -- syn
   zeros     <= (others => '0');
 
    -- this memory is read by the output of the MPM (called read pump)
-   PAGE_INDEX_LINKED_LIST_READ_PUMP : generic_dpram
+   PAGE_INDEX_LINKED_LIST_MPM : generic_dpram
      generic map (
        g_data_width  => g_data_width,-- one bit for validating the data
        g_size        => g_page_num

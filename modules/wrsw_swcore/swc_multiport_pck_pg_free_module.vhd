@@ -75,7 +75,7 @@ entity swc_multiport_pck_pg_free_module is
 
     mmu_free_o              : out std_logic_vector(g_num_ports-1 downto 0);
     mmu_free_done_i         : in  std_logic_vector(g_num_ports-1 downto 0);
-    mmu_free_last_pg_i      : in  std_logic_vector(g_num_ports-1 downto 0);
+    mmu_free_last_usecnt_i  : in  std_logic_vector(g_num_ports-1 downto 0);
     mmu_free_pgaddr_o       : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
         
 
@@ -120,7 +120,7 @@ begin  -- syn
       
       mmu_free_o              => mmu_free_o(i),
       mmu_free_done_i         => mmu_free_done_i(i),
-      mmu_free_last_pg_i      => mmu_free_last_pg_i(i),
+      mmu_free_last_usecnt_i  => mmu_free_last_usecnt_i(i),
       mmu_free_pgaddr_o       => mmu_free_pgaddr_o((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width),
 
       mmu_force_free_o        => mmu_force_free_o(i),

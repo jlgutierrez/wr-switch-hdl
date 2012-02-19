@@ -76,7 +76,7 @@
 -- 2) make the dsel more generic
 -- 3) test with mpm_dreq_i = LOW
 -- 4) implement drop_on_SWCORE_stuck
---    
+-- 5) writing to the linked list /  transfer -> we need to include waiting and stuff !!!   
 -------------------------------------------------------------------------------
 
 
@@ -1027,14 +1027,22 @@ architecture syn of xswc_input_block is
       ll_entry.size     <= (others => '0');      
       --===================================================
       else
-        
-        if(mpm_dlast = '1') then
+      -- TODO: 
+        if (in_pck_sof = '1') then         
+          ll_wr_req         <= '1';
+          ll_entry.valid    <= '0';
+          ll_entry.eof      <= '0';
+          ll_entry.addr     <= pckstart_pageaddr;
+          ll_entry.dsel     <= (others => '0');
+          ll_entry.size     <= (others => '0');
+          ll_entry.next_page<= (others => '0'); 
+        elsif(mpm_dlast = '1') then
           ll_wr_req         <= '1';
           ll_entry.valid    <= '1';
           ll_entry.eof      <= '1';
           ll_entry.addr     <= mpm_pg_addr;
           ---------------- TODO: make it more generic !!!! ---------------------------------
-          if(snk_sel_d0 = "00") then
+          if(snk_sel_d0 = "10") then
             ll_entry.dsel     <= (others => '1');
           else 
             ll_entry.dsel     <= (others => '0');
@@ -1062,7 +1070,6 @@ architecture syn of xswc_input_block is
 --           assert false
 --             report "Linked List done when not asked for";
         end if;
-
       end if;
     end if;
   end process ll_if;

@@ -88,7 +88,7 @@ package swc_swcore_pkg is
       pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
       pgaddr_valid_o : out std_logic;
       idle_o         : out std_logic;
-      free_last_pg_o : out std_logic;
+      free_last_usecnt_o : out std_logic;
       done_o         : out std_logic;
       nomem_o        : out std_logic);
   end component;
@@ -111,7 +111,7 @@ package swc_swcore_pkg is
       pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
       pgaddr_valid_o : out std_logic;
       idle_o         : out std_logic;
-      free_last_pg_o : out std_logic;
+      free_last_usecnt_o : out std_logic;
       done_o         : out std_logic;
       nomem_o        : out std_logic);
   end component;
@@ -128,66 +128,7 @@ package swc_swcore_pkg is
       grant_o       : out std_logic_vector(g_num_ports_log2 - 1 downto 0);
       grant_valid_o : out std_logic);
   end component;
-
-  component swc_packet_mem_write_pump
-    generic ( 
-      g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
-      g_pump_data_width                  : integer ;--:= c_swc_pump_width
-      g_mem_addr_width                   : integer ;--:= c_swc_packet_mem_addr_width
-      g_page_addr_offset_width           : integer ;--:= c_swc_page_offset_width
-      -- probably useless with new memory
-      g_packet_mem_multiply              : integer --:= c_swc_packet_mem_multiply
-      );  
-    port (
-      clk_i               : in  std_logic;
-      rst_n_i             : in  std_logic;
-      pgaddr_i            : in  std_logic_vector(g_page_addr_width-1 downto 0);
-      pgreq_i             : in  std_logic;
-      pgend_o             : out std_logic;
-      pckstart_i          : in std_logic;
-      drdy_i              : in  std_logic;
-      full_o              : out std_logic;
-      flush_i             : in  std_logic;
-      ll_addr_o           : out std_logic_vector(g_page_addr_width -1 downto 0);
-      ll_data_o           : out std_logic_vector(g_page_addr_width - 1 downto 0);
-      ll_wr_req_o         : out std_logic;
-      ll_wr_done_i        : in std_logic;
-      sync_i              : in  std_logic;
-      addr_o              : out std_logic_vector(g_mem_addr_width -1 downto 0);
-      d_i                 : in  std_logic_vector(g_pump_data_width -1 downto 0);
-      q_o                 : out std_logic_vector(g_pump_data_width * g_packet_mem_multiply - 1 downto 0);
-      we_o                : out std_logic);
-  end component;
-
-  component swc_packet_mem_read_pump
-  generic ( 
-      g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
-      g_pump_data_width                  : integer ;--:= c_swc_pump_width
-      g_mem_addr_width                   : integer ;--:= c_swc_packet_mem_addr_width
-      g_page_addr_offset_width           : integer ;--:= c_swc_page_offset_width
-      -- probably useless with new memory
-      g_packet_mem_multiply              : integer --:= c_swc_packet_mem_multiply
-    );
-    port (
-      clk_i               : in  std_logic;
-      rst_n_i             : in  std_logic;
-      pgreq_i             : in  std_logic;
-      pgaddr_i            : in  std_logic_vector(g_page_addr_width - 1 downto 0);
-      pgend_o             : out std_logic;
-      pckend_o            : out std_logic;
-      drdy_o              : out std_logic;
-      dreq_i              : in  std_logic;
-      sync_read_i         : in  std_logic;
-      ll_read_addr_o      : out std_logic_vector(g_page_addr_width -1 downto 0);
-      ll_read_data_i      : in  std_logic_vector(g_page_addr_width - 1 downto 0);
-      ll_read_req_o       : out std_logic;
-      ll_read_valid_data_i: in  std_logic;
-      sync_i              : in  std_logic;
-      d_o                 : out std_logic_vector(g_pump_data_width - 1 downto 0);
-      addr_o              : out std_logic_vector(g_mem_addr_width - 1 downto 0);
-      q_i                 : in  std_logic_vector(g_pump_data_width * g_packet_mem_multiply -1 downto 0));
-  end component;
-  
+ 
   component swc_multiport_linked_list is
     generic ( 
       g_num_ports                        : integer; --:= c_swc_num_ports
@@ -378,7 +319,7 @@ package swc_swcore_pkg is
       pgaddr_usecnt_i     : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
       usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
       pgaddr_alloc_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
-      free_last_pg_o      : out std_logic_vector(g_num_ports - 1 downto 0);
+      free_last_usecnt_o  : out std_logic_vector(g_num_ports - 1 downto 0);
       nomem_o             : out std_logic
       );
   
@@ -550,7 +491,7 @@ component  swc_multiport_pck_pg_free_module is
     mmu_free_o              : out std_logic_vector(g_num_ports-1 downto 0);
     mmu_free_done_i         : in  std_logic_vector(g_num_ports-1 downto 0);
     mmu_free_pgaddr_o       : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
-    mmu_free_last_pg_i      : in  std_logic_vector(g_num_ports-1 downto 0);
+    mmu_free_last_usecnt_i  : in  std_logic_vector(g_num_ports-1 downto 0);
 
     mmu_force_free_o        : out std_logic_vector(g_num_ports-1 downto 0);
     mmu_force_free_done_i   : in  std_logic_vector(g_num_ports-1 downto 0);
@@ -584,7 +525,7 @@ component  swc_multiport_pck_pg_free_module is
       mmu_free_o              : out std_logic;
       mmu_free_done_i         : in  std_logic;
       mmu_free_pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
-      mmu_free_last_pg_i      : in  std_logic;
+      mmu_free_last_usecnt_i  : in  std_logic;
       
       mmu_force_free_o        : out std_logic;
       mmu_force_free_done_i   : in  std_logic;

@@ -158,7 +158,7 @@ entity swc_page_allocator_new is
 
     idle_o : out std_logic;
 
-    free_last_pg_o : out std_logic;
+    free_last_usecnt_o : out std_logic;
 
     done_o : out std_logic;             -- "early" done output (active HI).
                                         -- Indicates that
@@ -331,6 +331,6 @@ ram_ones  <=(others => '1');
 
   idle_o <= not (initializing or free_d0 or alloc_d0);
   
-  free_last_pg_o <= (not initializing) when (free_d0 = '1' and unsigned(usecnt_rddata) = 1) else '0';
+  free_last_usecnt_o <= (not initializing) when (free_d0 = '1' and unsigned(usecnt_rddata) = 1) else '0';
   
 end syn;

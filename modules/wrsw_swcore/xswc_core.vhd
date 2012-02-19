@@ -266,7 +266,7 @@ architecture rtl of xswc_core is
    -- MMU -> PPFM
    signal mmu_force_free_done   : std_logic_vector(g_num_ports-1 downto 0);
    signal mmu_free_done         : std_logic_vector(g_num_ports-1 downto 0);   
-   signal mmu2ppfm_free_last_pg : std_logic_vector(g_num_ports-1 downto 0);   
+   signal mmu2ppfm_free_last_usecnt : std_logic_vector(g_num_ports-1 downto 0);   
   
    ---- end tmp      
  
@@ -456,7 +456,7 @@ architecture rtl of xswc_core is
       mmu_free_o              => ppfm_free,
       mmu_free_done_i         => mmu_free_done,
       mmu_free_pgaddr_o       => ppfm_free_pgaddr,
-      mmu_free_last_pg_i      => mmu2ppfm_free_last_pg
+      mmu_free_last_usecnt_i  => mmu2ppfm_free_last_usecnt
 
       );
 
@@ -519,7 +519,7 @@ architecture rtl of xswc_core is
       free_i                     => ppfm_free,
       free_done_o                => mmu_free_done,
       pgaddr_free_i              => ppfm_free_pgaddr,
-      free_last_pg_o             => mmu2ppfm_free_last_pg,
+      free_last_usecnt_o             => mmu2ppfm_free_last_usecnt,
       
       force_free_i               => ppfm_force_free,
       force_free_done_o          => mmu_force_free_done,
