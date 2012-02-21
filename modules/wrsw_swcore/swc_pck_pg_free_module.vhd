@@ -247,18 +247,32 @@ fsm_force_free : process(clk_i, rst_n_i)
            
             freeing_mode <= fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width);
             current_page <= fifo_data_out(g_page_addr_width - 1 downto 0);
-            ll_read_req  <= '1';
-            state        <= S_READ_NEXT_PAGE_ADDR;
+            
+            if(fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width) =  b"01") then -- standard free
+              state          <= S_FORCE_FREE_CURRENT_PAGE_ADDR;
+              mmu_force_free <= '1';
+            elsif(fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width) =  b"10") then -- forced free
+              state          <= S_FREE_CURRENT_PAGE_ADDR;
+              mmu_free       <= '1';            
+            else
+              state <= S_IDLE; 
+              -- this should not happen:
+              assert false
+                report "pck freeing: wrong free_mode";
+            end if;
                         
          when S_READ_NEXT_PAGE_ADDR =>
 
             if(ll_read_valid_data_i = '1') then
             
               ll_read_req    <= '0'; 
-              next_page      <= ll_read_data_i(g_page_addr_width-1 downto 0);
+              current_page   <= ll_read_data_i(g_page_addr_width-1 downto 0);
               eof            <= ll_read_data_i(g_data_width     -2 );
+              
+              if(ll_read_data_i(g_data_width     -2 ) = '1') then -- eof
+                 state  <= S_IDLE;              
               -- force free
-              if(freeing_mode = b"01") then
+              elsif(freeing_mode = b"01") then
                          
                 state          <= S_FORCE_FREE_CURRENT_PAGE_ADDR;
                 mmu_force_free <= '1';
@@ -288,20 +302,15 @@ fsm_force_free : process(clk_i, rst_n_i)
          when S_FORCE_FREE_CURRENT_PAGE_ADDR =>
              
             if(mmu_force_free_done_i = '1') then
-               
-               mmu_force_free <= '0';
-               
-               --if(next_page = ones ) then
-               if(eof = '1') then
-                 state  <= S_IDLE;
+               if(eof                    = '1') then 
+                 state        <= S_IDLE;
                else
-                 current_page <= next_page;
+                 mmu_force_free <= '0';
+                 --current_page <= next_page;
                  ll_read_req  <= '1';
-                 state        <= S_READ_NEXT_PAGE_ADDR;
-               end if;
-               
+                 state        <= S_READ_NEXT_PAGE_ADDR; 
+               end if;              
              end if;
-               
          
          when S_FREE_CURRENT_PAGE_ADDR =>
              
@@ -309,7 +318,6 @@ fsm_force_free : process(clk_i, rst_n_i)
                
                mmu_free <= '0';
                                         
-               --if(next_page = ones ) then
                if(eof                    = '1' or     -- end of pck, all pages of this pck freed :)
                   mmu_free_last_usecnt_i = '0') then  -- this means that still more readouts of the
                                                       -- pck is expected, so we just freed the first 
@@ -318,7 +326,7 @@ fsm_force_free : process(clk_i, rst_n_i)
                                                       -- pck, only on the last usage
                  state  <= S_IDLE;
                else
-                 current_page <= next_page;
+                 --current_page <= next_page;
                  ll_read_req  <= '1';
                  state        <= S_READ_NEXT_PAGE_ADDR;
                end if;
