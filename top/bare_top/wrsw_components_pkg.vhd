@@ -7,6 +7,29 @@ use work.wrsw_txtsu_pkg.all;
 
 package wrsw_components_pkg is
 
+  -- Output from SCB core to PHY
+  type t_phyif_output is record
+    rst     : std_logic;
+    loopen  : std_logic;
+    enable  : std_logic;
+    syncen  : std_logic;
+    tx_data : std_logic_vector(15 downto 0);
+    tx_k    : std_logic_vector(1 downto 0);
+  end record;
+
+  type t_phyif_input is record
+    tx_disparity : std_logic;
+    tx_enc_err   : std_logic;
+    rx_data      : std_logic_vector(15 downto 0);
+    rx_clk       : std_logic;
+    rx_k         : std_logic_vector(1 downto 0);
+    rx_enc_err   : std_logic;
+    rx_bitslide  : std_logic_vector(4 downto 0);
+  end record;
+
+  type t_phyif_output_array is array(integer range <>) of t_phyif_output;
+  type t_phyif_input_array is array(integer range <>) of t_phyif_input;
+
   component wb_cpu_bridge
     generic (
       g_simulation          : integer := 0;
@@ -56,7 +79,7 @@ package wrsw_components_pkg is
 
   component wr_gtx_phy_virtex6
     generic (
-      g_simulation : integer;
+      g_simulation         : integer;
       g_use_slave_tx_clock : integer);
     port (
       clk_ref_i      : in  std_logic;
@@ -82,7 +105,8 @@ package wrsw_components_pkg is
   component xwr_pps_gen
     generic (
       g_interface_mode      : t_wishbone_interface_mode;
-      g_address_granularity : t_wishbone_address_granularity);
+      g_address_granularity : t_wishbone_address_granularity;
+      g_ref_clock_rate      : integer);
     port (
       clk_ref_i       : in  std_logic;
       clk_sys_i       : in  std_logic;
@@ -179,6 +203,24 @@ package wrsw_components_pkg is
       TRIG1   : in    std_logic_vector(31 downto 0);
       TRIG2   : in    std_logic_vector(31 downto 0);
       TRIG3   : in    std_logic_vector(31 downto 0));
+  end component;
+
+  component xswc_core
+    generic (
+      g_swc_num_ports  : integer;
+      g_swc_prio_width : integer);
+    port (
+      clk_i               : in  std_logic;
+      rst_n_i             : in  std_logic;
+      snk_i               : in  t_wrf_sink_in_array(g_swc_num_ports-1 downto 0);
+      snk_o               : out t_wrf_sink_out_array(g_swc_num_ports-1 downto 0);
+      src_i               : in  t_wrf_source_in_array(g_swc_num_ports-1 downto 0);
+      src_o               : out t_wrf_source_out_array(g_swc_num_ports-1 downto 0);
+      rtu_rsp_valid_i     : in  std_logic_vector(g_swc_num_ports - 1 downto 0);
+      rtu_rsp_ack_o       : out std_logic_vector(g_swc_num_ports - 1 downto 0);
+      rtu_dst_port_mask_i : in  std_logic_vector(g_swc_num_ports * g_swc_num_ports - 1 downto 0);
+      rtu_drop_i          : in  std_logic_vector(g_swc_num_ports - 1 downto 0);
+      rtu_prio_i          : in  std_logic_vector(g_swc_num_ports * g_swc_prio_width - 1 downto 0));
   end component;
 
   

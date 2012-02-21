@@ -100,8 +100,8 @@ NET "pll_reset_n_o" LOC="AL16";
 NET "pll_status_i" LOC="AE18";
 NET "pll_sync_n_o" LOC="AG18";
 
-NET "uart_txd_o" LOC="AG31";
-NET "uart_rxd_i" LOC="AC25";
+NET "uart_txd_o" LOC="AP16";
+NET "uart_rxd_i" LOC="AJ17";
 
 NET "clk_en_o" LOC="AD16";
 NET "clk_sel_o" LOC="AK17";
@@ -113,69 +113,69 @@ NET "gtx0_3_clk_p_i" LOC="AK6";
 NET "gtx0_3_clk_n_i" IOSTANDARD="LVPECL_25";
 NET "gtx0_3_clk_p_i" IOSTANDARD="LVPECL_25";
 
-NET "gtx4_7_clk_n_i" LOC="AD5";
-NET "gtx4_7_clk_p_i" LOC="AD6";
+NET "gtx16_19_clk_n_i" LOC="H5";
+NET "gtx16_19_clk_p_i" LOC="H6";
       
-NET "gtx4_7_clk_n_i" IOSTANDARD="LVPECL_25";
-NET "gtx4_7_clk_p_i" IOSTANDARD="LVPECL_25";
+NET "gtx16_19_clk_n_i" IOSTANDARD="LVPECL_25";
+NET "gtx16_19_clk_p_i" IOSTANDARD="LVPECL_25";
+
+NET "gtx12_15_clk_n_i" LOC="P5";
+NET "gtx12_15_clk_p_i" LOC="P6";
+      
+NET "gtx12_15_clk_n_i" IOSTANDARD="LVPECL_25";
+NET "gtx12_15_clk_p_i" IOSTANDARD="LVPECL_25";
 
     
-NET "gtx_rxp_i[0]" LOC="AP5";
+NET "gtx_rxp_i[0]" LOC="AP5"; # gtx0
 NET "gtx_rxn_i[0]" LOC="AP6";
 
-NET "gtx_txp_o[0]" LOC="AP1";
+NET "gtx_txp_o[0]" LOC="AP1"; 
 NET "gtx_txn_o[0]" LOC="AP2";
 
-NET "gtx_rxp_i[1]" LOC="AM5";
+NET "gtx_rxp_i[1]" LOC="AM5"; # gtx1
 NET "gtx_rxn_i[1]" LOC="AM6";
 
 NET "gtx_txp_o[1]" LOC="AN3";
 NET "gtx_txn_o[1]" LOC="AN4";
 
-NET "gtx_rxp_i[2]" LOC="AL3";
+NET "gtx_rxp_i[2]" LOC="AL3"; # gtx2
 NET "gtx_rxn_i[2]" LOC="AL4";
 
 NET "gtx_txp_o[2]" LOC="AM1";
 NET "gtx_txn_o[2]" LOC="AM2";
 
-NET "gtx_rxp_i[3]" LOC="AJ3";
-NET "gtx_rxn_i[3]" LOC="AJ4";
+NET "gtx_rxp_i[3]" LOC="J3"; # gtx15
+NET "gtx_rxn_i[3]" LOC="J4";
 
-NET "gtx_txp_o[3]" LOC="AK1";
-NET "gtx_txn_o[3]" LOC="AK2";
+NET "gtx_txp_o[3]" LOC="F1";
+NET "gtx_txn_o[3]" LOC="F2";
 
-NET "gtx_rxp_i[4]" LOC="AG3";
-NET "gtx_rxn_i[4]" LOC="AG4";
+NET "gtx_rxp_i[4]" LOC="G3"; # gtx16
+NET "gtx_rxn_i[4]" LOC="G4";
 
-NET "gtx_txp_o[4]" LOC="AH1";
-NET "gtx_txn_o[4]" LOC="AH2";
+NET "gtx_txp_o[4]" LOC="D1";
+NET "gtx_txn_o[4]" LOC="D2";
 
-NET "gtx_rxp_i[5]" LOC="AF5";
-NET "gtx_rxn_i[5]" LOC="AF6";
+NET "gtx_rxp_i[5]" LOC="E3"; # gtx17
+NET "gtx_rxn_i[5]" LOC="E4";
 
-NET "gtx_txp_o[5]" LOC="AF1";
-NET "gtx_txn_o[5]" LOC="AF2";
+NET "gtx_txp_o[5]" LOC="C3";
+NET "gtx_txn_o[5]" LOC="C4";
 
 
 
-NET "gtx_sfp_tx_dis_o[0]" LOC="AD29";
-NET "gtx_sfp_tx_dis_o[1]" LOC="AA29";
-NET "gtx_sfp_tx_dis_o[2]" LOC="AC29";
-NET "gtx_sfp_tx_dis_o[3]" LOC="AD31"; #GPIO30
-NET "gtx_sfp_tx_dis_o[4]" LOC="AC28"; #GPIO33
-NET "gtx_sfp_tx_dis_o[5]" LOC="AG32"; #GPIO36
-NET "led_link_o[0]" LOC="AA26"; #GPIO14
-NET "led_link_o[1]" LOC="AC30"; #GPIO13
-NET "led_link_o[2]" LOC="AA31"; #GPIO11
-NET "led_link_o[3]" LOC="AA34"; #GPIO9
-NET "led_link_o[4]" LOC="AB33"; #GPIO7
-NET "led_link_o[5]" LOC="AC33"; #GPIO5
-NET "led_act_o[0]" LOC="AA28"; #GPIO15
-NET "led_act_o[1]" LOC="AB30"; #GPIO12
-NET "led_act_o[2]" LOC="AA33"; #GPIO10
-NET "led_act_o[3]" LOC="AB32"; #GPIO8
-NET "led_act_o[4]" LOC="AC34"; #GPIO6
-NET "led_act_o[5]" LOC="AD34"; #GPIO4
+NET "led_lact_o[0]" LOC="AG33";
+NET "led_lact_o[1]" LOC="AF33";
+NET "led_lact_o[2]" LOC="AC32";
+NET "led_lact_o[3]" LOC="AC34"; #6
+NET "led_lact_o[4]" LOC="AF34"; #0
+NET "led_lact_o[5]" LOC="AE34"; #2
+
+NET "mbl_sc0_b" LOC="AG32"; #74-36
+NET "mbl_sc1_b" LOC="AC25"; #80-39
+NET "mbl_sd0_b" LOC="AF31"; #76-37
+NET "mbl_sd1_b" LOC="AG31"; #78-38
+
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/20
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/22
 NET "fpga_clk_25mhz_n_i" TNM_NET = fpga_clk_25mhz_n_i;
@@ -210,11 +210,3 @@ NET "gen_phys[5].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[5].U_PHY/rx_rec_clk_
 TIMESPEC TS_gen_phys_5__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[5].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
 NET "gen_phys[4].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[4].U_PHY/rx_rec_clk_bufin;
 TIMESPEC TS_gen_phys_4__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[4].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gtx0_3_clk_n_i" TNM_NET = gtx0_3_clk_n_i;
-TIMESPEC TS_gtx0_3_clk_n_i = PERIOD "gtx0_3_clk_n_i" 8 ns HIGH 50%;
-NET "gtx0_3_clk_p_i" TNM_NET = gtx0_3_clk_p_i;
-TIMESPEC TS_gtx0_3_clk_p_i = PERIOD "gtx0_3_clk_p_i" 8 ns HIGH 50%;
-NET "gtx4_7_clk_p_i" TNM_NET = gtx4_7_clk_p_i;
-TIMESPEC TS_gtx4_7_clk_p_i = PERIOD "gtx4_7_clk_p_i" 8 ns HIGH 50%;
-NET "gtx4_7_clk_n_i" TNM_NET = gtx4_7_clk_n_i;
-TIMESPEC TS_gtx4_7_clk_n_i = PERIOD "gtx4_7_clk_n_i" 8 ns HIGH 50%;
