@@ -139,22 +139,24 @@ package swc_swcore_pkg is
       g_data_width                       : integer  
     );
     port (
-      rst_n_i               : in std_logic;
-      clk_i                 : in std_logic;
+      rst_n_i                : in std_logic;
+      clk_i                  : in std_logic;
 
-      write_i               : in  std_logic_vector(g_num_ports - 1 downto 0);
-      write_done_o          : out std_logic_vector(g_num_ports - 1 downto 0);
-      write_addr_i          : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
-      write_data_i          : in  std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
+      write_i                : in  std_logic_vector(g_num_ports - 1 downto 0);
+      write_done_o           : out std_logic_vector(g_num_ports - 1 downto 0);
+      write_addr_i           : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
+      write_data_i           : in  std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
+      write_next_addr_i      : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
+      write_next_addr_valid_i: in  std_logic_vector(g_num_ports - 1 downto 0);
 
-      free_pck_rd_req_i     : in  std_logic_vector(g_num_ports - 1 downto 0);
-      free_pck_addr_i       : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
-      free_pck_read_done_o  : out std_logic_vector(g_num_ports - 1 downto 0);
-      free_pck_data_o       : out std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
+      free_pck_rd_req_i      : in  std_logic_vector(g_num_ports - 1 downto 0);
+      free_pck_addr_i        : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
+      free_pck_read_done_o   : out std_logic_vector(g_num_ports - 1 downto 0);
+      free_pck_data_o        : out std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
     
-      mpm_rpath_clk_i       : in std_logic;
-      mpm_rpath_addr_i      : in  std_logic_vector(g_addr_width - 1 downto 0);
-      mpm_rpath_data_o      : out std_logic_vector(g_data_width - 1 downto 0)
+      mpm_rpath_clk_i        : in std_logic;
+      mpm_rpath_addr_i       : in  std_logic_vector(g_addr_width - 1 downto 0);
+      mpm_rpath_data_o       : out std_logic_vector(g_data_width - 1 downto 0)
     );
   end component;
   
@@ -283,6 +285,8 @@ package swc_swcore_pkg is
 
     ll_addr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
     ll_data_o    : out std_logic_vector(g_page_addr_width + 1 downto 0);
+    ll_next_addr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
+    ll_next_addr_valid_o   : out std_logic;
     ll_wr_req_o   : out std_logic;
     ll_wr_done_i  : in std_logic;
 

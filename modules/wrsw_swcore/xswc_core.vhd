@@ -115,7 +115,7 @@ entity xswc_core is
 end xswc_core;
 
 architecture rtl of xswc_core is
-   constant c_usecount_width        : integer := integer(CEIL(LOG2(real(g_num_ports-1))));
+   constant c_usecount_width        : integer := integer(CEIL(LOG2(real(g_num_ports+1))));
    constant c_prio_width            : integer := integer(CEIL(LOG2(real(g_prio_num-1)))); -- g_prio_width
    constant c_max_pck_size_width    : integer := integer(CEIL(LOG2(real(g_max_pck_size-1)))); -- c_swc_max_pck_size_width 
 
@@ -214,6 +214,10 @@ architecture rtl of xswc_core is
    ----------------------------------------------------------------------------------------------------   
    signal ib2ll_addr              : std_logic_vector(g_num_ports*c_ll_addr_width - 1 downto 0);
    signal ib2ll_data              : std_logic_vector(g_num_ports*c_ll_data_width - 1 downto 0);
+   
+   signal ib2ll_next_addr         : std_logic_vector(g_num_ports*c_ll_addr_width - 1 downto 0);
+   signal ib2ll_next_addr_valid   : std_logic_vector(g_num_ports                 - 1 downto 0);
+
    signal ib2ll_wr_req            : std_logic_vector(g_num_ports                 - 1 downto 0);
    signal ll2ib_wr_done           : std_logic_vector(g_num_ports                 - 1 downto 0);   
   
@@ -349,6 +353,10 @@ architecture rtl of xswc_core is
 
         ll_addr_o                => ib2ll_addr((i+1)* c_ll_addr_width - 1 downto i* c_ll_addr_width), 
         ll_data_o                => ib2ll_data((i+1)* c_ll_data_width - 1 downto i *c_ll_data_width),
+
+        ll_next_addr_o           => ib2ll_next_addr((i+1)* c_ll_addr_width - 1 downto i* c_ll_addr_width),
+        ll_next_addr_valid_o     => ib2ll_next_addr_valid(i),
+
         ll_wr_req_o              => ib2ll_wr_req(i),
         ll_wr_done_i             => ll2ib_wr_done(i),
 
@@ -476,6 +484,10 @@ architecture rtl of xswc_core is
  
      write_i                    => ib2ll_wr_req,
      write_done_o               => ll2ib_wr_done,
+
+     write_next_addr_i          => ib2ll_next_addr,
+     write_next_addr_valid_i    => ib2ll_next_addr_valid,
+
      write_addr_i               => ib2ll_addr,
      write_data_i               => ib2ll_data,
        

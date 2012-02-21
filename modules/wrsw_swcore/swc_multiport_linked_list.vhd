@@ -86,8 +86,13 @@ entity swc_multiport_linked_list is
     write_done_o          : out std_logic_vector(g_num_ports - 1 downto 0);
     -- write address, needs to be valid till write_done_o=HIGH
     write_addr_i          : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
-    -- 
+    -- next page [ctrls,address or (size + sel)]
     write_data_i          : in  std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
+    -- if we already know the address (of the next page to be used), we provide it here, it
+    -- is invalidated.
+    write_next_addr_i     : in  std_logic_vector(g_num_ports * g_addr_width - 1 downto 0);
+    -- indicates that the next_addr is provided
+    write_next_addr_valid_i: in  std_logic_vector(g_num_ports - 1 downto 0);
 
     ------------ reading from the Linked List by freeing module ----------
     -- request reading
@@ -127,9 +132,9 @@ architecture syn of swc_multiport_linked_list is
   signal in_sel_write             : integer range 0 to g_num_ports-1;
   -- signals used by writing process  
   signal ll_write_ena             : std_logic;
-  signal ll_write_ena_next        : std_logic;
+  signal ll_write_next_ena        : std_logic;
   signal ll_write_addr            : std_logic_vector(g_addr_width - 1 downto 0);
-  signal ll_write_addr_next       : std_logic_vector(g_addr_width - 1 downto 0);
+  signal ll_write_next_addr       : std_logic_vector(g_addr_width - 1 downto 0);
   signal ll_write_data            : std_logic_vector(g_data_width - 1 downto 0);
   signal ll_write_data_valid      : std_logic;
   signal ll_write_end_of_list     : std_logic;
@@ -237,7 +242,8 @@ begin  -- syn
 
   gen_write_request_vec : for i in 0 to g_num_ports - 1 generate
     tmp_write_end_of_list(i) <= write_data_i((i + 1) * g_data_width - 2);
-    write_request_vec(i)     <= write_i(i)  and (not ((tmp_write_end_of_list(i) and write_grant_vec_d0(i)) or write_grant_vec_d1(i)));
+    --write_request_vec(i)     <= write_i(i)  and (not ((tmp_write_end_of_list(i) and write_grant_vec_d0(i)) or write_grant_vec_d1(i)));
+    write_request_vec(i)     <= write_i(i)  and (not ((not write_next_addr_valid_i(i) and write_grant_vec_d0(i)) or write_grant_vec_d1(i)));
   end generate;
 
   gen_free_pck_request_vec : for i in 0 to g_num_ports - 1 generate
@@ -267,14 +273,16 @@ begin  -- syn
   ll_write_addr       <= write_addr_i((write_grant_index + 1) * g_addr_width - 1 downto write_grant_index * g_addr_width);
   ll_write_data_valid <= write_data_i((write_grant_index + 1) * g_data_width - 1); -- MSB    bit
   ll_write_end_of_list<= write_data_i((write_grant_index + 1) * g_data_width - 2); -- MSB -1 bit
-  ll_write_addr_next  <= ll_write_data(g_addr_width - 1 downto 0);
-
-  -- create data and address to be written to memory (both DPRAMs)
-  ll_wr_data          <= (others => '0')    when (ll_write_ena_next = '1' ) else ll_write_data;   
-  ll_wr_addr          <= ll_write_addr_next when (ll_write_ena_next = '1' ) else ll_write_addr;
-  ll_write_ena        <= (write_grant_vec   (write_grant_index) and write_grant_vec_d0(write_grant_index) and not ll_write_end_of_list) or 
-                         (write_grant_vec_d0(write_grant_index)                                           and     ll_write_end_of_list);
-  ll_write_ena_next   <=  write_grant_vec_d0(write_grant_index) and write_grant_vec_d1(write_grant_index);
+  --ll_write_next_addr  <= ll_write_data(g_addr_width - 1 downto 0);
+  ll_write_next_addr  <= write_next_addr_i((write_grant_index + 1) * g_addr_width - 1 downto write_grant_index * g_addr_width);
+    -- create data and address to be written to memory (both DPRAMs)
+  ll_wr_data          <= (others => '0')    when (ll_write_next_ena = '1' ) else ll_write_data;   
+  ll_wr_addr          <= ll_write_next_addr when (ll_write_next_ena = '1' ) else ll_write_addr;
+--   ll_write_ena        <= (write_grant_vec   (write_grant_index) and write_grant_vec_d0(write_grant_index) and not ll_write_end_of_list) or 
+--                          (write_grant_vec_d0(write_grant_index)                                           and     ll_write_end_of_list);
+  ll_write_ena        <= (write_grant_vec   (write_grant_index) and write_grant_vec_d0(write_grant_index) and        write_next_addr_valid_i(write_grant_index)) or 
+                         (write_grant_vec_d0(write_grant_index)                                           and not    write_next_addr_valid_i(write_grant_index));
+  ll_write_next_ena   <=  write_grant_vec_d0(write_grant_index) and write_grant_vec_d1(write_grant_index);
   -- ======= reading (read pump) =======    
   -- address
   ll_free_pck_addr <= free_pck_addr_i((free_pck_grant_index + 1) * g_addr_width - 1 downto free_pck_grant_index * g_addr_width);  
@@ -349,13 +357,16 @@ begin  -- syn
 
   ll_free_pck_ena       <= free_pck_grant_valid_d0;
 
-  ll_wr_ena             <= ll_write_ena or ll_write_ena_next;
+  ll_wr_ena             <= ll_write_ena or ll_write_next_ena;
 
---   write_done_o          <= ((write_grant_vec_d0)                        and     tmp_write_end_of_list) or -- end-of-list, one one write, so write_done faster
---                            ((write_grant_vec_d0 and write_grant_vec_d1) and not tmp_write_end_of_list);   -- normal write, we write two words, it takes longer
+--   wr_done: for i in 0 to g_num_ports -1 generate
+--     write_done_o(i)     <= '1' when ((write_grant_vec_d0(i) = '1'                                 and tmp_write_end_of_list(i) = '1')  or  -- end-of-list, one one write, so write_done faster
+--                                      (write_grant_vec_d0(i) = '1' and write_grant_vec_d1(i) = '1' and tmp_write_end_of_list(i) = '0')) else -- normal write, we write two words, it takes longer
+--                            '0';   
+--   end generate;
   wr_done: for i in 0 to g_num_ports -1 generate
-    write_done_o(i)     <= '1' when ((write_grant_vec_d0(i) = '1'                                 and tmp_write_end_of_list(i) = '1')  or  -- end-of-list, one one write, so write_done faster
-                                     (write_grant_vec_d0(i) = '1' and write_grant_vec_d1(i) = '1' and tmp_write_end_of_list(i) = '0')) else -- normal write, we write two words, it takes longer
+    write_done_o(i)     <= '1' when ((write_grant_vec_d0(i) = '1'                                 and write_next_addr_valid_i(i) = '0')  or  -- end-of-list, one one write, so write_done faster
+                                     (write_grant_vec_d0(i) = '1' and write_grant_vec_d1(i) = '1' and write_next_addr_valid_i(i) = '1')) else -- normal write, we write two words, it takes longer
                            '0';   
   end generate;
  
