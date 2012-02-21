@@ -277,7 +277,7 @@ module main_generic;
       sum_tx = 0;
       sum_rx = 0;
   
-      for(i=0;i<11;i++)
+      for(i=0;i<`c_num_ports;i++)
         begin
           for(j=0;j<`c_num_ports;j++) sum_tx_by_port[i] += tx_cnt_by_port[j][i];
           for(j=0;j<`c_num_ports;j++) sum_rx_by_port[i] += rx_cnt_by_port[i][j];
@@ -302,8 +302,14 @@ module main_generic;
       for(i=0;i<`c_num_ports;i++)
         begin
           s = $psprintf("",i);
-          for(int j=0;j<`c_num_ports;j++) s = {s, $psprintf(" %2d>%2d |",tx_cnt_by_port[i][j],rx_cnt_by_port[i][j])};
-          $display("TX Port %2d : %s",i,s);
+          for(int j=0;j<`c_num_ports;j++) 
+          begin
+            if(tx_cnt_by_port[i][j] == rx_cnt_by_port[i][j])
+              s = {s, $psprintf(" %2d>%2d |",tx_cnt_by_port[i][j],rx_cnt_by_port[i][j])};
+            else
+              s = {s, $psprintf("*%2d>%2d*|",tx_cnt_by_port[i][j],rx_cnt_by_port[i][j])};
+          end 
+          $display("TX Port %2d :  %s",i,s);
         end
       
       $display("%s",d1);
@@ -365,6 +371,8 @@ module main_generic;
       sink[17]  = new(U_wrf_sink[17].get_accessor()); 
       */
       
+     
+      
     endfunction
     
 /*
@@ -385,7 +393,7 @@ module main_generic;
       EthPacket      pkt, tmpl;
       EthPacket      txed[$];
       EthPacketGenerator gen;
-      int i,j;
+      int j;
       int n_ports = `c_num_ports;
       bit [`c_num_ports:0] mask;
       // initialization
@@ -403,22 +411,30 @@ module main_generic;
 
       //for(j=0;j<`c_num_ports;j++) begin
       
+     // U_wrf_sink[0].permanent_stall_enable();
+      
       for(j=0;j<16;j++) begin
-	fork 
-	  automatic int  p = j;
-          for(i=0; i<16; i++) begin  
-	    mask = mask^(1<<(i%(`c_num_ports)));
-	    //mask =1<<p;
-            //send_random_packet(src,txed, 0 , 0,7 , mask);  
-            //send_random_packet(src,txed, j, 0,7 , 16'hFFFF);
-            //$display("in fork %d",p);
-	    send_random_packet(src,txed, p, 0,7 , mask);  
-          end
-        join
-         //wait_cycles(500);
+     //   fork 
+     //     begin
+            automatic int  p = j;
+            //automatic bit [`c_num_ports:0] mask; 
+            for(int z=0; z<16; z++) begin  
+              mask = mask^(1<<(z%(`c_num_ports)));
+              //mask =1<<p;
+              //send_random_packet(src,txed, 0 , 0,7 , mask);  
+              //send_random_packet(src,txed, j, 0,7 , 16'hFFFF);
+              //$display("in fork %d",p);
+              send_random_packet(src,txed, p, 0,7 , mask);  
+              //wait_cycles(100);        
+            end
+       //   end
+       // join
        end 
+       
+  wait_cycles(10000);        
+  //U_wrf_sink[0].permanent_stall_disable();
   
-  wait_cycles(80000); 
+  wait_cycles(60000); 
   
   transferReport(); // here we wait for all pcks to be received and then make statistics
   memoryLeakageReport();
@@ -549,7 +565,7 @@ module main_generic;
             begin
               s = "";
               for(j=0;j<`c_num_ports;j++)  s = {s, $psprintf("%2d:%2d|",alloc_table[i].usecnt[j],alloc_table[i].port[j])};
-              $display("Page %4d: alloc = %4d [%s]",i,alloc_table[i].cnt,s);
+              $display("Page %4d[0x0%x: alloc = %4d [%s]",i,i,alloc_table[i].cnt,s);
               cnt++;
             end
         

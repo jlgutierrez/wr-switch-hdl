@@ -550,6 +550,7 @@ architecture syn of xswc_input_block is
                 
                 s_page_alloc            <= S_PCKSTART_SET_USECNT;
                 pckstart_usecnt_req     <= '1';
+                pckstart_usecnt_pgaddr  <= current_pckstart_pageaddr;
                 pckstart_usecnt_write   <= current_usecnt;
                 pckstart_usecnt_prev    <= current_usecnt;
                 
@@ -557,7 +558,7 @@ architecture syn of xswc_input_block is
                 
                 interpck_page_alloc_req <= '1';
                 s_page_alloc            <= S_INTERPCK_PAGE_REQ;
-                pckstart_usecnt_write   <= pckstart_usecnt_prev;
+                pckstart_usecnt_write   <=  std_logic_vector(to_unsigned(1, g_usecount_width));
                                
               else
                 
@@ -579,6 +580,7 @@ architecture syn of xswc_input_block is
                 
                 s_page_alloc            <= S_PCKSTART_SET_USECNT;
                 pckstart_usecnt_req     <= '1';
+                pckstart_usecnt_pgaddr  <= current_pckstart_pageaddr;
                 pckstart_usecnt_write   <= current_usecnt;
                 pckstart_usecnt_prev    <= current_usecnt;
                 
@@ -644,7 +646,7 @@ architecture syn of xswc_input_block is
           --===========================================================================================  
 
             if(rtu_rsp_valid_i = '1' and in_pck_sof = '1') then
-              if(rtu_drop_i = '1') then
+              if(rtu_drop_i = '1' or rtu_dst_port_mask_i = zeros) then
                 s_transfer_pck             <= S_DROP_PCK;
               elsif(rtu_dst_port_usecnt = pckstart_usecnt_prev) then
                 s_transfer_pck            <= S_TRANSFER;
@@ -674,7 +676,7 @@ architecture syn of xswc_input_block is
           when S_WAIT_RTU_VALID =>
           --===========================================================================================
             if(rtu_rsp_valid_i = '1') then
-              if(rtu_drop_i = '1') then
+              if(rtu_drop_i = '1' or rtu_dst_port_mask_i = zeros) then
                 s_transfer_pck             <= S_DROP_PCK;
               elsif(rtu_dst_port_usecnt = pckstart_usecnt_prev) then
                 s_transfer_pck             <= S_TRANSFER;
@@ -696,7 +698,7 @@ architecture syn of xswc_input_block is
           when S_WAIT_SOF =>
           --===========================================================================================
             if(in_pck_sof = '1') then
-              if(current_drop = '1') then
+              if(current_drop = '1' or pta_mask = zeros) then
                 s_transfer_pck             <= S_DROP_PCK;
               elsif(current_usecnt = pckstart_usecnt_prev) then
                 s_transfer_pck             <= S_TRANSFER;
@@ -909,7 +911,7 @@ architecture syn of xswc_input_block is
                 snk_stall_force_l <= '1';
                 
                 -- pck has not been transferred to the outputs yet, so we need to free on the inputs
-                if(s_transfer_pck /= S_PCK_TRANSFERED and s_transfer_pck /= S_PCK_TRANSFER) then 
+                if(s_transfer_pck /= S_PCK_TRANSFERED and s_transfer_pck /= S_TRANSFER) then 
                 
                   mmu_force_free_addr <= current_pckstart_pageaddr;
                 
@@ -1015,6 +1017,7 @@ architecture syn of xswc_input_block is
             
             if(ready_for_next_pck = '1' ) then  -- un-stuck the input :)
               snk_stall_force_h <= '0';
+              drop_on_stuck     <= '1';
               in_pck_dat_d0     <= (others=>'0');
               in_pck_sel_d0     <= (others=>'0'); 
               in_pck_sel_d1     <= (others=>'0');                
@@ -1080,6 +1083,10 @@ architecture syn of xswc_input_block is
       else
         
         if(in_pck_sof = '1' and in_pck_drop_on_sof = '0' and drop_on_stuck = '0' ) then
+          pckstart_page_in_advance <= '0';
+        elsif(in_pck_sof = '1' and in_pck_drop_on_sof = '0' and drop_on_stuck = '1' and ready_for_next_pck = '1' ) then 
+          -- this is a special case when we go to RCV_DATA from INPUT_STUCK (p_rcv_pck_fsm)
+          -- in such case we also use new page
           pckstart_page_in_advance <= '0';
         elsif(mmu_page_alloc_done_i = '1' and pckstart_page_alloc_req = '1') then
           pckstart_page_in_advance <= '1';
