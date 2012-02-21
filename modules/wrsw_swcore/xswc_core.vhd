@@ -56,7 +56,7 @@ use work.mpm_pkg.all;
 entity xswc_core is
   generic( 
 
-    g_prio_num                         : integer ;--:= c_swc_output_prio_num;
+    g_prio_num                         : integer ;--:= c_swc_output_prio_num; [works only for value of 8, output_block-causes problem]
     g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
@@ -72,18 +72,7 @@ entity xswc_core is
     g_mpm_page_size                    : integer ;
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
-    g_mpm_fetch_next_pg_in_advance     : boolean ;
-
-    -- probably useless with new memory
-    g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
-    -- g_data_width                       : integer ;--:= c_swc_data_width
-    -- g_mem_size                         : integer ;--:= c_swc_packet_mem_size
-    -- g_page_size                        : integer ;--:= c_swc_page_size   
-    g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
-    g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
-    g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance (xswc_input_block)
-  
-
+    g_mpm_fetch_next_pg_in_advance     : boolean 
     );
   port (
     clk_i          : in std_logic;
@@ -291,11 +280,7 @@ architecture rtl of xswc_core is
         g_mpm_data_width                   => c_mpm_data_width, 
         g_page_size                        => g_mpm_page_size,
         g_partial_select_width             => c_mpm_partial_sel_width,
-        g_ll_data_width                    => c_ll_data_width,
-        g_ctrl_width                       => g_ctrl_width,
-        g_packet_mem_multiply              => g_packet_mem_multiply,
-        g_input_block_fifo_size            => g_input_block_fifo_size,
-        g_input_block_fifo_full_in_advance => g_input_block_fifo_full_in_advance
+        g_ll_data_width                    => c_ll_data_width
       )
       port map (
         clk_i                    => clk_i,

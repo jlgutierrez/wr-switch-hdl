@@ -160,77 +160,6 @@ package swc_swcore_pkg is
     );
   end component;
   
-  component xswc_input_block_old is
-    generic ( 
-      g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
-      g_num_ports                        : integer ;--:= c_swc_num_ports
-      g_prio_width                       : integer ;--:= c_swc_prio_width;
-      g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
-      g_usecount_width                   : integer ;--:= c_swc_usecount_width
-      g_data_width                       : integer ;--:= c_swc_data_width
-      g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
-      g_input_block_cannot_accept_data   : string := "drop_pck"; --"stall_o", "rty_o" -- Don't CHANGE !
-
-      -- probably useless with new memory
-      g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply
-      g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size
-      g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance
-    );
-    port (
-      clk_i   : in std_logic;
-      rst_n_i : in std_logic;
-      -------------------------------------------------------------------------------
-      -- pWB  : input (comes from the Endpoint)
-      -------------------------------------------------------------------------------
-      snk_i : in  t_wrf_sink_in;
-      snk_o : out t_wrf_sink_out;
-      -------------------------------------------------------------------------------
-      -- I/F with Page allocator (MMU)
-      -------------------------------------------------------------------------------    
-      mmu_page_alloc_req_o : out std_logic;
-      mmu_page_alloc_done_i : in std_logic;
-      mmu_pageaddr_i : in std_logic_vector(g_page_addr_width - 1 downto 0);
-      mmu_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
-      mmu_force_free_o : out std_logic;
-      mmu_force_free_done_i : in std_logic;
-      mmu_force_free_addr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
-      mmu_set_usecnt_o : out std_logic;
-      mmu_set_usecnt_done_i : in std_logic;
-      mmu_usecnt_o : out std_logic_vector(g_usecount_width - 1 downto 0);
-      mmu_nomem_i : in std_logic;
-  -------------------------------------------------------------------------------
-  -- I/F with Routing Table Unit (RTU)
-  -------------------------------------------------------------------------------      
-      rtu_rsp_valid_i     : in  std_logic;
-      rtu_rsp_ack_o       : out std_logic;
-      rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
-      rtu_drop_i          : in  std_logic;
-      rtu_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
-  -------------------------------------------------------------------------------
-  -- I/F with Multiport Memory (MPU)
-  -------------------------------------------------------------------------------    
-      mpm_pckstart_o : out std_logic;
-      mpm_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
-      mpm_pagereq_o : out std_logic;
-      mpm_pageend_i : in  std_logic;
-      mpm_data_o : out std_logic_vector(g_data_width - 1 downto 0);
-      mpm_ctrl_o : out std_logic_vector(g_ctrl_width - 1 downto 0);
-      mpm_drdy_o : out std_logic;
-      mpm_full_i : in std_logic;
-      mpm_flush_o : out std_logic;
-      mpm_wr_sync_i : in std_logic;
-  -------------------------------------------------------------------------------
-  -- I/F with Page Transfer Arbiter (PTA)
-  -------------------------------------------------------------------------------     
-      pta_transfer_pck_o : out std_logic;
-      pta_transfer_ack_i : in std_logic;
-      pta_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
-      pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
-      pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
-      pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0)
-      );
-  end component;
-
   component xswc_input_block is
   generic ( 
     g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
@@ -244,12 +173,7 @@ package swc_swcore_pkg is
     g_mpm_data_width                   : integer ; -- it needs to be wb_data_width + wb_addr_width
     g_page_size                        : integer ;
     g_partial_select_width             : integer ;
-    g_ll_data_width                    : integer ;
-    -- probably useless with new memory
-    g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
-    g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply
-    g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size
-    g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance
+    g_ll_data_width                    : integer 
   );
   port (
     clk_i   : in std_logic;
@@ -556,13 +480,7 @@ component  swc_multiport_pck_pg_free_module is
       g_mpm_page_size                    : integer ;
       g_mpm_ratio                        : integer ;
       g_mpm_fifo_size                    : integer ;
-      g_mpm_fetch_next_pg_in_advance     : boolean ;
-    
-      -- probably useless with new memory
-      g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
-      g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
-      g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
-      g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance (xswc_input_block)
+      g_mpm_fetch_next_pg_in_advance     : boolean
       );
    port (
       clk_i          : in std_logic;

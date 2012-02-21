@@ -69,17 +69,7 @@ entity swc_core is
     g_mpm_page_size                    : integer ;
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
-    g_mpm_fetch_next_pg_in_advance     : boolean ;
-
-    -- probably useless with new memory
-    g_ctrl_width                       : integer ; --:= c_swc_ctrl_width
-    -- g_data_width                       : integer ;--:= c_swc_data_width
-    -- g_mem_size                         : integer ;--:= c_swc_packet_mem_size
-    -- g_page_size                        : integer ;--:= c_swc_page_size   
-    g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply (xswc_input_block, )
-    g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size     (xswc_input_block)
-    g_input_block_fifo_full_in_advance : integer --:=c_swc_fifo_full_in_advance (xswc_input_block)
-
+    g_mpm_fetch_next_pg_in_advance     : boolean 
     );
   port (
     clk_i          : in std_logic;
@@ -157,12 +147,7 @@ architecture rtl of swc_core is
       g_mpm_page_size                    => g_mpm_page_size,
       g_mpm_ratio                        => g_mpm_ratio,
       g_mpm_fifo_size                    => g_mpm_fifo_size,
-      g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance,
-
-      g_ctrl_width                       => g_ctrl_width,
-      g_packet_mem_multiply              => g_packet_mem_multiply,
-      g_input_block_fifo_size            => g_input_block_fifo_size,
-      g_input_block_fifo_full_in_advance => g_input_block_fifo_full_in_advance
+      g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance
       )
     port map(
       clk_i          => clk_i,

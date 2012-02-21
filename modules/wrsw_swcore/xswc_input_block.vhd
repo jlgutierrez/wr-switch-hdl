@@ -109,12 +109,7 @@ entity xswc_input_block is
     g_mpm_data_width                   : integer ; -- it needs to be wb_data_width + wb_addr_width
     g_page_size                        : integer ;
     g_partial_select_width             : integer ;
-    g_ll_data_width                    : integer ;
-    -- probably useless with new memory
-    g_ctrl_width                       : integer ;--:= c_swc_ctrl_width
-    g_packet_mem_multiply              : integer ;--:= c_swc_packet_mem_multiply
-    g_input_block_fifo_size            : integer ;--:= c_swc_input_fifo_size
-    g_input_block_fifo_full_in_advance : integer  --:=c_swc_fifo_full_in_advance
+    g_ll_data_width                    : integer
   );
   port (
     clk_i   : in std_logic;
@@ -232,7 +227,7 @@ end xswc_input_block;
 
 architecture syn of xswc_input_block is
 
-  constant c_input_fifo_size_log2  : integer := integer(CEIL(LOG2(real(g_input_block_fifo_size - 1))));
+--  constant c_input_fifo_size_log2  : integer := integer(CEIL(LOG2(real(g_input_block_fifo_size - 1))));
   constant c_page_size_width       : integer := integer(CEIL(LOG2(real(g_page_size + 1))));
 
   type t_page_alloc   is(S_IDLE,                  -- waiting for some work :)

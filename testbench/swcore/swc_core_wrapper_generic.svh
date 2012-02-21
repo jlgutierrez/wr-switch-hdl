@@ -73,12 +73,7 @@ module swc_core_wrapper_generic
        .g_mpm_page_size                    (`c_mpm_page_size),
        .g_mpm_ratio                        (`c_mpm_ratio),
        .g_mpm_fifo_size                    (`c_mpm_fifo_size),
-       .g_mpm_fetch_next_pg_in_advance     (`c_mpm_fetch_next_pg_in_advance),
-
-       .g_ctrl_width                       (`c_ctrl_width),
-       .g_packet_mem_multiply              (`c_packet_mem_multiply),
-       .g_input_block_fifo_size            (`c_input_block_fifo_size),
-       .g_input_block_fifo_full_in_advance (`c_input_block_fifo_full_in_advance)
+       .g_mpm_fetch_next_pg_in_advance     (`c_mpm_fetch_next_pg_in_advance)
        ) DUT_swc_core(
               .clk_i               (clk_i),
               .clk_mpm_core_i      (clk_mpm_core_i),
