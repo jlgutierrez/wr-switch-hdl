@@ -40,7 +40,8 @@ entity scb_top_bare is
     -- Muxed system clock
     clk_sys_o : out std_logic;
 
-
+    -- 200MHz clock to run the core of Multiport Memory in SWcore
+    clk_swc_mpm_core_i : in std_logic;
     -------------------------------------------------------------------------------
     -- Master wishbone bus (from the CPU bridge)
     -------------------------------------------------------------------------------
@@ -499,28 +500,36 @@ begin
   --endpoint_src_in(c_NUM_PORTS) <= endpoint_snk_out(1);
   --endpoint_src_in(1) <= endpoint_snk_out(c_NUM_PORTS);
 
-
-
-
-
-
-  U_Swcore : xswc_core
-    generic map (
-      g_swc_num_ports  => 7,
-      g_swc_prio_width => 3)
-    port map (
-      clk_i   => clk_sys,
-      rst_n_i => rst_n_periph,
-
-      src_i => endpoint_snk_out,
-      src_o => endpoint_snk_in,
-      snk_i => endpoint_src_out,
-      snk_o => endpoint_src_in,
-
-      rtu_rsp_i => rtu_rsp,
-      rtu_ack_o => rtu_rsp_ack
-      );
-
+  U_SWCORE: xswc_core
+    generic map
+      ( 
+      g_prio_num                         => 8,
+      g_max_pck_size                     =>  10 * 1024,
+      g_num_ports                        => 7,
+      g_pck_pg_free_fifo_size            => ((65536/64)/2),
+      g_input_block_cannot_accept_data   => "drop_pck",
+      g_output_block_per_prio_fifo_size  => 64,
+      g_wb_data_width                    => 16,
+      g_wb_addr_width                    => 2,
+      g_wb_sel_width                     => 2,
+      g_wb_ob_ignore_ack                 => FALSE,
+      g_mpm_mem_size                     => 65536,
+      g_mpm_page_size                    => 64,
+      g_mpm_ratio                        => 2,
+      g_mpm_fifo_size                    => 4,
+      g_mpm_fetch_next_pg_in_advance     => FALSE
+     )
+    port map(
+      clk_i                => clk_sys,
+      clk_mpm_core_i       => clk_swc_mpm_core_i,
+      rst_n_i              => rst_n_periph, 
+      src_i                => endpoint_snk_out,
+      src_o                => endpoint_snk_in,
+      snk_i                => endpoint_src_out,
+      snk_o                => endpoint_src_in,
+      rtu_rsp_i            => rtu_rsp,
+      rtu_ack_o            => rtu_rsp_ack
+     );
   U_PPS_Gen : xwr_pps_gen
     generic map (
       g_interface_mode      => PIPELINED,

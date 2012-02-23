@@ -205,22 +205,40 @@ package wrsw_components_pkg is
       TRIG3   : in    std_logic_vector(31 downto 0));
   end component;
 
-  component xswc_core
-    generic (
-      g_swc_num_ports  : integer;
-      g_swc_prio_width : integer);
-    port (
-      clk_i               : in  std_logic;
-      rst_n_i             : in  std_logic;
-      snk_i               : in  t_wrf_sink_in_array(g_swc_num_ports-1 downto 0);
-      snk_o               : out t_wrf_sink_out_array(g_swc_num_ports-1 downto 0);
-      src_i               : in  t_wrf_source_in_array(g_swc_num_ports-1 downto 0);
-      src_o               : out t_wrf_source_out_array(g_swc_num_ports-1 downto 0);
-      rtu_rsp_valid_i     : in  std_logic_vector(g_swc_num_ports - 1 downto 0);
-      rtu_rsp_ack_o       : out std_logic_vector(g_swc_num_ports - 1 downto 0);
-      rtu_dst_port_mask_i : in  std_logic_vector(g_swc_num_ports * g_swc_num_ports - 1 downto 0);
-      rtu_drop_i          : in  std_logic_vector(g_swc_num_ports - 1 downto 0);
-      rtu_prio_i          : in  std_logic_vector(g_swc_num_ports * g_swc_prio_width - 1 downto 0));
+  component xswc_core is
+    generic( 
+      g_prio_num                         : integer ;
+      g_max_pck_size                     : integer ;
+      g_num_ports                        : integer ;
+      g_pck_pg_free_fifo_size            : integer ;
+      g_input_block_cannot_accept_data   : string  ;
+      g_output_block_per_prio_fifo_size  : integer ;
+
+      g_wb_data_width                    : integer ;
+      g_wb_addr_width                    : integer ;
+      g_wb_sel_width                     : integer ;
+      g_wb_ob_ignore_ack                 : boolean ;
+      
+      g_mpm_mem_size                     : integer ;
+      g_mpm_page_size                    : integer ;
+      g_mpm_ratio                        : integer ;
+      g_mpm_fifo_size                    : integer ;
+      g_mpm_fetch_next_pg_in_advance     : boolean
+      );
+   port (
+      clk_i          : in std_logic;
+      clk_mpm_core_i : in std_logic;
+      rst_n_i        : in std_logic;
+  
+      snk_i          : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
+      snk_o          : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
+  
+      src_i          : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
+      src_o          : out t_wrf_source_out_array(g_num_ports-1 downto 0);
+      
+      rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
+      rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)
+      );
   end component;
 
   
