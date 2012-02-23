@@ -17,8 +17,9 @@ module main;
 
    reg clk_ref=0;
    reg clk_sys=0;
+   reg clk_mpm_core=0;
    reg rst_n=0;
-
+   
    parameter g_num_ports = 6;
    
    
@@ -33,6 +34,7 @@ module main;
 	  );
  -----/\----- EXCLUDED -----/\----- */
 
+   always #5ns clk_mpm_core <=~clk_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
    always #7.998ns clk_ref <= ~clk_ref;
    
@@ -116,7 +118,8 @@ module main;
               .clk_sys_i(clk_sys),
               .clk_ref_i(clk_ref),
               .rst_n_i(rst_n),
-              .cpu_irq(cpu_irq)
+              .cpu_irq(cpu_irq),
+              .clk_mpm_core_i(clk_mpm_core)
               );
 
    typedef struct {

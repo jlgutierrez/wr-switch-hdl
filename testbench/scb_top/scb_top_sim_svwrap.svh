@@ -44,15 +44,15 @@ module scb_top_sim_svwrap
    clk_sys_i,
    clk_ref_i,
    rst_n_i,
-   
-   cpu_irq
+   cpu_irq,
+   clk_mpm_core_i
    );
 
    parameter g_num_ports = 6;
    
 
    
-   input clk_sys_i, clk_ref_i,rst_n_i;
+   input clk_sys_i, clk_ref_i,rst_n_i,clk_mpm_core_i;
    output cpu_irq;
 
 
@@ -260,6 +260,7 @@ scb_top_sim
    .clk_ref_i           ( clk_ref_i),
    .clk_dmtd_i            ( clk_ref_i),
    .clk_sys_i           ( clk_sys_i),
+   .clk_mpm_core_i      ( clk_mpm_core_i),
    .wb_adr_i            ( cpu.master.adr),
    .wb_dat_i            ( cpu.master.dat_o),
    .wb_dat_o            ( cpu.master.dat_i),

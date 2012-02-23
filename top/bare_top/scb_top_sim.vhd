@@ -130,7 +130,7 @@ begin  -- rtl
       clk_swc_mpm_core_i  => clk_swc_mpm_core_i,
       cpu_wb_i            => cpu_wb_in,
       cpu_wb_o            => cpu_wb_out,
-      cpu_irq_n_o => cpu_irq_n,
+      cpu_irq_n_o         => cpu_irq_n,
       pps_i               => pps_i,
       pps_o               => pps_o,
       dac_helper_sync_n_o => dac_helper_sync_n_o,
@@ -153,7 +153,10 @@ begin  -- rtl
       phys_o              => phys_out,
       phys_i              => phys_in,
       led_link_o          => led_link_o,
-      led_act_o           => led_act_o);
+      led_act_o           => led_act_o,
+      gpio_o              => open,
+      gpio_i              => (others => '0')
+      );
 
   gen_phys : for i in 0 to g_num_ports-1 generate
     td_o(18 * i + 15 downto 18 * i)      <= phys_out(i).tx_data;

@@ -243,7 +243,9 @@ package wrsw_top_pkg is
       phys_o              : out t_phyif_output_array(g_num_ports-1 downto 0);
       phys_i              : in  t_phyif_input_array(g_num_ports-1 downto 0);
       led_link_o          : out std_logic_vector(g_num_ports-1 downto 0);
-      led_act_o           : out std_logic_vector(g_num_ports-1 downto 0));
+      led_act_o           : out std_logic_vector(g_num_ports-1 downto 0);
+      gpio_o : out std_logic_vector(31 downto 0);
+      gpio_i : in  std_logic_vector(31 downto 0));
   end component;
 
   component xswc_core is
