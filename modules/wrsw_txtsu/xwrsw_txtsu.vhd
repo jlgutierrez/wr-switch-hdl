@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-26
--- Last update: 2012-01-18
+-- Last update: 2012-01-20
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -118,9 +118,6 @@ architecture syn of xwrsw_tx_tsu is
 
   signal state : t_txtsu_state;
 
-  signal ep_valid : std_logic_vector(g_num_ports-1 downto 0);
-  signal ep_ack   : std_logic_vector(g_num_ports-1 downto 0);
-
   signal cur_ep : integer;
 
   signal wb_out       : t_wishbone_slave_out;
@@ -162,8 +159,8 @@ begin  -- syn
         case state is
           when TSU_SCAN =>
 
-            if(ep_valid(cur_ep) = '1') then
-              ep_ack(cur_ep) <= '1';
+            if(timestamps_i(cur_ep).valid = '1') then
+              timestamps_ack_o(cur_ep) <= '1';
               state          <= TSU_ACK;
 
               if(txtsu_tsf_wr_full = '0') then
