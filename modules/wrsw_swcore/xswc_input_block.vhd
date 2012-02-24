@@ -109,7 +109,8 @@ entity xswc_input_block is
     g_mpm_data_width                   : integer ; -- it needs to be wb_data_width + wb_addr_width
     g_page_size                        : integer ;
     g_partial_select_width             : integer ;
-    g_ll_data_width                    : integer
+    g_ll_data_width                    : integer ;
+    g_max_oob_size                     : integer  -- on words (16 bits)
   );
   port (
     clk_i   : in std_logic;
@@ -227,8 +228,8 @@ end xswc_input_block;
 
 architecture syn of xswc_input_block is
 
---  constant c_input_fifo_size_log2  : integer := integer(CEIL(LOG2(real(g_input_block_fifo_size - 1))));
   constant c_page_size_width       : integer := integer(CEIL(LOG2(real(g_page_size + 1))));
+  constant c_max_oob_size_width    : integer := integer(CEIL(LOG2(real(g_max_oob_size + 1))));
 
   type t_page_alloc   is(S_IDLE,                  -- waiting for some work :)
                          S_PCKSTART_SET_USECNT,   -- setting usecnt to a page which was allocated 
@@ -313,6 +314,9 @@ architecture syn of xswc_input_block is
   signal mpm_pg_addr        : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal mpm_dlast          : std_logic;
 
+  signal mpm_dlast_d0       : std_logic;
+  signal mpm_pg_req_d0       : std_logic;
+
    -- pWB 
   signal snk_dat_int   : std_logic_vector(15 downto 0);
   signal snk_adr_int   : std_logic_vector(1  downto 0);
@@ -327,32 +331,34 @@ architecture syn of xswc_input_block is
   
   signal snk_sel_d0    : std_logic_vector(1 downto 0);
   signal snk_cyc_d0    : std_logic;
+  signal snk_adr_d0    : std_logic_vector(1  downto 0);
   signal snk_stall_force_h : std_logic;  
   signal snk_stall_force_l : std_logic;  
   
   -- this si pipelined
-  signal in_pck_dvalid   : std_logic;
-  signal in_pck_dat      : std_logic_vector(g_mpm_data_width - 1 downto 0);
-  signal in_pck_sel      : std_logic_vector(g_partial_select_width - 1 downto 0);
+  signal in_pck_dvalid      : std_logic;
+  signal in_pck_dat         : std_logic_vector(g_mpm_data_width - 1 downto 0);
+  signal in_pck_sel         : std_logic_vector(g_partial_select_width - 1 downto 0);
   -- first stage
-  signal in_pck_dvalid_d0: std_logic;
-  signal in_pck_dat_d0   : std_logic_vector(g_mpm_data_width - 1 downto 0);
-  signal in_pck_sel_d0   : std_logic_vector(g_partial_select_width - 1 downto 0);
-  -- second stage
-  signal in_pck_dvalid_d1: std_logic;
-  signal in_pck_dat_d1   : std_logic_vector(g_mpm_data_width - 1 downto 0);
-  signal in_pck_sel_d1   : std_logic_vector(g_partial_select_width - 1 downto 0);
+  signal in_pck_dvalid_d0   : std_logic;
+  signal in_pck_dat_d0      : std_logic_vector(g_mpm_data_width - 1 downto 0);
+  signal in_pck_sel_d0  : std_logic_vector(g_partial_select_width - 1 downto 0); 
 
   signal in_pck_sof      : std_logic;
-  signal in_pck_eof      : std_logic;
+  signal in_pck_eof      : std_logic; -- 
   signal in_pck_err      : std_logic;
+  signal in_pck_eod      : std_logic; -- end of data
+
+  signal in_pck_is_dat   : std_logic;
+  signal in_pck_is_dat_d0: std_logic;
 
   signal mmu_force_free_req  : std_logic;
   signal mmu_force_free_addr : std_logic_vector(g_page_addr_width - 1 downto 0);
 
   signal in_pck_drop_on_sof : std_logic;
   
-  signal page_word_cnt    : unsigned(c_page_size_width - 1 downto 0);
+  signal page_word_cnt    : unsigned(c_page_size_width    - 1 downto 0);
+  signal oob_word_cnt     : unsigned(c_max_oob_size_width - 1 downto 0);
  
   signal ready_for_next_pck    : std_logic;
   signal input_stuck           : std_logic;
@@ -364,6 +370,13 @@ architecture syn of xswc_input_block is
   signal ll_data          : std_logic_vector(g_ll_data_width   - 1 downto 0);
   signal ll_data_eof      : std_logic_vector(g_page_addr_width - 1 downto 0);
 
+  signal ll_fsm_addr          : std_logic_vector(g_page_addr_width - 1 downto 0);
+  signal ll_fsm_data          : std_logic_vector(g_ll_data_width   - 1 downto 0);
+  signal ll_fsm_size          : std_logic_vector(c_page_size_width    - 1 downto 0);
+  signal ll_fsm_dat_sel       : std_logic_vector(g_partial_select_width - 1 downto 0);
+  signal ll_fsm_oob_sel       : std_logic_vector(g_partial_select_width - 1 downto 0);
+  signal ll_fsm_oob_size      : std_logic_vector(c_max_oob_size_width   - 1 downto 0);
+
   signal ll_next_addr          : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal ll_next_addr_valid    : std_logic_vector(g_page_addr_width - 1 downto 0);
 
@@ -373,12 +386,14 @@ architecture syn of xswc_input_block is
 
   type t_ll_entry is record
     valid           : std_logic;
-    eof             : std_logic;
-    next_page       : std_logic_vector(g_page_addr_width      - 1 downto 0);
+    eof             : std_logic;                                             -- End Of Pck
+    next_page       : std_logic_vector(g_page_addr_width      - 1 downto 0); 
     next_page_valid : std_logic;
     addr            : std_logic_vector(g_page_addr_width      - 1 downto 0);
     dsel            : std_logic_vector(g_partial_select_width - 1 downto 0);
     size            : std_logic_vector(c_page_size_width      - 1 downto 0);
+    oob_size        : std_logic_vector(c_max_oob_size_width   - 1 downto 0);
+    oob_dsel        : std_logic_vector(g_partial_select_width - 1 downto 0);
   end record;
 
   signal ll_entry           : t_ll_entry;
@@ -418,7 +433,17 @@ architecture syn of xswc_input_block is
                                (snk_adr_int = c_WRF_STATUS) and                          -- the address indicates status *and*
                                (f_unmarshall_wrf_status(snk_dat_int).error = '1') else   -- the status indicates error       
                    '0';
+  in_pck_eod    <= '1'         when (in_pck_dvalid = '1'   and  
+                               snk_adr_d0 = c_WRF_DATA     and 
+                               (snk_adr_int = c_WRF_OOB or snk_adr_int = c_WRF_USER)) else
+                   '0';
 
+  in_pck_sel           <= f_sel2partialSel(snk_sel_int,g_partial_select_width);
+--  in_pck_dat_sel       <= in_pck_sel  when (snk_adr_int = c_WRF_STATUS or snk_adr_int = c_WRF_DATA) else '0';
+--  in_pck_oob_sel       <= in_pck_sel  when (snk_adr_int = c_WRF_OOB    or snk_adr_int = c_WRF_USER) else '0';
+  in_pck_is_dat        <= '1'         when (snk_adr_int = c_WRF_STATUS or snk_adr_int = c_WRF_DATA) else '0';
+
+  
   -- TODO: we need to indicate somehow that there is error and pck is dumped !!!
 
   snk_stall_int <= ((not mpm_dreq_i) or snk_stall_force_h) and snk_stall_force_l; --fifo_full or stall_after_err or stall_when_stuck;
@@ -430,10 +455,12 @@ architecture syn of xswc_input_block is
       --================================================
         snk_ack_int    <= '0';
         snk_cyc_d0     <= '0';
+        snk_adr_d0     <= (others => '0');
       --================================================
       else
       
         snk_cyc_d0 <= snk_cyc_int;
+        snk_adr_d0 <= snk_adr_int;
         
         -- generating ack
         snk_ack_int <= snk_cyc_int and snk_stb_int and snk_we_int and not snk_stall_int;
@@ -795,13 +822,18 @@ architecture syn of xswc_input_block is
       snk_stall_force_l   <= '1';
       snk_sel_d0          <= (others => '0');
       page_word_cnt       <= (others => '0');
+      oob_word_cnt        <= (others => '0');
       
       in_pck_dvalid_d0    <= '0';
       in_pck_dat_d0       <= (others => '0');
       in_pck_sel_d0       <= (others => '0');
-      in_pck_dvalid_d1    <= '0';
-      in_pck_dat_d1       <= (others => '0');
-      in_pck_sel_d1       <= (others => '0'); 
+      in_pck_is_dat_d0    <= '0';
+
+      ll_fsm_addr         <= (others => '0');
+      ll_fsm_data         <= (others => '0'); 
+      ll_fsm_dat_sel      <= (others => '0');
+      ll_fsm_oob_sel      <= (others => '0'); 
+      ll_fsm_oob_size     <= (others => '0');
       
       mmu_force_free_req  <= '0'; 
       mmu_force_free_addr <= (others => '0'); 
@@ -827,9 +859,16 @@ architecture syn of xswc_input_block is
             snk_stall_force_h <= '1';
             snk_stall_force_l <= '1';
             in_pck_dvalid_d0  <= '0';
-            in_pck_dat_d0     <= (others=>'0');
-            in_pck_sel_d0     <= (others=>'0'); 
-            in_pck_sel_d1     <= (others=>'0');              
+            in_pck_dat_d0     <= (others => '0');
+            in_pck_sel_d0     <= (others => '0'); 
+            in_pck_is_dat_d0  <= '0';
+       
+            ll_fsm_addr       <= (others => '0');
+            ll_fsm_data       <= (others => '0'); 
+            ll_fsm_size       <= (others => '0'); 
+            ll_fsm_dat_sel    <= (others => '0');
+            ll_fsm_oob_sel    <= (others => '0'); 
+            ll_fsm_oob_size   <= (others => '0');
 
             if(ready_for_next_pck = '1' ) then 
               snk_stall_force_h <= '0';
@@ -852,6 +891,7 @@ architecture syn of xswc_input_block is
             in_pck_dvalid_d0 <= '0';
             in_pck_dat_d0    <= (others=>'0');
             in_pck_sel_d0    <= (others=>'0');              
+            in_pck_is_dat_d0 <= '0';
 
             if (in_pck_sof = '1') then               
               if(in_pck_drop_on_sof = '1') then
@@ -862,10 +902,12 @@ architecture syn of xswc_input_block is
                 mpm_pg_addr               <= pckstart_pageaddr;
                 s_rcv_pck                 <= S_RCV_DATA;
                 page_word_cnt             <= (others =>'0');
+                oob_word_cnt              <= (others =>'0');
                 if(in_pck_dvalid = '1') then 
                   in_pck_dvalid_d0 <= in_pck_dvalid;
                   in_pck_dat_d0    <= in_pck_dat;
-                  in_pck_sel_d0    <= in_pck_sel;         
+                  in_pck_sel_d0    <= in_pck_sel; 
+                  in_pck_is_dat_d0 <= in_pck_is_dat;         
                 end if;
               end if;
             end if;
@@ -876,27 +918,42 @@ architecture syn of xswc_input_block is
               if(in_pck_dvalid = '1') then 
                 in_pck_dvalid_d0 <= in_pck_dvalid;
                 in_pck_dat_d0    <= in_pck_dat;
-                in_pck_sel_d0    <= in_pck_sel;         
+                in_pck_sel_d0    <= in_pck_sel;      
+                in_pck_is_dat_d0 <= in_pck_is_dat;   
               end if;              
               
-              if(in_pck_eof = '1' or in_pck_err = '1') then 
+              if(in_pck_eof = '1' or in_pck_err = '1' or s_transfer_pck = S_DROP_PCK) then 
                 mpm_dlast     <= '1' ;
               end if;
 
               if((in_pck_dvalid = '1' and in_pck_dvalid_d0 ='1') or in_pck_eof = '1' or in_pck_err = '1') then
                 mpm_dvalid    <= '1';
                 mpm_data      <= in_pck_dat_d0;
-                in_pck_sel_d1 <= in_pck_sel_d0;
+                
+                if   (in_pck_is_dat_d0 = '1' and in_pck_is_dat = '0' and  in_pck_eof = '0' and in_pck_err = '0' ) then
+                  ll_fsm_dat_sel <= in_pck_sel_d0;
+                elsif(in_pck_is_dat_d0 = '1' and in_pck_is_dat = '1' and (in_pck_eof = '1' or in_pck_err = '1') ) then
+                  ll_fsm_dat_sel <= in_pck_sel_d0;
+                elsif(in_pck_is_dat = '0' and in_pck_eof = '1') then
+                  ll_fsm_oob_sel <= in_pck_sel_d0;
+                end if; 
               end if;
 
               if((in_pck_dvalid = '1' and in_pck_dvalid_d0 ='1') or in_pck_eof = '1' or in_pck_err = '1') then
                 if(mpm_pg_req_i = '1') then
-                  page_word_cnt <= to_unsigned(1, c_page_size_width);
+                  page_word_cnt <= to_unsigned(1, c_page_size_width);                    
+                  if(in_pck_is_dat_d0 = '0') then
+                    oob_word_cnt<= to_unsigned(1, c_max_oob_size_width);                    
+                  end if;
                 else
                   page_word_cnt <= page_word_cnt + 1;
+                  if(in_pck_is_dat_d0 = '0') then
+                    oob_word_cnt <= oob_word_cnt + 1;
+                  end if;
                 end if;
               elsif(mpm_pg_req_i = '1') then
-                page_word_cnt <= (others => '0');
+                oob_word_cnt    <= (others => '0');
+                page_word_cnt   <= (others => '0');
               end if;
 
               if(in_pck_err = '1') then 
@@ -919,7 +976,7 @@ architecture syn of xswc_input_block is
                 end if;
 
               elsif(s_transfer_pck = S_DROP_PCK) then   
-              
+                  
                   mmu_force_free_addr <= current_pckstart_pageaddr;
                 
                   if(mmu_force_free_req = '1') then -- it means that the previous request is still 
@@ -933,7 +990,7 @@ architecture syn of xswc_input_block is
                 snk_stall_force_l <= '0';
                 
               elsif(in_pck_eof = '1') then 
-
+                 
                 if(ready_for_next_pck = '1' ) then                                
                   snk_stall_force_h <= '0';
                   snk_stall_force_l <= '1';
@@ -949,8 +1006,8 @@ architecture syn of xswc_input_block is
                 if(page_word_cnt /= to_unsigned(g_page_size, c_page_size_width))  then
                   assert false
                     report "something is wrong with word counting, pg_req_i received in the middle of page";
-                end if; 
-
+                end if;
+                
                 mpm_pg_addr       <= interpck_pageaddr;
                
               elsif(no_new_pg_addr_at_eop = '1' or ll_not_ready_at_eop = '1') then  
@@ -1015,7 +1072,8 @@ architecture syn of xswc_input_block is
               drop_on_stuck     <= '1';
               in_pck_dat_d0     <= (others=>'0');
               in_pck_sel_d0     <= (others=>'0'); 
-              in_pck_sel_d1     <= (others=>'0');                
+              in_pck_is_dat_d0  <= '0'; 
+          
               if (in_pck_sof = '1') then               
                 if(in_pck_drop_on_sof = '1') then
                   s_rcv_pck                 <= S_DROP;
@@ -1028,7 +1086,8 @@ architecture syn of xswc_input_block is
                   if(in_pck_dvalid = '1') then 
                     in_pck_dvalid_d0 <= in_pck_dvalid;
                     in_pck_dat_d0    <= in_pck_dat;
-                    in_pck_sel_d0    <= in_pck_sel;         
+                    in_pck_sel_d0    <= in_pck_sel;    
+                    in_pck_is_dat_d0 <= in_pck_is_dat;      
                   end if;
                 end if;
               else  --  normal case: bedome ready again (un-stuck)
@@ -1058,7 +1117,13 @@ architecture syn of xswc_input_block is
         if(mmu_force_free_req = '1' and mmu_force_free_done_i ='1') then 
           mmu_force_free_req    <= '0';
         end if;
-
+        
+        if(mpm_pg_req_i = '1' or mpm_dlast = '1') then
+          ll_fsm_size     <= std_logic_vector(page_word_cnt);
+          ll_fsm_oob_size <= std_logic_vector(oob_word_cnt);
+          ll_fsm_addr     <= mpm_pg_addr;
+        end if;
+        
       end if;
     end if;
     
@@ -1118,16 +1183,26 @@ architecture syn of xswc_input_block is
       ll_entry.size                <= (others => '0');      
       ll_entry.next_page           <= (others => '0');
       ll_entry.next_page_valid     <= '0';      
+      ll_entry.oob_size            <= (others => '0');
+      ll_entry.oob_dsel            <= (others => '0');
+
       ll_entry_tmp.valid           <= '0';
       ll_entry_tmp.eof             <= '0';
       ll_entry_tmp.addr            <= (others => '0');
       ll_entry_tmp.dsel            <= (others => '0');
       ll_entry_tmp.size            <= (others => '0');      
       ll_entry_tmp.next_page       <= (others => '0');
-      ll_entry_tmp.next_page_valid <= '0';           
+      ll_entry_tmp.next_page_valid <= '0'; 
+      ll_entry_tmp.oob_size        <= (others => '0');
+      ll_entry_tmp.oob_dsel        <= (others => '0');  
+      
+      mpm_dlast_d0                 <= '0'; 
+      mpm_pg_req_d0                <= '0'; 
       --========================================
       else
         
+        mpm_dlast_d0  <= mpm_dlast;
+        mpm_pg_req_d0 <= mpm_pg_req_i;
 
         case s_ll_write is
           --===========================================================================================
@@ -1141,38 +1216,38 @@ architecture syn of xswc_input_block is
               ll_entry.dsel            <= (others => '0');
               ll_entry.size            <= (others => '0');
               ll_entry.next_page       <= (others => '0');   
-              ll_entry.next_page_valid <= '0';              
+              ll_entry.next_page_valid <= '0';   
+              ll_entry.oob_size        <= (others => '0');
+              ll_entry.oob_dsel        <= (others => '0');                         
               s_ll_write               <= S_WRITE;
             end if;
 
           --===========================================================================================
           when S_READY_FOR_WR =>
           --===========================================================================================
-            if(mpm_dlast = '1') then
+            if(mpm_dlast_d0 = '1') then
               ll_wr_req                <= '1';
               ll_entry.valid           <= '1';
               ll_entry.eof             <= '1';
-              ---------------- TODO: make it more generic !!!! ---------------------------------
-              ll_entry.addr            <= mpm_pg_addr;
-              if(snk_sel_d0 = "10") then
-                ll_entry.dsel          <= (others => '1');
-              else 
-                ll_entry.dsel          <= (others => '0');
-              end if;
-              -----------------------------------------------------------------------------------
-              ll_entry.size            <= std_logic_vector(page_word_cnt);      
+              ll_entry.addr            <= ll_fsm_addr;
+              ll_entry.dsel            <= ll_fsm_dat_sel;
+              ll_entry.size            <= ll_fsm_size;     
               ll_entry.next_page       <= pckstart_pageaddr;
               ll_entry.next_page_valid <= '1';       
+              ll_entry.oob_size        <= ll_fsm_oob_size;
+              ll_entry.oob_dsel        <= ll_fsm_oob_sel;
               s_ll_write               <= S_WRITE;     
-            elsif(mpm_pg_req_i = '1') then
+            elsif(mpm_pg_req_d0 = '1') then
               ll_wr_req                <= '1';
               ll_entry.valid           <= '1';
               ll_entry.eof             <= '0';
-              ll_entry.addr            <= mpm_pg_addr;
+              ll_entry.addr            <= ll_fsm_addr;
               ll_entry.dsel            <= (others => '0');
               ll_entry.size            <= (others => '0');             
               ll_entry.next_page       <= interpck_pageaddr;
               ll_entry.next_page_valid <= '1';       
+              ll_entry.oob_size        <= ll_fsm_oob_size;
+              ll_entry.oob_dsel        <= ll_fsm_oob_sel;              
               s_ll_write               <= S_WRITE;                               
             end if;
           --===========================================================================================
@@ -1181,19 +1256,16 @@ architecture syn of xswc_input_block is
             if(ll_wr_req = '1' and ll_wr_done_i = '1') then -- written
               ll_wr_req                <= '0';
                    
-             if(mpm_dlast = '1') then
+             if(mpm_dlast_d0 = '1') then
                 ll_wr_req                <= '1';
                 ll_entry.valid           <= '1';
                 ll_entry.eof             <= '1';
-                ll_entry.addr            <= mpm_pg_addr;
-                ---------------- TODO: make it more generic !!!! ---------------------------------
-                if(snk_sel_d0 = "10") then
-                  ll_entry.dsel          <= (others => '1');
-                else 
-                  ll_entry.dsel          <= (others => '0');
-                end if;
-               -----------------------------------------------------------------------------------
-                ll_entry.size              <= std_logic_vector(page_word_cnt); 
+                ll_entry.addr            <= ll_fsm_addr;
+                ll_entry.dsel            <= ll_fsm_dat_sel;
+                ll_entry.size            <= ll_fsm_size;
+                ll_entry.oob_size        <= ll_fsm_oob_size;
+                ll_entry.oob_dsel        <= ll_fsm_oob_sel;                 
+
                 if(pckstart_page_in_advance = '1') then
                   ll_entry.next_page       <= pckstart_pageaddr;
                   ll_entry.next_page_valid <= '1';       
@@ -1202,25 +1274,30 @@ architecture syn of xswc_input_block is
                   ll_entry.next_page_valid <= '0';       
                 end if;
                 s_ll_write                 <= S_WRITE;  
-              elsif(mpm_pg_req_i = '1') then
+              elsif(mpm_pg_req_d0 = '1') then
                 if(interpck_page_in_advance = '1') then
                   ll_wr_req                    <= '1';
                   ll_entry.valid               <= '1';
                   ll_entry.eof                 <= '0';
-                  ll_entry.addr                <= mpm_pg_addr;
+                  ll_entry.addr                <= ll_fsm_addr;
                   ll_entry.dsel                <= (others => '0');
                   ll_entry.size                <= (others => '0');             
                   ll_entry.next_page           <= interpck_pageaddr;
-                  ll_entry.next_page_valid     <= '1';       
+                  ll_entry.next_page_valid     <= '1';      
+                  ll_entry.oob_size            <= ll_fsm_oob_size;
+                  ll_entry.oob_dsel            <= ll_fsm_oob_sel;                    
                   s_ll_write                   <= S_WRITE;   
                 else -- remember
                   ll_entry_tmp.valid           <= '1';
                   ll_entry_tmp.eof             <= '0';
-                  ll_entry_tmp.addr            <= mpm_pg_addr;
+                  ll_entry_tmp.addr            <= ll_fsm_addr;
                   ll_entry_tmp.dsel            <= (others => '0');
                   ll_entry_tmp.size            <= (others => '0');             
                   ll_entry_tmp.next_page       <= (others => '0');   -- to be set later          
                   ll_entry_tmp.next_page_valid <= '0';               -- to be set later 
+                  ll_entry_tmp.oob_size        <= ll_fsm_oob_size;
+                  ll_entry_tmp.oob_dsel        <= ll_fsm_oob_sel;                    
+
                   s_ll_write                   <= S_WAIT_INTERMEDIATE_READY;   
                 end if;                
               else  -- most commont case
@@ -1231,12 +1308,14 @@ architecture syn of xswc_input_block is
                 ll_entry.size            <= (others => '0');             
                 ll_entry.next_page       <= (others => '0');
                 ll_entry.next_page_valid <= '0';                            
+                ll_entry.oob_size        <= (others => '0');
+                ll_entry.oob_dsel        <= (others => '0');                  
 
                 if(ll_entry.next_page_valid = '0' and ll_entry.eof = '1' and ll_entry.valid = '1') then 
                   -- finished writing end-of-frame page addr without cleaning pckstart_addr
                   if(pckstart_page_in_advance = '1') then
                     ll_wr_req                <= '1';
-                    ll_entry.addr            <= pckstart_pageaddr;
+                    ll_entry.addr            <= ll_fsm_addr;
                     s_ll_write               <= S_WRITE;
                   else
                     ll_wr_req                <= '0';
@@ -1251,44 +1330,36 @@ architecture syn of xswc_input_block is
               end if;
             else -- if(ll_wr_req = '1' and ll_wr_done_i = '1)
 
-              if(mpm_dlast = '1') then
+              if(mpm_dlast_d0 = '1') then
                 s_ll_write               <= S_EOF_ON_WR;
-              elsif(mpm_pg_req_i = '1') then
+              elsif(mpm_pg_req_d0 = '1') then
                 s_ll_write               <= S_PGR_ON_WR;                
               elsif(in_pck_sof = '1') then
                 s_ll_write               <= S_SOF_ON_WR;
               end if;
               
-              if(mpm_pg_req_i = '1' or mpm_dlast = '1') then 
+              if(mpm_pg_req_d0 = '1' or mpm_dlast_d0 = '1') then 
                 ll_entry_tmp.valid           <= '1';
-                ll_entry_tmp.eof             <= mpm_dlast;
-                ll_entry_tmp.addr            <= mpm_pg_addr;
-                ---------------- TODO: make it more generic !!!! ---------------------------------
-                if(snk_sel_d0 = "10") then
-                  ll_entry_tmp.dsel          <= (others => '1');
-                else 
-                  ll_entry_tmp.dsel          <= (others => '0');
-                end if;
-                -----------------------------------------------------------------------------------
-                ll_entry_tmp.size            <= std_logic_vector(page_word_cnt);             
+                ll_entry_tmp.eof             <= mpm_dlast_d0;
+                ll_entry_tmp.addr            <= ll_fsm_addr;
+                ll_entry_tmp.dsel            <= ll_fsm_dat_sel;
+                ll_entry_tmp.size            <= ll_fsm_size;
+                ll_entry_tmp.dsel            <= ll_fsm_dat_sel;
+                ll_entry_tmp.size            <= ll_fsm_size;
+                ll_entry_tmp.oob_size        <= ll_fsm_oob_size;
+                ll_entry_tmp.oob_dsel        <= ll_fsm_oob_sel;                           
               end if;
             end if; -- if(ll_wr_req = '1' and ll_wr_done_i = '1)
 
           --===========================================================================================
           when S_NOT_READY_FOR_WR =>
           --===========================================================================================
-            if(mpm_dlast = '1') then  
+            if(mpm_dlast_d0 = '1') then  
               ll_wr_req                <= '1';
               ll_entry.valid           <= '1';
               ll_entry.eof             <= '1';
-              ---------------- TODO: make it more generic !!!! ---------------------------------
-              ll_entry.addr            <= mpm_pg_addr;
-              if(snk_sel_d0 = "10") then
-                ll_entry.dsel          <= (others => '1');
-              else 
-                ll_entry.dsel          <= (others => '0');
-              end if;
-              ll_entry.size            <= std_logic_vector(page_word_cnt);        
+              ll_entry.dsel            <= ll_fsm_dat_sel;
+              ll_entry.size            <= ll_fsm_size;   
               -----------------------------------------------------------------------------------
               if(pckstart_page_in_advance = '1') then
                 ll_entry.next_page       <= pckstart_pageaddr;
@@ -1298,25 +1369,30 @@ architecture syn of xswc_input_block is
                 ll_entry.next_page_valid <= '0';       
               end if;
               s_ll_write               <= S_WRITE;                
-            elsif(mpm_pg_req_i = '1') then
+            elsif(mpm_pg_req_d0 = '1') then
               if(interpck_page_in_advance = '1') then  -- normal write as if from READY_FOR_WR
                 ll_wr_req                <= '1';
                 ll_entry.valid           <= '1';
                 ll_entry.eof             <= '0';
-                ll_entry.addr            <= mpm_pg_addr;
+                ll_entry.addr            <= ll_fsm_addr;
                 ll_entry.dsel            <= (others => '0');
                 ll_entry.size            <= (others => '0');             
                 ll_entry.next_page       <= interpck_pageaddr;
                 ll_entry.next_page_valid <= '1';       
+                ll_entry.oob_size        <= ll_fsm_oob_size;
+                ll_entry.oob_dsel        <= ll_fsm_oob_sel;                 
                 s_ll_write               <= S_WRITE;              
               else  -- should not happen because we PAUSE rcv_pck_fsm to prevent this
                 ll_entry_tmp.valid       <= '1';
                 ll_entry_tmp.eof         <= '0';
-                ll_entry_tmp.addr        <= mpm_pg_addr;
+                ll_entry_tmp.addr        <= ll_fsm_addr;
                 ll_entry_tmp.dsel        <= (others => '0');
                 ll_entry_tmp.size        <= (others => '0');
-                ll_entry.next_page       <= (others => '0');  -- to be set later
-                ll_entry.next_page_valid <= '0';              -- to be set later
+                ll_entry_tmp.next_page       <= (others => '0');  -- to be set later
+                ll_entry_tmp.next_page_valid <= '0';              -- to be set later
+                ll_entry_tmp.oob_size        <= ll_fsm_oob_size;
+                ll_entry_tmp.oob_dsel        <= ll_fsm_oob_sel;                 
+                
                 s_ll_write               <= S_WAIT_INTERMEDIATE_READY;                
               end if;
             elsif(interpck_page_in_advance = '1' and pckstart_page_in_advance = '1') then
@@ -1355,11 +1431,13 @@ architecture syn of xswc_input_block is
                 ll_wr_req                <= '1';
                 ll_entry.valid           <= '0';
                 ll_entry.eof             <= '0';
-                ll_entry.addr            <= pckstart_pageaddr;
+                ll_entry.addr            <= ll_fsm_addr;
                 ll_entry.dsel            <= (others => '0');
                 ll_entry.size            <= (others => '0');
                 ll_entry.next_page       <= (others => '0');   
-                ll_entry.next_page_valid <= '0';              
+                ll_entry.next_page_valid <= '0';      
+                ll_entry.oob_size        <= ll_fsm_oob_size;
+                ll_entry.oob_dsel        <= ll_fsm_oob_sel;                        
                 s_ll_write               <= S_WRITE;
               else
                 s_ll_write               <= S_IDLE;
@@ -1390,67 +1468,7 @@ architecture syn of xswc_input_block is
     end if;
     
   end process p_ll_write_fsm;
-  --================================================================================================
-  -- Linked List write
-  --================================================================================================
---   ll_if : process(clk_i, rst_n_i)
---   begin
---     if rising_edge(clk_i) then
---       if(rst_n_i = '0') then
---       --===================================================
---       ll_wr_req                <= '0';
---       ll_entry.valid           <= '0';
---       ll_entry.eof             <= '0';
---       ll_entry.addr            <= (others => '0');
---       ll_entry.dsel            <= (others => '0');
---       ll_entry.size            <= (others => '0');      
---       ll_entry.next_page       <= (others => '0');
---       ll_entry.next_page_valid <= '0';
---       --===================================================
---       else
--- 
---         if(mpm_dlast = '1') then
---           ll_wr_req                <= '1';
---           ll_entry.valid           <= '1';
---           ll_entry.eof             <= '1';
---           ll_entry.addr            <= mpm_pg_addr;
---           ---------------- TODO: make it more generic !!!! ---------------------------------
---           if(snk_sel_d0 = "10") then
---             ll_entry.dsel          <= (others => '1');
---           else 
---             ll_entry.dsel          <= (others => '0');
---           end if;
---           -----------------------------------------------------------------------------------
---           ll_entry.size            <= std_logic_vector(page_word_cnt);
---           ll_entry.next_page       <= pckstart_pageaddr;
---           ll_entry.next_page_valid <= '1';
---         elsif(mpm_pg_req_i = '1') then
---           ll_wr_req                <= '1';
---           ll_entry.valid           <= '1';
---           ll_entry.eof             <= '0';
---           ll_entry.addr            <= mpm_pg_addr;
---           ll_entry.dsel            <= (others => '0');
---           ll_entry.size            <= (others => '0');
---           ll_entry.next_page       <= interpck_pageaddr;    
---           ll_entry.next_page_valid <= '1';      
---         elsif(ll_wr_req = '1' and ll_wr_done_i = '1') then
---           ll_wr_req                <= '0';
---           ll_entry.valid           <= '0';
---           ll_entry.eof             <= '0';
---           ll_entry.addr            <= (others => '0');
---           ll_entry.dsel            <= (others => '0');
---           ll_entry.size            <= (others => '0');             
---           ll_entry.next_page       <= (others => '0');
---           ll_entry.next_page_valid <= '0';
---         end if;
---       end if;
---     end if;
---   end process ll_if;
-
-  --================================================================================================
-  -- Some input signals
-  --================================================================================================
-
+  
   rtu_dst_port_usecnt   <= std_logic_vector(to_unsigned(cnt(rtu_dst_port_mask_i), g_usecount_width));
   
   snk_o.stall           <= snk_stall_int;
@@ -1492,14 +1510,21 @@ architecture syn of xswc_input_block is
   snk_stb_int           <= snk_i.stb;  
   snk_we_int            <= snk_i.we;  
   
+  -- old
+--  ll_data_eof(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width) <= ll_entry.dsel;
+--  ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
+--  ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others =>'0');
   
-  ll_data_eof(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width) <= ll_entry.dsel;
+  ll_data_eof(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width) <= ll_entry.oob_dsel;
   ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
   ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others =>'0');
   
-  ll_addr_o                               <= ll_entry.addr;
-  ll_data_o(g_ll_data_width - 1)          <= ll_entry.valid;
-  ll_data_o(g_ll_data_width - 2)          <= ll_entry.eof; 
+  ll_addr_o                                                                      <= ll_entry.addr;
+  ll_data_o(g_ll_data_width-0                       -1)                          <= ll_entry.valid;
+  ll_data_o(g_ll_data_width-1                       -1)                          <= ll_entry.eof; 
+  ll_data_o(g_ll_data_width-2                       -1 downto g_ll_data_width-2-g_partial_select_width)                     <= ll_entry.dsel; 
+  ll_data_o(g_ll_data_width-2-g_partial_select_width-1 downto g_ll_data_width-2-g_partial_select_width-c_max_oob_size_width)<= ll_entry.oob_size; 
+  
   ll_data_o(g_page_addr_width-1 downto 0) <= ll_data_eof when (ll_entry.eof='1') else ll_entry.next_page;
   ll_next_addr_o                          <= ll_entry.next_page;
   ll_next_addr_valid_o                    <= ll_entry.next_page_valid;

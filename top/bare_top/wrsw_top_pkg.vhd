@@ -252,6 +252,7 @@ package wrsw_top_pkg is
     generic( 
       g_prio_num                         : integer ;
       g_max_pck_size                     : integer ;
+      g_max_oob_size                     : integer ;
       g_num_ports                        : integer ;
       g_pck_pg_free_fifo_size            : integer ;
       g_input_block_cannot_accept_data   : string  ;

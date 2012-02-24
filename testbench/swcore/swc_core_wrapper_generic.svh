@@ -59,6 +59,7 @@ module swc_core_wrapper_generic
      #(
        .g_prio_num                         (`c_prio_num),
        .g_max_pck_size                     (`c_max_pck_size),
+       .g_max_oob_size                     (`c_max_oob_size),
        .g_num_ports                        (`c_num_ports),
        .g_pck_pg_free_fifo_size            (`c_pck_pg_free_fifo_size),
        .g_input_block_cannot_accept_data   (`c_input_block_cannot_accept_data),

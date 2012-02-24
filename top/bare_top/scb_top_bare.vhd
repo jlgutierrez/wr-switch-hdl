@@ -504,7 +504,8 @@ begin
     generic map
       ( 
       g_prio_num                         => 8,
-      g_max_pck_size                     =>  10 * 1024,
+      g_max_pck_size                     => 10 * 1024,
+      g_max_oob_size                     => 3,
       g_num_ports                        => 7,
       g_pck_pg_free_fifo_size            => ((65536/64)/2),
       g_input_block_cannot_accept_data   => "drop_pck",

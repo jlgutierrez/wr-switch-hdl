@@ -26,6 +26,7 @@
 
 `define  c_prio_num                          8                // c_swc_output_prio_num, [does not work, output block]
 `define  c_max_pck_size                      10 * 1024        // 10kB -- c_swc_max_pck_size,
+`define  c_max_oob_size                      3                // max size of OOB or USER data
 
 `define  c_mpm_mem_size                      65536            //c_swc_packet_mem_size,
 `define  c_mpm_page_size                     64               //c_swc_page_size,

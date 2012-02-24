@@ -58,6 +58,7 @@ entity xswc_core is
 
     g_prio_num                         : integer ;--:= c_swc_output_prio_num; [works only for value of 8, output_block-causes problem]
     g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
+    g_max_oob_size                     : integer ;
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
@@ -107,6 +108,7 @@ architecture rtl of xswc_core is
    constant c_usecount_width        : integer := integer(CEIL(LOG2(real(g_num_ports+1))));
    constant c_prio_width            : integer := integer(CEIL(LOG2(real(g_prio_num-1)))); -- g_prio_width
    constant c_max_pck_size_width    : integer := integer(CEIL(LOG2(real(g_max_pck_size-1)))); -- c_swc_max_pck_size_width 
+   constant c_max_oob_size_width    : integer := integer(CEIL(LOG2(real(g_max_oob_size + 1))));
 
    constant c_mpm_page_num          : integer := integer(CEIL(real(g_mpm_mem_size / g_mpm_page_size))); -- 65536/64 = 1024 -- c_swc_packet_mem_num_pages
    constant c_mpm_page_addr_width   : integer := integer(CEIL(LOG2(real(c_mpm_page_num-1)))); --c_swc_page_addr_width
@@ -114,8 +116,10 @@ architecture rtl of xswc_core is
    constant c_mpm_partial_sel_width : integer := integer(g_wb_sel_width-1);
    constant c_mpm_page_size_width   : integer := integer(CEIL(LOG2(real(g_mpm_page_size-1))));
 
+
+
    constant c_ll_addr_width         : integer := c_mpm_page_addr_width;
-   constant c_ll_data_width         : integer := c_mpm_page_addr_width + 2;
+   constant c_ll_data_width         : integer := c_mpm_page_addr_width + c_max_oob_size_width + 3;
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Memory Management Unit<<
    ----------------------------------------------------------------------------------------------------
@@ -274,6 +278,7 @@ architecture rtl of xswc_core is
         g_num_ports                        => g_num_ports,
         g_prio_width                       => c_prio_width,
         g_max_pck_size_width               => c_max_pck_size_width,
+        g_max_oob_size                     => g_max_oob_size,
         g_usecount_width                   => c_usecount_width,
         g_input_block_cannot_accept_data   => g_input_block_cannot_accept_data,
         --new
@@ -536,7 +541,9 @@ architecture rtl of xswc_core is
     g_fifo_size            => g_mpm_fifo_size,
     g_page_addr_width      => c_mpm_page_addr_width,
     g_partial_select_width => c_mpm_partial_sel_width,
-    g_max_packet_size      => g_max_pck_size
+    g_max_oob_size         => g_max_oob_size,
+    g_max_packet_size      => g_max_pck_size,
+    g_ll_data_width        => c_ll_data_width
     )
   port map(
     clk_io_i               => clk_i,

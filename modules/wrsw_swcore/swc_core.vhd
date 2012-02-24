@@ -56,6 +56,7 @@ entity swc_core is
   generic( 
     g_prio_num                         : integer ;--:= c_swc_output_prio_num;
     g_max_pck_size                     : integer ;--:= 2^c_swc_max_pck_size
+    g_max_oob_size                     : integer ;
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
@@ -134,6 +135,7 @@ architecture rtl of swc_core is
     generic map( 
       g_prio_num                         => g_prio_num,
       g_max_pck_size                     => g_max_pck_size,
+      g_max_oob_size                     => g_max_oob_size,
       g_num_ports                        => g_num_ports,
       g_pck_pg_free_fifo_size            => g_pck_pg_free_fifo_size,
       g_input_block_cannot_accept_data   => g_input_block_cannot_accept_data,

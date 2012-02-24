@@ -166,6 +166,7 @@ package swc_swcore_pkg is
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_prio_width                       : integer ;--:= c_swc_prio_width;
     g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
+    g_max_oob_size                     : integer ;
     g_usecount_width                   : integer ;--:= c_swc_usecount_width
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- Don't CHANGE !
 
@@ -208,7 +209,7 @@ package swc_swcore_pkg is
     mpm_dreq_i           : in std_logic;
 
     ll_addr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
-    ll_data_o    : out std_logic_vector(g_page_addr_width + 1 downto 0);
+    ll_data_o    : out std_logic_vector(g_ll_data_width-1 downto 0);
     ll_next_addr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
     ll_next_addr_valid_o   : out std_logic;
     ll_wr_req_o   : out std_logic;
@@ -465,6 +466,7 @@ component  swc_multiport_pck_pg_free_module is
     generic( 
       g_prio_num                         : integer ;--:= c_swc_output_prio_num;
       g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
+      g_max_oob_size                     : integer ;
       g_num_ports                        : integer ;--:= c_swc_num_ports
       g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
       g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
@@ -524,8 +526,40 @@ component  swc_multiport_pck_pg_free_module is
   );
   end component;
 
+  function f_sel2partialSel(sel       : std_logic_vector; partialSelWidth: integer) return std_logic_vector;
+  function f_partialSel2sel(partialSel: std_logic_vector; selWidth       : integer) return std_logic_vector;
+
 end swc_swcore_pkg;
 
 package body swc_swcore_pkg is
+
+  function f_sel2partialSel(sel : std_logic_vector; partialSelWidth: integer) return std_logic_vector is
+    variable tmp : std_logic_vector(partialSelWidth -1 downto 0);
+    variable ones: std_logic_vector(sel'length -1 downto 0);
+  begin
+    -- this function needs proper implementation
+    ones := (others =>'1');
+    if(sel = ones) then
+      tmp := (others =>'1');
+    else
+      tmp := (others =>'0');
+    end if;
+    return tmp;
+  end function;  
+
+  function f_partialSel2sel(partialSel: std_logic_vector; selWidth       : integer) return std_logic_vector is
+    variable tmp  : std_logic_vector(selWidth -1 downto 0);
+    variable ones : std_logic_vector(partialSel'length -1 downto 0);
+  begin
+    -- this function needs proper implementation
+    ones := (others =>'1');
+    if(partialSel = ones) then
+      tmp := (others =>'1');
+    else
+      tmp(selWidth-1)          := '1';
+      tmp(selWidth-2 downto 0) := (others =>'0');
+    end if;
+    return tmp;
+  end function; 
 
 end swc_swcore_pkg;
