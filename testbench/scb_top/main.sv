@@ -17,7 +17,7 @@ module main;
 
    reg clk_ref=0;
    reg clk_sys=0;
-   reg clk_mpm_core=0;
+   reg clk_swc_mpm_core=0;
    reg rst_n=0;
    
    parameter g_num_ports = 6;
@@ -34,9 +34,10 @@ module main;
 	  );
  -----/\----- EXCLUDED -----/\----- */
 
-   always #5ns clk_mpm_core <=~clk_mpm_core;
+   always #2.5ns clk_swc_mpm_core <=~clk_swc_mpm_core;
+   //always #5ns clk_swc_mpm_core <=~clk_swc_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
-   always #7.998ns clk_ref <= ~clk_ref;
+   always #8ns clk_ref <= ~clk_ref;
    
 //   always #8ns clk_sys <= ~clk_sys;
 //   always #8ns clk_ref <= ~clk_ref;
@@ -103,6 +104,7 @@ module main;
                 arr[j].dump();
                 $display("Is: ");
                 pkt2.dump();
+                $fatal("dupa"); //ML
            //sfp     $stop;
              end
            end // for (i=0;i<n_tries;i++)
@@ -119,7 +121,7 @@ module main;
               .clk_ref_i(clk_ref),
               .rst_n_i(rst_n),
               .cpu_irq(cpu_irq),
-              .clk_mpm_core_i(clk_mpm_core)
+              .clk_swc_mpm_core_i(clk_swc_mpm_core)
               );
 
    typedef struct {
@@ -221,9 +223,16 @@ module main;
             for(i=0;i<20;i++)
               begin
                  $display("Try %d", i);
-                 tx_test(seed, 20, 0, 0, ports[6].send, ports[0].recv);
+                 tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[0].recv /* sink */);
               end
          end
+//          begin 
+//             for(i=0;i<20;i++)
+//               begin
+//                  $display("Try %d", i);
+//                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[5].send /* src */, ports[1].recv /* sink */);
+//               end
+//          end         
          forever begin
             nic.update(DUT.U_Top.U_Wrapped_SCBCore.vic_irqs[0]);
             @(posedge clk_sys);

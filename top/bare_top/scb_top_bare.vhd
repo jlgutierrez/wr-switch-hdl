@@ -515,8 +515,8 @@ begin
       g_wb_ob_ignore_ack                 => FALSE,
       g_mpm_mem_size                     => 65536,
       g_mpm_page_size                    => 64,
-      g_mpm_ratio                        => 2,
-      g_mpm_fifo_size                    => 4,
+      g_mpm_ratio                        => 4, --2
+      g_mpm_fifo_size                    => 8,
       g_mpm_fetch_next_pg_in_advance     => FALSE
      )
     port map(
