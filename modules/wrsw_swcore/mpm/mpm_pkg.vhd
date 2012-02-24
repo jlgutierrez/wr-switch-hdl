@@ -54,7 +54,9 @@ package mpm_pkg is
     g_fifo_size            : integer := 4;
     g_page_addr_width      : integer := 11;
     g_partial_select_width : integer := 1;
-    g_max_packet_size      : integer := 10000
+    g_max_oob_size         : integer := 3;
+    g_max_packet_size      : integer := 10000;
+    g_ll_data_width        : integer := 15
     );
 
   port(
@@ -80,7 +82,7 @@ package mpm_pkg is
     rport_pg_req_o   : out std_logic_vector (g_num_ports-1 downto 0);
 
     ll_addr_o : out std_logic_vector(g_page_addr_width-1 downto 0);
-    ll_data_i : in  std_logic_vector(g_page_addr_width+1 downto 0)
+    ll_data_i : in  std_logic_vector(g_ll_data_width  -1 downto 0)
     );
    end component; 
 
