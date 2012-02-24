@@ -113,12 +113,8 @@ begin
 
 
   -- Input buffering
-  --------------------------------------
-  clkin1_buf : IBUFG
-  port map
-   (O => clkin1,
-    I => CLK_IN1);
 
+  CLKIN1 <= clk_in1;
 
   -- Clocking primitive
   --------------------------------------

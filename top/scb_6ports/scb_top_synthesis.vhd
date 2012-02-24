@@ -181,6 +181,7 @@ architecture Behavioral of scb_top_synthesis is
       clk_dmtd_i          : in  std_logic;
       clk_sys_i           : in  std_logic;
       clk_sys_o           : out std_logic;
+      clk_swc_mpm_core_i  : in  std_logic;
       cpu_wb_i            : in  t_wishbone_slave_in;
       cpu_wb_o            : out t_wishbone_slave_out;
       cpu_irq_n_o         : out std_logic;
