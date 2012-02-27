@@ -54,7 +54,7 @@ module main;
       EthPacketGenerator gen = new;
       EthPacket pkt, tmpl, pkt2;
       EthPacket arr[];
-      int i,j;
+      //int i,j;
       
       arr            = new[n_tries](arr);
 
@@ -73,27 +73,29 @@ module main;
       gen.set_size(63, 257);
 
       fork
-      for(i=0;i<n_tries;i++)
+      begin
+      for(int i=0;i<n_tries;i++)
            begin
               pkt  = gen.gen();
               pkt.oob = TX_FID;
               
               $display("Tx %d", i);
-              //   pkt.dump();
+              
               src.send(pkt);
               arr[i]  = pkt;
-
+              //pkt.dump();
             //  repeat(3000) @(posedge clk_sys);
               
 	  //    $display("Send: %d [dsize %d]", i+1,pkt.payload.size() + 14);
 	      
            end
-
-         for(j=0;j<n_tries;j++)
+         end 
+	begin
+         for(int j=0;j<n_tries;j++)
            begin
            sink.recv(pkt2);
 	      $display("rx %d", j);
-              
+              //pkt2.dump();
            if(unvid)
              arr[j].is_q  = 0;
            
@@ -104,10 +106,11 @@ module main;
                 arr[j].dump();
                 $display("Is: ");
                 pkt2.dump();
-                $fatal("dupa"); //ML
+               // $fatal("dupa"); //ML
            //sfp     $stop;
              end
            end // for (i=0;i<n_tries;i++)
+           end
          join
       seed = gen.get_seed();
       

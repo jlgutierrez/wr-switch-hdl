@@ -1,4 +1,4 @@
-target = "altera" # "xilinx" # 
+target = "xilinx" #  "altera" # 
 action = "simulation"
 
 #fetchto = "../../ip_cores"

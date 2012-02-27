@@ -1358,6 +1358,7 @@ architecture syn of xswc_input_block is
               ll_wr_req                <= '1';
               ll_entry.valid           <= '1';
               ll_entry.eof             <= '1';
+              ll_entry.addr            <= ll_fsm_addr;
               ll_entry.dsel            <= ll_fsm_dat_sel;
               ll_entry.size            <= ll_fsm_size;   
               -----------------------------------------------------------------------------------
@@ -1368,6 +1369,8 @@ architecture syn of xswc_input_block is
                 ll_entry.next_page       <= (others => '0');
                 ll_entry.next_page_valid <= '0';       
               end if;
+              ll_entry.oob_size        <= ll_fsm_oob_size;
+              ll_entry.oob_dsel        <= ll_fsm_oob_sel;                 
               s_ll_write               <= S_WRITE;                
             elsif(mpm_pg_req_d0 = '1') then
               if(interpck_page_in_advance = '1') then  -- normal write as if from READY_FOR_WR
@@ -1427,7 +1430,7 @@ architecture syn of xswc_input_block is
           when S_SOF_ON_WR =>
           --===========================================================================================
             if(ll_wr_req = '1' and ll_wr_done_i = '1') then -- written
-              if(pckstart_page_in_advance = '1') then
+              if(pckstart_page_in_advance = '1' and (ll_entry.next_page_valid = '0' or ll_entry.next_page/=pckstart_pageaddr)) then
                 ll_wr_req                <= '1';
                 ll_entry.valid           <= '0';
                 ll_entry.eof             <= '0';
@@ -1440,6 +1443,7 @@ architecture syn of xswc_input_block is
                 ll_entry.oob_dsel        <= ll_fsm_oob_sel;                        
                 s_ll_write               <= S_WRITE;
               else
+                ll_wr_req                <= '0';
                 s_ll_write               <= S_IDLE;
               end if;         
             end if;
@@ -1463,6 +1467,7 @@ architecture syn of xswc_input_block is
           when others =>
           --===========================================================================================    
              s_ll_write               <= S_IDLE;       
+             ll_wr_req                <= '1';
         end case;        
       end if;
     end if;
