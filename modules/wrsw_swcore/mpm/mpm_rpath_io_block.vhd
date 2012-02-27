@@ -16,6 +16,7 @@ entity mpm_rpath_io_block is
     g_ratio                : integer;
     g_ll_data_width        : integer;
     g_max_oob_size         : integer;
+    g_min_packet_size      : integer := 32; -- words
     g_max_packet_size      : integer);
 
   port (
@@ -167,6 +168,11 @@ architecture behavioral of mpm_rpath_io_block is
   signal counters_equal : std_logic;
   signal data_dsel_valid  : std_logic;
   signal wait_first_fetched : std_logic;
+  signal wait_next_valid_ll_read : std_logic;
+  signal rport_pg_req  : std_logic;
+  
+  signal start_cnt: unsigned(f_log2_size(g_page_size+1)-1 downto 0);
+  signal min_pck_size_reached : std_logic;
 begin  -- behavioral
 
 
@@ -197,6 +203,13 @@ begin  -- behavioral
   -- ML
   data_dsel_valid  <= '1' when (dsel_words_total = words_xmitted and rport_dreq_i = '1') else '0';
 
+  wait_next_valid_ll_read <= '1' when ((words_total <  words_xmitted+2) and 
+                                       d_last_int   = '0'               and 
+                                       page_state  /= FIRST_PAGE        and
+                                       fetch_first  = '0' )             else '0';
+  min_pck_size_reached  <= '0' when (start_cnt < to_unsigned(g_min_packet_size, start_cnt'length ) ) else '1';
+  
+  
   p_count_words : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
@@ -219,6 +232,7 @@ begin  -- behavioral
         end if;
 
         if(fetch_ack = '1') then
+        --if(fetch_valid = '1') then
           if(fetch_first = '1') then
             words_total      <= resize(fetch_pg_words, words_total'length);
             dsel_words_total <= resize(fetch_dsel_words, dsel_words_total'length);
@@ -236,7 +250,7 @@ begin  -- behavioral
 
 
 
-  df_rd_int <= rport_dreq_i and not (df_empty_i or d_last_int or wait_first_fetched);
+  df_rd_int <= rport_dreq_i and not (df_empty_i or d_last_int or wait_first_fetched or wait_next_valid_ll_read);
   
   df_rd_o   <= df_rd_int;
 
@@ -259,9 +273,9 @@ begin  -- behavioral
 
   rport_dlast_o  <= d_last_int;
   rport_d_o      <= df_d_i;
-  rport_dsel_o   <= saved_oob_dsel when d_last_int      = '1' else 
-                    saved_dat_dsel when d_endOfData_int = '1' else (others => '1');
-
+  rport_dsel_o   <= saved_dat_dsel when d_endOfData_int = '1' else                  -- order is important
+                    saved_oob_dsel when d_last_int      = '1' else (others => '1'); -- first eod, then oob
+  rport_pg_req_o <= rport_pg_req;
 -------------------------------------------------------------------------------
 -- Page fetcher logic
 -------------------------------------------------------------------------------  
@@ -285,6 +299,19 @@ begin  -- behavioral
 
   fetch_valid <= fvalid_int and not fetch_ack;
 
+  p_count_down_start : process(clk_io_i)
+  begin
+    if rising_edge(clk_io_i) then
+      if rst_n_io_i = '0' or rport_pg_req = '1' then
+        start_cnt <= to_unsigned(0, start_cnt'length);
+      else
+        if(fetch_first = '1' ) then
+          start_cnt <= start_cnt + 1;
+        end if;
+      end if;
+    end if;  
+  end process;
+
   p_page_fsm : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
@@ -292,21 +319,22 @@ begin  -- behavioral
         page_state <= FIRST_PAGE;
 
         fvalid_int     <= '0';
-        rport_pg_req_o <= '0';
+        rport_pg_req <= '0';
         ll_req_int       <= '0';
         ll_grant_d0 <= '0';
         ll_grant_d1 <= '0';
         fetch_dsel_words<= (others =>'0');
         fetch_oob_dsel  <=  (others =>'0');
         wait_first_fetched <='1';
+        fetch_first     <= '0';
       else
 
         ll_grant_d0 <= ll_grant_i;
         ll_grant_d1 <= ll_grant_d0;
 
-        if(cur_ll.valid = '1' and fetch_first = '1') then
+        if((cur_ll.valid = '1' or min_pck_size_reached = '1' or page_state = WAIT_ACK or page_state = WAIT_LAST_ACK) and fetch_first = '1') then
           wait_first_fetched <='0';
-        elsif(fetch_first = '1' and df_empty_i = '0') then
+        elsif(fetch_first = '1' and (df_empty_i = '0' or min_pck_size_reached = '0')) then
           wait_first_fetched <='1';
         end if;
 
@@ -316,14 +344,14 @@ begin  -- behavioral
           when FIRST_PAGE =>
 
             if(rport_pg_valid_i = '1') then
-              rport_pg_req_o <= '0';
+              rport_pg_req <= '0';
               cur_page       <= rport_pg_addr_i;
               ll_req_int       <= '1';
               ll_addr_o      <= rport_pg_addr_i;
               page_state     <= NEXT_LINK;
               fetch_first    <= '1';
             else
-              rport_pg_req_o <= '1';
+              rport_pg_req <= '1';
             end if;
 
 -- fetch the length (or the link to the next packet) from the LL for the
@@ -383,7 +411,7 @@ begin  -- behavioral
 
           when WAIT_LAST_ACK =>
             if(fetch_ack = '1') then
-              rport_pg_req_o <= '1';
+              rport_pg_req <= '1';
               fetch_first    <= '0';
               fvalid_int     <= '0';
               page_state     <= FIRST_PAGE;
