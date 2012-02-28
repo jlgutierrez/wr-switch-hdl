@@ -50,7 +50,7 @@ module main;
    
 //   assign clk_ref = clk_sys;
    
-   task automatic tx_test(ref int seed, input  int n_tries, input int is_q,input int unvid, ref EthPacketSource src, ref EthPacketSink sink);
+   task automatic tx_test(ref int seed, input  int n_tries, input int is_q,input int unvid, ref EthPacketSource src, ref EthPacketSink sink, input int srcPort, input int dstPort);
       EthPacketGenerator gen = new;
       EthPacket pkt, tmpl, pkt2;
       EthPacket arr[];
@@ -61,8 +61,8 @@ module main;
       gen.set_seed(seed);
   
       tmpl           = new;
-      tmpl.src       = '{1,2,3,4,5,6};
-      tmpl.dst       = '{'h00, 'h50, 'hca, 'hfe, 'hba, 'hbe};
+      tmpl.src       = '{srcPort, 2,3,4,5,6};
+      tmpl.dst       = '{dstPort, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       tmpl.has_smac  = 1;
       tmpl.is_q      = is_q;
       tmpl.vid       = 100;
@@ -106,7 +106,7 @@ module main;
                 arr[j].dump();
                 $display("Is: ");
                 pkt2.dump();
-               // $fatal("dupa"); //ML
+                $fatal("dupa"); //ML
            //sfp     $stop;
              end
            end // for (i=0;i<n_tries;i++)
@@ -178,7 +178,7 @@ module main;
      
    
    initial begin
-      uint64_t msr, i;
+      uint64_t msr;
       int seed;
       rtu_vlan_entry_t def_vlan;
       
@@ -203,8 +203,21 @@ module main;
 
       rtu.set_bus(cpu_acc, 'h60000);
       
+      rtu.set_port_config(0, 1, 1, 1);
       rtu.set_port_config(1, 1, 1, 1);
-      rtu.add_static_rule('{'h00, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1'h1);
+      rtu.set_port_config(2, 1, 1, 1);
+      rtu.set_port_config(4, 1, 1, 1);
+      rtu.set_port_config(3, 1, 1, 1);
+      rtu.set_port_config(5, 1, 1, 1);
+      //rtu.add_static_rule('{'h00, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1'h1);
+      rtu.add_static_rule('{'h00, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<0);
+      rtu.add_static_rule('{'h01, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<1);
+      rtu.add_static_rule('{'h02, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<2);
+      rtu.add_static_rule('{'h03, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<3);
+      rtu.add_static_rule('{'h04, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<4);
+      rtu.add_static_rule('{'h05, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<5);
+      rtu.add_static_rule('{'h06, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<6);
+      
      // rtu.set_hash_poly();
       
       def_vlan.port_mask      = 32'hffffffff;
@@ -218,24 +231,36 @@ module main;
       rtu.enable();
       
 
-      
-
       fork
          
-         begin 
-            for(i=0;i<20;i++)
-              begin
-                 $display("Try %d", i);
-                 tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[0].recv /* sink */);
-              end
-         end
 //          begin 
-//             for(i=0;i<20;i++)
+//             for(int i=0;i<20;i++)
 //               begin
-//                  $display("Try %d", i);
-//                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[5].send /* src */, ports[1].recv /* sink */);
+//                  $display("Try f_1:%d", i);
+//                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[0].recv /* sink */);
 //               end
-//          end         
+//         end
+          begin 
+             for(int g=0;g<20;g++)
+               begin
+                  $display("Try f_2:%d", g);
+                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[5].send /* src */, ports[1].recv /* sink */, 5 /* srcPort */ , 1 /* dstPort */);
+               end
+          end   
+          begin 
+             for(int g=0;g<20;g++)
+               begin
+                  $display("Try f_3:%d", g);
+                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[4].send /* src */, ports[2].recv /* sink */, 4 /* srcPort */ , 2 /* dstPort */);
+               end
+          end 
+          begin 
+             for(int g=0;g<20;g++)
+               begin
+                  $display("Try f_4:%d", g);
+                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[3].send /* src */, ports[3].recv /* sink */,  3 /* srcPort */ , 3 /* dstPort */);
+               end
+          end       
          forever begin
             nic.update(DUT.U_Top.U_Wrapped_SCBCore.vic_irqs[0]);
             @(posedge clk_sys);

@@ -241,6 +241,21 @@ package wrsw_components_pkg is
       rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)
       );
   end component;
-
+  component xwrsw_rtu
+    generic (
+      g_interface_mode      : t_wishbone_interface_mode;
+      g_address_granularity : t_wishbone_address_granularity;
+      g_num_ports           : integer;
+      g_port_mask_bits      : integer);
+    port (
+      clk_sys_i  : in  std_logic;
+      rst_n_i    : in  std_logic;
+      req_i      : in  t_rtu_request_array(g_num_ports-1 downto 0);
+      req_full_o : out std_logic_vector(g_num_ports-1 downto 0);
+      rsp_o      : out t_rtu_response_array(g_num_ports-1 downto 0);
+      rsp_ack_i  : in  std_logic_vector(g_num_ports-1 downto 0);
+      wb_i       : in  t_wishbone_slave_in;
+      wb_o       : out t_wishbone_slave_out);
+  end component;
   
 end wrsw_components_pkg;
