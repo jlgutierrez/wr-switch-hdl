@@ -233,13 +233,13 @@ module main;
 
       fork
          
-//          begin 
-//             for(int i=0;i<20;i++)
-//               begin
-//                  $display("Try f_1:%d", i);
-//                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[0].recv /* sink */);
-//               end
-//         end
+          begin 
+             for(int i=0;i<20;i++)
+               begin
+                  $display("Try f_1:%d", i);
+                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[0].recv /* sink */, 6 /* srcPort */ , 0 /* dstPort */);
+               end
+         end
           begin 
              for(int g=0;g<20;g++)
                begin
@@ -261,6 +261,30 @@ module main;
                   tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[3].send /* src */, ports[3].recv /* sink */,  3 /* srcPort */ , 3 /* dstPort */);
                end
           end       
+          begin 
+             for(int g=0;g<20;g++)
+               begin
+                  $display("Try f_4:%d", g);
+                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[2].send /* src */, ports[4].recv /* sink */,  2 /* srcPort */ , 4 /* dstPort */);
+               end
+          end       
+
+          begin 
+             for(int g=0;g<20;g++)
+               begin
+                  $display("Try f_4:%d", g);
+                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[1].send /* src */, ports[5].recv /* sink */,  1 /* srcPort */ , 5 /* dstPort */);
+               end
+          end       
+
+          begin 
+             for(int g=0;g<20;g++)
+               begin
+                  $display("Try f_4:%d", g);
+                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[0].send /* src */, ports[6].recv /* sink */,  0 /* srcPort */ , 6 /* dstPort */);
+               end
+          end       
+
          forever begin
             nic.update(DUT.U_Top.U_Wrapped_SCBCore.vic_irqs[0]);
             @(posedge clk_sys);

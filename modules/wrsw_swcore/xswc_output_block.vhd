@@ -567,7 +567,7 @@ begin  --  behavoural
           when S_IDLE =>
           --===========================================================================================   
 
-            if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
+            if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0') then
               src_out_int.cyc  <= '1';
               s_send_pck       <= S_DATA;
               pck_start_pgaddr <= mpm_pg_addr;

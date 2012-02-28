@@ -231,6 +231,11 @@ architecture syn of xswc_input_block is
   constant c_page_size_width       : integer := integer(CEIL(LOG2(real(g_page_size + 1))));
   constant c_max_oob_size_width    : integer := integer(CEIL(LOG2(real(g_max_oob_size + 1))));
 
+  --maximum time we wait for transfer before deciding the core is stuck
+  constant c_max_transfer_delay    : integer := g_num_ports+2; 
+  constant c_max_transfer_delay_width    : integer := integer(CEIL(LOG2(real(c_max_transfer_delay + 1))));
+  
+
   type t_page_alloc   is(S_IDLE,                  -- waiting for some work :)
                          S_PCKSTART_SET_USECNT,   -- setting usecnt to a page which was allocated 
                                                  -- in advance to be used for the first page of 
@@ -325,6 +330,7 @@ architecture syn of xswc_input_block is
   signal snk_stb_int   : std_logic;
   signal snk_we_int    : std_logic;
   signal snk_stall_int : std_logic;
+  signal snk_stall_d0  : std_logic;
   signal snk_err_int   : std_logic;
   signal snk_ack_int   : std_logic;
   signal snk_rty_int   : std_logic;
@@ -351,6 +357,8 @@ architecture syn of xswc_input_block is
 
   signal in_pck_is_dat   : std_logic;
   signal in_pck_is_dat_d0: std_logic;
+  signal in_pck_sof_on_stall : std_logic; --not allowed by WB standard but happens :-(
+  signal in_pck_delayed_sof : std_logic;
 
   signal mmu_force_free_req  : std_logic;
   signal mmu_force_free_addr : std_logic_vector(g_page_addr_width - 1 downto 0);
@@ -398,6 +406,8 @@ architecture syn of xswc_input_block is
 
   signal ll_entry           : t_ll_entry;
   signal ll_entry_tmp       : t_ll_entry;
+  signal transfer_delay_cnt : unsigned(c_max_transfer_delay_width -1 downto 0) ;
+  signal max_transfer_delay : std_logic;
   -------------------------------------------------------------------------------
   -- Function which calculates number of 1's in a vector
   ------------------------------------------------------------------------------- 
@@ -425,7 +435,7 @@ architecture syn of xswc_input_block is
   --==================================================================================================
   -- pWB (sink) to input FIFO
   --==================================================================================================
-  in_pck_sof    <= snk_cyc_int and not snk_cyc_d0;                                       -- detecting the beginning of the pck
+  in_pck_sof    <= snk_cyc_int and not snk_cyc_d0 and not snk_stall_int;                                      -- detecting the beginning of the pck
   in_pck_dvalid <= snk_stb_int and     snk_we_int and snk_cyc_int and not snk_stall_int; -- valid data which can be stored into FIFO
   in_pck_dat    <= snk_adr_int & snk_dat_int;
   in_pck_eof    <= snk_cyc_d0  and not snk_cyc_int  ;                                    -- detecting the end of the pck
@@ -443,7 +453,7 @@ architecture syn of xswc_input_block is
 --  in_pck_oob_sel       <= in_pck_sel  when (snk_adr_int = c_WRF_OOB    or snk_adr_int = c_WRF_USER) else '0';
   in_pck_is_dat        <= '1'         when (snk_adr_int = c_WRF_STATUS or snk_adr_int = c_WRF_DATA) else '0';
 
-  
+  in_pck_delayed_sof  <= (not snk_stall_int) and snk_stall_d0 and in_pck_sof_on_stall;
   -- TODO: we need to indicate somehow that there is error and pck is dumped !!!
 
   snk_stall_int <= ((not mpm_dreq_i) or snk_stall_force_h) and snk_stall_force_l; --fifo_full or stall_after_err or stall_when_stuck;
@@ -456,12 +466,13 @@ architecture syn of xswc_input_block is
         snk_ack_int    <= '0';
         snk_cyc_d0     <= '0';
         snk_adr_d0     <= (others => '0');
+        snk_stall_d0   <= '0';
       --================================================
       else
       
         snk_cyc_d0 <= snk_cyc_int;
         snk_adr_d0 <= snk_adr_int;
-        
+        snk_stall_d0 <= snk_stall_int;
         -- generating ack
         snk_ack_int <= snk_cyc_int and snk_stb_int and snk_we_int and not snk_stall_int;
         
@@ -469,7 +480,32 @@ architecture syn of xswc_input_block is
      end if; --rising_edge(clk_i) then
    end process read_helper;
 
- 
+  p_cnts : process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+      --================================================
+        transfer_delay_cnt     <= (others => '0');
+        max_transfer_delay     <= '0';     
+      --================================================
+      else
+      
+        if(pta_transfer_pck = '1' and max_transfer_delay='0') then
+          transfer_delay_cnt <=  transfer_delay_cnt + 1;
+        elsif(pta_transfer_pck = '0') then
+          transfer_delay_cnt <= (others =>'0');
+        end if;
+        
+        if(transfer_delay_cnt < to_unsigned(c_max_transfer_delay,transfer_delay_cnt'length)) then
+          max_transfer_delay <= '0';
+        else
+          max_transfer_delay <= '1';
+        end if;
+        
+       end if;  -- if(rst_n_i = '0') then
+     end if; --rising_edge(clk_i) then
+   end process p_cnts;
+  
   --==================================================================================================
   -- FSM to allocate pages in advance and set USECNT of pages (pckstart) allocated in advance
   --==================================================================================================
@@ -667,7 +703,7 @@ architecture syn of xswc_input_block is
           when S_IDLE =>
           --===========================================================================================  
 
-            if(rtu_rsp_valid_i = '1' and in_pck_sof = '1') then
+            if(rtu_rsp_valid_i = '1' and (in_pck_sof = '1' or in_pck_delayed_sof = '1')) then
               if(rtu_drop_i = '1' or rtu_dst_port_mask_i = zeros) then
                 s_transfer_pck             <= S_DROP_PCK;
               elsif(rtu_dst_port_usecnt = pckstart_usecnt_prev) then
@@ -679,9 +715,9 @@ architecture syn of xswc_input_block is
                 s_transfer_pck             <= S_SET_USECNT;
                 need_pckstart_usecnt_set   <= '1'; -- let know the p_page_alloc_fsm there is work
               end if;
-            elsif(rtu_rsp_valid_i = '1' and in_pck_sof = '0') then
+            elsif(rtu_rsp_valid_i = '1' and in_pck_sof = '0' and  in_pck_delayed_sof = '0') then
               s_transfer_pck             <= S_WAIT_SOF;
-            elsif(rtu_rsp_valid_i = '0' and in_pck_sof = '1') then
+            elsif(rtu_rsp_valid_i = '0' and (in_pck_sof = '1'  or in_pck_delayed_sof = '1')) then
               s_transfer_pck             <= S_WAIT_RTU_VALID;
             end if;    
                 
@@ -719,7 +755,7 @@ architecture syn of xswc_input_block is
           --===========================================================================================
           when S_WAIT_SOF =>
           --===========================================================================================
-            if(in_pck_sof = '1') then
+            if(in_pck_sof = '1' or  in_pck_delayed_sof = '1') then
               if(current_drop = '1' or pta_mask = zeros) then
                 s_transfer_pck             <= S_DROP_PCK;
               elsif(current_usecnt = pckstart_usecnt_prev) then
@@ -791,8 +827,8 @@ architecture syn of xswc_input_block is
   
   -- detecting when the start of pck should not trigger allocation of new pckstart_page because
   -- we are going to dump the pck, not even trying to write to MPM
-  in_pck_drop_on_sof <= '1' when ((s_transfer_pck = S_WAIT_SOF and (current_drop  = '1' or pta_mask            = zeros) and in_pck_sof = '1') or
-                                  (s_transfer_pck = S_IDLE     and (rtu_drop_i    = '1' or rtu_dst_port_mask_i = zeros) and in_pck_sof = '1' and
+  in_pck_drop_on_sof <= '1' when ((s_transfer_pck = S_WAIT_SOF and (current_drop  = '1' or pta_mask            = zeros) and (in_pck_sof = '1' or in_pck_delayed_sof ='1')) or
+                                  (s_transfer_pck = S_IDLE     and (rtu_drop_i    = '1' or rtu_dst_port_mask_i = zeros) and (in_pck_sof = '1' or in_pck_delayed_sof ='1') and
                                   rtu_rsp_valid_i = '1' )) else
                         '0';
 
@@ -808,8 +844,14 @@ architecture syn of xswc_input_block is
                                       s_transfer_pck = S_DROP_PCK or s_transfer_pck = S_PCK_TRANSFERED) and -- last pck transfered *and*
                                       pckstart_page_in_advance = '1' and mpm_dreq_i = '1') else                                 -- first page allocated
                            '0';  
-  input_stuck           <= '1' when ((mpm_dreq_i = '0' or s_transfer_pck = S_TRANSFER) and pckstart_page_in_advance = '1') else -- this means the previous frame has not been
-                                                                                       -- transfered yet, this is bad
+
+  -- In the case the frame is not transfered withing the expected number of cycles, very possibly
+  -- the SWcore is stuck, so indicate this
+  -- We check the delay because it might happen that the RTU is blocking (gave the data to transfer late)
+  -- in such case we cannot interpret it as stuck SWcore
+  input_stuck           <= '1' when ((mpm_dreq_i = '0' or s_transfer_pck = S_TRANSFER) and 
+                                     pckstart_page_in_advance = '1'                    and 
+                                     max_transfer_delay       = '1' ) else                    
                            '0';
 
   p_rcv_pck_fsm : process(clk_i, rst_n_i)
@@ -828,6 +870,7 @@ architecture syn of xswc_input_block is
       in_pck_dat_d0       <= (others => '0');
       in_pck_sel_d0       <= (others => '0');
       in_pck_is_dat_d0    <= '0';
+      in_pck_sof_on_stall <= '0';
 
       ll_fsm_addr         <= (others => '0');
       ll_fsm_data         <= (others => '0'); 
@@ -851,6 +894,12 @@ architecture syn of xswc_input_block is
         -- default values:
         mpm_dlast <= '0';
         mpm_dvalid<= '0';
+        
+        if(snk_cyc_int ='1' and snk_cyc_d0 = '0' and snk_stall_int = '1') then
+          in_pck_sof_on_stall <= '1';
+        elsif(in_pck_delayed_sof = '1' and in_pck_sof_on_stall = '1') then
+          in_pck_sof_on_stall <= '0';
+        end if;
 
         case s_rcv_pck is
           --===========================================================================================
@@ -863,12 +912,12 @@ architecture syn of xswc_input_block is
             in_pck_sel_d0     <= (others => '0'); 
             in_pck_is_dat_d0  <= '0';
        
-            ll_fsm_addr       <= (others => '0');
-            ll_fsm_data       <= (others => '0'); 
-            ll_fsm_size       <= (others => '0'); 
-            ll_fsm_dat_sel    <= (others => '0');
-            ll_fsm_oob_sel    <= (others => '0'); 
-            ll_fsm_oob_size   <= (others => '0');
+--             ll_fsm_addr       <= (others => '0');
+--             ll_fsm_data       <= (others => '0'); 
+--             ll_fsm_size       <= (others => '0'); 
+--             ll_fsm_dat_sel    <= (others => '0');
+--             ll_fsm_oob_sel    <= (others => '0'); 
+--             ll_fsm_oob_size   <= (others => '0');
 
             if(ready_for_next_pck = '1' ) then 
               snk_stall_force_h <= '0';
@@ -893,7 +942,8 @@ architecture syn of xswc_input_block is
             in_pck_sel_d0    <= (others=>'0');              
             in_pck_is_dat_d0 <= '0';
 
-            if (in_pck_sof = '1') then               
+            if (in_pck_sof = '1' or in_pck_delayed_sof ='1') then               
+              
               if(in_pck_drop_on_sof = '1') then
                 s_rcv_pck                 <= S_DROP;
                 snk_stall_force_l         <= '0';
@@ -922,8 +972,14 @@ architecture syn of xswc_input_block is
                 in_pck_is_dat_d0 <= in_pck_is_dat;   
               end if;              
               
-              if(in_pck_eof = '1' or in_pck_err = '1' or s_transfer_pck = S_DROP_PCK) then 
+              --dlast_o needs to go along with dvalid HIGH, for eof we are sure dvalid is always OK
+              if(in_pck_eof = '1' ) then 
                 mpm_dlast     <= '1' ;
+              
+              --for the special cases, we validate any data
+              elsif(in_pck_err = '1' or s_transfer_pck = S_DROP_PCK) then 
+                mpm_dlast     <= '1' ;
+                mpm_dvalid    <= '1';  
               end if;
 
               if((in_pck_dvalid = '1' and in_pck_dvalid_d0 ='1') or in_pck_eof = '1' or in_pck_err = '1') then
@@ -1074,7 +1130,7 @@ architecture syn of xswc_input_block is
               in_pck_sel_d0     <= (others=>'0'); 
               in_pck_is_dat_d0  <= '0'; 
           
-              if (in_pck_sof = '1') then               
+              if (in_pck_sof = '1' or in_pck_delayed_sof ='1') then               
                 if(in_pck_drop_on_sof = '1') then
                   s_rcv_pck                 <= S_DROP;
                   snk_stall_force_l         <= '0';
@@ -1142,9 +1198,9 @@ architecture syn of xswc_input_block is
       --===================================================
       else
         
-        if(in_pck_sof = '1' and in_pck_drop_on_sof = '0' and drop_on_stuck = '0' ) then
-          pckstart_page_in_advance <= '0';
-        elsif(in_pck_sof = '1' and in_pck_drop_on_sof = '0' and drop_on_stuck = '1' and ready_for_next_pck = '1' ) then 
+        if((in_pck_sof = '1' or in_pck_delayed_sof ='1') and in_pck_drop_on_sof = '0' and drop_on_stuck = '0') then
+          pckstart_page_in_advance <= '0';        
+        elsif((in_pck_sof = '1' or in_pck_delayed_sof ='1') and in_pck_drop_on_sof = '0' and drop_on_stuck = '1' and ready_for_next_pck = '1' ) then 
           -- this is a special case when we go to RCV_DATA from INPUT_STUCK (p_rcv_pck_fsm)
           -- in such case we also use new page
           pckstart_page_in_advance <= '0';
