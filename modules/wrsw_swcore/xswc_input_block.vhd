@@ -872,7 +872,6 @@ architecture syn of xswc_input_block is
             
             if(tp_stuck = '0' ) then  -- un-stuck the input :)
 
-              mmu_force_free_req <= '1';
               s_rcv_pck          <= S_IDLE;
           
             else -- still stuck
@@ -1620,6 +1619,17 @@ architecture syn of xswc_input_block is
           --===========================================================================================
             if(ll_wr_req = '1' and ll_wr_done_i = '1') then -- written
               ll_wr_req                <= '0';
+              ll_entry.valid           <= '0';
+              ll_entry.eof             <= '0';
+              ll_entry.addr            <= (others => '0');
+              ll_entry.dsel            <= (others => '0');
+              ll_entry.size            <= (others => '0');             
+              ll_entry.next_page       <= (others => '0');
+              ll_entry.next_page_valid <= '0';                            
+              ll_entry.oob_size        <= (others => '0');
+              ll_entry.oob_dsel        <= (others => '0');    
+              ll_entry.first_page_clr  <= '0';   
+
               if(ll_entry.first_page_clr = '1') then
                 if(pckinter_page_in_advance = '1' and pckstart_page_in_advance = '1') then
                   s_ll_write               <= S_READY_FOR_PGR_AND_DLAST;  

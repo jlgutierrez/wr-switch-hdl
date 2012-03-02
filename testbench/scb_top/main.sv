@@ -209,14 +209,15 @@ module main;
       rtu.set_port_config(4, 1, 1, 1);
       rtu.set_port_config(3, 1, 1, 1);
       rtu.set_port_config(5, 1, 1, 1);
-      //rtu.add_static_rule('{'h00, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1'h1);
-      rtu.add_static_rule('{'h00, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<0);
-      rtu.add_static_rule('{'h01, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<1);
-      rtu.add_static_rule('{'h02, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<2);
-      rtu.add_static_rule('{'h03, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<3);
-      rtu.add_static_rule('{'h04, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<4);
-      rtu.add_static_rule('{'h05, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<5);
-      rtu.add_static_rule('{'h06, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1<<6);
+      rtu.set_port_config(6, 1, 1, 1);
+//      rtu.add_static_rule('{'h00, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 1'h1);
+       rtu.add_static_rule('{'h00, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<0));
+       rtu.add_static_rule('{'h01, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<1));
+       rtu.add_static_rule('{'h02, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<2));
+       rtu.add_static_rule('{'h03, 'h50, 'hca, 'hfe, 'hba, 'hbe}, 8'h0); //dump
+       rtu.add_static_rule('{'h04, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<4));
+       rtu.add_static_rule('{'h05, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<5));
+       rtu.add_static_rule('{'h06, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<6));
       
      // rtu.set_hash_poly();
       
@@ -233,13 +234,13 @@ module main;
 
       fork
          
-          begin 
-             for(int i=0;i<20;i++)
-               begin
-                  $display("Try f_1:%d", i);
-                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[0].recv /* sink */, 6 /* srcPort */ , 0 /* dstPort */);
-               end
-         end
+//            begin 
+//              for(int i=0;i<20;i++)
+//                 begin
+//                    $display("Try f_1:%d", i);
+//                    tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[0].recv /* sink */, 6 /* srcPort */ , 0 /* dstPort */);
+//                 end
+//           end
           begin 
              for(int g=0;g<20;g++)
                begin
@@ -258,32 +259,32 @@ module main;
              for(int g=0;g<20;g++)
                begin
                   $display("Try f_4:%d", g);
-                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[3].send /* src */, ports[3].recv /* sink */,  3 /* srcPort */ , 3 /* dstPort */);
+                 tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[3].send /* src */, ports[3].recv /* sink */,  3 /* srcPort */ , 3 /* dstPort */);
                end
           end       
-          begin 
-             for(int g=0;g<20;g++)
-               begin
-                  $display("Try f_4:%d", g);
-                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[2].send /* src */, ports[4].recv /* sink */,  2 /* srcPort */ , 4 /* dstPort */);
-               end
-          end       
-
-          begin 
-             for(int g=0;g<20;g++)
-               begin
-                  $display("Try f_4:%d", g);
-                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[1].send /* src */, ports[5].recv /* sink */,  1 /* srcPort */ , 5 /* dstPort */);
-               end
-          end       
-
-          begin 
-             for(int g=0;g<20;g++)
-               begin
-                  $display("Try f_4:%d", g);
-                  tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[0].send /* src */, ports[6].recv /* sink */,  0 /* srcPort */ , 6 /* dstPort */);
-               end
-          end       
+           begin 
+              for(int g=0;g<20;g++)
+                begin
+                   $display("Try f_4:%d", g);
+                   tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[2].send /* src */, ports[4].recv /* sink */,  2 /* srcPort */ , 4 /* dstPort */);
+                end
+           end       
+ 
+           begin 
+              for(int g=0;g<20;g++)
+                begin
+                   $display("Try f_5:%d", g);
+                   tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[1].send /* src */, ports[5].recv /* sink */,  1 /* srcPort */ , 5 /* dstPort */);
+                end
+           end       
+ 
+//            begin 
+//               for(int g=0;g<20;g++)
+//                 begin
+//                    $display("Try f_6:%d", g);
+//                    tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[0].send /* src */, ports[6].recv /* sink */,  0 /* srcPort */ , 6 /* dstPort */);
+//                 end
+//            end       
 
          forever begin
             nic.update(DUT.U_Top.U_Wrapped_SCBCore.vic_irqs[0]);

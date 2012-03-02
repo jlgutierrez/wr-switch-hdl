@@ -18,7 +18,7 @@ vlog_opt="+incdir+../../ip_cores/wr-cores/sim +incdir+../../ip_cores/wr-cores/si
 modules = {"local":
 		[ 
 		  "../../ip_cores/wr-cores",
-		  "../../ip_cores/general-cores/modules/genrams/",
+		  "../../ip_cores/wr-cores/ip_cores/general-cores/modules/genrams/",
 		  "../../modules/wrsw_swcore",
 		],
 	    #"git" :
