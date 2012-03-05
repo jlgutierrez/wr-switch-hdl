@@ -159,6 +159,7 @@ architecture behavoural of xswc_output_block is
   type t_prep_to_send is (S_IDLE, 
                           S_NEWPCK_PAGE_READY, 
                           S_NEWPCK_PAGE_SET_IN_ADVANCE, 
+                          S_NEWPCK_PAGE_USED,
                           S_RETRY_PREPARE,
                           S_RETRY_READY
                           );
@@ -459,7 +460,20 @@ begin  --  behavoural
             end if;
           --===========================================================================================
           when S_NEWPCK_PAGE_READY =>
-          --===========================================================================================        
+          --=========================================================================================== 
+            
+            if(request_retry = '1') then      
+              mpm_abort                   <= '1';
+              s_prep_to_send              <= S_RETRY_PREPARE;
+            elsif(s_send_pck = S_DATA) then
+              s_prep_to_send               <= S_NEWPCK_PAGE_USED;
+            end if;
+
+
+          --===========================================================================================
+          when S_NEWPCK_PAGE_USED =>
+          --=========================================================================================== 
+       
             if(request_retry = '1') then      
               mpm_abort                   <= '1';
               s_prep_to_send              <= S_RETRY_PREPARE;
@@ -474,6 +488,7 @@ begin  --  behavoural
             elsif(not_set_next_pg_addr = '1') then 
               s_prep_to_send <= S_IDLE;
             end if;
+            
           --===========================================================================================
           when S_RETRY_PREPARE =>
           --=========================================================================================== 

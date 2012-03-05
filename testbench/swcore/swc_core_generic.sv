@@ -161,7 +161,8 @@ module main_generic;
       if(portNumberCheck(chan) != 0) return;
       `array_copy(rtu_dst_port_mask,(chan+1)*`c_num_ports  - 1, chan*`c_num_ports,  mask ,0); 
       `array_copy(rtu_prio         ,(chan+1)*`c_prio_num_width - 1, chan*`c_prio_num_width, prio, 0); 
-    
+     
+      
       rtu_drop         [ chan ]                                                = drop;          
       rtu_rsp_valid    [ chan ]                                                = valid;
  
@@ -184,6 +185,9 @@ module main_generic;
       integer index;
       EthPacket pkt, tmpl;
       EthPacketGenerator gen  = new;
+      
+      int tmp_rtu_wait = (77*((global_seed*100)/3))%400 ;
+      
       if(portNumberCheck(port) != 0) return;
       global_seed ++;     
       tmpl                   = new;
@@ -202,10 +206,17 @@ module main_generic;
       //pkt.set_size(100);
       
       q.push_back(pkt);
-     
-      set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
-      src[port].send(pkt);
-      
+//      fork
+//        begin
+          src[port].send(pkt);
+//        end
+//	begin
+//	  automatic int tmp_rtu_wait = (77*((global_seed*100)/3))%400 ;
+	  wait_cycles(tmp_rtu_wait);
+	  $display("rtu wait: %4d cycles",tmp_rtu_wait);
+          set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
+//        end        
+//      join
       if(dbg) $display("Sent     @ port_%1d to mask=0x%x [with prio=%1d, drop=%1d ]!", port, mask, prio, drop);
       
       if(drop == 0 && mask != 0)
@@ -371,10 +382,11 @@ module main_generic;
       sink[17]  = new(U_wrf_sink[17].get_accessor()); 
       */
       
-     
-      
     endfunction
-    
+
+
+
+
 /*
  * Check if the requested action is on a valid port number
  * this way, we don't have to care whether the test is refering
@@ -395,7 +407,8 @@ module main_generic;
       EthPacketGenerator gen;
       int j;
       int n_ports = `c_num_ports;
-      bit [`c_num_ports:0] mask;
+      int mask_opt=1;     
+      int n_packets =100;
       // initialization
       initPckSrcAndSink(src, sink, n_ports);
       gen       = new;
@@ -411,28 +424,215 @@ module main_generic;
 
       //for(j=0;j<`c_num_ports;j++) begin
       
-     // U_wrf_sink[0].permanent_stall_enable();
+      //U_wrf_sink[0].permanent_stall_enable();
+
       
-      for(j=0;j<16;j++) begin
-     //   fork 
-     //     begin
-            automatic int  p = j;
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+       fork 
+          begin
+            automatic int  p = 0;
+            automatic bit [`c_num_ports:0] mask;
             //automatic bit [`c_num_ports:0] mask; 
-            for(int z=0; z<16; z++) begin  
-              mask = mask^(1<<(z%(`c_num_ports)));
-              //mask =1<<p;
-              //send_random_packet(src,txed, 0 , 0,7 , mask);  
-              //send_random_packet(src,txed, j, 0,7 , 16'hFFFF);
-              //$display("in fork %d",p);
+            for(int z=0; z<n_packets; z++) begin  
+              //if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+             // else
+              //  mask = (1<<(p%(`c_num_ports)));	      
               send_random_packet(src,txed, p, 0,7 , mask);  
-              //wait_cycles(100);        
             end
-       //   end
-       // join
-       end 
-       
-  wait_cycles(10000);        
-  //U_wrf_sink[0].permanent_stall_disable();
+          end
+          begin
+            automatic int  p = 1;
+            automatic bit [`c_num_ports:0] mask;
+            //automatic bit [`c_num_ports:0] mask; 
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end
+
+          begin
+            automatic int  p = 2;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end
+
+          begin
+            automatic int  p = 3;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end
+          
+          begin
+            automatic int  p = 4;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end
+          begin
+            automatic int  p = 5;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end   
+          begin
+            automatic int  p = 6;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end 
+          begin
+            automatic int  p = 7;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end           
+          begin
+            automatic int  p = 8;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end 
+          begin
+            automatic int  p = 9;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end 
+          begin
+            automatic int  p = 10;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end           
+          begin
+            automatic int  p = 11;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end   
+          begin
+            automatic int  p = 12;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end   
+          begin
+            automatic int  p = 13;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end   
+          begin
+            automatic int  p = 14;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end   
+          begin
+            automatic int  p = 15;
+            automatic bit [`c_num_ports:0] mask;
+            for(int z=0; z<n_packets; z++) begin  
+              if(mask_opt == 0)
+                mask = mask^(1<<(z%(`c_num_ports)));
+              else
+                mask = (1<<(p%(`c_num_ports)));	 
+              send_random_packet(src,txed, p, 0,7 , mask);  
+            end
+          end             
+       join_any
+//////////////////////////////////////////////////////////////////////////////////////////////////
+      
+      
+      
+/*      
+       for(j=0;j<16;j++) begin
+             automatic int  p = j;
+             automatic bit [`c_num_ports:0] mask;
+             for(int z=0; z<30; z++) begin  
+               mask = mask^(1<<(z%(`c_num_ports)));
+               send_random_packet(src,txed, p, 0,7 , mask);  
+             end
+        end 
+*/
+
+
+
+
+
+  wait_cycles(1000);        
+  // U_wrf_sink[0].permanent_stall_disable();
   
   wait_cycles(60000); 
   
@@ -570,7 +770,14 @@ module main_generic;
             end
         
         $display("=======================================================================");
-        $display("MEM LEAKGE Report:  number of lost pages = %2d", (cnt - (2*`c_num_ports)));
+        $display("MEM LEAKGE Report:  number of lost pages = %2d" , 
+		 (cnt - (2*`c_num_ports)));
+        $display("free_blocks=%4d={should be}= pg_num - cnt =%4d-%4d=%4d", 
+		 DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.free_blocks,
+		 DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.g_num_pages,
+		 cnt,
+		 (DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.g_num_pages - cnt));
+
         $display("=================================== DBG ===============================");
  `endif
    

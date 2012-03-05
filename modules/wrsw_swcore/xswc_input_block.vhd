@@ -299,11 +299,18 @@ architecture syn of xswc_input_block is
 
   -- pckstart page allocation in advance
   signal pckstart_page_in_advance  : std_logic;
+  -- page addr allocated in advance
   signal pckstart_pageaddr         : std_logic_vector(g_page_addr_width - 1 downto 0);
+  -- the usecnt of the page allocated in advance, usecnt given to allocator
+  -- at the moment of allocation. this value is stored in the same moment as pckstart_pageaddr
+  -- and later compared with the needed value
+  signal pckstart_usecnt           : std_logic_vector(g_usecount_width  - 1 downto 0);
   signal pckstart_page_alloc_req   : std_logic;
   signal pckstart_usecnt_req       : std_logic;
   signal pckstart_usecnt_write     : std_logic_vector(g_usecount_width  - 1 downto 0);
+  -- previously set usecnt (not necessarly the same as pckstart_usecnt !!!)
   signal pckstart_usecnt_prev      : std_logic_vector(g_usecount_width  - 1 downto 0);
+  signal pckstart_usecnt_next      : std_logic_vector(g_usecount_width  - 1 downto 0);
   signal pckstart_usecnt_pgaddr    : std_logic_vector(g_page_addr_width - 1 downto 0);
 
   -- interpck page allocation in advance
@@ -320,13 +327,17 @@ architecture syn of xswc_input_block is
   signal current_mask              : std_logic_vector(g_num_ports - 1 downto 0);
   signal current_usecnt            : std_logic_vector(g_usecount_width - 1 downto 0);
   signal current_drop              : std_logic;
+  
+  -- this is stored when first page is taken from the allocated in advanced register
   signal current_pckstart_pageaddr : std_logic_vector(g_page_addr_width - 1 downto 0);
+  -- we remember what was it's usecant at the time
+  signal current_pckstart_usecnt   : std_logic_vector(g_usecount_width - 1 downto 0);
 
   -- signals sent to Pck Transfer Unit  
   signal pta_transfer_pck          : std_logic;
   signal pta_pageaddr              : std_logic_vector(g_page_addr_width - 1 downto 0);
---   signal pta_mask                  : std_logic_vector(g_num_ports - 1 downto 0);
---   signal pta_prio                  : std_logic_vector(g_prio_width - 1 downto 0);
+  signal pta_mask                  : std_logic_vector(g_num_ports - 1 downto 0);
+  signal pta_prio                  : std_logic_vector(g_prio_width - 1 downto 0);
 --   signal pta_pck_size              : std_logic_vector(g_max_pck_size_width - 1 downto 0);  
 
   -- signals to MPM (registered) 
@@ -371,6 +382,8 @@ architecture syn of xswc_input_block is
   signal in_pck_err                : std_logic; -- error
   signal in_pck_eod                : std_logic; -- end of data
   signal in_pck_is_dat             : std_logic; -- 
+  signal in_pck_eof_normal         : std_logic;
+  signal in_pck_eof_on_pause       : std_logic;
   signal in_pck_sof_allowed        : std_logic;
   signal in_pck_sof_delayed        : std_logic;
   -- first stage register (delayed single cycle)
@@ -540,7 +553,13 @@ architecture syn of xswc_input_block is
   in_pck_dat    <= snk_adr_int & snk_dat_int;
   
   -- detecting the end of the pck
-  in_pck_eof    <= snk_cyc_d0  and not snk_cyc_int  ; 
+  -- it is enough always, except special case when we receive eof during PAUSE state, 
+  -- in this case,we come back to RCV_DATA and regenerate EOF (this is to make things simpler, 
+  -- otherwise loads of COPY+PASE would be required)
+  in_pck_eof_normal <= snk_cyc_d0  and not snk_cyc_int  ; 
+
+  -- the final EOF (in_pck_eof_on_pause set in rcv_pck FSM)
+  in_pck_eof    <= in_pck_eof_normal or in_pck_eof_on_pause;
   
   -- detecting error 
   in_pck_err    <= '1'  when in_pck_dvalid = '1'         and                       
@@ -622,6 +641,7 @@ architecture syn of xswc_input_block is
       in_pck_dat_d0       <= (others => '0');
       in_pck_sel_d0       <= (others => '0');
       in_pck_is_dat_d0    <= '0';
+      in_pck_eof_on_pause <= '0';
 
 
       
@@ -633,6 +653,7 @@ architecture syn of xswc_input_block is
       mpm_data            <= (others => '0');
       mpm_dlast           <= '0';
       current_pckstart_pageaddr <= (others => '0');
+      current_pckstart_usecnt   <= (others => '0');
       
       -- used in other FSM 
       rp_ll_entry_addr          <= (others => '0');
@@ -647,8 +668,9 @@ architecture syn of xswc_input_block is
       else
         
         -- default values:
-        mpm_dlast <= '0';
-        mpm_dvalid<= '0';
+        mpm_dlast           <= '0';
+        mpm_dvalid          <= '0';
+        in_pck_eof_on_pause <= '0';
 
         case s_rcv_pck is
           --===========================================================================================
@@ -667,6 +689,21 @@ architecture syn of xswc_input_block is
               snk_stall_force_h <= '0';
               s_rcv_pck         <= S_READY;
               rp_accept_rtu <= '1';
+              
+            -- it might happen that the RTU decision is very late, the data is already
+            -- received when we get the RTU decision, so we are waiting in IDLE.
+            -- in such case, we will get tp_drop before getting tp_sync, but we will
+            -- still have tp_drop when finally tp_sync is HIGH, so this is why the order of if's
+            elsif(tp_drop = '1') then
+         
+               mmu_force_free_addr <= current_pckstart_pageaddr;
+                
+               if(mmu_force_free_req = '1') then -- it means that the previous request is still 
+                                                    -- waiting to be accepted, which is a very bad sign
+                  s_rcv_pck          <= S_WAIT_FORCE_FREE;
+               else
+                  mmu_force_free_req <= '1';
+                end if;                  
                 
             -- transfer seems stcuk
             elsif(tp_stuck ='1') then                                   
@@ -697,6 +734,7 @@ architecture syn of xswc_input_block is
                 snk_stall_force_l         <= '0';
               else  
                 current_pckstart_pageaddr <= pckstart_pageaddr;
+                current_pckstart_usecnt   <= pckstart_usecnt;
                 mpm_pg_addr               <= pckstart_pageaddr;
                 s_rcv_pck                 <= S_RCV_DATA;
                 page_word_cnt             <= (others =>'0');
@@ -850,7 +888,28 @@ architecture syn of xswc_input_block is
           --===========================================================================================
           when S_PAUSE =>
           --===========================================================================================
-            if(lw_sync_second_stage = '1') then
+            -- remember the error and enter RCV_DATA state where the error will be handled 
+            -- properly (it's done like this to avoid copying the same code
+            if(in_pck_err = '1') then 
+              snk_stall_force_h <= '0';
+              rp_in_pck_err     <= '1';
+              s_rcv_pck         <= S_RCV_DATA;     
+              
+            -- the tp_drop is  going to be asserted also in next cycle, so go to RCV_DATA where it will
+            -- be handled properly (it's done like this to avoid copying the same code              
+            elsif(tp_drop = '1') then  
+              snk_stall_force_h <= '0';
+              s_rcv_pck         <= S_RCV_DATA;  
+            
+            -- so we finish   
+            elsif(in_pck_eof = '1') then                 
+              in_pck_eof_on_pause <= '1'; 
+              snk_stall_force_h <= '1';
+              snk_stall_force_l <= '1';
+              s_rcv_pck         <= S_RCV_DATA;
+              
+            -- back to work :)
+            elsif(lw_sync_second_stage = '1') then
               snk_stall_force_h <= '0';
               s_rcv_pck         <= S_RCV_DATA;     
             end if;
@@ -969,6 +1028,7 @@ architecture syn of xswc_input_block is
         pckinter_page_alloc_req    <= '0';
 
         pckstart_pageaddr          <= (others => '0');
+        pckstart_usecnt            <= (others => '0');
         pckstart_page_alloc_req    <= '0';
         
         pckstart_usecnt_req        <= '0';
@@ -1048,6 +1108,7 @@ architecture syn of xswc_input_block is
 
               -- remember the page start addr
               pckstart_pageaddr          <= mmu_pageaddr_i;
+              pckstart_usecnt            <= pckstart_usecnt_write;
 
               if(tp_need_pckstart_usecnt_set = '1') then
                 
@@ -1203,6 +1264,8 @@ architecture syn of xswc_input_block is
         
         pta_transfer_pck<= '0';
         pta_pageaddr    <= (others => '0');
+        pta_mask        <= (others => '0');
+        pta_prio        <= (others => '0');
       --========================================
       else
 
@@ -1228,14 +1291,16 @@ architecture syn of xswc_input_block is
             elsif(rtu_rsp_ack = '1' and   in_pck_sof = '1') then
 
               -- don't need to set usecnt
-              if(current_usecnt = pckstart_usecnt_prev) then
+              if(current_usecnt = current_pckstart_usecnt) then
+              -- if(current_usecnt = pckstart_usecnt_prev) then
               
                 -- first page is cleared in the Linked List
                 if(lw_pckstart_pg_clred = '1') then
                 
                   s_transfer_pck            <= S_TRANSFER;
                   pta_transfer_pck          <= '1';
-                  
+                  pta_mask                  <= current_mask;
+                  pta_prio                  <= current_prio;
                   -- we take stright from allocated in 
                   -- advance because we are on SOF
                   pta_pageaddr              <= pckstart_pageaddr;  
@@ -1272,14 +1337,16 @@ architecture syn of xswc_input_block is
                 s_transfer_pck             <= S_DROP;
                 
               -- don't need to set usecnt
-              elsif(current_usecnt = pckstart_usecnt_prev) then
+              elsif(current_usecnt = current_pckstart_usecnt) then
+              -- elsif(current_usecnt = pckstart_usecnt_prev) then
               
                 -- first page is cleared in the Linked List
                 if(lw_pckstart_pg_clred = '1') then
                    s_transfer_pck             <= S_TRANSFER;
                    pta_transfer_pck           <= '1';
                    pta_pageaddr               <= current_pckstart_pageaddr;              
-                   
+                    pta_mask                  <= current_mask;
+                    pta_prio                  <= current_prio;                   
                  -- wait for the first page to be cleard, sync-ing transfer_pck and rcv_pck and ll_wrie
                  else
                    s_transfer_pck            <= S_WAIT_WITH_TRANSFER;
@@ -1297,12 +1364,15 @@ architecture syn of xswc_input_block is
             if(in_pck_sof = '1') then
             
               -- don't need to set usecnt
-              if(current_usecnt = pckstart_usecnt_prev) then
+              if(current_usecnt = current_pckstart_usecnt) then
+              -- if(current_usecnt = pckstart_usecnt_prev) then
               
                 -- first page is cleared in the Linked List
                 if(lw_pckstart_pg_clred = '1') then
                   s_transfer_pck             <= S_TRANSFER;
                   pta_transfer_pck           <= '1';
+                  pta_mask                   <= current_mask;
+                  pta_prio                   <= current_prio;
                   -- take directly from allocation in advanc !!!
                   pta_pageaddr               <= pckstart_pageaddr; 
                 
@@ -1331,6 +1401,8 @@ architecture syn of xswc_input_block is
                 if(lw_pckstart_pg_clred = '1') then
                   s_transfer_pck            <= S_TRANSFER;
                   pta_transfer_pck          <= '1';
+                  pta_mask                  <= current_mask;
+                  pta_prio                  <= current_prio;
                   pta_pageaddr              <= current_pckstart_pageaddr;
                 else
                   s_transfer_pck            <= S_WAIT_WITH_TRANSFER;
@@ -1356,6 +1428,8 @@ architecture syn of xswc_input_block is
             if(lw_pckstart_pg_clred = '1') then
               s_transfer_pck            <= S_TRANSFER;
               pta_transfer_pck          <= '1';
+              pta_mask                  <= current_mask;
+              pta_prio                  <= current_prio;
               pta_pageaddr              <= current_pckstart_pageaddr;            
             end if;
           --===========================================================================================
@@ -1475,11 +1549,17 @@ architecture syn of xswc_input_block is
               ll_entry.addr            <= rp_ll_entry_addr;
               ll_entry.dsel            <= rp_ll_entry_sel;
               ll_entry.size            <= rp_ll_entry_size;     
-              ll_entry.next_page       <= pckstart_pageaddr;
-              ll_entry.next_page_valid <= '1';       
+              if(pckstart_page_in_advance = '1') then
+                ll_entry.next_page       <= pckstart_pageaddr;
+                ll_entry.next_page_valid <= '1';       
+                ll_entry.first_page_clr  <= '1';
+              else
+                ll_entry.next_page       <= (others => '0');
+                ll_entry.next_page_valid <= '0';
+                ll_entry.first_page_clr  <= '0';       
+              end if;      
               ll_entry.oob_size        <= rp_ll_entry_oob_size;
               ll_entry.oob_dsel        <= rp_ll_entry_oob_sel;
-              ll_entry.first_page_clr  <= '1';
               s_ll_write               <= S_WRITE;     
             elsif(mpm_pg_req_d0 = '1') then
               ll_wr_req                <= '1';
@@ -1670,7 +1750,9 @@ architecture syn of xswc_input_block is
   --================================================================================================
   
   -- ll_write FSM sync (lw): first stage, needs to be true for rcv_pck to enter READY state
-  lw_sync_first_stage <= '1' when (s_ll_write /= S_IDLE) else '0';
+  -- for the first stage, we need have already allocated first page throughout process of receiving
+  -- previous pck (it is to prevent very small pcks of less then single page to mess up)
+  lw_sync_first_stage <= '1' when (s_ll_write /= S_IDLE and pckstart_page_in_advance = '1') else '0';
   
   -- ll_write FSM sync (lw): second stage, needs to be true for rcv_pck to finish writing page
   -- rcv_pck goes to pause at the end of receiving first page if second state sync not fulfilled
@@ -1737,8 +1819,8 @@ architecture syn of xswc_input_block is
 
   pta_transfer_pck_o    <= pta_transfer_pck;
   pta_pageaddr_o        <= pta_pageaddr;
-  pta_mask_o            <= current_mask;
-  pta_prio_o            <= current_prio;
+  pta_mask_o            <= pta_mask;--current_mask;
+  pta_prio_o            <= pta_prio;--current_prio;
   pta_pck_size_o        <=  (others => '0');        -- unused
 
   -- pWB
