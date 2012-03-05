@@ -97,7 +97,8 @@ package swc_swcore_pkg is
   component swc_page_allocator_new
     generic (
       g_num_pages      : integer;
-      g_page_addr_width : integer;
+      g_page_addr_width: integer;
+      g_num_ports      : integer ;
       g_usecount_width : integer);
     port (
       clk_i          : in  std_logic;

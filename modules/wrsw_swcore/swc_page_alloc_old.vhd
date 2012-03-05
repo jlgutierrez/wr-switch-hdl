@@ -398,9 +398,9 @@ begin  -- syn
             -- linked list
 
             -- ========= hystheresis ===========================
-            if(nomem = '0' and (free_blocks < 3)) then
+            if(nomem = '0' and ( free_blocks < to_unsigned(3,free_blocks'length ) ) ) then
               nomem <= '1';
-            elsif(nomem = '1' and (free_blocks > (3*g_num_ports))) then
+            elsif(nomem = '1' and (free_blocks > to_unsigned((3*g_num_ports),free_blocks'length ) ) ) then
               nomem <= '0';
             end if;
             -- ========= =========== ===========================

@@ -171,12 +171,12 @@ begin  -- syn
 
 
   -- one allocator/deallocator for all ports
-  --ALLOC_CORE : swc_page_allocator_new -- tom's new allocator
+  --ALLOC_CORE : swc_page_allocator_new -- tom's new allocator, not debugged, looses pages :(
   ALLOC_CORE : swc_page_allocator
     generic map (
       g_num_pages      => g_page_num,
       g_page_addr_width=> g_page_addr_width,
-      g_num_ports      => g_page_num,
+      g_num_ports      => g_num_ports,
       g_usecount_width => g_usecount_width)
     port map (
       clk_i          => clk_i,

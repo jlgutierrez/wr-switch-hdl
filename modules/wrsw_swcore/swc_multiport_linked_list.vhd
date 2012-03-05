@@ -66,7 +66,7 @@ entity swc_multiport_linked_list is
   -- g_data_width >= 2 + g_addr_width
   -- g_data_width >= 2 + g_partial_select_width + g_size_width
   -- 
-  -- this is because the format of the LL entry (data) is the following:
+  -- this is because the format of the LL entry (data) is the following (ML: 4/03/2012 - not valid!!!):
   -- 
   -- |---------------------------------------------------------------------------------------|
   -- |1[bit]|1[bit]|                      g_data_width - 2 [bits]                            |

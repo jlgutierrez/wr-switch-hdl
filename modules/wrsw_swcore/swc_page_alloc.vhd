@@ -6,63 +6,15 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-01-24
+-- Last update: 2012-03-05
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
 -- Description: Module implements a fast (3 cycle) paged memory allocator.
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
--- Detailed description of the magic (by mlipinsk):
--- The address of allocated page is made up of two parts: 
---  * high: bits [x downto 5]
---  * low : bits [4 downto 0]
+-- Detailed description of the magic (by mlipinsk): needed
 -- 
--- The low part of the page address (the low bits) is mapped to 
--- a bit of 32 bit word in L0_LUT SRAM. 
--- The high part of the page address is the address of the word in 
--- the L0_LUT_SRAM memory. The address of the word in SRAM is
--- mapped into a bit of l1_bitmap register (high bits of the address).
---
--- Address mapped into bit means that the position of the bit (from LSB)
--- is equal to the address.
--- 
--- '1' means that a give address is free
--- '0' means that a give address is used
--- 
--- Tha page allocator looks for the lowest free (unused) page address. It uses
--- prio_encoder for this purpose. 
--- 
--- prio_encoder's input is a bit vector, the output is the position of the
--- least significant bit set to '1' (see description of prio_encoder).
--- Additionally, prio_encoder returns the position encoded as one_hot and
--- a mask.
--- 
--- In the L0_UCNTMEM SRAM, the number of users assigned to a particular
--- page address is stored. the address in L0_UCNTMEM SRAM corresponds
--- directly to the page address. The default value to fill in the
--- SRAM are all '1s'.
--- 
--- The default value to fill in the l1_bitmap register is all '1s'.
---
--- Page allocation:
--- When page allocation is requested, the number of users (usecnt) needs
--- to be provided. The allocation of the page is not complited until
--- the provided number of users have read the page (attempted to free
--- the page). During allocation, the lowest free page address is sought.
--- As soon as the address is determined, the requested user count is 
--- written to L0_UCNTMEM SRAM and allocation is finished.
--- 
--- Page Deallocation:
--- When free_page is attempted, the address of the page needs to be provided.
--- The address is decoded into high and low parts. First, the count in 
--- L0_UCNTMEM SRAM is checked, if it's greater than 1, it is decreased.
--- If the usecount == 1, it means that this was the last page user, and thus
--- the page is freed. this means that '1' is written to the bit corresponding
--- to the page low part of the address in the word in L0_LUT SRAM. And '1' is
--- written to the l1_bitmap register to the bit corresponding to the high part
--- of the address. 
--- 
--- 
+-- THIS IS STILL BUGGY, IT LOOSES PAGES !!!
 -- 
 -------------------------------------------------------------------------------
 --
@@ -89,6 +41,8 @@
 -- Date        Version  Author   Description
 -- 2010-04-08  1.0      twlostow Created
 -- 2010-10-11  1.1      mlipinsk comments added !!!!!
+-- 2012-01-24  2.0      twlostow completely changed (uses FIFO)
+-- 2012-03-05  2.1      mlipinsk added debugging stuff + made interchangeable with old (still buggy)
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -108,6 +62,9 @@ entity swc_page_allocator_new is
 
     -- number of bits of the page address
     g_page_addr_width: integer := 11; --g_page_addr_bits 
+
+    -- not needed here, but added for inter-changeability withh the old version
+    g_num_ports      : integer ;--:= c_swc_num_ports
 
     -- number of bits of the user count value
     g_usecount_width: integer := 4 --g_usecount_width 
@@ -196,7 +153,11 @@ architecture syn of swc_page_allocator_new is
   signal done_int                     : std_logic;
    signal ram_ones     : std_logic_vector(g_page_addr_width + g_usecount_width -1 downto 0);
    
-  
+
+  --debuggin sygnals
+  signal tmp_dbg_dealloc : std_logic;  -- used for symulation debugging, don't remove
+  signal tmp_page : std_logic_vector(g_page_addr_width -1 downto 0);
+  signal free_blocks : unsigned(g_page_addr_width downto 0);
 
 begin  -- syn
 ram_ones  <=(others => '1');
@@ -333,4 +294,21 @@ ram_ones  <=(others => '1');
   
   free_last_usecnt_o <= (not initializing) when (free_d0 = '1' and unsigned(usecnt_rddata) = 1) else '0';
   
+  -- generating debugging signals
+  
+
+  p_dbg : process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if rst_n_i = '0' then
+        tmp_page                       <= (others => '0');
+      else
+        tmp_page        <= pgaddr_i;      
+        tmp_dbg_dealloc <= done_int and (free_i or force_free_i); -- not sure whether force as well
+      end if;
+    end if;
+  end process;
+  free_blocks <= free_pages;
+
+
 end syn;
