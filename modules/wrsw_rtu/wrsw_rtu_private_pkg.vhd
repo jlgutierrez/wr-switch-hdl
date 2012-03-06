@@ -51,12 +51,13 @@ package wrsw_rtu_private_pkg is
 ----------------------------------------------------------------------------------------
 
 -- Number of switch ports (including NIC)
-  constant c_wrsw_num_ports          : integer                           := 11;
+  constant c_wrsw_num_ports_max      : integer                           := 20; -- need for WB I/F
+  constant c_wrsw_num_ports          : integer                           := 16;
   constant c_wrsw_mac_addr_width     : integer                           := 48;
   constant c_wrsw_vid_width          : integer                           := 12;
   constant c_wrsw_prio_width         : integer                           := 3;
   constant c_wrsw_prio_levels        : integer                           := 8;
-  constant c_rtu_num_ports           : integer                           := 10;  --c_wrsw_num_ports - 1;
+  constant c_rtu_num_ports           : integer                           := 15;--10;  --c_wrsw_num_ports - 1;
   constant c_wrsw_fid_width          : integer                           := 8;
   constant c_wrsw_hash_width         : integer                           := 9;
   constant c_wrsw_crc_width          : integer                           := 16;
@@ -308,7 +309,69 @@ package wrsw_rtu_private_pkg is
       rtu_pcr9_pass_bpdu_o     : out std_logic;
       rtu_pcr9_fix_prio_o      : out std_logic;
       rtu_pcr9_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr9_b_unrec_o       : out std_logic);
+      rtu_pcr9_b_unrec_o       : out std_logic;
+      rtu_pcr10_learn_en_o     : out std_logic;
+      rtu_pcr10_pass_all_o     : out std_logic;
+      rtu_pcr10_pass_bpdu_o    : out std_logic;
+      rtu_pcr10_fix_prio_o     : out std_logic;
+      rtu_pcr10_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr10_b_unrec_o      : out std_logic;
+      rtu_pcr11_learn_en_o     : out std_logic;
+      rtu_pcr11_pass_all_o     : out std_logic;
+      rtu_pcr11_pass_bpdu_o    : out std_logic;
+      rtu_pcr11_fix_prio_o     : out std_logic;
+      rtu_pcr11_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr11_b_unrec_o      : out std_logic;
+      rtu_pcr12_learn_en_o     : out std_logic;
+      rtu_pcr12_pass_all_o     : out std_logic;
+      rtu_pcr12_pass_bpdu_o    : out std_logic;
+      rtu_pcr12_fix_prio_o     : out std_logic;
+      rtu_pcr12_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr12_b_unrec_o      : out std_logic;
+      rtu_pcr13_learn_en_o     : out std_logic;
+      rtu_pcr13_pass_all_o     : out std_logic;
+      rtu_pcr13_pass_bpdu_o    : out std_logic;
+      rtu_pcr13_fix_prio_o     : out std_logic;
+      rtu_pcr13_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr13_b_unrec_o      : out std_logic;
+      rtu_pcr14_learn_en_o     : out std_logic;
+      rtu_pcr14_pass_all_o     : out std_logic;
+      rtu_pcr14_pass_bpdu_o    : out std_logic;
+      rtu_pcr14_fix_prio_o     : out std_logic;
+      rtu_pcr14_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr14_b_unrec_o      : out std_logic;
+      rtu_pcr15_learn_en_o     : out std_logic;
+      rtu_pcr15_pass_all_o     : out std_logic;
+      rtu_pcr15_pass_bpdu_o    : out std_logic;
+      rtu_pcr15_fix_prio_o     : out std_logic;
+      rtu_pcr15_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr15_b_unrec_o      : out std_logic;
+      rtu_pcr16_learn_en_o     : out std_logic;
+      rtu_pcr16_pass_all_o     : out std_logic;
+      rtu_pcr16_pass_bpdu_o    : out std_logic;
+      rtu_pcr16_fix_prio_o     : out std_logic;
+      rtu_pcr16_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr16_b_unrec_o      : out std_logic;
+      rtu_pcr17_learn_en_o     : out std_logic;
+      rtu_pcr17_pass_all_o     : out std_logic;
+      rtu_pcr17_pass_bpdu_o    : out std_logic;
+      rtu_pcr17_fix_prio_o     : out std_logic;
+      rtu_pcr17_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr17_b_unrec_o      : out std_logic;
+      rtu_pcr18_learn_en_o     : out std_logic;
+      rtu_pcr18_pass_all_o     : out std_logic;
+      rtu_pcr18_pass_bpdu_o    : out std_logic;
+      rtu_pcr18_fix_prio_o     : out std_logic;
+      rtu_pcr18_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr18_b_unrec_o      : out std_logic;
+      rtu_pcr19_learn_en_o     : out std_logic;
+      rtu_pcr19_pass_all_o     : out std_logic;
+      rtu_pcr19_pass_bpdu_o    : out std_logic;
+      rtu_pcr19_fix_prio_o     : out std_logic;
+      rtu_pcr19_prio_val_o     : out std_logic_vector(2 downto 0);
+      rtu_pcr19_b_unrec_o      : out std_logic
+
+);
   end component;
 ----------------------------------------------------------------------------------------
 --| CRC-based hash calculation

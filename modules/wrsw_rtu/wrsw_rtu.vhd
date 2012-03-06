@@ -303,12 +303,12 @@ architecture behavioral of wrsw_rtu is
   signal gcr_mfifotrig_in   : std_logic;
   signal gcr_mfifotrig_load : std_logic;
 
-  signal s_pcr_learn_en  : std_logic_vector(c_rtu_num_ports - 1 downto 0);
-  signal s_pcr_pass_all  : std_logic_vector(c_rtu_num_ports - 1 downto 0);
-  signal s_pcr_pass_bpdu : std_logic_vector(c_rtu_num_ports - 1 downto 0);
-  signal s_pcr_fix_prio  : std_logic_vector(c_rtu_num_ports - 1 downto 0);
-  signal s_pcr_prio_val  : std_logic_vector(c_wrsw_prio_width * c_rtu_num_ports - 1 downto 0);
-  signal s_pcr_b_unrec   : std_logic_vector(c_rtu_num_ports - 1 downto 0);
+  signal s_pcr_learn_en  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
+  signal s_pcr_pass_all  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
+  signal s_pcr_pass_bpdu : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
+  signal s_pcr_fix_prio  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
+  signal s_pcr_prio_val  : std_logic_vector(c_wrsw_num_ports_max  * c_rtu_num_ports - 1 downto 0);
+  signal s_pcr_b_unrec   : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
 
 
   --| RESPONSE FIFO
@@ -557,10 +557,10 @@ begin
       rtu_vlan_tab_data_i  => s_vlan_tab_data,
       rtu_vlan_tab_rd_o    => s_vlan_tab_rd,
       rtu_gcr_g_ena_i      => s_global_ena,
-      rtu_pcr_pass_all_i   => s_pcr_pass_all,
-      rtu_pcr_learn_en_i   => s_pcr_learn_en,
-      rtu_pcr_pass_bpdu_i  => s_pcr_pass_bpdu,
-      rtu_pcr_b_unrec_i    => s_pcr_b_unrec,
+      rtu_pcr_pass_all_i   => s_pcr_pass_all(c_rtu_num_ports - 1 downto 0),
+      rtu_pcr_learn_en_i   => s_pcr_learn_en(c_rtu_num_ports - 1 downto 0),
+      rtu_pcr_pass_bpdu_i  => s_pcr_pass_bpdu(c_rtu_num_ports - 1 downto 0),
+      rtu_pcr_b_unrec_i    => s_pcr_b_unrec(c_rtu_num_ports - 1 downto 0),
       rtu_crc_poly_i       => s_rtu_gcr_poly_used  --x"1021"-- x"0589" -- x"8005" --x"1021" --x"8005", --
 --    rtu_rw_bank_i                                => s_vlan_bsel
       );
@@ -721,7 +721,80 @@ begin
       rtu_pcr9_pass_bpdu_o => s_pcr_pass_bpdu(9),
       rtu_pcr9_fix_prio_o  => s_pcr_fix_prio(9),
       rtu_pcr9_prio_val_o  => s_pcr_prio_val(3*9 + 3 - 1 downto 3*9),
-      rtu_pcr9_b_unrec_o   => s_pcr_b_unrec(9)
+      rtu_pcr9_b_unrec_o   => s_pcr_b_unrec(9),
+------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------
+      rtu_pcr10_learn_en_o  => s_pcr_learn_en(10),
+      rtu_pcr10_pass_all_o  => s_pcr_pass_all(10),
+      rtu_pcr10_pass_bpdu_o => s_pcr_pass_bpdu(10),
+      rtu_pcr10_fix_prio_o  => s_pcr_fix_prio(10),
+      rtu_pcr10_prio_val_o  => s_pcr_prio_val(3*10 + 3 - 1 downto 3*10),
+      rtu_pcr10_b_unrec_o   => s_pcr_b_unrec(10),
+
+      rtu_pcr11_learn_en_o  => s_pcr_learn_en(11),
+      rtu_pcr11_pass_all_o  => s_pcr_pass_all(11),
+      rtu_pcr11_pass_bpdu_o => s_pcr_pass_bpdu(11),
+      rtu_pcr11_fix_prio_o  => s_pcr_fix_prio(11),
+      rtu_pcr11_prio_val_o  => s_pcr_prio_val(3*11 + 3 - 1 downto 3*11),
+      rtu_pcr11_b_unrec_o   => s_pcr_b_unrec(11),
+
+      rtu_pcr12_learn_en_o  => s_pcr_learn_en(12),
+      rtu_pcr12_pass_all_o  => s_pcr_pass_all(12),
+      rtu_pcr12_pass_bpdu_o => s_pcr_pass_bpdu(12),
+      rtu_pcr12_fix_prio_o  => s_pcr_fix_prio(12),
+      rtu_pcr12_prio_val_o  => s_pcr_prio_val(3*12 + 3 - 1 downto 3*12),
+      rtu_pcr12_b_unrec_o   => s_pcr_b_unrec(12),
+
+      rtu_pcr13_learn_en_o  => s_pcr_learn_en(13),
+      rtu_pcr13_pass_all_o  => s_pcr_pass_all(13),
+      rtu_pcr13_pass_bpdu_o => s_pcr_pass_bpdu(13),
+      rtu_pcr13_fix_prio_o  => s_pcr_fix_prio(13),
+      rtu_pcr13_prio_val_o  => s_pcr_prio_val(3*13 + 3 - 1 downto 3*13),
+      rtu_pcr13_b_unrec_o   => s_pcr_b_unrec(13),
+
+      rtu_pcr14_learn_en_o  => s_pcr_learn_en(14),
+      rtu_pcr14_pass_all_o  => s_pcr_pass_all(14),
+      rtu_pcr14_pass_bpdu_o => s_pcr_pass_bpdu(14),
+      rtu_pcr14_fix_prio_o  => s_pcr_fix_prio(14),
+      rtu_pcr14_prio_val_o  => s_pcr_prio_val(3*14 + 3 - 1 downto 3*14),
+      rtu_pcr14_b_unrec_o   => s_pcr_b_unrec(14),
+
+      rtu_pcr15_learn_en_o  => s_pcr_learn_en(15),
+      rtu_pcr15_pass_all_o  => s_pcr_pass_all(15),
+      rtu_pcr15_pass_bpdu_o => s_pcr_pass_bpdu(15),
+      rtu_pcr15_fix_prio_o  => s_pcr_fix_prio(15),
+      rtu_pcr15_prio_val_o  => s_pcr_prio_val(3*15 + 3 - 1 downto 3*15),
+      rtu_pcr15_b_unrec_o   => s_pcr_b_unrec(15),
+
+      rtu_pcr16_learn_en_o  => s_pcr_learn_en(16),
+      rtu_pcr16_pass_all_o  => s_pcr_pass_all(16),
+      rtu_pcr16_pass_bpdu_o => s_pcr_pass_bpdu(16),
+      rtu_pcr16_fix_prio_o  => s_pcr_fix_prio(16),
+      rtu_pcr16_prio_val_o  => s_pcr_prio_val(3*16 + 3 - 1 downto 3*16),
+      rtu_pcr16_b_unrec_o   => s_pcr_b_unrec(16),
+
+      rtu_pcr17_learn_en_o  => s_pcr_learn_en(17),
+      rtu_pcr17_pass_all_o  => s_pcr_pass_all(17),
+      rtu_pcr17_pass_bpdu_o => s_pcr_pass_bpdu(17),
+      rtu_pcr17_fix_prio_o  => s_pcr_fix_prio(17),
+      rtu_pcr17_prio_val_o  => s_pcr_prio_val(3*17 + 3 - 1 downto 3*17),
+      rtu_pcr17_b_unrec_o   => s_pcr_b_unrec(17),
+
+      rtu_pcr18_learn_en_o  => s_pcr_learn_en(18),
+      rtu_pcr18_pass_all_o  => s_pcr_pass_all(18),
+      rtu_pcr18_pass_bpdu_o => s_pcr_pass_bpdu(18),
+      rtu_pcr18_fix_prio_o  => s_pcr_fix_prio(18),
+      rtu_pcr18_prio_val_o  => s_pcr_prio_val(3*18 + 3 - 1 downto 3*18),
+      rtu_pcr18_b_unrec_o   => s_pcr_b_unrec(18),
+
+      rtu_pcr19_learn_en_o  => s_pcr_learn_en(19),
+      rtu_pcr19_pass_all_o  => s_pcr_pass_all(19),
+      rtu_pcr19_pass_bpdu_o => s_pcr_pass_bpdu(19),
+      rtu_pcr19_fix_prio_o  => s_pcr_fix_prio(19),
+      rtu_pcr19_prio_val_o  => s_pcr_prio_val(3*19 + 3 - 1 downto 3*19),
+      rtu_pcr19_b_unrec_o   => s_pcr_b_unrec(19)
+
+------------------------------------------------------------------------------------------
       );  
 
 
