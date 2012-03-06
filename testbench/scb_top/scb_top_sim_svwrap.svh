@@ -48,7 +48,7 @@ module scb_top_sim_svwrap
    clk_swc_mpm_core_i
    );
 
-   parameter g_num_ports = 6;
+   parameter g_num_ports = 15;
    
 
    

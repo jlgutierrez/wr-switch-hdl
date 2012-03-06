@@ -108,6 +108,7 @@ architecture rtl of scb_top_bare is
   constant c_NUM_WB_SLAVES : integer := 8;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
+  constant c_NUM_PRIO      : integer := 8;
 
 
 -------------------------------------------------------------------------------
@@ -503,10 +504,10 @@ begin
   U_SWCORE: xswc_core
     generic map
       ( 
-      g_prio_num                         => 8,
+      g_prio_num                         => c_NUM_PRIO,
       g_max_pck_size                     => 10 * 1024,
       g_max_oob_size                     => 3,
-      g_num_ports                        => 7,
+      g_num_ports                        => g_num_ports+1,
       g_pck_pg_free_fifo_size            => ((65536/64)/2),
       g_input_block_cannot_accept_data   => "drop_pck",
       g_output_block_per_prio_fifo_size  => 64,
@@ -564,10 +565,12 @@ begin
 
   U_RTU : xwrsw_rtu
     generic map (
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE,
-      g_num_ports           => g_num_ports,
-      g_port_mask_bits      => g_num_ports+1)
+      g_interface_mode                  => PIPELINED,
+      g_address_granularity             => BYTE,
+      g_prio_num                        => c_NUM_PRIO,
+      g_handle_only_single_req_per_port => FALSE,
+      g_num_ports                       => g_num_ports,
+      g_port_mask_bits                  => g_num_ports+1)
     port map (
       clk_sys_i  => clk_sys,
       rst_n_i    => rst_n_periph,

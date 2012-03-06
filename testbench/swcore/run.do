@@ -1,10 +1,13 @@
-vlib work
+make -f Makefile
+#vlog +incdir+../../sim +incdir+../../ip_cores/wr-cores/sim main.sv
 
-vlog -sv fabric_emu_demo.sv
+vsim -L secureip -L unisim -t 10fs work.main_generic -voptargs="+acc" +nowarn8684 +nowarn8683
 
-vsim work.main -voptargs="+acc"
-radix -hexadecimal
+set StdArithNoWarnings 1
+set NumericStdNoWarnings 1
 do wave.do
-
-run 300us
+#do wave_allports.do
+radix -hexadecimal
+run 4000us
 wave zoomfull
+radix -hexadecimal
