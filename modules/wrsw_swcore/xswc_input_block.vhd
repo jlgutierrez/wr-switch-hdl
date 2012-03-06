@@ -415,6 +415,8 @@ architecture syn of xswc_input_block is
   signal transfer_delay_cnt        : unsigned(c_max_transfer_delay_width -1 downto 0) ;
   signal max_transfer_delay        : std_logic;
   
+  -- used in rcv_pck FSM
+  signal new_pck_first_page        : std_logic;
   -------------------------------------------------------------------------------
   -- signals used to store information for and interface with Linked List
   -------------------------------------------------------------------------------
@@ -469,6 +471,9 @@ architecture syn of xswc_input_block is
   
   -- set by rcv_pck FSM to indicate to transfer_pck FSM that reception error ocured
   signal rp_in_pck_error           : std_logic;
+  
+  -- if HIGH, it means that we are receiving/writting the first page of the pck
+  signal rp_rcv_first_page         : std_logic;
   
   -- Signals written by rcv_pck FSM and used by ll_write FSM, sync by rtu_rsp_ack
   signal rp_ll_entry_addr          : std_logic_vector(g_page_addr_width - 1 downto 0);
@@ -656,6 +661,7 @@ architecture syn of xswc_input_block is
       current_pckstart_pageaddr <= (others => '0');
       current_pckstart_usecnt   <= (others => '0');
       
+      new_pck_first_page  <= '0';
       -- used in other FSM 
       rp_ll_entry_addr          <= (others => '0');
       rp_ll_entry_sel           <= (others => '0');
@@ -665,6 +671,8 @@ architecture syn of xswc_input_block is
       rp_drop_on_stuck          <= '0';
       rp_in_pck_err             <= '0';
       rp_accept_rtu             <= '1';
+      
+      rp_rcv_first_page         <= '0';
       --========================================
       else
         
@@ -672,6 +680,7 @@ architecture syn of xswc_input_block is
         mpm_dlast           <= '0';
         mpm_dvalid          <= '0';
         in_pck_eof_on_pause <= '0';
+        new_pck_first_page  <= '0';
 
         case s_rcv_pck is
           --===========================================================================================
@@ -738,6 +747,8 @@ architecture syn of xswc_input_block is
                 current_pckstart_usecnt   <= pckstart_usecnt;
                 mpm_pg_addr               <= pckstart_pageaddr;
                 s_rcv_pck                 <= S_RCV_DATA;
+                new_pck_first_page        <= '1';
+                
                 page_word_cnt             <= (others =>'0');
                 oob_word_cnt              <= (others =>'0');
                 if(in_pck_dvalid = '1') then 
@@ -960,6 +971,21 @@ architecture syn of xswc_input_block is
         
         if(mmu_force_free_req = '1' and mmu_force_free_done_i ='1') then 
           mmu_force_free_req    <= '0';
+        end if;
+
+        -- we set the *rp_rcv_first_page* one cycle after entering RCV_DATA, this is on purpose !
+        -- we need *rp_rcv_first_page* to identify which pckstart_pageaddr clear 
+        -- (1) the one stored in pckstart_addr (allocated in advance)
+        -- (2) the one stored in  current_pckstart_pageaddr
+        -- as soon as RCV_DATA state is entered the first time for a given pck reception,
+        -- the pckstart_addr is copied to current_pckstart_pageaddr and new pckstart_addr is 
+        -- requestd, but the request takes time (more then 1 cycle). so we delay setting of 
+        -- *rp_rcv_first_page* to be able to copie the addr to be clearted (in ll_write FSM) from 
+        -- current_pckstart_pageaddr in case *rp_rcv_first_page* is asserted
+        if(new_pck_first_page = '1') then
+          rp_rcv_first_page         <= '1';
+        elsif((mpm_pg_req_i = '1' or mpm_dlast = '1') and rp_rcv_first_page = '1') then
+          rp_rcv_first_page         <= '0';
         end if;
         
         if(mpm_pg_req_i = '1' or mpm_dlast = '1') then
@@ -1245,7 +1271,7 @@ architecture syn of xswc_input_block is
 
         if(lw_sync_first_stage = '1' and rp_sync = '1' and  tp_sync ='1') then 
           lw_pckstart_pg_clred <= '0';
-        elsif(pckstart_pageaddr_clred = current_pckstart_pageaddr)  then
+        elsif(pckstart_pg_clred = '1' and rp_rcv_first_page = '1' and pckstart_pageaddr_clred = current_pckstart_pageaddr)  then
           lw_pckstart_pg_clred <= '1';
         end if;
 
@@ -1269,29 +1295,30 @@ architecture syn of xswc_input_block is
 --               (pckstart_pg_clred = '1' and pckstart_pageaddr_clred = current_pckstart_pageaddr) ) then
 --          lw_pckstart_pg_clred <= '1';
 --        end if;
-        
-        -- check when writing to Linked List is confirmed
---        if(ll_wr_req = '1' and ll_wr_done_i = '1') then
-        
-          -- if the written page is the one which was recently cleaned, it means that  we've used it
---          if(ll_entry.addr = pckstart_pageaddr_clred and ll_entry.valid = '1' and pckstart_pg_clred = '1') then 
---            pckstart_pg_clred <= '0';
+                
+          -- if the written page is the one which we started clearing, it means that  we've used it
+          -- we check it at the beginning of the request, so that when we finish the WRITE state,
+          -- we can verify *pckstart_pg_clred* and based on its value decide whether clearing
+          -- new first page is needed
+        if(ll_wr_req     = '1'                     and pckstart_pg_clred = '1' and  -- @ beginning of req
+           ll_entry.addr = pckstart_pageaddr_clred and ll_entry.valid    = '1' ) then 
+            pckstart_pg_clred <= '0';
+        end if;
           
           -- if we just cleanred a page, remember the page and that we have something clred
---          elsif(ll_entry.first_page_clr = '1') then
+       if(ll_wr_req = '1' and ll_wr_done_i = '1' and ll_entry.first_page_clr = '1') then
           
---            pckstart_pg_clred <= '1';
+          pckstart_pg_clred <= '1';
             
-            -- remember the page which you just cleared
-            -- it is used to sync ll_write FSM with rcv_pck FSM and also transfer_pck            
---            if(ll_entry.next_page_valid = '1') then
---              pckstart_pageaddr_clred <= ll_entry.next_page;
---            else
---              pckstart_pageaddr_clred <= ll_entry.addr;
---            end if;         
-   
---          end if;
---        end if;       
+          -- remember the page which you just cleared
+          -- it is used to sync ll_write FSM with rcv_pck FSM and also transfer_pck            
+          if(ll_entry.next_page_valid = '1') then
+            pckstart_pageaddr_clred <= ll_entry.next_page;
+          else
+            pckstart_pageaddr_clred <= ll_entry.addr;
+          end if;            
+        end if;       
+        
       end if;
     end if;  
   end process p_2nd_stage_syc;
@@ -1571,12 +1598,28 @@ architecture syn of xswc_input_block is
           when S_IDLE =>
           --===========================================================================================  
             
-            -- clear the first page of the pck
-            if(pckstart_page_in_advance = '1') then
+            -- clear the first page of the pck:
+            -- (1) as soon as the first page is allocated, or
+            -- (2) in case the WRITE state is quite long and it spans from the previous pck
+            --     to the new one and into RCV_PCK state of rcv_pck FSM, we use the first page
+            --     indication
+            if(pckstart_page_in_advance = '1' or new_pck_first_page = '1') then
               ll_wr_req                <= '1';
               ll_entry.valid           <= '0';
               ll_entry.eof             <= '0';
-              ll_entry.addr            <= pckstart_pageaddr;
+              
+              -- if we've already started sending new pck, then new page already can be allocated
+              -- (this is because we trigger allocation of new pckstart_pageaddr as soon as
+              -- we use it at the beginning of RCV_DATA)
+              -- but we need to clear previously allocated pckstart_pageaddr (this was stored
+              -- in current_pckstart_pageaddr).
+              -- such situation can happen only within the first page, if pckstart_pageaddr
+              -- is not allocated by the end of first page,  we PAUSE..
+              if(rp_rcv_first_page = '1') then
+                ll_entry.addr            <= current_pckstart_pageaddr;
+              else
+                ll_entry.addr            <= pckstart_pageaddr;
+              end if;
               ll_entry.dsel            <= (others => '0');
               ll_entry.size            <= (others => '0');
               ll_entry.next_page       <= (others => '0');   
@@ -1629,17 +1672,12 @@ architecture syn of xswc_input_block is
               ll_entry.addr            <= rp_ll_entry_addr;
               ll_entry.dsel            <= rp_ll_entry_sel;
               ll_entry.size            <= rp_ll_entry_size;   
-              -----------------------------------------------------------------------------------
-              -- here we really don't know whether we have start allocated or not
-              if(pckstart_page_in_advance = '1') then
-                ll_entry.next_page       <= pckstart_pageaddr;
-                ll_entry.next_page_valid <= '1';       
-                ll_entry.first_page_clr  <= '1';
-              else
-                ll_entry.next_page       <= (others => '0');
-                ll_entry.next_page_valid <= '0';
-                ll_entry.first_page_clr  <= '0';       
-              end if;
+              
+              -- we write size and stuff, next_page unused
+              ll_entry.next_page       <= (others => '0');
+              ll_entry.next_page_valid <= '0';
+              ll_entry.first_page_clr  <= '0';       
+
               ll_entry.oob_size        <= rp_ll_entry_oob_size;
               ll_entry.oob_dsel        <= rp_ll_entry_oob_sel;                 
               s_ll_write               <= S_WRITE;                
@@ -1683,9 +1721,17 @@ architecture syn of xswc_input_block is
                 ll_entry.next_page_valid <= '0';                            
                 ll_entry.oob_size        <= (others => '0');
                 ll_entry.oob_dsel        <= (others => '0');    
-                ll_entry.first_page_clr  <= '0';              
-
-                if(ll_entry.first_page_clr = '0' and ll_entry.eof = '1' and ll_entry.valid = '1') then 
+                ll_entry.first_page_clr  <= '0';
+                
+                -- what happens here:
+                -- (1) we exit write process of the End of frame (ll_entry.eof = '1' and ll_entry.valid = '1' )
+                -- (2) it should not clear the first page but we still check(ll_entry.first_page_clr = '0' )
+                -- (3) and the current first page allocated in advance has not been cleared yet 
+                --     (pckstart_pg_clred = '0')
+                -- so we go into S_IDLE state, in this state (by default) we wait for the first
+                -- page to be allocated in advance, once it's done, we clear it
+                if(ll_entry.first_page_clr = '0' and ll_entry.eof = '1' and ll_entry.valid = '1' and
+                   pckstart_pg_clred = '0') then 
                   -- finished writing end-of-frame page addr without cleaning pckstart_addr
                   ll_wr_req                <= '0';
                   s_ll_write               <= S_IDLE;  -- here it will be waiting for pckstart_page
@@ -1723,15 +1769,10 @@ architecture syn of xswc_input_block is
             if(ll_wr_req = '1' and ll_wr_done_i = '1') then -- written
               ll_wr_req                <= '1';
               ll_entry                 <= ll_entry_tmp;
-              if(pckstart_page_in_advance = '1') then
-                ll_entry.next_page       <= pckstart_pageaddr;
-                ll_entry.next_page_valid <= '1';  
-                ll_entry.first_page_clr  <= '1';     
-              else 
-                ll_entry.next_page       <= (others => '0');
-                ll_entry.next_page_valid <= '0';       
-                ll_entry.first_page_clr  <= '0';
-              end if;             
+              --- not used because we write size and stuff
+              ll_entry.next_page       <= (others => '0');
+              ll_entry.next_page_valid <= '0';       
+              ll_entry.first_page_clr  <= '0';
               s_ll_write               <= S_WRITE;              
             end if;
           --===========================================================================================
