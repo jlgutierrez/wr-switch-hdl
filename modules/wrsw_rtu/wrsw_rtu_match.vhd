@@ -339,7 +339,7 @@ architecture behavioral of wrsw_rtu_match is
   signal s_ufifo_smac_hi  : std_logic_vector(15 downto 0);
   signal s_ufifo_vid      : std_logic_vector(11 downto 0);
   signal s_ufifo_prio     : std_logic_vector(2 downto 0);
-  signal s_ufifo_pid      : std_logic_vector(3 downto 0);
+  signal s_ufifo_pid      : std_logic_vector(7 downto 0);
   signal s_ufifo_has_vid  : std_logic;
   signal s_ufifo_has_prio : std_logic;
 
@@ -357,8 +357,8 @@ architecture behavioral of wrsw_rtu_match is
   signal s_rq_learned_reg : std_logic;
 
 -- nasty translation from one pid coding to another
-  signal s_port_id_vector  : std_logic_vector(15 downto 0);
-  signal s_port_number_tmp : std_logic_vector(3 downto 0);
+  signal s_port_id_vector  : std_logic_vector(31 downto 0);
+  signal s_port_number_tmp : std_logic_vector(7 downto 0);
 
 -- control regs
   signal s_rtu_pcr_pass_all  : std_logic;
@@ -411,26 +411,42 @@ begin
   -----------------------------------------------------------------------------------------------------------------------
 
   s_port_id_vector(c_rtu_num_ports - 1 downto 0) <= rq_fifo_input_i(c_rtu_num_ports - 1 downto 0);
-  s_port_id_vector(15 downto c_rtu_num_ports)    <= (others => '0');
+  s_port_id_vector(31 downto c_rtu_num_ports)    <= (others => '0');
 
   with s_port_id_vector select
-    s_port_number_tmp <= x"0" when "0000000000000000",
-    x"1"                      when "0000000000000010",
-    x"2"                      when "0000000000000100",
-    x"3"                      when "0000000000001000",
-    x"4"                      when "0000000000010000",
-    x"5"                      when "0000000000100000",
-    x"6"                      when "0000000001000000",
-    x"7"                      when "0000000010000000",
-    x"8"                      when "0000000100000000",
-    x"9"                      when "0000001000000000",
-    x"a"                      when "0000010000000000",
-    x"b"                      when "0000100000000000",
-    x"c"                      when "0001000000000000",
-    x"d"                      when "0010000000000000",
-    x"e"                      when "0100000000000000",
-    x"f"                      when "1000000000000000",
-    x"0"                      when others;
+    s_port_number_tmp <= x"00" when "00000000000000000000000000000000", -- should not ther be 1? 
+    x"01"                      when "00000000000000000000000000000010",
+    x"02"                      when "00000000000000000000000000000100",
+    x"03"                      when "00000000000000000000000000001000",
+    x"04"                      when "00000000000000000000000000010000",
+    x"05"                      when "00000000000000000000000000100000",
+    x"06"                      when "00000000000000000000000001000000",
+    x"07"                      when "00000000000000000000000010000000",
+    x"08"                      when "00000000000000000000000100000000",
+    x"09"                      when "00000000000000000000001000000000",
+    x"0a"                      when "00000000000000000000010000000000",
+    x"0b"                      when "00000000000000000000100000000000",
+    x"0c"                      when "00000000000000000001000000000000",
+    x"0d"                      when "00000000000000000010000000000000",
+    x"0e"                      when "00000000000000000100000000000000",
+    x"0f"                      when "00000000000000001000000000000000",
+    x"10"                      when "00000000000000010000000000000000",
+    x"11"                      when "00000000000000100000000000000000",
+    x"12"                      when "00000000000001000000000000000000",
+    x"13"                      when "00000000000010000000000000000000",
+    x"14"                      when "00000000000100000000000000000000",
+    x"15"                      when "00000000001000000000000000000000",
+    x"16"                      when "00000000010000000000000000000000",
+    x"17"                      when "00000000100000000000000000000000",
+    x"18"                      when "00000001000000000000000000000000",
+    x"19"                      when "00000010000000000000000000000000",
+    x"1a"                      when "00000100000000000000000000000000",
+    x"1b"                      when "00001000000000000000000000000000",
+    x"1c"                      when "00010000000000000000000000000000",
+    x"1d"                      when "00100000000000000000000000000000",
+    x"1e"                      when "01000000000000000000000000000000",
+    x"1f"                      when "10000000000000000000000000000000",
+    x"00"                      when others;
 
 
   -------------------------------------------------------------------------------------------------------------------------
@@ -1225,7 +1241,7 @@ begin
 
 
   -- TODO:
-  rtu_ufifo_pid_o <= s_ufifo_pid;
+  rtu_ufifo_pid_o <= s_ufifo_pid(3 downto 0);
 
 
   rtu_ufifo_has_vid_o  <= s_rq_has_vid;
