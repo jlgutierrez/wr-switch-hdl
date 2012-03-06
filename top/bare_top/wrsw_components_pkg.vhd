@@ -245,6 +245,8 @@ package wrsw_components_pkg is
     generic (
       g_interface_mode      : t_wishbone_interface_mode;
       g_address_granularity : t_wishbone_address_granularity;
+      g_handle_only_single_req_per_port : boolean := FALSE;
+      g_prio_num            : integer;
       g_num_ports           : integer;
       g_port_mask_bits      : integer);
     port (
