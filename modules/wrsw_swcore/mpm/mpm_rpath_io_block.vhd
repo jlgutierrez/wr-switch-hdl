@@ -161,7 +161,7 @@ architecture behavioral of mpm_rpath_io_block is
   signal dsel_words_total   : unsigned(c_word_count_width-1 downto 0);
   signal words_xmitted : unsigned(c_word_count_width-1 downto 0);
 
-  signal d_last_int, d_valid_int, df_rd_int, d_endOfData_int : std_logic;
+  signal last_int, d_valid_int, df_rd_int, d_endOfData_int : std_logic;
   signal pf_we_int                          : std_logic;
 
   signal ll_req_int, ll_grant_d0, ll_grant_d1 : std_logic;
@@ -173,6 +173,8 @@ architecture behavioral of mpm_rpath_io_block is
   
   signal start_cnt: unsigned(f_log2_size(g_page_size+1)-1 downto 0);
   signal min_pck_size_reached : std_logic;
+  
+  signal d_counter_equal : std_logic;
 begin  -- behavioral
 
 
@@ -204,7 +206,7 @@ begin  -- behavioral
   data_dsel_valid  <= '1' when (dsel_words_total = words_xmitted and rport_dreq_i = '1') else '0';
 
   wait_next_valid_ll_read <= '1' when ((words_total <  words_xmitted+2) and 
-                                       d_last_int   = '0'               and 
+                                       last_int   = '0'               and 
                                        page_state  /= FIRST_PAGE        and
                                        fetch_first  = '0' )             else '0';
   min_pck_size_reached  <= '0' when (start_cnt < to_unsigned(g_min_packet_size, start_cnt'length ) ) else '1';
@@ -213,11 +215,13 @@ begin  -- behavioral
   p_count_words : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
-      if rst_n_io_i = '0' or (d_last_int = '1' and d_valid_int = '1') then
+      if rst_n_io_i = '0' or (last_int = '1' and d_valid_int = '1') then
         words_total     <= (others => '0');
         dsel_words_total<= (others => '0');
         words_xmitted   <= to_unsigned(1, words_xmitted'length);
-        d_last_int      <= '0';
+        -- ML
+        -- last_int      <= '0'; 
+        d_counter_equal <= '0';
         d_endOfData_int <= '0';
       else
 
@@ -242,15 +246,21 @@ begin  -- behavioral
           end if;
         end if;
 
-        d_last_int      <= counters_equal;
+        -- ML:
+        -- last_int      <= counters_equal;
+        d_counter_equal    <= counters_equal;
+        ---------
+        
         d_endOfData_int <= data_dsel_valid;
       end if;
     end if;
   end process;
+  
+  -- ML: this is for the case when we got empty_i HIGH on the very last word
+  last_int <= d_counter_equal and not counters_equal;
+  ---------
 
-
-
-  df_rd_int <= rport_dreq_i and not (df_empty_i or d_last_int or wait_first_fetched or wait_next_valid_ll_read);
+  df_rd_int <= rport_dreq_i and not (df_empty_i or last_int or wait_first_fetched or wait_next_valid_ll_read);
   
   df_rd_o   <= df_rd_int;
 
@@ -267,14 +277,14 @@ begin  -- behavioral
     end if;
   end process;
 
-  df_flush_o <= d_last_int;-- counters_equal;
+  df_flush_o <= last_int;-- counters_equal;
   
   rport_dvalid_o <= d_valid_int;
 
-  rport_dlast_o  <= d_last_int;
+  rport_dlast_o  <= last_int;
   rport_d_o      <= df_d_i;
   rport_dsel_o   <= saved_dat_dsel when d_endOfData_int = '1' else                  -- order is important
-                    saved_oob_dsel when d_last_int      = '1' else (others => '1'); -- first eod, then oob
+                    saved_oob_dsel when last_int      = '1' else (others => '1'); -- first eod, then oob
   rport_pg_req_o <= rport_pg_req;
 -------------------------------------------------------------------------------
 -- Page fetcher logic
