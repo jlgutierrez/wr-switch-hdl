@@ -53,7 +53,7 @@ const struct ad9516_reg ad9516_base_config[] = {
 {0x0196, 0x00},
 {0x0197, 0x00},
 {0x0198, 0x00},
-{0x0199, 0x00},
+{0x0199, 0x11},
 {0x019A, 0x00},
 {0x019B, 0x11},
 {0x019C, 0x20},
@@ -74,6 +74,13 @@ const struct ad9516_reg ad9516_base_config[] = {
 const struct ad9516_reg ad9516_ref_tcxo[] = {
 {0x0011, 0x05},
 {0x0012, 0x00}, /* RDiv = 5 */
-{0x001C, 0x02}  /* Use REF1 */
+{0x001C, 0x06}  /* Use REF1 */
+};
+
+/* Config for 10 MHz external reference (RDiv = 2, use REF2) */
+const struct ad9516_reg ad9516_ref_ext[] = {
+{0x0011, 0x02},
+{0x0012, 0x00}, /* RDiv = 2 */
+{0x001C, 0x46}  /* Use REF1 */
 };
 

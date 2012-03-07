@@ -11,6 +11,7 @@
 #include "timer.h"
 #include "gpio.h"
 
+
 #include "ad9516.h"
 
 #ifndef ARRAY_SIZE
@@ -123,7 +124,80 @@ static void ad9516_wait_lock()
 	while ((ad9516_read_reg(0x1f) & 1) == 0);
 }
 
-int ad9516_init()
+int ad9516_set_output_divider(int output, int ratio, int phase_offset)
+{
+	uint8_t lcycles = (ratio/2) - 1;
+	uint8_t hcycles = (ratio - (ratio / 2)) - 1;
+
+	if(output >= 0 && output < 6) /* LVPECL outputs */
+	{
+		uint16_t base = (output / 2) * 0x3 + 0x190;
+
+		if(ratio == 1)  /* bypass the divider */
+		{
+			uint8_t div_ctl = ad9516_read_reg(base + 1);
+			ad9516_write_reg(base + 1, div_ctl | (1<<7) | (phase_offset & 0xf)); 
+		} else {
+			uint8_t div_ctl = ad9516_read_reg(base + 1);
+			TRACE("DivCtl: %x\n", div_ctl);
+			ad9516_write_reg(base + 1, (div_ctl & (~(1<<7))) | (phase_offset & 0xf));  /* disable bypass bit */
+			ad9516_write_reg(base, (lcycles << 4) | hcycles);
+		}
+	} else { /* LVDS/CMOS outputs */
+			
+		uint16_t base = ((output - 6) / 2) * 0x5 + 0x199;
+
+		TRACE("Output: %d ratio: %d base %x lc %d hc %d\n", output, ratio, base, lcycles ,hcycles);
+
+		if(ratio == 1)  /* bypass the divider */
+			ad9516_write_reg(base + 3, 0x30); 
+		else {
+			ad9516_write_reg(base, (lcycles << 4) | hcycles); 
+			ad9516_write_reg(base + 1, phase_offset & 0xf); 
+		}		
+	}
+
+	/* update */
+	ad9516_write_reg(0x232, 0x0);
+	ad9516_write_reg(0x232, 0x1);
+	ad9516_write_reg(0x232, 0x0);
+
+}
+
+void ad9516_sync_outputs()
+{
+	/* VCO divider: static mode */
+	ad9516_write_reg(0x1E0, 0x7);
+	ad9516_write_reg(0x232, 0x1);
+
+	/* Sync the outputs when they're inactive to avoid +-1 cycle uncertainity */
+	ad9516_write_reg(0x230, 1);
+	ad9516_write_reg(0x232, 1);
+	ad9516_write_reg(0x230, 0);
+	ad9516_write_reg(0x232, 1);
+
+	/* VCO divider: /6 mode */
+	ad9516_write_reg(0x1E0, 0x4);
+	ad9516_write_reg(0x232, 0x1);
+}
+
+
+
+void ad9516_set_gm_mode()
+{
+	ad9516_set_output_divider(9, 25, 0);
+
+	
+
+/*	int i;
+	ad9516_sync_outputs();	
+	for(i=0;i<100000;i++) asm volatile("nop");
+	TRACE("Sync!\n");*/
+	
+	
+}
+
+int ad9516_init(int ref_source)
 {
 	TRACE("Initializing AD9516 PLL...\n");
 
@@ -148,13 +222,12 @@ int ad9516_init()
 
 	ad9516_load_regset(ad9516_base_config, ARRAY_SIZE(ad9516_base_config), 0);
 	ad9516_load_regset(ad9516_ref_tcxo, ARRAY_SIZE(ad9516_ref_tcxo), 1);
+//	ad9516_load_regset(ad9516_ref_ext, ARRAY_SIZE(ad9516_ref_ext), 1);
 	ad9516_wait_lock();
 
-	/* sync channels */
-	ad9516_write_reg(0x230, 1);
-	ad9516_write_reg(0x232, 1);
-	ad9516_write_reg(0x230, 0);
-	ad9516_write_reg(0x232, 1);
+	ad9516_set_output_divider(9, 25, 0);
+
+//	ad9516_set_gm_mode();
 
 	TRACE("AD9516 locked.\n");
 
