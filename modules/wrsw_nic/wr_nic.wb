@@ -1,0 +1,459 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+-- White-Rabbit NIC spec
+-- author: Emilio G. Cota <cota@braap.org>
+-- updated by: Tomasz Wlostowski <tomasz.wlostowski@cern.ch>
+--
+-- Use wbgen2 to generate code, documentation and more.
+-- wbgen2 is available at:
+-- http://www.ohwr.org/projects/wishbone-gen
+--
+
+top = peripheral {
+   name = "White Rabbit Switch NIC's spec",
+   description = "This NIC is in between the endpoints and the on-board Linux CPU of the White Rabbit Switch.\
+   \
+   Operation \
+   ~~~~~~~ \
+      * There's a pool of n TX descriptors and a pool of n RX descriptors. \
+      * In fact, we should have n for TX and m for RX since 32K / 1536 = 21.3. Anyway, to make things simple, first let's do n and n; we can fine-tune later on. \
+      * Software keeps track of which buffers are marked to be used with the READY/EMPTY flags. \
+      * Interrupts are useed by software to update the state, e.g. when frames are received or when a frame has been sent. \
+      * Endianness: all multi-byte registers are Little Endian \
+   \
+   Frame transmission \
+   ~~~~~~~~~~~~~~~ \
+      * Enable Transmission in the Control Register \
+      * Store the frame in memory \
+      * Fill in the corresponding descriptor from the TX pool \
+      * Set READY bit to 1 \
+      * Interrupt arrives--if enabled-- and software updates stats reading the descriptor (READY has been set to 0 by the NIC). \
+   \
+   Frame reception \
+   ~~~~~~~~~~~~~ \
+      * Enable Reception in the Control Register \
+      * Initialize a descriptor from the RX descriptors pool. Mark it as EMPTY \
+      * A frame is received and, if enabled, the NIC raises an interrupt \
+      * With EMPTY set to 0, the frame can now be copied from the NIC's memory and stats can be updated \
+      * Set READY bit to 1 \
+   \
+   Todo \
+   ~~~~ \
+      * Descriptors in RAM, not as registers. wbgen2 doesn't support this yet. Working on it. \
+   Known issues \
+   ~~~~~~~~~~~ \
+      * Only 32-bit aligned addresses are supported";
+
+   hdl_entity = "nic_wishbone_slave";
+   prefix = "nic";
+
+   reg {
+      name = "NIC Control Register";
+      prefix = "CR";
+
+      field {
+				 name = "Receive enable";
+				 description = "Enables the NIC to receive data";
+				 prefix = "rx_en";
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+      field {
+				 name = "Transmit enable";
+				 description = "Enables the NIC to transmit data. When reset, the internal transmit pointer points to the first entry in the TX descriptor pool";
+				 prefix = "tx_en";
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+   };
+
+   reg {
+      name = "NIC Status Register";
+      prefix = "SR";
+
+      field {
+				 name = "Buffer Not Available";
+				 prefix = "bna";
+				 description = "No buffers were available when receiving a packet.";
+				 type = BIT;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+				 load = LOAD_EXT;
+      };
+
+      field {
+				 name = "Frame Received";
+				 prefix = "rec";
+				 description = "One or more frames have been received.\
+				 Cleared by writing a one to this bit";
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_WRITE;
+				 load = LOAD_EXT;
+      };
+
+      field {
+				 name = "Transmission done";
+				 prefix = "tx_done";
+				 description = "read 1: All non-empty TX descriptors have been transmitted\
+				                read 0: Transmission in progress\
+				 write 1: Clears the flag\
+				 write 0: No effect";
+
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_WRITE;
+				 load = LOAD_EXT;
+      };
+
+      field {
+				 name = "Transmission error";
+				 prefix = "tx_error";
+				 description = "read 1: A TX error occured and the transmission was stopped. CUR_TX_DESC is pointing the TX descriptor for which the error occured\
+				                read 0: No TX error\
+				 write 1: Clears the flag\
+				 write 0: No effect";
+
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_WRITE;
+				 load = LOAD_EXT;
+      };
+
+
+			field {
+				 align = 8;
+				 name = "Current TX descriptor";
+				 size = 3;
+				 prefix = "cur_TX_Desc";
+				 description = "Index of the currently handled TX descriptor";
+				 type = SLV;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+			};
+
+			field {
+				 align = 8;
+				 name = "Current RX descriptor";
+				 size = 3;
+				 prefix = "cur_RX_DESC";
+				 description = "Index of the currently handled RX descriptor";
+				 type = SLV;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+			};
+   };
+
+
+   reg {
+      name = "SW_Reset";
+      description = "Writing to this register resets the NIC, zeroing all registers and resetting the state of the module";
+      prefix = "reset";
+      field {
+				 name = "Software reset";
+				 type = PASS_THROUGH;
+				 size = 32;
+      };
+   };
+	 
+	 irq {
+      name = "Receive Complete";
+      prefix = "rcomp";
+      ack_line = true;
+      description = "A frame has been stored in memory.";
+      trigger = LEVEL_1;
+   };
+
+   irq {
+      name = "Transmit Complete";
+      prefix = "tcomp";
+      ack_line = true;
+			mask_line = true;
+      description = "Frame successfully transmitted";
+      trigger = LEVEL_1;
+   };
+
+   irq {
+      name = "Transmit Error";
+      prefix = "txerr";
+      ack_line = true;
+			mask_line = true;
+      trigger = LEVEL_1;
+   };
+
+	 ram {
+			name = "TX descriptors mem";
+			prefix = "dtx";
+			size = 32;
+			width = 32;
+      access_bus = READ_WRITE;
+      access_dev = READ_WRITE;
+	 };
+
+	 ram {
+			name = "RX descriptors mem";
+			prefix = "drx";
+			size = 32;
+			width = 32;
+      access_bus = READ_WRITE;
+      access_dev = READ_WRITE;
+	 };
+
+
+   -- ram {
+   --    name = "TX/RX Buffers";
+   --    prefix = "mem";
+   --    -- 8192 * 32 = 32Kb
+   --    size = 8192;
+   --    width = 32;
+   --    access_bus = READ_WRITE;
+   --    access_dev = READ_WRITE;
+
+   -- };
+
+};
+
+
+TX_desc_template = 
+	 {
+
+   reg {
+			name = "TX Descriptor %d register 1";
+			
+			description = "1st part of TX descriptor header. ";
+			prefix = "tx%d_d1";
+			
+			align = 4;
+
+      field {
+				 name = "Ready";
+				 prefix = "ready";
+				 description = "0 - The descriptor and buffer can be manipulated. \
+				 1 - The device owns the descriptor and will set the bit to 0 after transmission";
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_WRITE;
+				 load = LOAD_EXT;
+
+      };
+
+      field {
+				 name = "Error";
+				 prefix = "error";
+				 description = "1 - an error occured during transmission of this descriptor.\
+				 0 - transmission was successful";
+				 type = BIT;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+
+      };
+
+      field {
+				 name = "Timestamp Enable";
+				 description = "Set to 1 if the frame has to be timestamped by the endpoint. The NIC will then generate a TX OOB block on its WRF source, containing the value of TS_ID from the descriptor. ";
+				 prefix = "ts_e";
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      },
+			
+      field {
+				 name = "Pad Enable";
+				 prefix = "pad_e";
+				 description = "When set, short frames (< 60 bytes) are padded with zeros to 60 bytes. This doesn't include the CRC field (so the final frame length will be 64 bytes)";
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      },
+			
+      -- todo: Errors: add some more, e.g. Retry Count, Retry Limit exceeded...
+      field {
+				 name = "Timestamp Frame Identifier";
+				 prefix = "ts_id";
+				 description = "Frame Identifier - a 16-bit value which must be unique in reasonably long time period. It's used to match the TX timestamps coming from different physical ports with the timestamped packets.";
+				 type = SLV;
+				 size = 16;
+				 align = 16;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+   };
+
+   reg {
+      name = "TX Descriptor %d register 2";
+      prefix = "tx%d_d2";
+
+      field {
+				 name = "offset in RAM--in bytes, must be aligned to 32-bit boundary";
+				 prefix = "offset";
+				 type = SLV;
+				 size = 13;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+
+      field {
+				 name = "Length of buffer--in bytes. Least significant bit must always be 0 (the packet size must be divisible by 2)";
+				 prefix = "len";
+				 type = SLV;
+				 size = 13;
+				 align = 16;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+   };
+
+   reg {
+      name = "TX Descriptor %d register 3";
+      prefix = "tx%d_d3";
+      field {
+				 prefix = "DPM";
+				 name = "Destination Port Mask: 0x00000001 means the packet will be sent to port 0, 0x00000002 - port 1, etc.  0xffffffff means broadcast. 0x0 doesn't make any sense yet.";
+				 type = SLV;
+				 size = 32;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+   };
+
+};
+
+RX_desc_template = {
+   reg {
+  		align=4;
+      name = "RX Descriptor %d register 1";
+
+      description = "Descriptor of an RX frame buffer";
+      prefix = "rx%d_d1";
+			
+      field {
+				 name = "Empty";
+				 prefix = "empty";
+				 description = "0 - Reception (or failure) has occurred on this buffer. The NIC cannot operate on the until this bit is set to 1. \
+				 1 - The buffer is ready to be filled in with data by the NIC";
+				 type = BIT;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_WRITE;
+				 load = LOAD_EXT;
+
+      };
+
+      field {
+				 name = "Error";
+				 prefix = "error";
+				 description = "Set when the the received frame contains an error (an error was indicated by the remote WRF source)";
+				 type = BIT;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+      };
+
+      field {
+				 name = "Port number of the receiving endpoint--0 to n-1. Indicated in RX OOB block.";
+				 prefix = "port";
+				 type = SLV;
+				 size = 6;
+				 align = 8;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+      };
+
+      field {
+				 name = "Got RX Timestamp";
+				 prefix = "GOT_TS";
+				 description = "1 - there is a valid RX timestamp present in the TS field,\
+				 0 - no RX timestamp";
+				 type = BIT;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+      };
+   };
+
+	 
+
+   reg {
+      name = "RX Descriptor %d register 2";
+      prefix = "rx%d_d2";
+      
+      field {
+				 name = "RX_TS_R";
+				 description = "Value of the RX timestamp (rising edge bits)";
+				 size = 28;
+				 type = SLV;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+      };
+
+      field {
+				 name = "RX_TS_F";
+				 description = "Value of the RX timestamp (falling edge bits)";
+				 size = 4;
+				 type = SLV;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+      };
+   };
+
+	 
+   reg {
+      name = "RX Descriptor %d register 3";
+      prefix = "rx%d_d3";
+      field {
+				 name = "Offset in packet RAM (in bytes, 32-bit aligned)";
+				 prefix = "offset";
+				 type = SLV;
+				 size = 13;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      },
+
+      field {
+				 name = "Length of buffer in bytes. After reception of the packet, it's updated with the length of the received packet.";
+				 prefix = "len";
+				 type = SLV;
+				 size = 13;
+				 align = 16;
+				 access_bus = READ_WRITE;
+				 access_dev = READ_WRITE;
+				 load = LOAD_EXT;
+      };
+   };
+};
+
+
+
+function generate_descriptors(n)
+   local i;
+
+   for i=1,n do
+      local T=deepcopy(TX_desc_template);
+			
+			
+      foreach_reg({TYPE_REG}, function(r)
+																 r.name = string.format(r.name, i);
+																 r.prefix = string.format(r.prefix, i);
+																 print(r.name)
+															end, T);
+
+
+      table_join(periph, T);
+   end
+
+   for i=1,n do
+      local T=deepcopy(RX_desc_template);
+			
+			
+      foreach_reg({TYPE_REG}, function(r)
+																 r.name = string.format(r.name, i);
+																 r.prefix = string.format(r.prefix, i);
+															end, T);
+
+      table_join(periph, T);
+   end
+
+
+end
+
+--generate_descriptors(8);
+
+

@@ -19,7 +19,8 @@ entity wrsw_rt_subsystem is
     clk_dmtd_i : in std_logic;
     clk_rx_i   : in std_logic_vector(g_num_rx_clocks-1 downto 0);
 
-    rst_n_i : in std_logic;
+    rst_n_i : in  std_logic;
+    rst_n_o : out std_logic;
 
     wb_i : in  t_wishbone_slave_in;
     wb_o : out t_wishbone_slave_out;
@@ -59,12 +60,12 @@ end wrsw_rt_subsystem;
 architecture rtl of wrsw_rt_subsystem is
 
   constant c_NUM_GPIO_PINS : integer := 32;
-  
-  
-  signal cnx_slave_in   : t_wishbone_slave_in_array(0 to 1);
-  signal cnx_slave_out  : t_wishbone_slave_out_array(0 to 1);
-  signal cnx_master_in  : t_wishbone_master_in_array(0 to 4);
-  signal cnx_master_out : t_wishbone_master_out_array(0 to 4);
+
+
+  signal cnx_slave_in   : t_wishbone_slave_in_array(1 downto 0);
+  signal cnx_slave_out  : t_wishbone_slave_out_array(1 downto 0);
+  signal cnx_master_in  : t_wishbone_master_in_array(5 downto 0);
+  signal cnx_master_out : t_wishbone_master_out_array(5 downto 0);
 
   signal cpu_iwb_out : t_wishbone_master_out;
   signal cpu_iwb_in  : t_wishbone_master_in;
@@ -72,15 +73,15 @@ architecture rtl of wrsw_rt_subsystem is
   signal cpu_irq_vec : std_logic_vector(31 downto 0);
   signal cpu_reset_n : std_logic;
 
-  signal dummy : std_logic_vector(63 downto 0);
+  signal dummy             : std_logic_vector(63 downto 0);
   signal gpio_out, gpio_in : std_logic_vector(c_NUM_GPIO_PINS-1 downto 0);
-    
 
-  constant c_cnx_base_addr : t_wishbone_address_array(0 to 4) :=
-    (x"00000000", x"00010000", x"00010100", x"00010200", x"00010300");
 
-  constant c_cnx_base_mask : t_wishbone_address_array(0 to 4) :=
-    (x"000f0000", x"000fff00", x"000fff00", x"000fff00", x"000fff00");
+  constant c_cnx_base_addr : t_wishbone_address_array(5 downto 0) :=
+    (x"00010400", x"00010300", x"00010200", x"00010100", x"00010000", x"00000000");
+
+  constant c_cnx_base_mask : t_wishbone_address_array(5 downto 0) :=
+    (x"000fff00", x"000fff00", x"000fff00", x"000fff00", x"000fff00", x"000f0000");
   
 begin  -- rtl
 
@@ -90,16 +91,17 @@ begin  -- rtl
 -- 0x10100 - 0x10200: SoftPLL
 -- 0x10200 - 0x10300: SPI master (to PLL)
 -- 0x10300 - 0x10400: GPIO
+-- 0x10400 - 0x10500: Timer
 
   cnx_slave_in(0) <= wb_i;
   wb_o            <= cnx_slave_out(0);
 
   cpu_irq_vec <= (others => '0');
-  
+
   U_Intercon : xwb_crossbar
     generic map (
       g_num_masters => 2,
-      g_num_slaves  => 5,
+      g_num_slaves  => 6,
       g_registered  => true)
     port map (
       clk_sys_i     => clk_sys_i,
@@ -118,14 +120,14 @@ begin  -- rtl
       clk_sys_i => clk_sys_i,
       rst_n_i   => cpu_reset_n,
       irq_i     => cpu_irq_vec,
-      dwb_o     => cnx_slave_in(0),
-      dwb_i     => cnx_slave_out(0),
+      dwb_o     => cnx_slave_in(1),
+      dwb_i     => cnx_slave_out(1),
       iwb_o     => cpu_iwb_out,
       iwb_i     => cpu_iwb_in);
 
   U_DPRAM : xwb_dpram
     generic map (
-      g_size                  => 4096,
+      g_size                  => 16384,
       g_init_file             => "",
       g_slave1_interface_mode => PIPELINED,
       g_slave2_interface_mode => PIPELINED,
@@ -155,6 +157,9 @@ begin  -- rtl
       uart_txd_o => uart_txd_o);
 
   cnx_master_in(2).stall <= '0';
+  cnx_master_in(2).ack   <= '0';
+  cnx_master_in(2).err   <= '0';
+  cnx_master_in(2).rty   <= '0';
 
   U_SPI_Master : xwb_spi
     generic map (
@@ -166,7 +171,7 @@ begin  -- rtl
       slave_i              => cnx_master_out(3),
       slave_o              => cnx_master_in(3),
       desc_o               => open,
-      pad_cs_o(0)          => pll_sck_o,
+      pad_cs_o(0)          => pll_cs_n_o,
       pad_cs_o(7 downto 1) => dummy(7 downto 1),
       pad_sclk_o           => pll_sck_o,
       pad_mosi_o           => pll_mosi_o,
@@ -189,10 +194,24 @@ begin  -- rtl
       gpio_in_i  => gpio_in,
       gpio_oen_o => open);
 
-  sel_clk_sys_o   <= gpio_out(0);
+
+
+  U_Timer : xwb_tics
+    generic map (
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE,
+      g_period              => 625)     -- 10us tick period
+    port map (
+      clk_sys_i => clk_sys_i,
+      rst_n_i   => rst_n_i,
+      slave_i   => cnx_master_out(5),
+      slave_o   => cnx_master_in(5),
+      desc_o    => open);
+
+  sel_clk_sys_o <= gpio_out(0);
   pll_reset_n_o <= gpio_out(1);
   cpu_reset_n   <= not gpio_out(2) and rst_n_i;
-  
+  rst_n_o       <= gpio_out(3);
   
 end rtl;
 
