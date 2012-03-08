@@ -80,7 +80,7 @@ int helper_prelock_update(struct spll_helper_prelock_state *s)
 		}
 	}
 	
-	return SPLL_LOCKING;
+	return SPLL_LOCKED;//ING;
 }
 
 struct spll_helper_phase_state {
@@ -101,8 +101,10 @@ void helper_phase_init(struct spll_helper_phase_state *s, int ref_channel)
  	s->pi.kp = (int)(0.3 * 32.0 * 16.0);
 	s->pi.ki = (int)(0.03 * 32.0 * 3.0); 
 
+	SPLL->DAC_HPLL = 0;
+	timer_delay(100000);
 
-	s->pi.anti_windup = 0;
+	s->pi.anti_windup = 1;
 	s->pi.bias = 32000;
 	
 	/* Phase branch lock detection */

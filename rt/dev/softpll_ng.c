@@ -3,6 +3,7 @@
 
 #include "board.h"
 #include "timer.h"
+#include "trace.h"
 #include "hw/softpll_regs.h"
 
 #include "irq.h"
@@ -19,6 +20,7 @@ static volatile struct SPLL_WB *SPLL = (volatile struct SPLL_WB *) BASE_SOFTPLL;
 #include "spll_common.h"
 #include "spll_debug.h"
 #include "spll_helper.h"
+#include "spll_main.h"
 
 
 struct spll_pmeas_channel {
@@ -29,8 +31,9 @@ struct spll_pmeas_channel {
 	int n_tags;
 };
 
-static struct spll_helper_state helper;
-static struct spll_pmeas_channel pmeas[MAX_CHAN_REF + MAX_CHAN_OUT];
+static volatile struct spll_helper_state helper;
+static volatile struct spll_main_state mpll;
+static volatile struct spll_pmeas_channel pmeas[MAX_CHAN_REF + MAX_CHAN_OUT];
 
 
 
@@ -69,20 +72,17 @@ void _irq_entry()
 {
 	volatile uint32_t trr;
 	int src = -1, tag;
+
 	if(! (SPLL->CSR & SPLL_TRR_CSR_EMPTY))
 	{
 		trr = SPLL->TRR_R0;
 		src = SPLL_TRR_R0_CHAN_ID_R(trr);
 		tag = SPLL_TRR_R0_VALUE_R(trr);
-		eee = tag;
 
 		helper_update(&helper, tag, src);
-
-/*	if(spll_pmeas_mask & (1<<src))
-		pmeas_update(&pmeas[src], tag);*/
+		mpll_update(&mpll, tag, src);
 	}
 
-//		yyy=helper.phase.pi.y;
 		irq_count++;
 		clear_irq();
 }
@@ -116,17 +116,23 @@ int spll_check_lock()
 	return helper.phase.ld.locked ? 1 : 0;
 }
 
+#define CHAN_TCXO 8
+
 void spll_test()
 {
 	int i = 0;
 	volatile	int dummy;
 
 
-
 	spll_init();
 	helper_start(&helper, 0);
+	mpll_init(&mpll, 0, CHAN_TCXO);
 	enable_irq();
-	
+
+//	mpll_init(&mpll, 0, CHAN_TCXO);
+	while(!helper.phase.ld.locked) ;//TRACE("%d\n", helper.phase.ld.locked);
+	TRACE("Helper locked, starting main\n");
+	mpll_start(&mpll);
 
 }
 

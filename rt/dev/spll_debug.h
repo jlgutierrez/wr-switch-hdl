@@ -7,6 +7,7 @@
 #define DBG_SAMPLE_ID 6
 
 #define DBG_HELPER 0x20
+#define DBG_MAIN 0x0
 #define DBG_PRELOCK 0x40
 #define DBG_EVT_START 1
 #define DBG_EVT_LOCKED 2
