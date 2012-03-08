@@ -17,7 +17,9 @@ entity mpm_top is
     g_fifo_size            : integer := 4;
     g_page_addr_width      : integer := 11;
     g_partial_select_width : integer := 1;
-    g_max_packet_size      : integer := 10000
+    g_max_oob_size         : integer := 3;
+    g_max_packet_size      : integer := 10000;
+    g_ll_data_width        : integer := 15
     );
 
   port(
@@ -47,7 +49,7 @@ entity mpm_top is
     rport_pg_req_o   : out std_logic_vector (g_num_ports-1 downto 0);
 
     ll_addr_o : out std_logic_vector(g_page_addr_width-1 downto 0);
-    ll_data_i : in  std_logic_vector(g_page_addr_width+1 downto 0)
+    ll_data_i : in  std_logic_vector(g_ll_data_width  -1 downto 0)
     );
 
 end mpm_top;
@@ -93,7 +95,9 @@ architecture rtl of mpm_top is
       g_fifo_size            : integer;
       g_page_addr_width      : integer;
       g_partial_select_width : integer;
-      g_max_packet_size      : integer);
+      g_max_oob_size         : integer;
+      g_max_packet_size      : integer;
+      g_ll_data_width        : integer);
     port (
       clk_io_i         : in  std_logic;
       clk_core_i       : in  std_logic;
@@ -109,7 +113,7 @@ architecture rtl of mpm_top is
       rport_pg_req_o   : out std_logic_vector(g_num_ports-1 downto 0);
       rport_pg_valid_i : in  std_logic_vector (g_num_ports-1 downto 0);
       ll_addr_o        : out std_logic_vector(g_page_addr_width-1 downto 0);
-      ll_data_i        : in  std_logic_vector(g_page_addr_width+1 downto 0);
+      ll_data_i        : in  std_logic_vector(g_ll_data_width  -1 downto 0);
       fbm_addr_o       : out std_logic_vector(f_log2_size(g_num_pages * g_page_size / g_ratio)-1 downto 0);
       fbm_data_i       : in  std_logic_vector(g_ratio * g_data_width -1 downto 0));
   end component;
@@ -167,7 +171,9 @@ begin  -- rtl
       g_fifo_size            => g_fifo_size,
       g_page_addr_width      => g_page_addr_width,
       g_partial_select_width => g_partial_select_width,
-      g_max_packet_size      => g_max_packet_size)
+      g_max_oob_size         => g_max_oob_size,
+      g_max_packet_size      => g_max_packet_size,
+      g_ll_data_width        => g_ll_data_width)
     port map (
       clk_io_i         => clk_io_i,
       clk_core_i       => clk_core_i,

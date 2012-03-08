@@ -1,0 +1,39 @@
+-------------------------------------------------------------------------------
+-- Title      : README on testbenches
+-- Project    : WhiteRabbit switch
+-------------------------------------------------------------------------------
+-- File       : README
+-- Author     : Maciej Lipinski
+-- Company    : CERN BE-Co-HT
+-- Created    : 2012-02-07
+-- Last update: 2012-02-07
+-- Platform   : FPGA-generic
+-- Standard   : VHDL'87
+-------------------------------------------------------------------------------
+-- Description: 
+-------------------------------------------------------------------------------
+-- Revisions  :
+-- Date        Version  Author   Description
+-- 2012-01-15  1.0      mlipinsk Created
+-------------------------------------------------------------------------------
+
+Currently used testbenches:
+1. Generic
+   - it can be used for any number of ports, the number of ports is defined in swc_param_defs.svh
+   - it uses the parameters (i.e. number of ports) defined in swc_param_defs.svh
+   - simulate with: vsim main_generic
+  swc_core_generic.sv
+  |-> swc_core_wrapper_generic.svh
+     |-> swc_core.vhd
+
+2. 7 ports
+   - it simulates swcore configured for 7 ports
+   - it uses hand made wrapper
+   - simulat with: vsim main_7ports
+   swc_core_7ports.sv
+   |->xswc_core_wrapper_7ports.svh
+      |->swc_core_wrapper_7ports.vhd
+         |->xswc_core.vhd
+
+Currently unused testbenches [not tested if work]: all the rest (they might be useful for further
+single components verification and tests later)

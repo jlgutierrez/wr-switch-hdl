@@ -210,3 +210,5 @@ NET "gen_phys[5].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[5].U_PHY/rx_rec_clk_
 TIMESPEC TS_gen_phys_5__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[5].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
 NET "gen_phys[4].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[4].U_PHY/rx_rec_clk_bufin;
 TIMESPEC TS_gen_phys_4__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[4].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "clk_swc_mpm_core" TNM_NET = clk_swc_mpm_core;
+TIMESPEC TS_clk_swc_mpm_core = PERIOD "clk_swc_mpm_core" 5 ns HIGH 50%;

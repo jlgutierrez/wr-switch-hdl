@@ -159,7 +159,7 @@ architecture Behavioral of scb_top_synthesis is
   signal clk_sys_startup, clk_sys_pll           : std_logic;
   signal clk_sys, clk_ref, clk_25mhz , clk_dmtd : std_logic;
   signal pllout_clk_fb                          : std_logic;
-
+  signal clk_swc_mpm_core                       : std_logic;
 
   -----------------------------------------------------------------------------
   -- Component declarations
@@ -196,6 +196,7 @@ architecture Behavioral of scb_top_synthesis is
       clk_dmtd_i          : in  std_logic;
       clk_sys_i           : in  std_logic;
       clk_sys_o           : out std_logic;
+      clk_swc_mpm_core_i  : in  std_logic;
       cpu_wb_i            : in  t_wishbone_slave_in;
       cpu_wb_o            : out t_wishbone_slave_out;
       cpu_irq_n_o         : out std_logic;
@@ -436,6 +437,13 @@ begin
 
   end generate gen_phys;
 
+  SWC_MPM_PLL: pll200MhZ
+    port map
+    (
+     CLK_IN1   => clk_ref,
+     CLK_OUT1  => clk_swc_mpm_core    
+    );
+
 
   -----------------------------------------------------------------------------
   -- "Bare" top module instantiation
@@ -452,6 +460,7 @@ begin
       clk_dmtd_i          => clk_dmtd,
       clk_sys_i           => clk_sys_pll,
       clk_sys_o           => clk_sys,
+      clk_swc_mpm_core_i  => clk_swc_mpm_core,
       cpu_wb_i            => top_master_out,
       cpu_wb_o            => top_master_in,
       cpu_irq_n_o         => cpu_irq_n_o,
