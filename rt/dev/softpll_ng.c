@@ -1,6 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "board.h"
+#include "timer.h"
 #include "hw/softpll_regs.h"
 
 #include "irq.h"
@@ -11,8 +13,11 @@ static volatile struct SPLL_WB *SPLL = (volatile struct SPLL_WB *) BASE_SOFTPLL;
 
 /* The includes below contain code (not only declarations) to enable the compiler
    to inline functions where necessary and save some CPU cycles */
+
+
 #include "spll_defs.h"
 #include "spll_common.h"
+#include "spll_debug.h"
 #include "spll_helper.h"
 
 
@@ -24,11 +29,12 @@ struct spll_pmeas_channel {
 	int n_tags;
 };
 
-static volatile uint32_t spll_pmeas_mask = 0;
+static struct spll_helper_state helper;
+static struct spll_pmeas_channel pmeas[MAX_CHAN_REF + MAX_CHAN_OUT];
 
 
-volatile struct spll_helper_state helper;
-volatile struct spll_pmeas_channel pmeas[32];
+
+
 
 static void pmeas_update(struct spll_pmeas_channel *chan, int tag)
 {
@@ -56,7 +62,7 @@ static void pmeas_enable(int channel)
 	
 	SPLL->RCER |= (1<<channel);
 	
-	spll_pmeas_mask |= (1<<channel);
+//	spll_pmeas_mask |= (1<<channel);
 }
 
 void _irq_entry()
@@ -86,6 +92,14 @@ void spll_init()
 	volatile int dummy;
 	disable_irq();
 
+	
+	n_chan_ref = SPLL_CSR_N_REF_R(SPLL->CSR);
+	n_chan_out = SPLL_CSR_N_OUT_R(SPLL->CSR);
+
+	TRACE("SPLL_Init: %d ref channels, %d out channels\n", n_chan_ref, n_chan_out);
+	SPLL->DAC_HPLL = 0;
+	timer_delay(100000);
+	
 	SPLL->CSR= 0 ;
 	SPLL->OCER = 0;
 	SPLL->RCER = 0;
@@ -108,28 +122,19 @@ void spll_test()
 	volatile	int dummy;
 
 
+
 	spll_init();
-	helper_start(&helper, 8);
+	helper_start(&helper, 0);
 	enable_irq();
 	
-	while(!spll_check_lock()) { TRACE("%d %d %x %x\n",irq_count, delta, SPLL->TRR_CSR, SPLL->OCER); }
-
-	
-	SPLL->DCCR = SPLL_DCCR_GATE_DIV_W(24);
-	SPLL->RCGER = (1<<7) | (1<<6);
-	pmeas_enable(7);
-	pmeas_enable(6);
-	for(;;) {
-		TRACE("RCER %x Phase %d/%d rdy %d/%d, py %d\n", SPLL->RCER, pmeas[7].current, pmeas[6].current, pmeas[7].ready, pmeas[6].ready, py);
-	}
 
 }
 
+/*
 #define CHAN_AUX 7
 #define CHAN_EXT 6
 
 
-/* measures external reference vs local clock phase */
 int spll_gm_measure_ext_phase()
 {
 	SPLL->CSR = 0;
@@ -137,3 +142,4 @@ int spll_gm_measure_ext_phase()
 	SPLL->RCGER = (1<<CHAN_AUX);
 	SPLL->RCGER = (1<<CHAN_EXT);
 }
+*/
