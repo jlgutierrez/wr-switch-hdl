@@ -1,3 +1,44 @@
+-------------------------------------------------------------------------------
+-- Title        : Asynchronous Multi Port Memory - write path
+-- Project      : White Rabbit Switch
+-------------------------------------------------------------------------------
+-- File         : mpm_write_path.vhd
+-- Author       : Tomasz Włostowski
+-- Company      : CERN BE-CO-HT
+-- Created      : 2012-01-30
+-- Last update  : 2012-01-30
+-- Platform     : FPGA-generic
+-- Standard     : VHDL'93
+-- Dependencies : genram_pkg, gencores_pkg, mpm_async_grow_fifo, mpm_pipelined_mux,
+--                mpm_private_pkg.
+-------------------------------------------------------------------------------
+-- Description: N-port MPM write path.
+-------------------------------------------------------------------------------
+--
+-- Copyright (c) 2012 CERN
+--
+-- This source file is free software; you can redistribute it   
+-- and/or modify it under the terms of the GNU Lesser General   
+-- Public License as published by the Free Software Foundation; 
+-- either version 2.1 of the License, or (at your option) any   
+-- later version.                                               
+--
+-- This source is distributed in the hope that it will be       
+-- useful, but WITHOUT ANY WARRANTY; without even the implied   
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      
+-- PURPOSE.  See the GNU Lesser General Public License for more 
+-- details.                                                     
+--
+-- You should have received a copy of the GNU Lesser General    
+-- Public License along with this source; if not, download it   
+-- from http://www.gnu.org/licenses/lgpl-2.1.html
+--
+-------------------------------------------------------------------------------
+-- Revisions  :
+-- Date        Version  Author          Description
+-- 2012-01-30  1.0      twlostow        Created
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -33,6 +74,7 @@ entity mpm_write_path is
     wport_d_i       : in  std_logic_vector (g_num_ports * g_data_width -1 downto 0);
     wport_dvalid_i  : in  std_logic_vector (g_num_ports-1 downto 0);
     wport_dlast_i   : in  std_logic_vector (g_num_ports-1 downto 0);
+
     wport_pg_addr_i : in  std_logic_vector (g_num_ports * g_page_addr_width -1 downto 0);
     wport_pg_req_o  : out std_logic_vector(g_num_ports -1 downto 0);
     wport_dreq_o    : out std_logic_vector (g_num_ports-1 downto 0);
