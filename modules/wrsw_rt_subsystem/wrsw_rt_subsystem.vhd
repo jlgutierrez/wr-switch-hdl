@@ -18,6 +18,7 @@ entity wrsw_rt_subsystem is
     clk_sys_i  : in std_logic;
     clk_dmtd_i : in std_logic;
     clk_rx_i   : in std_logic_vector(g_num_rx_clocks-1 downto 0);
+    clk_aux_i  : in std_logic;
 
     rst_n_i : in  std_logic;
     rst_n_o : out std_logic;
@@ -59,8 +60,34 @@ end wrsw_rt_subsystem;
 
 architecture rtl of wrsw_rt_subsystem is
 
-  constant c_NUM_GPIO_PINS : integer := 32;
+  component xwr_softpll_ng
+    generic (
+      g_tag_bits                 : integer;
+      g_interface_mode           : t_wishbone_interface_mode;
+      g_address_granularity      : t_wishbone_address_granularity;
+      g_num_ref_inputs           : integer;
+      g_num_outputs              : integer;
+      g_period_detector_ref_mask : std_logic_vector(31 downto 0) := x"ffffffff"
+      );
+    port (
+      clk_sys_i       : in  std_logic;
+      rst_n_i         : in  std_logic;
+      clk_ref_i       : in  std_logic_vector(g_num_ref_inputs-1 downto 0);
+      clk_fb_i        : in  std_logic_vector(g_num_outputs-1 downto 0);
+      clk_dmtd_i      : in  std_logic;
+      dac_dmtd_data_o : out std_logic_vector(15 downto 0);
+      dac_dmtd_load_o : out std_logic;
+      dac_out_data_o  : out std_logic_vector(15 downto 0);
+      dac_out_sel_o   : out std_logic_vector(3 downto 0);
+      dac_out_load_o  : out std_logic;
+      out_enable_i    : in  std_logic_vector(g_num_outputs-1 downto 0);
+      out_locked_o    : out std_logic_vector(g_num_outputs-1 downto 0);
+      slave_i         : in  t_wishbone_slave_in;
+      slave_o         : out t_wishbone_slave_out;
+      debug_o         : out std_logic_vector(3 downto 0));
+  end component;
 
+  constant c_NUM_GPIO_PINS : integer := 32;
 
   signal cnx_slave_in   : t_wishbone_slave_in_array(1 downto 0);
   signal cnx_slave_out  : t_wishbone_slave_out_array(1 downto 0);
@@ -76,14 +103,32 @@ architecture rtl of wrsw_rt_subsystem is
   signal dummy             : std_logic_vector(63 downto 0);
   signal gpio_out, gpio_in : std_logic_vector(c_NUM_GPIO_PINS-1 downto 0);
 
+  signal dac_out_data, dac_dmtd_data : std_logic_vector(15 downto 0);
+  signal dac_out_load, dac_dmtd_load : std_logic;
+
 
   constant c_cnx_base_addr : t_wishbone_address_array(5 downto 0) :=
     (x"00010400", x"00010300", x"00010200", x"00010100", x"00010000", x"00000000");
 
   constant c_cnx_base_mask : t_wishbone_address_array(5 downto 0) :=
     (x"000fff00", x"000fff00", x"000fff00", x"000fff00", x"000fff00", x"000f0000");
-  
+
+  alias clk_ref_10m is pll_status_i;
+  signal clk_rx_vec : std_logic_vector(g_num_rx_clocks+1 downto 0);
+
+  function f_mask_single_bit(index : integer; size : integer) return std_logic_vector is
+    variable tmp : std_logic_vector(size-1 downto 0);
+  begin
+    tmp        := (others => '1');
+    tmp(index) := '0';
+    return tmp;
+  end f_mask_single_bit;
+
 begin  -- rtl
+
+  clk_rx_vec(g_num_rx_clocks-1 downto 0) <= clk_rx_i;
+  clk_rx_vec(g_num_rx_clocks)   <= clk_ref_10m;
+  clk_rx_vec(g_num_rx_clocks+1) <= clk_aux_i;
 
 -- interconnect layout:
 -- 0x00000 - 0x10000: RAM
@@ -95,8 +140,6 @@ begin  -- rtl
 
   cnx_slave_in(0) <= wb_i;
   wb_o            <= cnx_slave_out(0);
-
-  cpu_irq_vec <= (others => '0');
 
   U_Intercon : xwb_crossbar
     generic map (
@@ -156,10 +199,34 @@ begin  -- rtl
       uart_rxd_i => uart_rxd_i,
       uart_txd_o => uart_txd_o);
 
-  cnx_master_in(2).stall <= '0';
-  cnx_master_in(2).ack   <= '0';
-  cnx_master_in(2).err   <= '0';
-  cnx_master_in(2).rty   <= '0';
+
+  U_SoftPLL : xwr_softpll_ng
+    generic map (
+      g_tag_bits                 => 22,
+      g_interface_mode           => PIPELINED,
+      g_address_granularity      => BYTE,
+      g_num_ref_inputs           => g_num_rx_clocks + 2,
+      g_num_outputs              => 1,
+      g_period_detector_ref_mask => f_mask_single_bit(g_num_rx_clocks, 32))
+    port map (
+      clk_sys_i       => clk_sys_i,
+      rst_n_i         => rst_n_i,
+      clk_ref_i       => clk_rx_vec,
+      clk_fb_i(0)     => clk_ref_i,
+      clk_dmtd_i      => clk_dmtd_i,
+      dac_dmtd_data_o => dac_dmtd_data,
+      dac_dmtd_load_o => dac_dmtd_load,
+      dac_out_data_o  => dac_out_data,
+      dac_out_sel_o   => open,
+      dac_out_load_o  => dac_out_load,
+      out_enable_i    => "0",
+      out_locked_o    => open,
+      slave_i         => cnx_master_out(2),
+      slave_o         => cnx_master_in(2),
+      debug_o         => open);
+
+  cpu_irq_vec(0)           <= cnx_master_in(2).int;
+  cpu_irq_vec(31 downto 1) <= (others => '0');
 
   U_SPI_Master : xwb_spi
     generic map (
@@ -212,6 +279,40 @@ begin  -- rtl
   pll_reset_n_o <= gpio_out(1);
   cpu_reset_n   <= not gpio_out(2) and rst_n_i;
   rst_n_o       <= gpio_out(3);
-  
+
+  U_Main_DAC : gc_serial_dac
+    generic map (
+      g_num_data_bits  => 16,
+      g_num_extra_bits => 8,
+      g_num_cs_select  => 1,
+      g_sclk_polarity  => 0)
+    port map (
+      clk_i         => clk_sys_i,
+      rst_n_i       => rst_n_i,
+      value_i       => dac_out_data,
+      cs_sel_i      => "1",
+      load_i        => dac_out_load,
+      sclk_divsel_i => "010",
+      dac_cs_n_o(0) => dac_main_sync_n_o,
+      dac_sclk_o    => dac_main_sclk_o,
+      dac_sdata_o   => dac_main_data_o);
+
+  U_DMTD_DAC : gc_serial_dac
+    generic map (
+      g_num_data_bits  => 16,
+      g_num_extra_bits => 8,
+      g_num_cs_select  => 1,
+      g_sclk_polarity  => 0)
+    port map (
+      clk_i         => clk_sys_i,
+      rst_n_i       => rst_n_i,
+      value_i       => dac_dmtd_data,
+      cs_sel_i      => "1",
+      load_i        => dac_dmtd_load,
+      sclk_divsel_i => "010",
+      dac_cs_n_o(0) => dac_helper_sync_n_o,
+      dac_sclk_o    => dac_helper_sclk_o,
+      dac_sdata_o   => dac_helper_data_o);
+
 end rtl;
 
