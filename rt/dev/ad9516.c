@@ -124,10 +124,14 @@ static void ad9516_wait_lock()
 	while ((ad9516_read_reg(0x1f) & 1) == 0);
 }
 
+#define SECONDARY_DIVIDER 0x100
+
 int ad9516_set_output_divider(int output, int ratio, int phase_offset)
 {
 	uint8_t lcycles = (ratio/2) - 1;
 	uint8_t hcycles = (ratio - (ratio / 2)) - 1;
+	int secondary = (output & SECONDARY_DIVIDER) ? 1 : 0;
+	output &= 0xf;
 
 	if(output >= 0 && output < 6) /* LVPECL outputs */
 	{
@@ -147,13 +151,24 @@ int ad9516_set_output_divider(int output, int ratio, int phase_offset)
 			
 		uint16_t base = ((output - 6) / 2) * 0x5 + 0x199;
 
-		TRACE("Output: %d ratio: %d base %x lc %d hc %d\n", output, ratio, base, lcycles ,hcycles);
+		TRACE("Output [divider %d]: %d ratio: %d base %x lc %d hc %d\n", secondary, output, ratio, base, lcycles ,hcycles);
 
-		if(ratio == 1)  /* bypass the divider */
-			ad9516_write_reg(base + 3, 0x30); 
-		else {
-			ad9516_write_reg(base, (lcycles << 4) | hcycles); 
-			ad9516_write_reg(base + 1, phase_offset & 0xf); 
+		if(!secondary)
+		{
+			if(ratio == 1)  /* bypass the divider 1 */
+				ad9516_write_reg(base + 3, ad9516_read_reg(base + 3) | 0x10); 
+			else {
+				ad9516_write_reg(base, (lcycles << 4) | hcycles); 
+				ad9516_write_reg(base + 1, phase_offset & 0xf);
+			}
+		} else {
+			if(ratio == 1)  /* bypass the divider 2 */
+				ad9516_write_reg(base + 3, ad9516_read_reg(base + 3) | 0x20); 
+			else {
+				ad9516_write_reg(base + 2, (lcycles << 4) | hcycles); 
+//				ad9516_write_reg(base + 1, phase_offset & 0xf);
+				
+		}
 		}		
 	}
 
@@ -162,6 +177,15 @@ int ad9516_set_output_divider(int output, int ratio, int phase_offset)
 	ad9516_write_reg(0x232, 0x1);
 	ad9516_write_reg(0x232, 0x0);
 
+}
+
+int ad9516_set_vco_divider(int ratio) /* Sets the VCO divider (2..6) or 0 to enable static output */
+{
+	if(ratio == 0)
+		ad9516_write_reg(0x1e0, 0x5); /* static mode */
+	else
+		ad9516_write_reg(0x1e0, (ratio-2));
+	ad9516_write_reg(0x232, 0x1);
 }
 
 void ad9516_sync_outputs()
@@ -177,8 +201,8 @@ void ad9516_sync_outputs()
 	ad9516_write_reg(0x232, 1);
 
 	/* VCO divider: /6 mode */
-	ad9516_write_reg(0x1E0, 0x4);
-	ad9516_write_reg(0x232, 0x1);
+//	ad9516_write_reg(0x1E0, 0x4);
+//	ad9516_write_reg(0x232, 0x1);
 }
 
 
@@ -225,7 +249,13 @@ int ad9516_init(int ref_source)
 //	ad9516_load_regset(ad9516_ref_ext, ARRAY_SIZE(ad9516_ref_ext), 1);
 	ad9516_wait_lock();
 
-	ad9516_set_output_divider(9, 25, 0);
+	ad9516_sync_outputs();
+	ad9516_set_output_divider(9, 4, 0);  /* AUX/SWCore = 187.5 MHz */
+	ad9516_set_output_divider(7, 12, 0); /* REF = 62.5 MHz */
+	ad9516_set_output_divider(4, 6, 0);  /* GTX = 125 MHz */
+	ad9516_sync_outputs();
+	ad9516_set_vco_divider(2); 
+	
 
 //	ad9516_set_gm_mode();
 
