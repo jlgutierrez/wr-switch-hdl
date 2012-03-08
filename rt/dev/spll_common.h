@@ -4,6 +4,8 @@ White Rabbit Softcore PLL (SoftPLL) - common definitions
 
 */
 
+static int n_chan_ref, n_chan_out;
+
 /* PI regulator state */
 typedef struct {
   	int ki, kp; 		/* integral and proportional gains (1<<PI_FRACBITS == 1.0f) */
@@ -93,20 +95,20 @@ static void ld_init(spll_lock_det_t *ld)
  	ld->lock_cnt = 0;
 }
 
-#define DBG_Y 0
-#define DBG_ERR 1
-#define DBG_TAG 2
-#define DBG_REF 5
-#define DBG_PERIOD 3
-#define DBG_EVENT 4
-#define DBG_SAMPLE_ID 6
 
-#define DBG_HELPER 0x20
-#define DBG_PRELOCK 0x40
-#define DBG_EVT_START 1
-#define DBG_EVT_LOCKED 2
-
-static inline void spll_debug(int what, int value, int last)
+static void spll_enable_tagger(int channel, int enable)
 {
-	SPLL->DFR_SPLL = (last ? 0x80000000 : 0) | (value & 0xffffff) | (what << 24);
+	if(channel >= n_chan_ref) /* Output channel? */
+	{
+		if(enable)
+			SPLL->OCER |= 1<< (channel - n_chan_ref);
+		else
+			SPLL->OCER &= ~ (1<< (channel - n_chan_ref));
+	} else {
+		if(enable)
+			SPLL->RCER |= 1<<channel;
+		else
+			SPLL->RCER &= ~ (1<<channel);
+	}
+	TRACE("spll_enable_channel: ch %d, OCER %x, RCER %x\n", channel, SPLL->OCER, SPLL->RCER);
 }

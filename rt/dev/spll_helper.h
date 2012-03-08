@@ -42,7 +42,7 @@ void helper_prelock_enable(int ref_channel, int enable)
 	
 	SPLL->CSR = 0;
 
-	dummy = SPLL->PER_HPLL;
+	dummy = SPLL->PER_HPLL; /* clean any pending frequency measurement to avoid distubing the control loop */
 	if(enable)
 		SPLL->CSR = SPLL_CSR_PER_SEL_W(ref_channel) | SPLL_CSR_PER_EN;
 	else
@@ -92,7 +92,7 @@ struct spll_helper_phase_state {
  	spll_lock_det_t ld;
 };
 	
-void helper_phase_init(struct spll_helper_phase_state *s)
+void helper_phase_init(struct spll_helper_phase_state *s, int ref_channel)
 {
 	
 	/* Phase branch PI controller */
@@ -109,7 +109,7 @@ void helper_phase_init(struct spll_helper_phase_state *s)
 	s->ld.threshold = 200;
 	s->ld.lock_samples = 1000;
 	s->ld.delock_samples = 900;
-	s->ref_src = 8;
+	s->ref_src = ref_channel;
 	s->p_setpoint = 0;	
 	s->p_adder = 0;
 	s->sample_n = 0;
@@ -120,11 +120,7 @@ void helper_phase_init(struct spll_helper_phase_state *s)
 
 void helper_phase_enable(int ref_channel, int enable)
 {
-	if(enable) 
-		SPLL->OCER = 1; /* fixme: use ref_channel */ 
-	else
-		SPLL->OCER = 0;
-
+	spll_enable_tagger(ref_channel, enable);
 //		spll_debug(DBG_EVENT | DBG_HELPER, DBG_EVT_START, 1);
 }
 
@@ -186,13 +182,12 @@ void helper_start(struct spll_helper_state *s, int ref_channel)
 	s->ref_channel = ref_channel;
 	
 	helper_prelock_init(&s->prelock);
-	helper_phase_init(&s->phase);
+	helper_phase_init(&s->phase, ref_channel);
 	helper_prelock_enable(ref_channel, 1);
 	spll_debug(DBG_EVENT | DBG_PRELOCK | DBG_HELPER, DBG_EVT_START, 1);
-	
 }
 
-void helper_update(struct spll_helper_state *s, int tag, int source)
+int helper_update(struct spll_helper_state *s, int tag, int source)
 {
 	switch(s->state)
 	{
@@ -204,13 +199,9 @@ void helper_update(struct spll_helper_state *s, int tag, int source)
 				s->phase.pi.bias = s->prelock.pi.y;
 				helper_phase_enable(s->ref_channel, 1);
 			}
-		break;
+			return SPLL_LOCKING;
 		case HELPER_PHASE:
-			if(helper_phase_update(&s->phase, tag, source)==SPLL_LOCKED)
-			{
-//				spll_debug(DBG_EVENT |  DBG_HELPER, DBG_EVT_LOCKED, 1);
-			
-			}
-		break;
+			return helper_phase_update(&s->phase, tag, source);
 	}
+	return SPLL_LOCKING;
 }

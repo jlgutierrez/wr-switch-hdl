@@ -19,12 +19,9 @@ White Rabbit Softcore PLL (SoftPLL) - common definitions
 /* Fractional bits in PI controller coefficients */
 #define PI_FRACBITS 12
 
-/* Number of reference channels */
-#define N_CHAN_REF 7
+/* Max. number of reference channels */
+#define MAX_CHAN_REF 7
 
-/* Local reference input */
-#define ID_LOCAL_REF 6
-
-/* Number of output channels */
-#define N_CHAN_OUT 1
+/* Max. number of output channels */
+#define MAX_CHAN_OUT 1
 
