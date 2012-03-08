@@ -3,12 +3,13 @@
 peripheral {
 	 name = "WR Softcore PLL";
 	 hdl_entity = "spll_wb_slave";
-	 prefix = "SPLL";
+	 prefix = "spll";
 	 
 	 reg {
 			name = "SPLL Control/Status Register";
 			prefix = "CSR";
 			
+
       field {
          align = 8;
          name = "Period detector reference select";
@@ -38,7 +39,44 @@ peripheral {
 				 access_bus = READ_ONLY;
 				 access_dev = WRITE_ONLY;
 			};
+
+      field {
+         name = "Enable Period Measurement";
+         prefix = "PER_EN";
+         type = BIT;
+         access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+      
 	 };
+
+	 reg {
+			name = "DMTD Clock Control Register";
+			prefix = "DCCR";
+			
+      field {
+         name = "DMTD Clock Gate Divider";
+         prefix = "GATE_DIV";
+         size = 6;
+         type = SLV;
+         access_bus = READ_WRITE;
+				 access_dev = READ_ONLY;
+      };
+
+    
+	 };
+
+   reg {
+      name = "Reference Channel Gating Enable Register";
+      prefix = "RCGER";
+      
+      field {
+         name = "Reference Channel Gating Enable";
+         prefix = "GATE_SEL";
+         size = 32;
+         type = PASS_THROUGH;
+      };
+   };
 
 	 reg {
 			name = "Output Channel Control Register";
@@ -165,13 +203,56 @@ peripheral {
 			};
 	 };
 
+   reg {
+      name = "Debug FIFO Register - SPLL side";
+      prefix = "DFR_SPLL";
+      
+      field {
+         name = "Debug Value";
+         prefix = "VALUE";
+         size = 31;
+         type = PASS_THROUGH;
+      };
+
+      field {
+         name = "End-of-Sample";
+         prefix = "EOS";
+         size = 1;
+         type = PASS_THROUGH;
+      };
+   };
+
+	 fifo_reg {
+			name = "Debug FIFO Register - Host side";		
+			prefix = "DFR_HOST";
+			direction = CORE_TO_BUS;		 		 
+      size = 8192;
+
+			flags_dev = {FIFO_FULL, FIFO_EMPTY, FIFO_COUNT};
+			flags_bus = {FIFO_FULL, FIFO_EMPTY, FIFO_COUNT};
+
+      field {
+				 name = "Value";
+				 prefix = "VALUE";
+				 type = SLV;
+				 size = 32;
+      };
+
+      field {
+         name = "Seq ID";
+         prefix = "SEQ_ID";
+         type = SLV;
+         size = 16;
+      };
+   };
+
 	 fifo_reg {
 			name = "Tag Readout Register";		
 			prefix = "TRR";
 			direction = CORE_TO_BUS;		 		 
 			size = 32;
 
-			flags_dev = {FIFO_FULL};
+			flags_dev = {FIFO_FULL, FIFO_EMPTY};
 			flags_bus = {FIFO_EMPTY};
 
 			field {
@@ -195,6 +276,8 @@ peripheral {
 				 type = BIT;
 			};
 	 };
+
+
 
 	 irq {
 			name = "Got a tag";

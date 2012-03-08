@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-06-14
--- Last update: 2012-01-17
+-- Last update: 2012-01-23
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -70,55 +70,84 @@ end spll_period_detect;
 
 architecture rtl of spll_period_detect is
 
-  constant c_COUNTER_BITS  : integer := 19;
-  constant c_GATING_PERIOD : integer := 1024;
+  constant c_GATING_PERIOD_LOG2 : integer := 17;
 
--- frequency counters: feedback clock & gating counter
-  signal in_muxed      : std_logic;
-  signal in_sel_onehot : std_logic_vector(g_num_ref_inputs-1 downto 0);
+  subtype t_counter is unsigned(c_GATING_PERIOD_LOG2+1 downto 0);
+  type    t_counter_array is array(integer range <>) of t_counter;
 
-  signal freq                                  : std_logic_vector(19 downto 0);
-  signal freq_valid_dmtdclk, freq_valid_sysclk : std_logic;
-  signal freq_valid_dmtdclk_d0, freq_valid_dmtdclk_pulse : std_logic;
+  signal freq_valid_sysclk : std_logic;
+
+  signal gate_counter         : t_counter;
+  signal gate_pulse_dmtdclk   : std_logic;
+  signal gate_pulse_synced    : std_logic_vector(g_num_ref_inputs-1 downto 0);
+  signal fb_counters, fb_freq : t_counter_array(g_num_ref_inputs-1 downto 0);
+  signal fb_muxpipe           : t_counter_array(2 downto 0);
+  
   
 begin  -- rtl
 
+  p_gate_counter : process(clk_dmtd_i)
+  begin
+    if rising_edge(clk_dmtd_i) then
+      if rst_n_dmtdclk_i = '0' then
+        gate_counter <= to_unsigned(1, gate_counter'length);
+      else
+        if(gate_counter(c_GATING_PERIOD_LOG2) = '1') then
+          gate_counter <= to_unsigned(1, gate_counter'length);
+        else
+          gate_counter <= gate_counter + 1;
+        end if;
+      end if;
+    end if;
+  end process;
 
-  gen_in_sel_mask : for i in 0 to g_num_ref_inputs-1 generate
-    in_sel_onehot(i) <= '1' when i = to_integer(unsigned(in_sel_i)) else '0';
-  end generate gen_in_sel_mask;  -- i 
+  gate_pulse_dmtdclk <= gate_counter(c_GATING_PERIOD_LOG2);
 
-  in_muxed <= '1' when unsigned(in_sel_onehot and clk_ref_i) /= 0 else '0';
+  gen_feedback_counters : for i in 0 to g_num_ref_inputs-1 generate
+    
+    U_Gate_Sync : gc_pulse_synchronizer
+      port map (
+        clk_in_i  => clk_dmtd_i,
+        clk_out_i => clk_ref_i(i),
+        rst_n_i   => rst_n_sysclk_i,
+        d_p_i     => gate_pulse_dmtdclk,
+        q_p_o     => gate_pulse_synced(i));
 
-  U_Freq_Meter : gc_frequency_meter
-    generic map (
-      g_with_internal_timebase => true,
-      g_clk_sys_freq           => c_GATING_PERIOD,
-      g_counter_bits           => 20)
-    port map (
-      clk_sys_i    => clk_dmtd_i,
-      clk_in_i     => in_muxed,
-      rst_n_i      => rst_n_dmtdclk_i,
-      pps_p1_i     => '0',
-      freq_o       => freq,
-      freq_valid_o => freq_valid_dmtdclk);
-
-  U_Pulse_Sync : gc_pulse_synchronizer
-    port map (
-      clk_in_i  => clk_dmtd_i,
-      clk_out_i => clk_sys_i,
-      rst_n_i   => rst_n_sysclk_i,
-      d_p_i     => freq_valid_dmtdclk_pulse,
-      q_p_o     => freq_valid_sysclk);
-
-  p_edge_detect: process(clk_dmtd_i)
+    p_feedback_counter : process(clk_ref_i(i))
     begin
-      if rising_edge(clk_dmtd_i) then
-        freq_valid_dmtdclk_d0 <= freq_valid_dmtdclk;
+      if rst_n_sysclk_i = '0' then
+        fb_counters(i) <= to_unsigned(1, c_GATING_PERIOD_LOG2+2);
+      elsif rising_edge(clk_ref_i(i)) then
+
+        if(gate_pulse_synced(i) = '1') then
+          fb_freq(i)     <= fb_counters(i);
+          fb_counters(i) <= to_unsigned(0, c_GATING_PERIOD_LOG2+2);
+        else
+          fb_counters(i) <= fb_counters(i) + 1;
+        end if;
       end if;
     end process;
-  freq_valid_dmtdclk_pulse <= freq_valid_dmtdclk and not freq_valid_dmtdclk_d0;
-    
+  end generate gen_feedback_counters;
+
+  U_Sync_Gate : gc_sync_ffs
+    generic map (
+      g_sync_edge => "positive")
+    port map (
+      clk_i    => clk_sys_i,
+      rst_n_i  => rst_n_sysclk_i,
+      data_i   => std_logic(gate_counter(c_GATING_PERIOD_LOG2-1)),
+      ppulse_o => freq_valid_sysclk);
+
+  p_mux_counters : process(clk_sys_i)
+  begin
+    if rising_edge(clk_sys_i) then
+      fb_muxpipe(0) <= fb_freq(to_integer(unsigned(in_sel_i)));
+      for i in 1 to fb_muxpipe'length-1 loop
+        fb_muxpipe(i) <= fb_muxpipe(i-1);
+      end loop;  -- i
+    end if;
+  end process;
+
   p_output : process(clk_sys_i)
   begin
     if rising_edge(clk_sys_i) then
@@ -126,12 +155,12 @@ begin  -- rtl
         freq_err_o       <= (others => '0');
         freq_err_stb_p_o <= '0';
       elsif(freq_valid_sysclk = '1') then
-        freq_err_o       <= std_logic_vector(resize(unsigned(freq) - c_GATING_PERIOD, freq_err_o'length));
+        freq_err_o       <= std_logic_vector(resize(fb_muxpipe(fb_muxpipe'length-1) - (2 ** c_GATING_PERIOD_LOG2), freq_err_o'length));
         freq_err_stb_p_o <= '1';
       else
         freq_err_stb_p_o <= '0';
       end if;
     end if;
   end process;
-  
+
 end rtl;
