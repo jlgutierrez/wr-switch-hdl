@@ -18,7 +18,8 @@ entity scb_top_synthesis is
   generic(
     g_cpu_addr_width : integer := 19;
     g_num_ports      : integer := 6;
-    g_simulation     : boolean := false
+    g_simulation     : boolean := false;
+    g_chipscope_only : boolean := true
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -35,9 +36,10 @@ entity scb_top_synthesis is
     fpga_clk_dmtd_p_i : in std_logic;
     fpga_clk_dmtd_n_i : in std_logic;
 
-    -- 62.5 MHz system clock (from the AD9516 PLL output QDRII_200CLK)
-    fpga_clk_sys_p_i : in std_logic;
-    fpga_clk_sys_n_i : in std_logic;
+    -- 250/10 MHz aux clock for Swcore/rephasing AD9516 in master mode
+    -- (from the AD9516 PLL output QDRII_200CLK)
+    fpga_clk_aux_p_i : in std_logic;
+    fpga_clk_aux_n_i : in std_logic;
 
     -------------------------------------------------------------------------------
     -- Atmel EBI bus
@@ -141,7 +143,7 @@ architecture Behavioral of scb_top_synthesis is
   -- Clocks
   -------------------------------------------------------------------------------
 
-  signal clk_sys_startup, clk_sys_pll           : std_logic;
+  signal clk_sys_startup                        : std_logic;
   signal clk_sys, clk_ref, clk_25mhz , clk_dmtd : std_logic;
   signal pllout_clk_fb                          : std_logic;
 
@@ -179,8 +181,8 @@ architecture Behavioral of scb_top_synthesis is
       clk_startup_i       : in  std_logic;
       clk_ref_i           : in  std_logic;
       clk_dmtd_i          : in  std_logic;
-      clk_sys_i           : in  std_logic;
       clk_sys_o           : out std_logic;
+      clk_aux_i           : in  std_logic;
       cpu_wb_i            : in  t_wishbone_slave_in;
       cpu_wb_o            : out t_wishbone_slave_out;
       cpu_irq_n_o         : out std_logic;
@@ -206,12 +208,14 @@ architecture Behavioral of scb_top_synthesis is
       phys_o              : out t_phyif_output_array(g_num_ports-1 downto 0);
       phys_i              : in  t_phyif_input_array(g_num_ports-1 downto 0);
       led_link_o          : out std_logic_vector(g_num_ports-1 downto 0);
-      led_act_o           : out std_logic_vector(g_num_ports-1 downto 0));
+      led_act_o           : out std_logic_vector(g_num_ports-1 downto 0);
+      gpio_i              : in  std_logic_vector(31 downto 0) := x"00000000") ;
   end component;
 
   signal to_phys   : t_phyif_output_array(g_num_ports-1 downto 0);
   signal from_phys : t_phyif_input_array(g_num_ports-1 downto 0);
 
+  signal clk_aux : std_logic;
   signal clk_gtx0_3 : std_logic;
   signal clk_gtx4_7 : std_logic;
   signal clk_gtx    : std_logic_vector(c_MAX_PORTS-1 downto 0);
@@ -220,8 +224,49 @@ architecture Behavioral of scb_top_synthesis is
 
   signal top_master_in, bridge_master_in   : t_wishbone_master_in;
   signal top_master_out, bridge_master_out : t_wishbone_master_out;
-  
+
+  component chipscope_icon
+    port (
+      CONTROL0 : inout std_logic_vector(35 downto 0));
+  end component;
+
+  component chipscope_ila
+    port (
+      CONTROL : inout std_logic_vector(35 downto 0);
+      CLK     : in    std_logic;
+      TRIG0   : in    std_logic_vector(31 downto 0);
+      TRIG1   : in    std_logic_vector(31 downto 0);
+      TRIG2   : in    std_logic_vector(31 downto 0);
+      TRIG3   : in    std_logic_vector(31 downto 0));
+  end component;
+
+  signal CONTROL : std_logic_vector(35 downto 0);
+  signal TRIG0   : std_logic_vector(31 downto 0);
+  signal TRIG1   : std_logic_vector(31 downto 0);
+  signal TRIG2   : std_logic_vector(31 downto 0);
+  signal TRIG3   : std_logic_vector(31 downto 0);
 begin
+
+  --chipscope_icon_1 : chipscope_icon
+  --  port map (
+  --    CONTROL0 => CONTROL);
+
+  --chipscope_ila_1 : chipscope_ila
+  --  port map (
+  --    CONTROL => CONTROL,
+  --    CLK     => clk_25mhz,
+  --    TRIG0   => TRIG0,
+  --    TRIG1   => TRIG1,
+  --    TRIG2   => TRIG2,
+  --    TRIG3   => TRIG3);
+
+  --TRIG0(g_cpu_addr_width-1 downto 0) <= cpu_addr_i;
+  --TRIG1                              <= cpu_data_b;
+  --TRIG2(0)                           <= cpu_cs_n_i;
+  --TRIG2(1)                           <= cpu_rd_n_i;
+  --TRIG2(2)                           <= cpu_wr_n_i;
+  --TRIG2(3) <= sys_rst_n_i;
+  
 
   U_Clk_Buf_GTX0_3 : IBUFDS_GTXE1
     port map
@@ -266,9 +311,9 @@ begin
       DIFF_TERM  => true,
       IOSTANDARD => "LVDS_25")
     port map (
-      O  => clk_sys_pll,
-      I  => fpga_clk_sys_p_i,
-      IB => fpga_clk_sys_n_i);
+      O  => clk_aux,
+      I  => fpga_clk_aux_p_i,
+      IB => fpga_clk_aux_n_i);
 
 
   U_Buf_CLK_DMTD : IBUFGDS
@@ -353,7 +398,7 @@ begin
       g_slave_mode         => CLASSIC,
       g_slave_granularity  => WORD)
     port map (
-      clk_sys_i => clk_sys_pll,
+      clk_sys_i => clk_sys,
       rst_n_i   => sys_rst_n_i,
       slave_i   => bridge_master_out,
       slave_o   => bridge_master_in,
@@ -404,6 +449,10 @@ begin
   -- "Bare" top module instantiation
   -----------------------------------------------------------------------------
 
+  pps_o <=from_phys(0).rx_clk;
+  
+  -- gen_with_top : if(g_chipscope_only = false) generate
+
   U_Real_Top : scb_top_bare
     generic map (
       g_num_ports  => g_num_ports,
@@ -413,13 +462,13 @@ begin
       clk_startup_i       => clk_sys_startup,
       clk_ref_i           => clk_ref,
       clk_dmtd_i          => clk_dmtd,
-      clk_sys_i           => clk_sys_pll,
       clk_sys_o           => clk_sys,
+      clk_aux_i           => clk_aux,
       cpu_wb_i            => top_master_out,
       cpu_wb_o            => top_master_in,
       cpu_irq_n_o         => cpu_irq_n_o,
       pps_i               => pps_i,
-      pps_o               => pps_o,
+      pps_o               => open, --pps_o,
       dac_helper_sync_n_o => dac_helper_sync_n_o,
       dac_helper_sclk_o   => dac_helper_sclk_o,
       dac_helper_data_o   => dac_helper_data_o,
@@ -441,6 +490,10 @@ begin
       phys_i              => from_phys,
       led_link_o          => led_link_o,
       led_act_o           => led_act_o);
+
+  -- end generate gen_with_top;
+
+
 
   gtx_sfp_tx_dis_o <= (others => '1');
 
