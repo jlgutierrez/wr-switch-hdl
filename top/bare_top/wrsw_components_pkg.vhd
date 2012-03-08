@@ -164,6 +164,7 @@ package wrsw_components_pkg is
       clk_sys_i           : in  std_logic;
       clk_dmtd_i          : in  std_logic;
       clk_rx_i            : in  std_logic_vector(g_num_rx_clocks-1 downto 0);
+      clk_aux_i           : in  std_logic;
       rst_n_i             : in  std_logic;
       rst_n_o             : out std_logic;
       wb_i                : in  t_wishbone_slave_in;

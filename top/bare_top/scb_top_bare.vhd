@@ -20,7 +20,8 @@ use UNISIM.vcomponents.all;
 entity scb_top_bare is
   generic(
     g_num_ports  : integer := 6;
-    g_simulation : boolean := false
+    g_simulation : boolean := false;
+    g_without_network: boolean := true
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -28,14 +29,15 @@ entity scb_top_bare is
     -- Startup 25 MHz clock (from onboard 25 MHz oscillator)
     clk_startup_i : in std_logic;
 
-    -- 125 MHz timing reference (from the AD9516 PLL output QDRII_CLK)
+    -- 62.5 MHz timing reference (from the AD9516 PLL output QDRII_CLK)
     clk_ref_i : in std_logic;
 
-    -- 125+ MHz DMTD offset clock (from the CDCM62001 PLL output DMTDCLK_MAIN)
+    -- 62.5+ MHz DMTD offset clock (from the CDCM62001 PLL output DMTDCLK_MAIN)
     clk_dmtd_i : in std_logic;
 
-    -- 62.5 MHz system clock (from the AD9516 PLL output QDRII_200CLK)
-    clk_sys_i : in std_logic;
+    -- Programmable aux clock (from the AD9516 PLL output QDRII_200CLK). Used
+    -- for re-phasing the 10 MHz input as well as clocking the 
+    clk_aux_i : in std_logic;
 
     -- Muxed system clock
     clk_sys_o : out std_logic;
@@ -247,23 +249,31 @@ architecture rtl of scb_top_bare is
 begin
 
 
-  CS_ICON : chipscope_icon
-    port map (
-      CONTROL0 => CONTROL0);
+  --CS_ICON : chipscope_icon
+  --  port map (
+  --    CONTROL0 => CONTROL0);
 
-  CS_ILA : chipscope_ila
-    port map (
-      CONTROL => CONTROL0,
-      CLK     => clk_sys,
-      TRIG0   => TRIG0,
-      TRIG1   => TRIG1,
-      TRIG2   => TRIG2,
-      TRIG3   => TRIG3);
+  --CS_ILA : chipscope_ila
+  --  port map (
+  --    CONTROL => CONTROL0,
+  --    CLK     => clk_sys,
+  --    TRIG0   => TRIG0,
+  --    TRIG1   => TRIG1,
+  --    TRIG2   => TRIG2,
+  --    TRIG3   => TRIG3);
 
 
   cnx_slave_in(0) <= cpu_wb_i;
   cpu_wb_o        <= cnx_slave_out(0);
 
+  --TRIG0 <= cpu_wb_i.adr;
+  --TRIG1 <= cpu_wb_i.dat;
+  --TRIG3 <= cnx_slave_out(0).dat;
+  --TRIG2(0) <= cpu_wb_i.cyc;
+  --TRIG2(1) <= cpu_wb_i.stb;
+  --TRIG2(2) <= cpu_wb_i.we;
+  --TRIG2(3) <= cnx_slave_out(0).stall;
+  --TRIG2(4) <= cnx_slave_out(0).ack;
 
   U_Sys_Clock_Mux : BUFGMUX
     generic map (
@@ -271,7 +281,7 @@ begin
     port map (
       O  => clk_sys,
       I0 => clk_startup_i,
-      I1 => clk_sys_i,
+      I1 => clk_ref_i,                  -- both are 62.5 MHz
       S  => sel_clk_sys_int);
 
 
@@ -322,6 +332,7 @@ begin
       clk_sys_i           => clk_sys,
       clk_dmtd_i          => clk_dmtd_i,
       clk_rx_i            => clk_rx_vec,
+      clk_aux_i =>clk_aux_i,
       rst_n_i             => rst_n_sys,
       rst_n_o             => rst_n_periph,
       wb_i                => cnx_master_out(c_SLAVE_RT_SUBSYSTEM),
@@ -358,6 +369,8 @@ begin
       irqs_i       => vic_irqs,
       irq_master_o => cpu_irq_n_o);
 
+  gen_network_stuff: if(g_without_network = false) generate
+  
   U_Nic : xwrsw_nic
     generic map (
       g_interface_mode      => PIPELINED,
@@ -471,38 +484,6 @@ begin
     --txtsu_timestamps(i).valid <= '0';
   end generate gen_terminate_unused_eps;
 
-  --gen_rtu_bcast: for i in 0 to c_NUM_PORTS-1 generate
-  --  rtu_rsp(i).valid <= '1';
-  --  rtu_rsp(i).port_mask <= (i => '0', others => '1');
-  --  rtu_rsp(i).prio <= (others => '0');
-  --  rtu_rsp(i).drop <= '0';
-  --end generate gen_rtu_bcast;
-
-
-  --trig0 <= f_fabric_2_slv(endpoint_src_out(4), endpoint_src_in(4));
-  --trig1 <= f_fabric_2_slv(endpoint_snk_in(4), endpoint_snk_out(4));
-
-
-  trig2 <= f_fabric_2_slv(endpoint_src_out(0), endpoint_src_in(0));
-  trig3 <= f_fabric_2_slv(endpoint_snk_in(0), endpoint_snk_out(0));
-
-  trig0 <= f_fabric_2_slv(endpoint_src_out(4), endpoint_src_in(4));
-  trig1 <= f_fabric_2_slv(endpoint_snk_in(4), endpoint_snk_out(4));
-
-  --endpoint_snk_in(4) <= endpoint_src_out(0);
-  --endpoint_snk_in(0) <= endpoint_src_out(4);
-  --endpoint_src_in(4) <= endpoint_snk_out(0);
-  --endpoint_src_in(0) <= endpoint_snk_out(4);
-
-  --endpoint_snk_in(c_NUM_PORTS) <= endpoint_src_out(1);
-  --endpoint_snk_in(1) <= endpoint_src_out(c_NUM_PORTS);
-  --endpoint_src_in(c_NUM_PORTS) <= endpoint_snk_out(1);
-  --endpoint_src_in(1) <= endpoint_snk_out(c_NUM_PORTS);
-
-
-
-
-
 
   U_Swcore : xswc_core
     generic map (
@@ -521,38 +502,7 @@ begin
       rtu_ack_o => rtu_rsp_ack
       );
 
-  U_PPS_Gen : xwr_pps_gen
-    generic map (
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE,
-      g_ref_clock_rate      => 62500000)
-    port map (
-      clk_ref_i       => clk_ref_i,
-      clk_sys_i       => clk_sys,
-      rst_n_i         => rst_n_periph,
-      slave_i         => cnx_master_out(c_SLAVE_PPS_GEN),
-      slave_o         => cnx_master_in(c_SLAVE_PPS_GEN),
-      pps_in_i        => '0',
-      pps_csync_o     => pps_csync,
-      pps_out_o       => pps_o,
-      tm_utc_o        => open,
-      tm_cycles_o     => open,
-      tm_time_valid_o => open);
-
-  U_Tx_TSU : xwrsw_tx_tsu
-    generic map (
-      g_num_ports           => c_NUM_PORTS,
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE)
-    port map (
-      clk_sys_i        => clk_sys,
-      rst_n_i          => rst_n_periph,
-      timestamps_i     => txtsu_timestamps,
-      timestamps_ack_o => txtsu_timestamps_ack,
-      wb_i             => cnx_master_out(c_SLAVE_TXTSU),
-      wb_o             => cnx_master_in(c_SLAVE_TXTSU));
-
-  U_RTU : xwrsw_rtu
+    U_RTU : xwrsw_rtu
     generic map (
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE,
@@ -567,6 +517,50 @@ begin
       rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
       wb_i       => cnx_master_out(c_SLAVE_RTU),
       wb_o       => cnx_master_in(c_SLAVE_RTU));
+
+  end generate gen_network_stuff;
+
+  gen_no_network_stuff: if(g_without_network= true) generate
+    gen_dummy_resets: for i in 0 to g_num_ports-1 generate
+      phys_o(i).rst <= not rst_n_periph;
+      phys_o(i).loopen <= '0';
+    end generate gen_dummy_resets;
+  end generate gen_no_network_stuff;
+  
+
+  U_PPS_Gen : xwr_pps_gen
+    generic map (
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE,
+      g_ref_clock_rate      => 62500000)
+    port map (
+      clk_ref_i       => clk_ref_i,
+      clk_sys_i       => clk_sys,
+      rst_n_i         => rst_n_periph,
+      slave_i         => cnx_master_out(c_SLAVE_PPS_GEN),
+      slave_o         => cnx_master_in(c_SLAVE_PPS_GEN),
+      pps_in_i        => '0',
+      pps_csync_o     => pps_csync,
+      pps_out_o       => open,          -- fixme: was pps_o
+      tm_utc_o        => open,
+      tm_cycles_o     => open,
+      tm_time_valid_o => open);
+
+  pps_o <= clk_sys;
+
+  U_Tx_TSU : xwrsw_tx_tsu
+    generic map (
+      g_num_ports           => c_NUM_PORTS,
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE)
+    port map (
+      clk_sys_i        => clk_sys,
+      rst_n_i          => rst_n_periph,
+      timestamps_i     => txtsu_timestamps,
+      timestamps_ack_o => txtsu_timestamps_ack,
+      wb_i             => cnx_master_out(c_SLAVE_TXTSU),
+      wb_o             => cnx_master_in(c_SLAVE_TXTSU));
+
 
   U_GPIO : xwb_gpio_port
     generic map (
