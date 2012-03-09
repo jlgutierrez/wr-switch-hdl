@@ -31,13 +31,15 @@ GROUP(-lgcc -lc)
 
 MEMORY
 {
-    ram : ORIGIN = 0x00000000, LENGTH = 0x4000
+    ram : ORIGIN = 0x00000000, LENGTH = 0x3000
+    mbox : ORIGIN = 0x3000, LENGTH = 0x1000
 }
 
 SECTIONS
 {
 
   .boot : { *(.boot) } > ram
+	
    
   /* Code */
   .text           :
@@ -108,6 +110,13 @@ SECTIONS
     _end = .;
     PROVIDE (end = .);
   } > ram
+
+	.mbox :
+	{
+    . = ALIGN(4);
+    _fmbox = .;
+    *(.mbox)	
+	} > mbox
   
   /* First location in stack is highest address in RAM */
   PROVIDE(_fstack = ORIGIN(ram) + LENGTH(ram) - 4);

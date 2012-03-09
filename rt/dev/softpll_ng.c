@@ -36,9 +36,6 @@ static volatile struct spll_main_state mpll;
 static volatile struct spll_pmeas_channel pmeas[MAX_CHAN_REF + MAX_CHAN_OUT];
 
 
-
-
-
 static void pmeas_update(struct spll_pmeas_channel *chan, int tag)
 {
 	chan->n_tags++;
@@ -78,7 +75,6 @@ void _irq_entry()
 		trr = SPLL->TRR_R0;
 		src = SPLL_TRR_R0_CHAN_ID_R(trr);
 		tag = SPLL_TRR_R0_VALUE_R(trr);
-
 		helper_update(&helper, tag, src);
 		mpll_update(&mpll, tag, src);
 	}
@@ -113,7 +109,7 @@ void spll_init()
 
 int spll_check_lock()
 {
-	return helper.phase.ld.locked ? 1 : 0;
+	return helper.ld.locked ? 1 : 0;
 }
 
 #define CHAN_TCXO 8
@@ -123,17 +119,35 @@ void spll_test()
 	int i = 0;
 	volatile	int dummy;
 
+	SPLL->DAC_HPLL = 0;
+	SPLL->DAC_MAIN = 0;
+	timer_delay(10000);
 
 	spll_init();
-	helper_start(&helper, 0);
-	mpll_init(&mpll, 0, CHAN_TCXO);
+
+	uint32_t t1 = timer_get_tics();
+	
+	helper_init(&helper, 2);
+	helper_start(&helper);
+	mpll_init(&mpll, 2, CHAN_TCXO);
 	enable_irq();
-
-//	mpll_init(&mpll, 0, CHAN_TCXO);
-	while(!helper.phase.ld.locked) ;//TRACE("%d\n", helper.phase.ld.locked);
-	TRACE("Helper locked, starting main\n");
+	while(!helper.ld.locked) ;//TRACE("%d\n", helper.phase.ld.locked);
 	mpll_start(&mpll);
+	while(!mpll.ld.locked) ;//TRACE("%d\n", helper.phase.ld.locked);
 
+	uint32_t t2 = timer_get_tics();
+
+	TRACE("SoftPLL locked (time = %d tics)\n", t2-t1);
+
+/*	for(;;)
+	{
+		TRACE("Left...\n");
+		mpll_set_phase_shift(&mpll, -4000);
+		while(mpll_shifter_busy(&mpll));
+		TRACE("Right...\n");
+		mpll_set_phase_shift(&mpll, 4000);
+		while(mpll_shifter_busy(&mpll));
+	}*/
 }
 
 /*

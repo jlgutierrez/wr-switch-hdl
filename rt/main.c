@@ -2,18 +2,17 @@
 #include "uart.h"
 #include "timer.h"
 
+
+#include "minipc.h"
+
 //void _irq_entry() {};
 
 main()
 {
 	uart_init();
 	ad9516_init();
-
-	spll_test();
+	char tmp[100];
 	
-	for(;;)
-	{
-		mprintf("Ping [lock %d]!\n", spll_check_lock());
-		timer_delay(TICS_PER_SECOND);
-	}
+//	spll_test();
+	ipc_test();	
 }

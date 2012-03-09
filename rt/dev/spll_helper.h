@@ -1,90 +1,19 @@
 
 /* State of the Helper PLL producing a clock (clk_dmtd_i) which is
    slightly offset in frequency from the recovered/reference clock (clk_rx_i or clk_ref_i), so the
-   Main PLL can use it to perform linear phase measurements. This structure keeps the state of the pre-locking
-   stage */
-struct spll_helper_prelock_state {
- 	spll_pi_t pi; 
- 	spll_lock_det_t ld;
- 	int f_setpoint;
-	int ref_select;
-};
-
-
-volatile int serr;
-	
-void helper_prelock_init(struct spll_helper_prelock_state *s)
-{
-	
-	/* Frequency branch PI controller */
-	s->pi.y_min = 5;
-	s->pi.y_max = 65530;
-	s->pi.anti_windup = 0;
-	s->pi.kp = 28*32*16;
-	s->pi.ki = 50*32*16;
-	s->pi.bias = 32000;
-
-	/* Freqency branch lock detection */
-	s->ld.threshold = 2;
-	s->ld.lock_samples = 100;
-	s->ld.delock_samples = 90;
-	
-	s->f_setpoint = -131072 / (1<<HPLL_N);
-
-	pi_init(&s->pi);
-	ld_init(&s->ld);
-}
-
-
-void helper_prelock_enable(int ref_channel, int enable)
-{
-	volatile int dummy;
-	
-	SPLL->CSR = 0;
-
-	dummy = SPLL->PER_HPLL; /* clean any pending frequency measurement to avoid distubing the control loop */
-	if(enable)
-		SPLL->CSR = SPLL_CSR_PER_SEL_W(ref_channel) | SPLL_CSR_PER_EN;
-	else
-		SPLL->CSR = 0;
-	
-}
-
+   Main PLL can use it to perform linear phase measurements. 
+   */
+   
 #define SPLL_LOCKED 1
 #define SPLL_LOCKING 0
 
-int helper_prelock_update(struct spll_helper_prelock_state *s)
-{
-	int y;
-	volatile uint32_t per = SPLL->PER_HPLL;
-	
-	if(per & SPLL_PER_HPLL_VALID)
-	{
-		short err = (short) (per & 0xffff);
+#define HELPER_TAG_WRAPAROUND 100000000
 
-		err -= s->f_setpoint;
+/* Maximum abs value of the phase error. If the error is bigger, it's clamped to this value. */
+#define HELPER_ERROR_CLAMP 150000
 
-		serr = (int)err;
-
-		y = pi_update(&s->pi, err);
-		SPLL->DAC_HPLL = y;
-
-		spll_debug(DBG_Y | DBG_PRELOCK | DBG_HELPER, y, 0);
-		spll_debug(DBG_ERR | DBG_PRELOCK | DBG_HELPER, err, 1);
-		
-		if(ld_update(&s->ld, err))
-		{
-			spll_debug(DBG_EVENT | DBG_PRELOCK | DBG_HELPER, DBG_EVT_LOCKED, 1);
-			
-			return SPLL_LOCKED;
-		}
-	}
-	
-	return SPLL_LOCKED;//ING;
-}
-
-struct spll_helper_phase_state {
-	int p_adder;
+struct spll_helper_state {
+	int p_adder;						/* anti wrap-around adder */
  	int p_setpoint, tag_d0;
  	int ref_src;
  	int sample_n;
@@ -92,20 +21,19 @@ struct spll_helper_phase_state {
  	spll_lock_det_t ld;
 };
 	
-void helper_phase_init(struct spll_helper_phase_state *s, int ref_channel)
+static void helper_init(struct spll_helper_state *s, int ref_channel)
 {
 	
 	/* Phase branch PI controller */
 	s->pi.y_min = 5;
-	s->pi.y_max = 65530;
+	s->pi.y_max = (1 << DAC_BITS) - 5;
  	s->pi.kp = (int)(0.3 * 32.0 * 16.0);
 	s->pi.ki = (int)(0.03 * 32.0 * 3.0); 
-
-	SPLL->DAC_HPLL = 0;
-	timer_delay(100000);
-
+	
 	s->pi.anti_windup = 1;
-	s->pi.bias = 32000;
+ /* Set the bias to the upper end of tuning range. This is to ensure that
+ 		the HPLL will always lock on positive frequency offset. */
+	s->pi.bias = s->pi.y_max;
 	
 	/* Phase branch lock detection */
 	s->ld.threshold = 200;
@@ -115,22 +43,13 @@ void helper_phase_init(struct spll_helper_phase_state *s, int ref_channel)
 	s->p_setpoint = 0;	
 	s->p_adder = 0;
 	s->sample_n = 0;
-	s->tag_d0 = 0;
+	s->tag_d0 = -1;
+
 	pi_init(&s->pi);
 	ld_init(&s->ld);
 }
 
-void helper_phase_enable(int ref_channel, int enable)
-{
-	spll_enable_tagger(ref_channel, enable);
-//		spll_debug(DBG_EVENT | DBG_HELPER, DBG_EVT_START, 1);
-}
-
-volatile int delta;
-
-#define TAG_WRAPAROUND 100000000
-
-int helper_phase_update(struct spll_helper_phase_state *s, int tag, int source)
+static int helper_update(struct spll_helper_state *s, int tag, int source)
 {
 	int err, y;
 
@@ -139,19 +58,33 @@ int helper_phase_update(struct spll_helper_phase_state *s, int tag, int source)
 		spll_debug(DBG_TAG | DBG_HELPER, tag, 0);
 		spll_debug(DBG_REF | DBG_HELPER, s->p_setpoint, 0);
 
+		if(s->tag_d0 < 0)
+		{
+			s->p_setpoint = tag;
+			s->tag_d0 = tag;
+
+			return SPLL_LOCKING;
+		}
+		
 		if(s->tag_d0 > tag)
 			s->p_adder += (1<<TAG_BITS);
 			
 		err = (tag + s->p_adder) - s->p_setpoint;
 
-		s->tag_d0 = tag;
-		s->p_setpoint += (1<<HPLL_N);
-		
-		if(s->p_adder > TAG_WRAPAROUND)
+		if(HELPER_ERROR_CLAMP)
 		{
-			s->p_adder -= TAG_WRAPAROUND;
-			s->p_setpoint -= TAG_WRAPAROUND;
+			if(err < -HELPER_ERROR_CLAMP) err = -HELPER_ERROR_CLAMP;
+			if(err > HELPER_ERROR_CLAMP) err = HELPER_ERROR_CLAMP;
+		}	
+	
+		if((tag + s->p_adder) > HELPER_TAG_WRAPAROUND && s->p_setpoint > HELPER_TAG_WRAPAROUND)
+		{
+			s->p_adder -= HELPER_TAG_WRAPAROUND;
+			s->p_setpoint -= HELPER_TAG_WRAPAROUND;
 		}
+
+		s->p_setpoint += (1<<HPLL_N);
+		s->tag_d0 = tag;
 		
 		y = pi_update(&s->pi, err);
 		SPLL->DAC_HPLL = y;
@@ -163,47 +96,13 @@ int helper_phase_update(struct spll_helper_phase_state *s, int tag, int source)
 		if(ld_update(&s->ld, err))
 			return SPLL_LOCKED;
 	}
-
 	return SPLL_LOCKING;
 }
 
-#define HELPER_PRELOCKING 1
-#define HELPER_PHASE 2
-#define HELPER_LOCKED 3
 
-struct spll_helper_state {
-	struct spll_helper_prelock_state prelock;
-	struct 	spll_helper_phase_state phase;
-	int state;
-	int ref_channel;
-};
-
-void helper_start(struct spll_helper_state *s, int ref_channel)
+static void helper_start(struct spll_helper_state *s)
 {
-	s->state = HELPER_PRELOCKING;	
-	s->ref_channel = ref_channel;
-	
-	helper_prelock_init(&s->prelock);
-	helper_phase_init(&s->phase, ref_channel);
-	helper_prelock_enable(ref_channel, 1);
-	spll_debug(DBG_EVENT | DBG_PRELOCK | DBG_HELPER, DBG_EVT_START, 1);
+	spll_enable_tagger(s->ref_src, 1);
+	spll_debug(DBG_EVENT |  DBG_HELPER, DBG_EVT_START, 1);
 }
 
-int helper_update(struct spll_helper_state *s, int tag, int source)
-{
-	switch(s->state)
-	{
-		case HELPER_PRELOCKING:
-			if(helper_prelock_update(&s->prelock) == SPLL_LOCKED)
-			{
-				s->state = HELPER_PHASE;
-				helper_prelock_enable(s->ref_channel, 0);
-				s->phase.pi.bias = s->prelock.pi.y;
-				helper_phase_enable(s->ref_channel, 1);
-			}
-			return SPLL_LOCKING;
-		case HELPER_PHASE:
-			return helper_phase_update(&s->phase, tag, source);
-	}
-	return SPLL_LOCKING;
-}
