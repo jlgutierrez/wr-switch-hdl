@@ -21,52 +21,10 @@ static volatile struct SPLL_WB *SPLL = (volatile struct SPLL_WB *) BASE_SOFTPLL;
 #include "spll_debug.h"
 #include "spll_helper.h"
 #include "spll_main.h"
+#include "spll_ptracker.h"
 
-
-struct spll_pmeas_channel {
-	int acc;
-	int n_avgs, remaining;
-	int current;
-	int ready;
-	int n_tags;
-};
-
-static volatile struct spll_helper_state helper;
-static volatile struct spll_main_state mpll;
-static volatile struct spll_pmeas_channel pmeas[MAX_CHAN_REF + MAX_CHAN_OUT];
-
-
-
-
-
-static void pmeas_update(struct spll_pmeas_channel *chan, int tag)
-{
-	chan->n_tags++;
-	chan->remaining--;
-	chan->acc += tag & ((1<<HPLL_N)-1);
-	py = tag;
-	if(chan->remaining == 0)
-	{
-		chan->remaining = chan->n_avgs;
-		chan->current = chan->acc / chan->n_avgs;
-		chan->acc = 0;
-		chan->ready = 1;
-	}
-}
-
-static void pmeas_enable(int channel)
-{
-	pmeas[channel].n_avgs = 256;
-	pmeas[channel].remaining = 256;
-	pmeas[channel].current = 0;
-	pmeas[channel].acc = 0;
-	pmeas[channel].ready = 0;
-	pmeas[channel].n_tags = 0;
-	
-	SPLL->RCER |= (1<<channel);
-	
-//	spll_pmeas_mask |= (1<<channel);
-}
+static struct spll_helper_state helper;
+static struct spll_main_state mpll;
 
 void _irq_entry()
 {
