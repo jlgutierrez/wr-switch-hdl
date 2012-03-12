@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-08
--- Last update: 2012-01-26
+-- Last update: 2012-03-09
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -151,10 +151,6 @@ entity wrsw_rtu_match is
     -- Write strobe (active high)
     rtu_aram_main_wr_o : out std_logic;
 
-    -- Port for std_logic_vector field: 'Aging register value' in reg: 'Aging register for HCAM'
-    rtu_agr_hcam_i      : in  std_logic_vector(31 downto 0);
-    rtu_agr_hcam_o      : out std_logic_vector(31 downto 0);
-    rtu_agr_hcam_load_i : in  std_logic;
 
     -------------------------------------------------------------------------------
     -- VLAN TABLE
@@ -350,7 +346,6 @@ architecture behavioral of wrsw_rtu_match is
   signal s_src_dst_sel : std_logic;
 
 
-  signal s_agr_hcam_reg : std_logic_vector(31 downto 0);
 
 -- we remenber taht we learned request, not to send it
 -- second time to learning queue
@@ -414,7 +409,7 @@ begin
   s_port_id_vector(31 downto c_rtu_num_ports)    <= (others => '0');
 
   with s_port_id_vector select
-    s_port_number_tmp <= x"00" when "00000000000000000000000000000000", -- should not ther be 1? 
+    s_port_number_tmp <= x"00" when "00000000000000000000000000000000",  -- should not ther be 1? 
     x"01"                      when "00000000000000000000000000000010",
     x"02"                      when "00000000000000000000000000000100",
     x"03"                      when "00000000000000000000000000001000",
@@ -1268,7 +1263,4 @@ begin
                     c_wrsw_num_ports +
                     c_wrsw_prio_width) <=  s_rsp_drop ;
 
-  s_agr_hcam_reg <= (others => '0');
-  rtu_agr_hcam_o <= s_agr_hcam_reg;     -- x"F0123456";
-  
 end architecture;  --wrsw_rtu_match

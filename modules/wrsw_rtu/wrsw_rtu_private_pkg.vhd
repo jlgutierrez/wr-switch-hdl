@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-09
--- Last update: 2012-01-25
+-- Last update: 2012-03-09
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -44,6 +44,8 @@ use ieee.std_logic_1164.all;
 
 library work;
 use work.wishbone_pkg.all;              -- for test part (to be moved)
+use work.rtu_wbgen2_pkg.all;
+
 package wrsw_rtu_private_pkg is
 
 ----------------------------------------------------------------------------------------
@@ -202,177 +204,6 @@ package wrsw_rtu_private_pkg is
       entry_o          : out t_rtu_htab_entry);
   end component;
 
-  component wrsw_rtu_wb
-    port (
-      rst_n_i                  : in  std_logic;
-      wb_clk_i                 : in  std_logic;
-      wb_addr_i                : in  std_logic_vector(13 downto 0);
-      wb_data_i                : in  std_logic_vector(31 downto 0);
-      wb_data_o                : out std_logic_vector(31 downto 0);
-      wb_cyc_i                 : in  std_logic;
-      wb_sel_i                 : in  std_logic_vector(3 downto 0);
-      wb_stb_i                 : in  std_logic;
-      wb_we_i                  : in  std_logic;
-      wb_ack_o                 : out std_logic;
-      wb_irq_o                 : out std_logic;
-      clk_match_i              : in  std_logic;
-      rtu_gcr_g_ena_o          : out std_logic;
-      rtu_gcr_mfifotrig_o      : out std_logic;
-      rtu_gcr_mfifotrig_i      : in  std_logic;
-      rtu_gcr_mfifotrig_load_o : out std_logic;
-      rtu_gcr_poly_val_o       : out std_logic_vector(15 downto 0);
-      irq_nempty_i             : in  std_logic;
-      rtu_ufifo_wr_req_i       : in  std_logic;
-      rtu_ufifo_wr_full_o      : out std_logic;
-      rtu_ufifo_wr_empty_o     : out std_logic;
-      rtu_ufifo_dmac_lo_i      : in  std_logic_vector(31 downto 0);
-      rtu_ufifo_dmac_hi_i      : in  std_logic_vector(15 downto 0);
-      rtu_ufifo_smac_lo_i      : in  std_logic_vector(31 downto 0);
-      rtu_ufifo_smac_hi_i      : in  std_logic_vector(15 downto 0);
-      rtu_ufifo_vid_i          : in  std_logic_vector(11 downto 0);
-      rtu_ufifo_prio_i         : in  std_logic_vector(2 downto 0);
-      rtu_ufifo_pid_i          : in  std_logic_vector(3 downto 0);
-      rtu_ufifo_has_vid_i      : in  std_logic;
-      rtu_ufifo_has_prio_i     : in  std_logic;
-      rtu_aram_main_addr_i     : in  std_logic_vector(7 downto 0);
-      rtu_aram_main_data_o     : out std_logic_vector(31 downto 0);
-      rtu_aram_main_rd_i       : in  std_logic;
-      rtu_aram_main_data_i     : in  std_logic_vector(31 downto 0);
-      rtu_aram_main_wr_i       : in  std_logic;
-      rtu_vlan_tab_addr_i      : in  std_logic_vector(11 downto 0);
-      rtu_vlan_tab_data_o      : out std_logic_vector(31 downto 0);
-      rtu_vlan_tab_rd_i        : in  std_logic;
-      rtu_agr_hcam_o           : out std_logic_vector(31 downto 0);
-      rtu_agr_hcam_i           : in  std_logic_vector(31 downto 0);
-      rtu_agr_hcam_load_o      : out std_logic;
-      rtu_mfifo_rd_req_i       : in  std_logic;
-      rtu_mfifo_rd_empty_o     : out std_logic;
-      rtu_mfifo_rd_usedw_o     : out std_logic_vector(5 downto 0);
-      rtu_mfifo_ad_sel_o       : out std_logic;
-      rtu_mfifo_ad_val_o       : out std_logic_vector(31 downto 0);
-      rtu_pcr0_learn_en_o      : out std_logic;
-      rtu_pcr0_pass_all_o      : out std_logic;
-      rtu_pcr0_pass_bpdu_o     : out std_logic;
-      rtu_pcr0_fix_prio_o      : out std_logic;
-      rtu_pcr0_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr0_b_unrec_o       : out std_logic;
-      rtu_pcr1_learn_en_o      : out std_logic;
-      rtu_pcr1_pass_all_o      : out std_logic;
-      rtu_pcr1_pass_bpdu_o     : out std_logic;
-      rtu_pcr1_fix_prio_o      : out std_logic;
-      rtu_pcr1_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr1_b_unrec_o       : out std_logic;
-      rtu_pcr2_learn_en_o      : out std_logic;
-      rtu_pcr2_pass_all_o      : out std_logic;
-      rtu_pcr2_pass_bpdu_o     : out std_logic;
-      rtu_pcr2_fix_prio_o      : out std_logic;
-      rtu_pcr2_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr2_b_unrec_o       : out std_logic;
-      rtu_pcr3_learn_en_o      : out std_logic;
-      rtu_pcr3_pass_all_o      : out std_logic;
-      rtu_pcr3_pass_bpdu_o     : out std_logic;
-      rtu_pcr3_fix_prio_o      : out std_logic;
-      rtu_pcr3_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr3_b_unrec_o       : out std_logic;
-      rtu_pcr4_learn_en_o      : out std_logic;
-      rtu_pcr4_pass_all_o      : out std_logic;
-      rtu_pcr4_pass_bpdu_o     : out std_logic;
-      rtu_pcr4_fix_prio_o      : out std_logic;
-      rtu_pcr4_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr4_b_unrec_o       : out std_logic;
-      rtu_pcr5_learn_en_o      : out std_logic;
-      rtu_pcr5_pass_all_o      : out std_logic;
-      rtu_pcr5_pass_bpdu_o     : out std_logic;
-      rtu_pcr5_fix_prio_o      : out std_logic;
-      rtu_pcr5_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr5_b_unrec_o       : out std_logic;
-      rtu_pcr6_learn_en_o      : out std_logic;
-      rtu_pcr6_pass_all_o      : out std_logic;
-      rtu_pcr6_pass_bpdu_o     : out std_logic;
-      rtu_pcr6_fix_prio_o      : out std_logic;
-      rtu_pcr6_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr6_b_unrec_o       : out std_logic;
-      rtu_pcr7_learn_en_o      : out std_logic;
-      rtu_pcr7_pass_all_o      : out std_logic;
-      rtu_pcr7_pass_bpdu_o     : out std_logic;
-      rtu_pcr7_fix_prio_o      : out std_logic;
-      rtu_pcr7_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr7_b_unrec_o       : out std_logic;
-      rtu_pcr8_learn_en_o      : out std_logic;
-      rtu_pcr8_pass_all_o      : out std_logic;
-      rtu_pcr8_pass_bpdu_o     : out std_logic;
-      rtu_pcr8_fix_prio_o      : out std_logic;
-      rtu_pcr8_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr8_b_unrec_o       : out std_logic;
-      rtu_pcr9_learn_en_o      : out std_logic;
-      rtu_pcr9_pass_all_o      : out std_logic;
-      rtu_pcr9_pass_bpdu_o     : out std_logic;
-      rtu_pcr9_fix_prio_o      : out std_logic;
-      rtu_pcr9_prio_val_o      : out std_logic_vector(2 downto 0);
-      rtu_pcr9_b_unrec_o       : out std_logic;
-      rtu_pcr10_learn_en_o     : out std_logic;
-      rtu_pcr10_pass_all_o     : out std_logic;
-      rtu_pcr10_pass_bpdu_o    : out std_logic;
-      rtu_pcr10_fix_prio_o     : out std_logic;
-      rtu_pcr10_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr10_b_unrec_o      : out std_logic;
-      rtu_pcr11_learn_en_o     : out std_logic;
-      rtu_pcr11_pass_all_o     : out std_logic;
-      rtu_pcr11_pass_bpdu_o    : out std_logic;
-      rtu_pcr11_fix_prio_o     : out std_logic;
-      rtu_pcr11_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr11_b_unrec_o      : out std_logic;
-      rtu_pcr12_learn_en_o     : out std_logic;
-      rtu_pcr12_pass_all_o     : out std_logic;
-      rtu_pcr12_pass_bpdu_o    : out std_logic;
-      rtu_pcr12_fix_prio_o     : out std_logic;
-      rtu_pcr12_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr12_b_unrec_o      : out std_logic;
-      rtu_pcr13_learn_en_o     : out std_logic;
-      rtu_pcr13_pass_all_o     : out std_logic;
-      rtu_pcr13_pass_bpdu_o    : out std_logic;
-      rtu_pcr13_fix_prio_o     : out std_logic;
-      rtu_pcr13_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr13_b_unrec_o      : out std_logic;
-      rtu_pcr14_learn_en_o     : out std_logic;
-      rtu_pcr14_pass_all_o     : out std_logic;
-      rtu_pcr14_pass_bpdu_o    : out std_logic;
-      rtu_pcr14_fix_prio_o     : out std_logic;
-      rtu_pcr14_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr14_b_unrec_o      : out std_logic;
-      rtu_pcr15_learn_en_o     : out std_logic;
-      rtu_pcr15_pass_all_o     : out std_logic;
-      rtu_pcr15_pass_bpdu_o    : out std_logic;
-      rtu_pcr15_fix_prio_o     : out std_logic;
-      rtu_pcr15_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr15_b_unrec_o      : out std_logic;
-      rtu_pcr16_learn_en_o     : out std_logic;
-      rtu_pcr16_pass_all_o     : out std_logic;
-      rtu_pcr16_pass_bpdu_o    : out std_logic;
-      rtu_pcr16_fix_prio_o     : out std_logic;
-      rtu_pcr16_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr16_b_unrec_o      : out std_logic;
-      rtu_pcr17_learn_en_o     : out std_logic;
-      rtu_pcr17_pass_all_o     : out std_logic;
-      rtu_pcr17_pass_bpdu_o    : out std_logic;
-      rtu_pcr17_fix_prio_o     : out std_logic;
-      rtu_pcr17_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr17_b_unrec_o      : out std_logic;
-      rtu_pcr18_learn_en_o     : out std_logic;
-      rtu_pcr18_pass_all_o     : out std_logic;
-      rtu_pcr18_pass_bpdu_o    : out std_logic;
-      rtu_pcr18_fix_prio_o     : out std_logic;
-      rtu_pcr18_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr18_b_unrec_o      : out std_logic;
-      rtu_pcr19_learn_en_o     : out std_logic;
-      rtu_pcr19_pass_all_o     : out std_logic;
-      rtu_pcr19_pass_bpdu_o    : out std_logic;
-      rtu_pcr19_fix_prio_o     : out std_logic;
-      rtu_pcr19_prio_val_o     : out std_logic_vector(2 downto 0);
-      rtu_pcr19_b_unrec_o      : out std_logic
-
-);
-  end component;
 ----------------------------------------------------------------------------------------
 --| CRC-based hash calculation
 ----------------------------------------------------------------------------------------
@@ -483,10 +314,6 @@ package wrsw_rtu_private_pkg is
       -- Write strobe (active high)
       rtu_aram_main_wr_o : out std_logic;
 
-      -- Port for std_logic_vector field: 'Aging register value' in reg: 'Aging register for HCAM'
-      rtu_agr_hcam_i      : in  std_logic_vector(31 downto 0);
-      rtu_agr_hcam_o      : out std_logic_vector(31 downto 0);
-      rtu_agr_hcam_load_i : in  std_logic;
 
       -------------------------------------------------------------------------------
       -- VLAN TABLE
@@ -533,6 +360,34 @@ package wrsw_rtu_private_pkg is
       );
   end component;
 
+  component rtu_wishbone_slave
+    port (
+      rst_n_i             : in  std_logic;
+      clk_sys_i           : in  std_logic;
+      wb_adr_i            : in  std_logic_vector(13 downto 0);
+      wb_dat_i            : in  std_logic_vector(31 downto 0);
+      wb_dat_o            : out std_logic_vector(31 downto 0);
+      wb_cyc_i            : in  std_logic;
+      wb_sel_i            : in  std_logic_vector(3 downto 0);
+      wb_stb_i            : in  std_logic;
+      wb_we_i             : in  std_logic;
+      wb_ack_o            : out std_logic;
+      wb_stall_o          : out std_logic;
+      wb_int_o            : out std_logic;
+      clk_match_i         : in  std_logic;
+      irq_nempty_i        : in  std_logic;
+      rtu_aram_addr_i     : in  std_logic_vector(7 downto 0);
+      rtu_aram_data_o     : out std_logic_vector(31 downto 0);
+      rtu_aram_rd_i       : in  std_logic;
+      rtu_aram_data_i     : in  std_logic_vector(31 downto 0);
+      rtu_aram_wr_i       : in  std_logic;
+      rtu_vlan_tab_addr_i : in  std_logic_vector(11 downto 0);
+      rtu_vlan_tab_data_o : out std_logic_vector(31 downto 0);
+      rtu_vlan_tab_rd_i   : in  std_logic;
+      regs_i              : in  t_rtu_in_registers;
+      regs_o              : out t_rtu_out_registers);
+  end component;
+  
   function f_unmarshall_htab_entry (w0, w1, w2, w3 : std_logic_vector) return t_rtu_htab_entry;
 
 end package wrsw_rtu_private_pkg;
