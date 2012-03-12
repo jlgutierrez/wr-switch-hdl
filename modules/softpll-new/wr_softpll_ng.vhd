@@ -14,10 +14,7 @@ entity wr_softpll_ng is
     g_num_ref_inputs      : integer                        := 1;
     g_num_outputs         : integer                        := 1;
 
--- choose which clocks should go to the period detector, to avoid connecting
--- extra calibration signals as clocks (such as PLL status pin, which doesn't
--- drive a BUFG) 
-    g_period_detector_ref_mask : std_logic_vector(31 downto 0) := x"ffffffff"
+    g_with_period_detector: boolean := false
     );
 
   port(
@@ -283,7 +280,7 @@ begin  -- rtl
     end process;
     
   end generate gen_ref_channels_clk_enables;
-
+  
 
   resized_addr(6 downto 0)                          <= wb_adr_i;
   resized_addr(c_wishbone_address_width-1 downto 7) <= (others => '0');
@@ -396,9 +393,12 @@ begin  -- rtl
 
       irq_tag_i => irq_tag);
 
+  wb_irq_o <= wb_irq_out;
 
   
-  per_clk_ref(g_num_ref_inputs-1 downto 0) <= clk_ref_i and g_period_detector_ref_mask(g_num_ref_inputs-1 downto 0);
+ gen_with_period_detector: if(g_with_period_detector) generate
+  
+  per_clk_ref(g_num_ref_inputs-1 downto 0) <= clk_ref_i;-- and g_period_detector_ref_mask(g_num_ref_inputs-1 downto 0);
   per_clk_ref(g_num_ref_inputs)            <= clk_fb_i(0);
 
   -- Frequency/Period detector (to speed up locking)
@@ -414,15 +414,6 @@ begin  -- rtl
       freq_err_o       => dmtd_freq_err,
       freq_err_stb_p_o => dmtd_freq_err_stb_p,
       in_sel_i         => regs_in.csr_per_sel_o(4 downto 0));
-
-  wb_irq_o <= wb_irq_out;
-
-  dac_dmtd_load_o <= regs_in.dac_hpll_wr_o;
-  dac_dmtd_data_o <= regs_in.dac_hpll_o;
-
-  dac_out_data_o <= regs_in.dac_main_value_o;
-  dac_out_sel_o  <= regs_in.dac_main_dac_sel_o;
-  dac_out_load_o <= regs_in.dac_main_value_wr_o;
 
   p_collect_tags_hpll : process(clk_sys_i)
   begin
@@ -446,6 +437,20 @@ begin  -- rtl
       end if;
     end if;
   end process;
+
+ end generate gen_with_period_detector;
+  
+  gen_without_period_detector: if(g_with_period_detector = false) generate
+    regs_out.per_hpll_valid_i <= '0';
+  end generate gen_without_period_detector;
+  
+  
+  dac_dmtd_load_o <= regs_in.dac_hpll_wr_o;
+  dac_dmtd_data_o <= regs_in.dac_hpll_o;
+
+  dac_out_data_o <= regs_in.dac_main_value_o;
+  dac_out_sel_o  <= regs_in.dac_main_dac_sel_o;
+  dac_out_load_o <= regs_in.dac_main_value_wr_o;
 
 
   p_ocer_rcer_regs : process(clk_sys_i)

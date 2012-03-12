@@ -55,8 +55,8 @@ architecture wrapper of xwr_softpll_ng is
       g_interface_mode           : t_wishbone_interface_mode;
       g_address_granularity      : t_wishbone_address_granularity;
       g_num_ref_inputs           : integer;
-      g_num_outputs              : integer;
-      g_period_detector_ref_mask : std_logic_vector(31 downto 0) := x"ffffffff"
+      g_num_outputs              : integer--;
+--      g_period_detector_ref_mask : std_logic_vector(31 downto 0) := x"ffffffff"
       );
     port (
       clk_sys_i       : in  std_logic;
@@ -92,8 +92,8 @@ begin  -- behavioral
       g_interface_mode      => g_interface_mode,
       g_address_granularity => g_address_granularity,
       g_num_ref_inputs      => g_num_ref_inputs,
-      g_num_outputs         => g_num_outputs,
-      g_period_detector_ref_mask => g_period_detector_ref_mask)
+      g_num_outputs         => g_num_outputs)
+--      g_period_detector_ref_mask => g_period_detector_ref_mask)
     port map (
       clk_sys_i       => clk_sys_i,
       rst_n_i         => rst_n_i,
