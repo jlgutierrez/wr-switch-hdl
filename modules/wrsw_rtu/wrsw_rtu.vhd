@@ -6,7 +6,7 @@
 -- Authors    : Tomasz Wlostowski, Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-27
--- Last update: 2012-01-26
+-- Last update: 2012-03-09
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -113,11 +113,15 @@
 
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 library work;
 use work.genram_pkg.all;
 use work.wrsw_rtu_private_pkg.all;
 use work.wishbone_pkg.all;
+use work.rtu_wbgen2_pkg.all;
+
+
 
 
 entity wrsw_rtu is
@@ -261,26 +265,7 @@ architecture behavioral of wrsw_rtu is
   signal s_vlan_tab_data : std_logic_vector(31 downto 0);
   signal s_vlan_tab_rd   : std_logic;
 
-  --| MFIFO
-  signal s_rtu_mfifo_rd_usedw : std_logic_vector(5 downto 0);
-  signal s_rtu_mfifo_rd_empty : std_logic;
-  signal s_rtu_mfifo_rd_req   : std_logic;
-  signal s_rtu_mfifo_ad_sel   : std_logic;
-  signal s_rtu_mfifo_ad_val   : std_logic_vector(31 downto 0);
-
   -- | UFIFO for learning
-  signal s_ufifo_wr_req   : std_logic;
-  signal s_ufifo_wr_full  : std_logic;
-  signal s_ufifo_wr_empty : std_logic;
-  signal s_ufifo_dmac_lo  : std_logic_vector(31 downto 0);
-  signal s_ufifo_dmac_hi  : std_logic_vector(15 downto 0);
-  signal s_ufifo_smac_lo  : std_logic_vector(31 downto 0);
-  signal s_ufifo_smac_hi  : std_logic_vector(15 downto 0);
-  signal s_ufifo_vid      : std_logic_vector(11 downto 0);
-  signal s_ufifo_prio     : std_logic_vector(2 downto 0);
-  signal s_ufifo_pid      : std_logic_vector(3 downto 0);
-  signal s_ufifo_has_vid  : std_logic;
-  signal s_ufifo_has_prio : std_logic;
 
   --|IRQ
   signal s_irq_nempty : std_logic;
@@ -292,22 +277,11 @@ architecture behavioral of wrsw_rtu is
   signal s_aram_main_rd     : std_logic;
   signal s_aram_main_wr     : std_logic;
 
-  --| ARG_HCAM - Aging register for HCAM
-  signal s_agr_hcam_o    : std_logic_vector(31 downto 0);
-  signal s_agr_hcam_i    : std_logic_vector(31 downto 0);
-  signal s_agr_hcam_load : std_logic;
-
-  --| CONTROL REGISTERS
-
-  signal gcr_mfifotrig_out  : std_logic;
-  signal gcr_mfifotrig_in   : std_logic;
-  signal gcr_mfifotrig_load : std_logic;
-
   signal s_pcr_learn_en  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
   signal s_pcr_pass_all  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
   signal s_pcr_pass_bpdu : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
   signal s_pcr_fix_prio  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
-  signal s_pcr_prio_val  : std_logic_vector(c_wrsw_num_ports_max  * c_rtu_num_ports - 1 downto 0);
+  signal s_pcr_prio_val  : std_logic_vector(c_wrsw_num_ports_max * c_rtu_num_ports - 1 downto 0);
   signal s_pcr_b_unrec   : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
 
 
@@ -340,32 +314,18 @@ architecture behavioral of wrsw_rtu is
   -- access granted by REQ_FIFO_ARBITER to single port (if '1' access is granted
   signal s_gnt_fifo_access : std_logic_vector(c_rtu_num_ports - 1 downto 0);
 
-  --| GLOBAL CONTROL REG
-
-  -- HT_BSEL : Main table bank select
-  -- Selects active bank of RTU hashtable (ZBT).
-  -- 0: bank 0 is used by lookup engine and bank 1 can be accessed using MFIFO
-  -- 1: bank 1 is used by lookup engine and bank 0 can be accessed using MFIFO 
-  signal s_htab_bsel : std_logic;
-
-  -- HCAM_BSEL : Hash collision table (HCAM) bank select
-  -- Selects active bank of RTU extra memory for colliding hashes.
-  -- 0: bank 0 is used by lookup engine
-  -- 1: bank 1 is used by lookup engine 
-  signal s_cam_bsel : std_logic;
-
-  -- global enable
-  signal s_global_ena : std_logic;
-
   -- hash polynomial
   signal s_rtu_gcr_poly_input : std_logic_vector(15 downto 0);
   signal s_rtu_gcr_poly_used  : std_logic_vector(15 downto 0);
-signal s_rq_fifo_qvalid : std_logic;
-  
--------------------------------------------------------------------------------------------------------------------------
+  signal s_rq_fifo_qvalid     : std_logic;
+
+  signal regs_towb   : t_rtu_in_registers;
+  signal regs_fromwb : t_rtu_out_registers;
+
+  signal current_pcr : integer;
 begin
 
-  s_irq_nempty <= s_ufifo_wr_empty;
+  s_irq_nempty <= regs_fromwb.ufifo_wr_empty_o;
 
   ---------------------------------------------------------------------------------------------------------------------
   --| REQUEST ROUND ROBIN ARBITER - governs access to REQUEST FIFO
@@ -393,7 +353,7 @@ begin
       port map(
         clk_i               => clk_sys_i,
         rst_n_i             => rst_n_i,
-        rtu_gcr_g_ena_i     => s_global_ena,
+        rtu_gcr_g_ena_i     => regs_fromwb.gcr_g_ena_o,
         rtu_idle_o          => rtu_idle_o(i),
         rq_strobe_p_i       => rq_strobe_p_i(i),
         rq_smac_i           => rq_smac_i((i+1)*c_wrsw_mac_addr_width - 1 downto i*c_wrsw_mac_addr_width),
@@ -486,31 +446,31 @@ begin
 
   req_fifo : generic_shiftreg_fifo
     generic map (  -- |request port ID |    destination MAC    |     source MAC        |     VLAN ID      |      PRIORITY     | has_prio | has vid |
-      g_data_width             => c_rtu_num_ports + c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 1 + 1,
-      g_size                   => 32
+      g_data_width => c_rtu_num_ports + c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 1 + 1,
+      g_size       => 32
 --      g_almost_full_threshold  => 27,
 --      g_almost_empty_threshold => 0,
 --      g_show_ahead             => true
       )
     port map
     (
-      rst_n_i => rst_n_i,
-      d_i     => s_req_fifo_input,
-      clk_i   => clk_sys_i,
-      rd_i    => s_rq_fifo_read,        --rtu_match
-      we_i    => s_rq_fifo_write_sng,
-      q_o     => s_rq_rtu_match_data,
+      rst_n_i   => rst_n_i,
+      d_i       => s_req_fifo_input,
+      clk_i     => clk_sys_i,
+      rd_i      => s_rq_fifo_read,      --rtu_match
+      we_i      => s_rq_fifo_write_sng,
+      q_o       => s_rq_rtu_match_data,
       q_valid_o => s_rq_fifo_qvalid,
-      full_o  => s_rq_fifo_full
+      full_o    => s_rq_fifo_full
       );
 
   s_rq_fifo_empty <= not s_rq_fifo_qvalid;
 
-  
 
-  ---------------------------------------------------------------------------------------------------------------------
+
+  --------------------------------------------------------------------------------------------
   --| RTU MATCH: Routing Table Unit Engine
-  ---------------------------------------------------------------------------------------------------------------------
+  --------------------------------------------------------------------------------------------
   -- to be added
   U_Match : wrsw_rtu_match
     port map(
@@ -533,43 +493,41 @@ begin
       htab_drdy_i  => s_htab_drdy,
       htab_entry_i => s_htab_entry,
 
-      rtu_ufifo_wr_req_o   => s_ufifo_wr_req,
-      rtu_ufifo_wr_full_i  => s_ufifo_wr_full,
-      rtu_ufifo_wr_empty_i => s_ufifo_wr_empty,
-      rtu_ufifo_dmac_lo_o  => s_ufifo_dmac_lo,
-      rtu_ufifo_dmac_hi_o  => s_ufifo_dmac_hi,
-      rtu_ufifo_smac_lo_o  => s_ufifo_smac_lo,
-      rtu_ufifo_smac_hi_o  => s_ufifo_smac_hi,
-      rtu_ufifo_vid_o      => s_ufifo_vid,
-      rtu_ufifo_prio_o     => s_ufifo_prio,
-      rtu_ufifo_pid_o      => s_ufifo_pid,
-      rtu_ufifo_has_vid_o  => s_ufifo_has_vid,
-      rtu_ufifo_has_prio_o => s_ufifo_has_prio,
+      rtu_ufifo_wr_req_o   => regs_towb.ufifo_wr_req_i,
+      rtu_ufifo_wr_full_i  => regs_fromwb.ufifo_wr_full_o,
+      rtu_ufifo_wr_empty_i => regs_fromwb.ufifo_wr_empty_o,
+      rtu_ufifo_dmac_lo_o  => regs_towb.ufifo_dmac_lo_i,
+      rtu_ufifo_dmac_hi_o  => regs_towb.ufifo_dmac_hi_i,
+      rtu_ufifo_smac_lo_o  => regs_towb.ufifo_smac_lo_i,
+      rtu_ufifo_smac_hi_o  => regs_towb.ufifo_smac_hi_i,
+      rtu_ufifo_vid_o      => regs_towb.ufifo_vid_i,
+      rtu_ufifo_prio_o     => regs_towb.ufifo_prio_i,
+      rtu_ufifo_pid_o      => regs_towb.ufifo_pid_i,
+      rtu_ufifo_has_vid_o  => regs_towb.ufifo_has_vid_i,
+      rtu_ufifo_has_prio_o => regs_towb.ufifo_has_prio_i,
+
       rtu_aram_main_addr_o => s_aram_main_addr,
       rtu_aram_main_data_i => s_aram_main_data_i,
       rtu_aram_main_rd_o   => s_aram_main_rd,
       rtu_aram_main_data_o => s_aram_main_data_o,
       rtu_aram_main_wr_o   => s_aram_main_wr,
-      rtu_agr_hcam_i       => s_agr_hcam_i,
-      rtu_agr_hcam_o       => s_agr_hcam_o,
-      rtu_agr_hcam_load_i  => s_agr_hcam_load,
-      rtu_vlan_tab_addr_o  => s_vlan_tab_addr,
-      rtu_vlan_tab_data_i  => s_vlan_tab_data,
-      rtu_vlan_tab_rd_o    => s_vlan_tab_rd,
-      rtu_gcr_g_ena_i      => s_global_ena,
-      rtu_pcr_pass_all_i   => s_pcr_pass_all(c_rtu_num_ports - 1 downto 0),
-      rtu_pcr_learn_en_i   => s_pcr_learn_en(c_rtu_num_ports - 1 downto 0),
-      rtu_pcr_pass_bpdu_i  => s_pcr_pass_bpdu(c_rtu_num_ports - 1 downto 0),
-      rtu_pcr_b_unrec_i    => s_pcr_b_unrec(c_rtu_num_ports - 1 downto 0),
-      rtu_crc_poly_i       => s_rtu_gcr_poly_used  --x"1021"-- x"0589" -- x"8005" --x"1021" --x"8005", --
+
+      rtu_vlan_tab_addr_o => s_vlan_tab_addr,
+      rtu_vlan_tab_data_i => s_vlan_tab_data,
+      rtu_vlan_tab_rd_o   => s_vlan_tab_rd,
+
+      rtu_gcr_g_ena_i     => regs_fromwb.gcr_g_ena_o,
+      rtu_pcr_pass_all_i  => s_pcr_pass_all(c_rtu_num_ports - 1 downto 0),
+      rtu_pcr_learn_en_i  => s_pcr_learn_en(c_rtu_num_ports - 1 downto 0),
+      rtu_pcr_pass_bpdu_i => s_pcr_pass_bpdu(c_rtu_num_ports - 1 downto 0),
+      rtu_pcr_b_unrec_i   => s_pcr_b_unrec(c_rtu_num_ports - 1 downto 0),
+      rtu_crc_poly_i      => s_rtu_gcr_poly_used  --x"1021"-- x"0589" -- x"8005" --x"1021" --x"8005", --
 --    rtu_rw_bank_i                                => s_vlan_bsel
       );
 
-  s_rtu_gcr_poly_used <= c_default_hash_poly when (s_rtu_gcr_poly_input = x"0000") else s_rtu_gcr_poly_input;
+  s_rtu_gcr_poly_used <= c_default_hash_poly when (regs_fromwb.gcr_poly_val_o = x"0000") else s_rtu_gcr_poly_input;
 
-  mfifo_trigger <= gcr_mfifotrig_out and gcr_mfifotrig_load;
-
-
+  mfifo_trigger <= regs_fromwb.gcr_mfifotrig_o and regs_fromwb.gcr_mfifotrig_load_o;
 
   U_Lookup : rtu_lookup_engine
     port map (
@@ -577,12 +535,12 @@ begin
       clk_match_i => clk_sys_i,
       rst_n_i     => rst_n_i,
 
-      mfifo_rd_req_o   => s_rtu_mfifo_rd_req,
-      mfifo_rd_empty_i => s_rtu_mfifo_rd_empty,
-      mfifo_ad_sel_i   => s_rtu_mfifo_ad_sel,
-      mfifo_ad_val_i   => s_rtu_mfifo_ad_val,
+      mfifo_rd_req_o   => regs_towb.mfifo_rd_req_i,
+      mfifo_rd_empty_i => regs_fromwb.mfifo_rd_empty_o,
+      mfifo_ad_sel_i   => regs_fromwb.mfifo_ad_sel_o,
+      mfifo_ad_val_i   => regs_fromwb.mfifo_ad_val_o,
       mfifo_trigger_i  => mfifo_trigger,
-      mfifo_busy_o     => gcr_mfifotrig_in,
+      mfifo_busy_o     => regs_towb.gcr_mfifotrig_i,
 
       start_i => s_htab_start,
       ack_i   => s_htab_ack,
@@ -597,205 +555,67 @@ begin
 
   --| WISHBONE I/F: interface with CPU and RAM/CAM
 
-  WB_slave : wrsw_rtu_wb
+  U_WB_Slave : rtu_wishbone_slave
     port map(
       rst_n_i   => rst_n_i,
-      wb_clk_i  => clk_sys_i,
-      wb_addr_i => wb_addr_i,
-      wb_data_i => wb_data_i,
-      wb_data_o => wb_data_o,
+      clk_sys_i  => clk_sys_i,
+
+      wb_adr_i => wb_addr_i,
+      wb_dat_i => wb_data_i,
+      wb_dat_o => wb_data_o,
       wb_cyc_i  => wb_cyc_i,
       wb_sel_i  => wb_sel_i,
       wb_stb_i  => wb_stb_i,
       wb_we_i   => wb_we_i,
       wb_ack_o  => wb_ack_o,
-      wb_irq_o  => wb_irq_o,
+      wb_int_o  => wb_irq_o,
+      wb_stall_o => open,
 
       clk_match_i => clk_sys_i,
 
-      rtu_gcr_mfifotrig_o      => gcr_mfifotrig_out,
-      rtu_gcr_mfifotrig_i      => gcr_mfifotrig_in,
-      rtu_gcr_mfifotrig_load_o => gcr_mfifotrig_load,
+      regs_o => regs_fromwb,
+      regs_i => regs_towb,
 
-      rtu_gcr_g_ena_o      => s_global_ena,
-      rtu_gcr_poly_val_o   => s_rtu_gcr_poly_input,
-      irq_nempty_i         => s_irq_nempty,  --'1',
-      rtu_ufifo_wr_req_i   => s_ufifo_wr_req,
-      rtu_ufifo_wr_full_o  => s_ufifo_wr_full,
-      rtu_ufifo_wr_empty_o => s_ufifo_wr_empty,
-      rtu_ufifo_dmac_lo_i  => s_ufifo_dmac_lo,
-      rtu_ufifo_dmac_hi_i  => s_ufifo_dmac_hi,
-      rtu_ufifo_smac_lo_i  => s_ufifo_smac_lo,
-      rtu_ufifo_smac_hi_i  => s_ufifo_smac_hi,
-      rtu_ufifo_vid_i      => s_ufifo_vid,
-      rtu_ufifo_prio_i     => s_ufifo_prio,
-      rtu_ufifo_pid_i      => s_ufifo_pid,
-      rtu_ufifo_has_vid_i  => s_ufifo_has_vid,
-      rtu_ufifo_has_prio_i => s_ufifo_has_prio,
+      irq_nempty_i => s_irq_nempty,     --'1',
 
-      rtu_aram_main_addr_i => s_aram_main_addr,
-      rtu_aram_main_data_o => s_aram_main_data_i,
-      rtu_aram_main_rd_i   => s_aram_main_rd,
-      rtu_aram_main_data_i => s_aram_main_data_o,
-      rtu_aram_main_wr_i   => s_aram_main_wr,
+      rtu_aram_addr_i => s_aram_main_addr,
+      rtu_aram_data_o => s_aram_main_data_i,
+      rtu_aram_rd_i   => s_aram_main_rd,
+      rtu_aram_data_i => s_aram_main_data_o,
+      rtu_aram_wr_i   => s_aram_main_wr,
 
       rtu_vlan_tab_addr_i => s_vlan_tab_addr,
       rtu_vlan_tab_data_o => s_vlan_tab_data,
-      rtu_vlan_tab_rd_i   => s_vlan_tab_rd,
-
-      rtu_agr_hcam_o       => s_agr_hcam_i,
-      rtu_agr_hcam_i       => s_agr_hcam_o,
-      rtu_agr_hcam_load_o  => s_agr_hcam_load,
-      rtu_mfifo_rd_usedw_o => s_rtu_mfifo_rd_usedw,
-      rtu_mfifo_rd_req_i   => s_rtu_mfifo_rd_req,
-      rtu_mfifo_rd_empty_o => s_rtu_mfifo_rd_empty,
-      rtu_mfifo_ad_sel_o   => s_rtu_mfifo_ad_sel,
-      rtu_mfifo_ad_val_o   => s_rtu_mfifo_ad_val,
-
-      rtu_pcr0_learn_en_o  => s_pcr_learn_en(0),
-      rtu_pcr0_pass_all_o  => s_pcr_pass_all(0),
-      rtu_pcr0_pass_bpdu_o => s_pcr_pass_bpdu(0),
-      rtu_pcr0_fix_prio_o  => s_pcr_fix_prio(0),
-      rtu_pcr0_prio_val_o  => s_pcr_prio_val(3*0 + 3 - 1 downto 3*0),
-      rtu_pcr0_b_unrec_o   => s_pcr_b_unrec(0),
-
-      rtu_pcr1_learn_en_o  => s_pcr_learn_en(1),
-      rtu_pcr1_pass_all_o  => s_pcr_pass_all(1),
-      rtu_pcr1_pass_bpdu_o => s_pcr_pass_bpdu(1),
-      rtu_pcr1_fix_prio_o  => s_pcr_fix_prio(1),
-      rtu_pcr1_prio_val_o  => s_pcr_prio_val(3*1 + 3 - 1 downto 3*1),
-      rtu_pcr1_b_unrec_o   => s_pcr_b_unrec(1),
-
-      rtu_pcr2_learn_en_o  => s_pcr_learn_en(2),
-      rtu_pcr2_pass_all_o  => s_pcr_pass_all(2),
-      rtu_pcr2_pass_bpdu_o => s_pcr_pass_bpdu(2),
-      rtu_pcr2_fix_prio_o  => s_pcr_fix_prio(2),
-      rtu_pcr2_prio_val_o  => s_pcr_prio_val(3*2 + 3 - 1 downto 3*2),
-      rtu_pcr2_b_unrec_o   => s_pcr_b_unrec(2),
-
-      rtu_pcr3_learn_en_o  => s_pcr_learn_en(3),
-      rtu_pcr3_pass_all_o  => s_pcr_pass_all(3),
-      rtu_pcr3_pass_bpdu_o => s_pcr_pass_bpdu(3),
-      rtu_pcr3_fix_prio_o  => s_pcr_fix_prio(3),
-      rtu_pcr3_prio_val_o  => s_pcr_prio_val(3*3 + 3 - 1 downto 3*3),
-      rtu_pcr3_b_unrec_o   => s_pcr_b_unrec(3),
-
-      rtu_pcr4_learn_en_o  => s_pcr_learn_en(4),
-      rtu_pcr4_pass_all_o  => s_pcr_pass_all(4),
-      rtu_pcr4_pass_bpdu_o => s_pcr_pass_bpdu(4),
-      rtu_pcr4_fix_prio_o  => s_pcr_fix_prio(4),
-      rtu_pcr4_prio_val_o  => s_pcr_prio_val(3*4 + 3 - 1 downto 3*4),
-      rtu_pcr4_b_unrec_o   => s_pcr_b_unrec(4),
-
-      rtu_pcr5_learn_en_o  => s_pcr_learn_en(5),
-      rtu_pcr5_pass_all_o  => s_pcr_pass_all(5),
-      rtu_pcr5_pass_bpdu_o => s_pcr_pass_bpdu(5),
-      rtu_pcr5_fix_prio_o  => s_pcr_fix_prio(5),
-      rtu_pcr5_prio_val_o  => s_pcr_prio_val(3*5 + 3 - 1 downto 3*5),
-      rtu_pcr5_b_unrec_o   => s_pcr_b_unrec(5),
-
-      rtu_pcr6_learn_en_o  => s_pcr_learn_en(6),
-      rtu_pcr6_pass_all_o  => s_pcr_pass_all(6),
-      rtu_pcr6_pass_bpdu_o => s_pcr_pass_bpdu(6),
-      rtu_pcr6_fix_prio_o  => s_pcr_fix_prio(6),
-      rtu_pcr6_prio_val_o  => s_pcr_prio_val(3*6 + 3 - 1 downto 3*6),
-      rtu_pcr6_b_unrec_o   => s_pcr_b_unrec(6),
-
-      rtu_pcr7_learn_en_o  => s_pcr_learn_en(7),
-      rtu_pcr7_pass_all_o  => s_pcr_pass_all(7),
-      rtu_pcr7_pass_bpdu_o => s_pcr_pass_bpdu(7),
-      rtu_pcr7_fix_prio_o  => s_pcr_fix_prio(7),
-      rtu_pcr7_prio_val_o  => s_pcr_prio_val(3*7 + 3 - 1 downto 3*7),
-      rtu_pcr7_b_unrec_o   => s_pcr_b_unrec(7),
-
-
-      rtu_pcr8_learn_en_o  => s_pcr_learn_en(8),
-      rtu_pcr8_pass_all_o  => s_pcr_pass_all(8),
-      rtu_pcr8_pass_bpdu_o => s_pcr_pass_bpdu(8),
-      rtu_pcr8_fix_prio_o  => s_pcr_fix_prio(8),
-      rtu_pcr8_prio_val_o  => s_pcr_prio_val(3*8 + 3 - 1 downto 3*8),
-      rtu_pcr8_b_unrec_o   => s_pcr_b_unrec(8),
-
-      rtu_pcr9_learn_en_o  => s_pcr_learn_en(9),
-      rtu_pcr9_pass_all_o  => s_pcr_pass_all(9),
-      rtu_pcr9_pass_bpdu_o => s_pcr_pass_bpdu(9),
-      rtu_pcr9_fix_prio_o  => s_pcr_fix_prio(9),
-      rtu_pcr9_prio_val_o  => s_pcr_prio_val(3*9 + 3 - 1 downto 3*9),
-      rtu_pcr9_b_unrec_o   => s_pcr_b_unrec(9),
-------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------
-      rtu_pcr10_learn_en_o  => s_pcr_learn_en(10),
-      rtu_pcr10_pass_all_o  => s_pcr_pass_all(10),
-      rtu_pcr10_pass_bpdu_o => s_pcr_pass_bpdu(10),
-      rtu_pcr10_fix_prio_o  => s_pcr_fix_prio(10),
-      rtu_pcr10_prio_val_o  => s_pcr_prio_val(3*10 + 3 - 1 downto 3*10),
-      rtu_pcr10_b_unrec_o   => s_pcr_b_unrec(10),
-
-      rtu_pcr11_learn_en_o  => s_pcr_learn_en(11),
-      rtu_pcr11_pass_all_o  => s_pcr_pass_all(11),
-      rtu_pcr11_pass_bpdu_o => s_pcr_pass_bpdu(11),
-      rtu_pcr11_fix_prio_o  => s_pcr_fix_prio(11),
-      rtu_pcr11_prio_val_o  => s_pcr_prio_val(3*11 + 3 - 1 downto 3*11),
-      rtu_pcr11_b_unrec_o   => s_pcr_b_unrec(11),
-
-      rtu_pcr12_learn_en_o  => s_pcr_learn_en(12),
-      rtu_pcr12_pass_all_o  => s_pcr_pass_all(12),
-      rtu_pcr12_pass_bpdu_o => s_pcr_pass_bpdu(12),
-      rtu_pcr12_fix_prio_o  => s_pcr_fix_prio(12),
-      rtu_pcr12_prio_val_o  => s_pcr_prio_val(3*12 + 3 - 1 downto 3*12),
-      rtu_pcr12_b_unrec_o   => s_pcr_b_unrec(12),
-
-      rtu_pcr13_learn_en_o  => s_pcr_learn_en(13),
-      rtu_pcr13_pass_all_o  => s_pcr_pass_all(13),
-      rtu_pcr13_pass_bpdu_o => s_pcr_pass_bpdu(13),
-      rtu_pcr13_fix_prio_o  => s_pcr_fix_prio(13),
-      rtu_pcr13_prio_val_o  => s_pcr_prio_val(3*13 + 3 - 1 downto 3*13),
-      rtu_pcr13_b_unrec_o   => s_pcr_b_unrec(13),
-
-      rtu_pcr14_learn_en_o  => s_pcr_learn_en(14),
-      rtu_pcr14_pass_all_o  => s_pcr_pass_all(14),
-      rtu_pcr14_pass_bpdu_o => s_pcr_pass_bpdu(14),
-      rtu_pcr14_fix_prio_o  => s_pcr_fix_prio(14),
-      rtu_pcr14_prio_val_o  => s_pcr_prio_val(3*14 + 3 - 1 downto 3*14),
-      rtu_pcr14_b_unrec_o   => s_pcr_b_unrec(14),
-
-      rtu_pcr15_learn_en_o  => s_pcr_learn_en(15),
-      rtu_pcr15_pass_all_o  => s_pcr_pass_all(15),
-      rtu_pcr15_pass_bpdu_o => s_pcr_pass_bpdu(15),
-      rtu_pcr15_fix_prio_o  => s_pcr_fix_prio(15),
-      rtu_pcr15_prio_val_o  => s_pcr_prio_val(3*15 + 3 - 1 downto 3*15),
-      rtu_pcr15_b_unrec_o   => s_pcr_b_unrec(15),
-
-      rtu_pcr16_learn_en_o  => s_pcr_learn_en(16),
-      rtu_pcr16_pass_all_o  => s_pcr_pass_all(16),
-      rtu_pcr16_pass_bpdu_o => s_pcr_pass_bpdu(16),
-      rtu_pcr16_fix_prio_o  => s_pcr_fix_prio(16),
-      rtu_pcr16_prio_val_o  => s_pcr_prio_val(3*16 + 3 - 1 downto 3*16),
-      rtu_pcr16_b_unrec_o   => s_pcr_b_unrec(16),
-
-      rtu_pcr17_learn_en_o  => s_pcr_learn_en(17),
-      rtu_pcr17_pass_all_o  => s_pcr_pass_all(17),
-      rtu_pcr17_pass_bpdu_o => s_pcr_pass_bpdu(17),
-      rtu_pcr17_fix_prio_o  => s_pcr_fix_prio(17),
-      rtu_pcr17_prio_val_o  => s_pcr_prio_val(3*17 + 3 - 1 downto 3*17),
-      rtu_pcr17_b_unrec_o   => s_pcr_b_unrec(17),
-
-      rtu_pcr18_learn_en_o  => s_pcr_learn_en(18),
-      rtu_pcr18_pass_all_o  => s_pcr_pass_all(18),
-      rtu_pcr18_pass_bpdu_o => s_pcr_pass_bpdu(18),
-      rtu_pcr18_fix_prio_o  => s_pcr_fix_prio(18),
-      rtu_pcr18_prio_val_o  => s_pcr_prio_val(3*18 + 3 - 1 downto 3*18),
-      rtu_pcr18_b_unrec_o   => s_pcr_b_unrec(18),
-
-      rtu_pcr19_learn_en_o  => s_pcr_learn_en(19),
-      rtu_pcr19_pass_all_o  => s_pcr_pass_all(19),
-      rtu_pcr19_pass_bpdu_o => s_pcr_pass_bpdu(19),
-      rtu_pcr19_fix_prio_o  => s_pcr_fix_prio(19),
-      rtu_pcr19_prio_val_o  => s_pcr_prio_val(3*19 + 3 - 1 downto 3*19),
-      rtu_pcr19_b_unrec_o   => s_pcr_b_unrec(19)
-
-------------------------------------------------------------------------------------------
+      rtu_vlan_tab_rd_i   => s_vlan_tab_rd
       );  
+
+  current_pcr             <= to_integer(unsigned(regs_fromwb.psr_port_sel_o));
+  regs_towb.psr_n_ports_i <= std_logic_vector(to_unsigned(c_rtu_num_ports, 8));
+
+  -- indirectly addressed PCR registers - this is to allow easy generic-based
+  -- scaling of the number of ports
+  p_pcr_registers : process(clk_sys_i)
+  begin
+    if rising_edge(clk_sys_i) then
+      regs_towb.pcr_learn_en_i  <= s_pcr_learn_en(current_pcr);
+      regs_towb.pcr_pass_all_i  <= s_pcr_pass_all(current_pcr);
+      regs_towb.pcr_pass_bpdu_i <= s_pcr_pass_bpdu(current_pcr);
+      regs_towb.pcr_fix_prio_i  <= s_pcr_fix_prio(current_pcr);
+      regs_towb.pcr_prio_val_i  <= s_pcr_prio_val(3*current_pcr + 3 - 1 downto 3*current_pcr);
+      regs_towb.pcr_b_unrec_i   <= s_pcr_b_unrec(current_pcr);
+
+      if(regs_fromwb.pcr_learn_en_load_o = '1') then
+        s_pcr_learn_en(current_pcr)                                <= regs_fromwb.pcr_learn_en_o;
+        s_pcr_pass_all(current_pcr)                                <= regs_fromwb.pcr_pass_all_o;
+        s_pcr_pass_bpdu(current_pcr)                               <= regs_fromwb.pcr_pass_bpdu_o;
+        s_pcr_fix_prio(current_pcr)                                <= regs_fromwb.pcr_fix_prio_o;
+        s_pcr_prio_val(3*current_pcr + 3 - 1 downto 3*current_pcr) <= regs_fromwb.pcr_prio_val_o;
+        s_pcr_b_unrec(current_pcr)                                 <= regs_fromwb.pcr_b_unrec_o;
+      end if;
+    end if;
+  end process;
+  
+  
 
 
 
