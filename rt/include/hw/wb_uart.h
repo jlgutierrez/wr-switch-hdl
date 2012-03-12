@@ -14,7 +14,7 @@
 #ifndef __WBGEN2_REGDEFS_UART_WB
 #define __WBGEN2_REGDEFS_UART_WB
 
-#include <inttypes.h>
+#include <stdint.h>
 
 #if defined( __GNUC__)
 #define PACKED __attribute__ ((packed))

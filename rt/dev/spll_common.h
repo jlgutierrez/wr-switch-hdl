@@ -2,24 +2,41 @@
 
 White Rabbit Softcore PLL (SoftPLL) - common definitions
 
+Copyright (c) 2010 - 2012 CERN / BE-CO-HT (Tomasz Włostowski)
+
+Licensed under LGPL 2.1.
+
 */
 
+
+/* Number of reference/output channels. Currently we support only one SoftPLL instantiation per project,
+   so these can remain static. */
 static int n_chan_ref, n_chan_out;
 
 /* PI regulator state */
 typedef struct {
-  	int ki, kp; 		/* integral and proportional gains (1<<PI_FRACBITS == 1.0f) */
+  	int ki, kp; 			/* integral and proportional gains (1<<PI_FRACBITS == 1.0f) */
   	int integrator;		/* current integrator value */
-  	int bias;			/* DC offset always added to the output */
+  	int bias;					/* DC offset always added to the output */
 		int anti_windup;	/* when non-zero, anti-windup is enabled */
-		int y_min;			/* min/max output range, used by claming and antiwindup algorithms */
+		int y_min;				/* min/max output range, used by clapming and antiwindup algorithms */
 		int y_max;			
-		int x,y;            /* Current input and output value */
+		int x, y;         /* Current input (x) and output value (y) */
 } spll_pi_t;
 
+/* lock detector state */
+typedef struct {
+  	int lock_cnt; 			/* Lock sample counter */
+  	int lock_samples;   /* Number of samples below the (threshold) to assume that we are locked */
+  	int delock_samples; /* Accumulated number of samples that causes the PLL go get out of lock.
+  												delock_samples < lock_samples.  */
+  	int threshold; 			/* Error threshold */
+  	int locked;					/* Non-zero: we are locked */
+} spll_lock_det_t;
 
-/* Processes a single sample (x) using PI controller (pi). Returns the value (y) which should
-   be used to drive the actuator. */
+
+/* Processes a single sample (x) with PI control algorithm (pi). Returns the value (y) to 
+	 drive the actuator. */
 static inline int pi_update(spll_pi_t *pi, int x)
 {
 	int i_new, y;
@@ -29,23 +46,22 @@ static inline int pi_update(spll_pi_t *pi, int x)
 	y = ((i_new * pi->ki + x * pi->kp) >> PI_FRACBITS) + pi->bias;
 	
 	/* clamping (output has to be in <y_min, y_max>) and anti-windup:
-	   stop the integretor if the output is already out of range and the output
+	   stop the integrator if the output is already out of range and the output
 	   is going further away from y_min/y_max. */
     if(y < pi->y_min)
     {
        	y = pi->y_min;
        	if((pi->anti_windup && (i_new > pi->integrator)) || !pi->anti_windup)
        		pi->integrator = i_new;
-	} else if (y > pi->y_max) {
+		} else if (y > pi->y_max) {
        	y = pi->y_max;
       	if((pi->anti_windup && (i_new < pi->integrator)) || !pi->anti_windup)
        		pi->integrator = i_new;
-	} else
-		pi->integrator = i_new;
+		} else /* No antiwindup/clamping? */
+			pi->integrator = i_new;
 
     pi->y = y;
-    return y;
-   
+    return y;   
 }
 
 /* initializes the PI controller state. Currently almost a stub. */
@@ -54,19 +70,17 @@ static inline void pi_init(spll_pi_t *pi)
  	pi->integrator = 0;
 }
 
-/* lock detector state */
-typedef struct {
-  	int lock_cnt;
-  	int lock_samples;
-  	int delock_samples;
-  	int threshold;
-  	int locked;
-} spll_lock_det_t;
 
 
 /* Lock detector state machine. Takes an error sample (y) and checks if it's withing an acceptable range
    (i.e. <-ld.threshold, ld.threshold>. If it has been inside the range for (ld.lock_samples) cyckes, the 
-   FSM assumes the PLL is locked. */
+   FSM assumes the PLL is locked. 
+   
+   Return value:
+   0: PLL not locked
+   1: PLL locked
+   -1: PLL just got out of lock
+ */
 static inline int ld_update(spll_lock_det_t *ld, int y)
 {
 	if (abs(y) <= ld->threshold)
@@ -75,7 +89,10 @@ static inline int ld_update(spll_lock_det_t *ld, int y)
 			ld->lock_cnt++;
 		
 		if(ld->lock_cnt == ld->lock_samples)
+		{
 			ld->locked = 1;
+			return 1;
+		}
 	} else {
 	 	if(ld->lock_cnt > ld->delock_samples)
 	 		ld->lock_cnt--;
@@ -84,6 +101,7 @@ static inline int ld_update(spll_lock_det_t *ld, int y)
 		{
 		 	ld->lock_cnt=  0;
 		 	ld->locked = 0;
+		 	return -1;
 		}
 	}
 	return ld->locked;
@@ -96,6 +114,18 @@ static void ld_init(spll_lock_det_t *ld)
 }
 
 
+/* Enables/disables DDMTD tag generation on a given (channel). 
+
+Channels (0 ... n_chan_ref - 1) are the reference channels 	(e.g. transceivers' RX clocks 
+	or a local reference)
+
+Channels (n_chan_ref ... n_chan_out + n_chan_ref-1) are the output channels (local voltage 
+	controlled oscillators). One output (usually the first one) is always used to drive the 
+	oscillator which produces the reference clock for the transceiver. Other outputs can be
+	used to discipline external oscillators (e.g. on FMCs). 
+	
+*/
+
 static void spll_enable_tagger(int channel, int enable)
 {
 	if(channel >= n_chan_ref) /* Output channel? */
@@ -104,11 +134,12 @@ static void spll_enable_tagger(int channel, int enable)
 			SPLL->OCER |= 1<< (channel - n_chan_ref);
 		else
 			SPLL->OCER &= ~ (1<< (channel - n_chan_ref));
-	} else {
+	} else { /* Reference channel */
 		if(enable)
 			SPLL->RCER |= 1<<channel;
 		else
 			SPLL->RCER &= ~ (1<<channel);
 	}
-	TRACE("spll_enable_channel: ch %d, OCER %x, RCER %x\n", channel, SPLL->OCER, SPLL->RCER);
+
+	TRACE("%s: ch %d, OCER 0x%x, RCER 0x%x\n", __FUNCTION__, channel, SPLL->OCER, SPLL->RCER);
 }
