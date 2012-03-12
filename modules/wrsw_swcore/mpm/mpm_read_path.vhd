@@ -312,25 +312,17 @@ begin  -- rtl
 
 
   p_ll_mux_addr : process(clk_io_i)
-    -- ML
-    --variable muxed : std_logic_vector(g_page_addr_width-1 downto 0);
-    -- ML
+    variable muxed : std_logic_vector(g_page_addr_width-1 downto 0);
   begin
     if rising_edge(clk_io_i) then
       if rst_n_io_i = '0' then
         ll_addr_o <= (others => '0');
-        -- ML
-        muxed     <= (others => '0');
-        -- ML
       else
         for i in 0 to g_num_ports-1 loop
           if(io(i).ll_grant = '1') then
-            -- ML
-            --muxed := io(i).ll_addr;
-            muxed <= io(i).ll_addr;
-            -- ML
+            muxed := io(i).ll_addr;
           end if;
-        end loop;  -- i
+        end loop; 
         ll_addr_o <= muxed;
       end if;
     end if;

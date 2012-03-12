@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-01-24
+-- Last update: 2012-03-12
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -155,7 +155,6 @@ package swc_swcore_pkg is
       free_pck_read_done_o   : out std_logic_vector(g_num_ports - 1 downto 0);
       free_pck_data_o        : out std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
     
-      mpm_rpath_clk_i        : in std_logic;
       mpm_rpath_addr_i       : in  std_logic_vector(g_addr_width - 1 downto 0);
       mpm_rpath_data_o       : out std_logic_vector(g_data_width - 1 downto 0)
     );
@@ -175,7 +174,8 @@ package swc_swcore_pkg is
     g_mpm_data_width                   : integer ; -- it needs to be wb_data_width + wb_addr_width
     g_page_size                        : integer ;
     g_partial_select_width             : integer ;
-    g_ll_data_width                    : integer 
+    g_ll_data_width                    : integer ;
+    g_port_index : integer
   );
   port (
     clk_i   : in std_logic;

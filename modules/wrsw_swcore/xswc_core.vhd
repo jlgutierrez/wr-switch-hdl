@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-29
--- Last update: 2012-02-02
+-- Last update: 2012-03-12
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -285,7 +285,8 @@ architecture rtl of xswc_core is
         g_mpm_data_width                   => c_mpm_data_width, 
         g_page_size                        => g_mpm_page_size,
         g_partial_select_width             => c_mpm_partial_sel_width,
-        g_ll_data_width                    => c_ll_data_width
+        g_ll_data_width                    => c_ll_data_width,
+        g_port_index => i
       )
       port map (
         clk_i                    => clk_i,
@@ -481,7 +482,6 @@ architecture rtl of xswc_core is
      write_addr_i               => ib2ll_addr,
      write_data_i               => ib2ll_data,
        
-     mpm_rpath_clk_i            => clk_mpm_core_i,
      mpm_rpath_addr_i           => mpm2ll_addr,
      mpm_rpath_data_o           => ll2mpm_data,
 

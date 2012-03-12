@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-26
--- Last update: 2012-02-16
+-- Last update: 2012-03-12
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -104,9 +104,7 @@ entity swc_multiport_linked_list is
     -- requested data
     free_pck_data_o       : out std_logic_vector(g_num_ports * g_data_width - 1 downto 0);
     
-    -------- reading by Multiport Memory (direct access, different clock domain) -------
-    -- clock of the MPM's core
-    mpm_rpath_clk_i       : in std_logic;
+    -------- reading by Multiport Memory (direct access) -------
     -- requested address,  needs to be valid till write_done_o=HIGH
     mpm_rpath_addr_i      : in  std_logic_vector(g_addr_width - 1 downto 0);
     -- requested data
@@ -196,7 +194,8 @@ begin  -- syn
    PAGE_INDEX_LINKED_LIST_MPM : generic_dpram
      generic map (
        g_data_width  => g_data_width,-- one bit for validating the data
-       g_size        => g_page_num
+       g_size        => g_page_num,
+       g_dual_clock=> false
                  )
      port map (
        -- Port A -- writing
@@ -208,7 +207,7 @@ begin  -- syn
        qa_o   => open,   
  
        -- Port B  -- reading
-       clkb_i => mpm_rpath_clk_i,
+       clkb_i => clk_i,
        bweb_i => (others => '1'), 
        web_i  => '0',
        ab_i   => mpm_rpath_addr_i,
