@@ -23,10 +23,10 @@ entity scb_top_sim is
     clk_dmtd_i : in std_logic;
 
     -- 62.5 MHz system clock (from the AD9516 PLL output QDRII_200CLK)
-    clk_sys_i : in std_logic;
+--    clk_sys_i : in std_logic;
 
     -- 200MHz clock to run the core of Multiport Memory in SWcore
-    clk_swc_mpm_core_i : in std_logic;
+    clk_aux_i : in std_logic;
     -------------------------------------------------------------------------------
     -- Master wishbone bus (from the CPU bridge)
     -------------------------------------------------------------------------------
@@ -126,8 +126,8 @@ begin  -- rtl
       clk_startup_i       => clk_startup_i,
       clk_ref_i           => clk_ref_i,
       clk_dmtd_i          => clk_dmtd_i,
-      clk_sys_i           => clk_sys_i,
-      clk_swc_mpm_core_i  => clk_swc_mpm_core_i,
+--      clk_sys_i           => clk_sys_i,
+      clk_aux_i  => clk_aux_i,
       cpu_wb_i            => cpu_wb_in,
       cpu_wb_o            => cpu_wb_out,
       cpu_irq_n_o         => cpu_irq_n,
