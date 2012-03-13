@@ -120,7 +120,10 @@ entity scb_top_synthesis is
     gtx_sfp_tx_dis_o : out std_logic_vector(g_num_ports-1 downto 0);
 
     led_link_o : out std_logic_vector(g_num_ports-1 downto 0);
-    led_act_o  : out std_logic_vector(g_num_ports-1 downto 0)
+    led_act_o  : out std_logic_vector(g_num_ports-1 downto 0);
+
+    mbl_scl_b: inout std_logic;
+    mbl_sda_b: inout std_logic
     );
 end scb_top_synthesis;
 
@@ -209,7 +212,14 @@ architecture Behavioral of scb_top_synthesis is
       phys_i              : in  t_phyif_input_array(g_num_ports-1 downto 0);
       led_link_o          : out std_logic_vector(g_num_ports-1 downto 0);
       led_act_o           : out std_logic_vector(g_num_ports-1 downto 0);
-      gpio_i              : in  std_logic_vector(31 downto 0) := x"00000000") ;
+      gpio_i              : in  std_logic_vector(31 downto 0) := x"00000000";
+      i2c_mbl0_scl_oen_o : out std_logic;
+      i2c_mbl0_scl_o     : out std_logic;
+      i2c_mbl0_scl_i     : in  std_logic := '1';
+      i2c_mbl0_sda_oen_o : out std_logic;
+      i2c_mbl0_sda_o     : out std_logic;
+      i2c_mbl0_sda_i     : in  std_logic := '1'
+      ) ;
   end component;
 
   signal to_phys   : t_phyif_output_array(g_num_ports-1 downto 0);
@@ -225,6 +235,11 @@ architecture Behavioral of scb_top_synthesis is
   signal top_master_in, bridge_master_in   : t_wishbone_master_in;
   signal top_master_out, bridge_master_out : t_wishbone_master_out;
 
+  signal i2c_mbl0_scl_oen  : std_logic;
+  signal i2c_mbl0_scl_out      : std_logic;
+  signal i2c_mbl0_sda_oen  : std_logic;
+  signal i2c_mbl0_sda_out      : std_logic;
+  
   component chipscope_icon
     port (
       CONTROL0 : inout std_logic_vector(35 downto 0));
@@ -247,6 +262,10 @@ architecture Behavioral of scb_top_synthesis is
   signal TRIG3   : std_logic_vector(31 downto 0);
 begin
 
+  mbl_scl_b <= i2c_mbl0_scl_out when i2c_mbl0_scl_oen = '0' else 'Z';
+  mbl_sda_b <= i2c_mbl0_sda_out when i2c_mbl0_sda_oen = '0' else 'Z';
+
+  
   --chipscope_icon_1 : chipscope_icon
   --  port map (
   --    CONTROL0 => CONTROL);
@@ -489,8 +508,14 @@ begin
       phys_o              => to_phys,
       phys_i              => from_phys,
       led_link_o          => led_link_o,
-      led_act_o           => led_act_o);
-
+      led_act_o           => led_act_o,
+      i2c_mbl0_scl_oen_o  => i2c_mbl0_scl_oen,
+      i2c_mbl0_scl_o      => i2c_mbl0_scl_out,
+      i2c_mbl0_scl_i      => mbl_scl_b,
+      i2c_mbl0_sda_oen_o  => i2c_mbl0_sda_oen,
+      i2c_mbl0_sda_o      => i2c_mbl0_sda_out,
+      i2c_mbl0_sda_i      => mbl_scl_b);
+  
   -- end generate gen_with_top;
 
 

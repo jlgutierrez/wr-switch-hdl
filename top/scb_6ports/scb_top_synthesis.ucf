@@ -157,13 +157,15 @@ NET "gtx_txp_o[5]" LOC="AF1";
 NET "gtx_txn_o[5]" LOC="AF2";
 
 
+NET "mbl_scl_b" LOC="AG32"; #GPIO36
+NET "mbl_sda_b" LOC="AF31"; #GPIO37
 
 NET "gtx_sfp_tx_dis_o[0]" LOC="AD29";
 NET "gtx_sfp_tx_dis_o[1]" LOC="AA29";
 NET "gtx_sfp_tx_dis_o[2]" LOC="AC29";
 NET "gtx_sfp_tx_dis_o[3]" LOC="AD31"; #GPIO30
 NET "gtx_sfp_tx_dis_o[4]" LOC="AC28"; #GPIO33
-NET "gtx_sfp_tx_dis_o[5]" LOC="AG32"; #GPIO36
+#NET "gtx_sfp_tx_dis_o[5]" LOC="AG32"; #GPIO36
 NET "led_link_o[0]" LOC="AA26"; #GPIO14
 NET "led_link_o[1]" LOC="AC30"; #GPIO13
 NET "led_link_o[2]" LOC="AA31"; #GPIO11
@@ -191,9 +193,9 @@ TIMESPEC TS_fpga_clk_ref_n_i = PERIOD "fpga_clk_ref_n_i" 16 ns HIGH 50%;
 NET "fpga_clk_ref_p_i" TNM_NET = fpga_clk_ref_p_i;
 TIMESPEC TS_fpga_clk_ref_p_i = PERIOD "fpga_clk_ref_p_i" 16 ns HIGH 50%;
 NET "fpga_clk_aux_n_i" TNM_NET = fpga_clk_aux_n_i;
-TIMESPEC TS_fpga_clk_aux_n_i = PERIOD "fpga_clk_aux_n_i" 16 ns HIGH 50%;
+TIMESPEC TS_fpga_clk_aux_n_i = PERIOD "fpga_clk_aux_n_i" 5 ns HIGH 50%;
 NET "fpga_clk_aux_p_i" TNM_NET = fpga_clk_aux_p_i;
-TIMESPEC TS_fpga_clk_aux_p_i = PERIOD "fpga_clk_aux_p_i" 16 ns HIGH 50%;
+TIMESPEC TS_fpga_clk_aux_p_i = PERIOD "fpga_clk_aux_p_i" 5 ns HIGH 50%;
 NET "gen_phys[0].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[0].U_PHY/rx_rec_clk_bufin;
 TIMESPEC TS_gen_phys_0__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[0].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
 NET "gen_phys[1].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[1].U_PHY/rx_rec_clk_bufin;
