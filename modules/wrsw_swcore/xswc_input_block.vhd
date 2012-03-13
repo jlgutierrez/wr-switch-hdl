@@ -716,7 +716,8 @@ begin  --arch
               -- received when we get the RTU decision, so we are waiting in IDLE.
               -- in such case, we will get tp_drop before getting tp_sync, but we will
               -- still have tp_drop when finally tp_sync is HIGH, so this is why the order of if's
-            elsif(tp_drop = '1') then
+            elsif(tp_drop            = '1'   and  -- transfer_pck state indicates the drop decision
+                  mmu_force_free_req = '0') then  -- the pck is not being freed yet
               
               mmu_force_free_addr <= current_pckstart_pageaddr;
 
@@ -1542,6 +1543,12 @@ begin
           -- sync-ing with rcv_pck FSM
           if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then
             s_transfer_pck <= S_READY;
+
+          -- this is to prevent trashing of the drop process (it happened that force_free was
+          -- re-done many times by rcv_pck FSM when transfer_pck FSM stayed in DROP state waiting
+          -- for global sync
+          elsif(mmu_force_free_req = '1' and mmu_force_free_done_i = '1') then
+            s_transfer_pck <= S_IDLE;  
           end if;
 
           --===========================================================================================
