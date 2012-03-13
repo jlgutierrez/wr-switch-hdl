@@ -23,8 +23,8 @@ static volatile struct SPLL_WB *SPLL = (volatile struct SPLL_WB *) BASE_SOFTPLL;
 #include "spll_main.h"
 #include "spll_ptracker.h"
 
-static struct spll_helper_state helper;
-static struct spll_main_state mpll;
+static volatile struct spll_helper_state helper;
+static volatile struct spll_main_state mpll;
 
 void _irq_entry()
 {
@@ -71,7 +71,7 @@ void spll_init()
 
 int spll_check_lock()
 {
-	return helper.phase.ld.locked ? 1 : 0;
+	return helper.ld.locked ? 1 : 0;
 }
 
 #define CHAN_TCXO 8
@@ -83,12 +83,13 @@ void spll_test()
 
 
 	spll_init();
-	helper_start(&helper, 0);
+	helper_init(&helper, 0);
+	helper_start(&helper);
 	mpll_init(&mpll, 0, CHAN_TCXO);
 	enable_irq();
 
 //	mpll_init(&mpll, 0, CHAN_TCXO);
-	while(!helper.phase.ld.locked) ;//TRACE("%d\n", helper.phase.ld.locked);
+	while(!helper.ld.locked) ;//TRACE("%d\n", helper.phase.ld.locked);
 	TRACE("Helper locked, starting main\n");
 	mpll_start(&mpll);
 
