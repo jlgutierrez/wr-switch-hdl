@@ -194,7 +194,14 @@ task CRTUSimDriver::add_hash_entry(rtu_filtering_entry_t ent);
 endtask // CRTUSimDriver
 
 task CRTUSimDriver::set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en);
-   bus.write(base_addr + `ADDR_RTU_PCR0 + (port * 4), `RTU_PCR0_B_UNREC | 3);
+   uint64_t rv;
+   
+   bus.read(base_addr + `ADDR_RTU_PSR, rv);
+   $display("PSel: %d supported ports\n", (rv>>8) & 'hff);
+   
+   
+   bus.write(base_addr + `ADDR_RTU_PSR, port);
+   bus.write(base_addr + `ADDR_RTU_PCR, `RTU_PCR_B_UNREC | 3);
 endtask // CRTUSimDriver
 
 function bit[15:0] CRTUSimDriver::crc16(bit[15:0] init_crc, bit[15:0] message);
