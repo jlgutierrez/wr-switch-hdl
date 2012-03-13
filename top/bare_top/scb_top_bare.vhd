@@ -19,9 +19,9 @@ use UNISIM.vcomponents.all;
 
 entity scb_top_bare is
   generic(
-    g_num_ports  : integer := 6;
-    g_simulation : boolean := false;
-    g_without_network: boolean := true
+    g_num_ports       : integer := 6;
+    g_simulation      : boolean := false;
+    g_without_network : boolean := false
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -99,14 +99,24 @@ entity scb_top_bare is
     led_act_o  : out std_logic_vector(g_num_ports-1 downto 0);
 
     gpio_o : out std_logic_vector(31 downto 0);
-    gpio_i : in  std_logic_vector(31 downto 0)
+    gpio_i : in  std_logic_vector(31 downto 0);
 
-    ) ;
+    ---------------------------------------------------------------------------
+    -- Mini-backplane I/O
+    ---------------------------------------------------------------------------
+
+    i2c_mbl0_scl_oen_o : out std_logic;
+    i2c_mbl0_scl_o     : out std_logic;
+    i2c_mbl0_scl_i     : in  std_logic := '1';
+    i2c_mbl0_sda_oen_o : out std_logic;
+    i2c_mbl0_sda_o     : out std_logic;
+    i2c_mbl0_sda_i     : in  std_logic := '1'
+  );
 end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 8;
+  constant c_NUM_WB_SLAVES : integer := 9;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
 
@@ -123,9 +133,11 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_PPS_GEN      : integer := 5;
   constant c_SLAVE_RTU          : integer := 6;
   constant c_SLAVE_GPIO         : integer := 7;
+  constant c_SLAVE_I2C          : integer := 8;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
+      x"00054000",                      -- I2C
       x"00053000",                      -- GPIO
       x"00060000",                      -- RTU
       x"00052000",                      -- PPSgen
@@ -138,6 +150,7 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
      x"000f0000",
      x"000ff000",
      x"000ff000",
@@ -198,6 +211,11 @@ architecture rtl of scb_top_bare is
   signal endpoint_snk_out : t_wrf_sink_out_array(c_NUM_PORTS downto 0);
   signal endpoint_snk_in  : t_wrf_sink_in_array(c_NUM_PORTS downto 0);
 
+  signal dummy_snk_in  : t_wrf_sink_in_array(c_NUM_PORTS downto 0);
+  signal dummy_src_in  : t_wrf_source_in_array(c_NUM_PORTS downto 0);
+  signal dummy_src_out : t_wrf_source_out_array(c_NUM_PORTS downto 0);
+
+
   signal rtu_req                            : t_rtu_request_array(c_NUM_PORTS downto 0);
   signal rtu_rsp                            : t_rtu_response_array(c_NUM_PORTS downto 0);
   signal rtu_req_ack, rtu_full, rtu_rsp_ack : std_logic_vector(c_NUM_PORTS downto 0);
@@ -211,8 +229,8 @@ architecture rtl of scb_top_bare is
 
   signal txtsu_timestamps_ack : std_logic_vector(c_NUM_PORTS-1 downto 0);
   signal txtsu_timestamps     : t_txtsu_timestamp_array(c_NUM_PORTS-1 downto 0);
-  signal dummy : std_logic_vector(31 downto 0);
-  
+  signal dummy                : std_logic_vector(31 downto 0);
+
   -----------------------------------------------------------------------------
   -- Component declarations
   -----------------------------------------------------------------------------
@@ -246,21 +264,36 @@ architecture rtl of scb_top_bare is
   signal cyc_d0    : std_logic_vector(g_num_ports-1 downto 0);
   signal pps_csync : std_logic;
   
+  component chipscope_icon
+    port (
+      CONTROL0 : inout std_logic_vector(35 downto 0));
+  end component;
+  component chipscope_ila
+    port (
+      CONTROL : inout std_logic_vector(35 downto 0);
+      CLK     : in    std_logic;
+      TRIG0   : in    std_logic_vector(31 downto 0);
+      TRIG1   : in    std_logic_vector(31 downto 0);
+      TRIG2   : in    std_logic_vector(31 downto 0);
+      TRIG3   : in    std_logic_vector(31 downto 0));
+  end component;
+
+
 begin
 
 
-  --CS_ICON : chipscope_icon
-  --  port map (
-  --    CONTROL0 => CONTROL0);
 
-  --CS_ILA : chipscope_ila
-  --  port map (
-  --    CONTROL => CONTROL0,
-  --    CLK     => clk_sys,
-  --    TRIG0   => TRIG0,
-  --    TRIG1   => TRIG1,
-  --    TRIG2   => TRIG2,
-  --    TRIG3   => TRIG3);
+  CS_ICON : chipscope_icon
+    port map (
+     CONTROL0 => CONTROL0);
+  CS_ILA : chipscope_ila
+    port map (
+      CONTROL => CONTROL0,
+      CLK     => clk_sys,
+      TRIG0   => TRIG0,
+      TRIG1   => TRIG1,
+      TRIG2   => TRIG2,
+      TRIG3   => TRIG3);
 
 
   cnx_slave_in(0) <= cpu_wb_i;
@@ -332,7 +365,7 @@ begin
       clk_sys_i           => clk_sys,
       clk_dmtd_i          => clk_dmtd_i,
       clk_rx_i            => clk_rx_vec,
-      clk_aux_i =>clk_aux_i,
+      clk_aux_i           => clk_aux_i,
       rst_n_i             => rst_n_sys,
       rst_n_o             => rst_n_periph,
       wb_i                => cnx_master_out(c_SLAVE_RT_SUBSYSTEM),
@@ -369,179 +402,271 @@ begin
       irqs_i       => vic_irqs,
       irq_master_o => cpu_irq_n_o);
 
-  gen_network_stuff: if(g_without_network = false) generate
-  
-  U_Nic : xwrsw_nic
-    generic map (
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE)
-    port map (
-      clk_sys_i           => clk_sys,
-      rst_n_i             => rst_n_sys,
-      snk_i               => endpoint_snk_in(c_NUM_PORTS),
-      snk_o               => endpoint_snk_out(c_NUM_PORTS),
-      src_i               => endpoint_src_in(c_NUM_PORTS),
-      src_o               => endpoint_src_out(c_NUM_PORTS),
-      rtu_dst_port_mask_o => rtu_rsp(c_NUM_PORTS).port_mask(31 downto 0),
-      rtu_prio_o          => rtu_rsp(c_NUM_PORTS).prio,
-      rtu_drop_o          => rtu_rsp(c_NUM_PORTS).drop,
-      rtu_rsp_valid_o     => rtu_rsp(c_NUM_PORTS).valid,
-      rtu_rsp_ack_i       => rtu_rsp_ack(c_NUM_PORTS),
-      wb_i                => cnx_master_out(c_SLAVE_NIC),
-      wb_o                => cnx_master_in(c_SLAVE_NIC));
-
-  
-  U_Endpoint_Fanout : xwb_crossbar
-    generic map (
-      g_num_masters => 1,
-      g_num_slaves  => c_MAX_PORTS,
-      g_registered  => true)
-    port map (
-      clk_sys_i     => clk_sys,
-      rst_n_i       => rst_n_sys,
-      slave_i(0)    => cnx_master_out(c_SLAVE_ENDPOINTS),
-      slave_o(0)    => cnx_master_in(c_SLAVE_ENDPOINTS),
-      master_i      => cnx_endpoint_in,
-      master_o      => cnx_endpoint_out,
-      cfg_address_i => c_cnx_endpoint_addr,
-      cfg_mask_i    => c_cnx_endpoint_mask);
-
-
-  gen_endpoints_and_phys : for i in 0 to c_NUM_PORTS-1 generate
-    U_Endpoint_X : xwr_endpoint
+  gen_network_stuff : if(g_without_network = false) generate
+    
+    U_Nic : xwrsw_nic
       generic map (
         g_interface_mode      => PIPELINED,
-        g_address_granularity => BYTE,
-        g_simulation          => g_simulation,
-        g_tx_force_gap_length => 0,
-        g_pcs_16bit           => true,
-        g_rx_buffer_size      => 1024,
-        g_with_rx_buffer      => true,
-        g_with_flow_control   => false,
-        g_with_timestamper    => true,
-        g_with_dpi_classifier => false,
-        g_with_vlans          => false,
-        g_with_rtu            => true,
-        g_with_leds           => true)
+        g_address_granularity => BYTE)
       port map (
-        clk_ref_i          => clk_ref_i,
-        clk_sys_i          => clk_sys,
-        clk_dmtd_i         => clk_dmtd_i,
-        rst_n_i            => rst_n_periph,
-        pps_csync_p1_i     => pps_csync,
-        phy_rst_o          => phys_o(i).rst,
-        phy_loopen_o       => phys_o(i).loopen,
-        phy_enable_o       => phys_o(i).enable,
-        phy_ref_clk_i      => phys_i(i).ref_clk,
-        phy_tx_data_o      => phys_o(i).tx_data,
-        phy_tx_k_o         => phys_o(i).tx_k,
-        phy_tx_disparity_i => phys_i(i).tx_disparity,
-        phy_tx_enc_err_i   => phys_i(i).tx_enc_err,
-        phy_rx_data_i      => phys_i(i).rx_data,
-        phy_rx_clk_i       => phys_i(i).rx_clk,
-        phy_rx_k_i         => phys_i(i).rx_k,
-        phy_rx_enc_err_i   => phys_i(i).rx_enc_err,
-        phy_rx_bitslide_i  => phys_i(i).rx_bitslide,
+        clk_sys_i           => clk_sys,
+        rst_n_i             => rst_n_sys,
+        snk_i               => endpoint_snk_in(c_NUM_PORTS),
+        snk_o               => endpoint_snk_out(c_NUM_PORTS),
+        src_i               => endpoint_src_in(c_NUM_PORTS),
+        src_o               => endpoint_src_out(c_NUM_PORTS),
+        rtu_dst_port_mask_o => rtu_rsp(c_NUM_PORTS).port_mask(31 downto 0),
+        rtu_prio_o          => rtu_rsp(c_NUM_PORTS).prio,
+        rtu_drop_o          => rtu_rsp(c_NUM_PORTS).drop,
+        rtu_rsp_valid_o     => rtu_rsp(c_NUM_PORTS).valid,
+        rtu_rsp_ack_i       => rtu_rsp_ack(c_NUM_PORTS),
+        wb_i                => cnx_master_out(c_SLAVE_NIC),
+        wb_o                => cnx_master_in(c_SLAVE_NIC));
 
-        txtsu_port_id_o  => txtsu_timestamps(i).port_id(4 downto 0),
-        txtsu_frame_id_o => txtsu_timestamps(i).frame_id,
-        txtsu_tsval_o    => txtsu_timestamps(i).tsval,
-        txtsu_valid_o    => txtsu_timestamps(i).valid,
-        txtsu_ack_i      => txtsu_timestamps_ack(i),
-
-        rtu_full_i         => rtu_full(i),
-        rtu_rq_strobe_p1_o => rtu_req(i).valid,
-        rtu_rq_smac_o      => rtu_req(i).smac,
-        rtu_rq_dmac_o      => rtu_req(i).dmac,
-        rtu_rq_prio_o      => rtu_req(i).prio,
-        rtu_rq_vid_o       => rtu_req(i).vid,
-        rtu_rq_has_vid_o   => rtu_req(i).has_vid,
-        rtu_rq_has_prio_o  => rtu_req(i).has_prio,
+    
+    U_Endpoint_Fanout : xwb_crossbar
+      generic map (
+        g_num_masters => 1,
+        g_num_slaves  => c_MAX_PORTS,
+        g_registered  => true)
+      port map (
+        clk_sys_i     => clk_sys,
+        rst_n_i       => rst_n_sys,
+        slave_i(0)    => cnx_master_out(c_SLAVE_ENDPOINTS),
+        slave_o(0)    => cnx_master_in(c_SLAVE_ENDPOINTS),
+        master_i      => cnx_endpoint_in,
+        master_o      => cnx_endpoint_out,
+        cfg_address_i => c_cnx_endpoint_addr,
+        cfg_mask_i    => c_cnx_endpoint_mask);
 
 
+    gen_endpoints_and_phys : for i in 0 to c_NUM_PORTS-1 generate
+      U_Endpoint_X : xwr_endpoint
+        generic map (
+          g_interface_mode      => PIPELINED,
+          g_address_granularity => BYTE,
+          g_simulation          => g_simulation,
+          g_tx_force_gap_length => 0,
+          g_pcs_16bit           => true,
+          g_rx_buffer_size      => 1024,
+          g_with_rx_buffer      => true,
+          g_with_flow_control   => false,
+          g_with_timestamper    => true,
+          g_with_dpi_classifier => false,
+          g_with_vlans          => false,
+          g_with_rtu            => true,
+          g_with_leds           => true)
+        port map (
+          clk_ref_i          => clk_ref_i,
+          clk_sys_i          => clk_sys,
+          clk_dmtd_i         => clk_dmtd_i,
+          rst_n_i            => rst_n_periph,
+          pps_csync_p1_i     => pps_csync,
+          phy_rst_o          => phys_o(i).rst,
+          phy_loopen_o       => phys_o(i).loopen,
+          phy_enable_o       => phys_o(i).enable,
+          phy_ref_clk_i      => phys_i(i).ref_clk,
+          phy_tx_data_o      => phys_o(i).tx_data,
+          phy_tx_k_o         => phys_o(i).tx_k,
+          phy_tx_disparity_i => phys_i(i).tx_disparity,
+          phy_tx_enc_err_i   => phys_i(i).tx_enc_err,
+          phy_rx_data_i      => phys_i(i).rx_data,
+          phy_rx_clk_i       => phys_i(i).rx_clk,
+          phy_rx_k_i         => phys_i(i).rx_k,
+          phy_rx_enc_err_i   => phys_i(i).rx_enc_err,
+          phy_rx_bitslide_i  => phys_i(i).rx_bitslide,
 
-        src_o      => endpoint_src_out(i),
-        src_i      => endpoint_src_in(i),
-        snk_o      => endpoint_snk_out(i),
-        snk_i      => endpoint_snk_in(i),
-        wb_i       => cnx_endpoint_out(i),
-        wb_o       => cnx_endpoint_in(i),
-        led_link_o => led_link_o(i),
-        led_act_o  => led_act_o(i));
+          txtsu_port_id_o  => txtsu_timestamps(i).port_id(4 downto 0),
+          txtsu_frame_id_o => txtsu_timestamps(i).frame_id,
+          txtsu_tsval_o    => txtsu_timestamps(i).tsval,
+          txtsu_valid_o    => txtsu_timestamps(i).valid,
+          txtsu_ack_i      => txtsu_timestamps_ack(i),
 
-    txtsu_timestamps(i).port_id(5) <= '0';
-
-
-    clk_rx_vec(i) <= phys_i(i).rx_clk;
-  end generate gen_endpoints_and_phys;
-
-  gen_terminate_unused_eps : for i in c_NUM_PORTS to c_MAX_PORTS-1 generate
-    cnx_endpoint_in(i).ack   <= '1';
-    cnx_endpoint_in(i).stall <= '0';
-    cnx_endpoint_in(i).dat   <= x"deadbeef";
-    cnx_endpoint_in(i).err   <= '0';
-    cnx_endpoint_in(i).rty   <= '0';
-    --txtsu_timestamps(i).valid <= '0';
-  end generate gen_terminate_unused_eps;
+          rtu_full_i         => rtu_full(i),
+          rtu_rq_strobe_p1_o => rtu_req(i).valid,
+          rtu_rq_smac_o      => rtu_req(i).smac,
+          rtu_rq_dmac_o      => rtu_req(i).dmac,
+          rtu_rq_prio_o      => rtu_req(i).prio,
+          rtu_rq_vid_o       => rtu_req(i).vid,
+          rtu_rq_has_vid_o   => rtu_req(i).has_vid,
+          rtu_rq_has_prio_o  => rtu_req(i).has_prio,
 
 
-  U_Swcore : xswc_core
-    generic map (
-      g_prio_num                         => 8,
-      g_max_pck_size                     => 10 * 1024,
-      g_max_oob_size                     => 3,
-      g_num_ports                        => g_num_ports+1,
-      g_pck_pg_free_fifo_size            => ((65536/64)/2),
-      g_input_block_cannot_accept_data   => "drop_pck",
-      g_output_block_per_prio_fifo_size  => 64,
-      g_wb_data_width                    => 16,
-      g_wb_addr_width                    => 2,
-      g_wb_sel_width                     => 2,
-      g_wb_ob_ignore_ack                 => FALSE,
-      g_mpm_mem_size                     => 65536,
-      g_mpm_page_size                    => 64,
-      g_mpm_ratio                        => 8, --2
-      g_mpm_fifo_size                    => 8,
-      g_mpm_fetch_next_pg_in_advance     => FALSE)
-    port map (
-      clk_i   => clk_sys,
-	  clk_mpm_core_i => clk_aux_i,
-      rst_n_i => rst_n_periph,
 
-      src_i => endpoint_snk_out,
-      src_o => endpoint_snk_in,
-      snk_i => endpoint_src_out,
-      snk_o => endpoint_src_in,
+          src_o      => endpoint_src_out(i),
+          src_i      => endpoint_src_in(i),
+          snk_o      => endpoint_snk_out(i),
+          snk_i      => endpoint_snk_in(i),
+          wb_i       => cnx_endpoint_out(i),
+          wb_o       => cnx_endpoint_in(i),
+          led_link_o => led_link_o(i),
+          led_act_o  => led_act_o(i));
 
-      rtu_rsp_i => rtu_rsp,
-      rtu_ack_o => rtu_rsp_ack
-      );
+      txtsu_timestamps(i).port_id(5) <= '0';
+
+
+      clk_rx_vec(i) <= phys_i(i).rx_clk;
+    end generate gen_endpoints_and_phys;
+
+    gen_terminate_unused_eps : for i in c_NUM_PORTS to c_MAX_PORTS-1 generate
+      cnx_endpoint_in(i).ack   <= '1';
+      cnx_endpoint_in(i).stall <= '0';
+      cnx_endpoint_in(i).dat   <= x"deadbeef";
+      cnx_endpoint_in(i).err   <= '0';
+      cnx_endpoint_in(i).rty   <= '0';
+      --txtsu_timestamps(i).valid <= '0';
+    end generate gen_terminate_unused_eps;
+
+
+
+
+
+    U_Swcore : xswc_core
+      generic map (
+        g_prio_num                        => 8,
+        g_max_pck_size                    => 10 * 1024,
+        g_max_oob_size                    => 3,
+        g_num_ports                       => g_num_ports+1,
+        g_pck_pg_free_fifo_size           => ((65536/64)/2),
+        g_input_block_cannot_accept_data  => "drop_pck",
+        g_output_block_per_prio_fifo_size => 64,
+        g_wb_data_width                   => 16,
+        g_wb_addr_width                   => 2,
+        g_wb_sel_width                    => 2,
+        g_wb_ob_ignore_ack                => false,
+        g_mpm_mem_size                    => 65536,
+        g_mpm_page_size                   => 64,
+        g_mpm_ratio                       => 8,  --2
+        g_mpm_fifo_size                   => 8,
+        g_mpm_fetch_next_pg_in_advance    => false)
+      port map (
+        clk_i          => clk_sys,
+        clk_mpm_core_i => clk_aux_i,
+        rst_n_i        => rst_n_periph,
+
+--        src_i(0) => c_dummy_src_in,
+--        src_i(1) => endpoint_snk_out(1),
+--        src_i(2) => endpoint_snk_out(2),
+--        src_i(3) => endpoint_snk_out(3),
+--        src_i(4) => endpoint_snk_out(4),
+--        src_i(5) => endpoint_snk_out(5),
+--        src_i(6) => c_dummy_src_in,
+
+--        src_o(0) => dummy_snk_in(0),--endpoint_snk_in(0),
+--        src_o(1) => endpoint_snk_in(1),
+--        src_o(2) => endpoint_snk_in(2),
+--        src_o(3) => endpoint_snk_in(3),
+--        src_o(4) => endpoint_snk_in(4),
+--        src_o(5) => endpoint_snk_in(5),
+--        src_o(6) => dummy_snk_in(6),
+----        src_o(6) => endpoint_snk_in(6),
+
+
+
+
+
+
+
+--        snk_i(0) => dummy_src_out(0),
+
+
+
+--        snk_i(1) => endpoint_src_out(1),
+--        snk_i(2) => endpoint_src_out(2),
+--        snk_i(3) => endpoint_src_out(3),
+--        snk_i(4) => endpoint_src_out(4),
+--        snk_i(5) => endpoint_src_out(5),
+--        snk_i(6) => dummy_src_out(6),
+
+--        snk_o(0) => dummy_src_in(0),
+----        snk_o(0) => endpoint_src_in(0),
+--        snk_o(1) => endpoint_src_in(1),
+--        snk_o(2) => endpoint_src_in(2),
+--        snk_o(3) => endpoint_src_in(3),
+--        snk_o(4) => endpoint_src_in(4),
+--        snk_o(5) => endpoint_src_in(5),
+----        snk_o(6) => endpoint_src_in(6),
+--        snk_o(6) => dummy_src_in(6),
+
+
+        src_i => endpoint_snk_out,
+        src_o => endpoint_snk_in,
+        snk_i => endpoint_src_out,
+        snk_o => endpoint_src_in,
+
+        rtu_rsp_i => rtu_rsp,
+        rtu_ack_o => rtu_rsp_ack
+        );
+
+    --dummy_src_out(0).cyc <= '0';
+
+    --rtu_rsp(1).port_mask <= x"0000000000000004";
+    --rtu_rsp(2).port_mask <= x"0000000000000002";
+    --rtu_rsp(1).valid     <= '1';
+    --rtu_rsp(1).drop      <= '0';
+    --rtu_rsp(2).valid     <= '1';
+    --rtu_rsp(2).drop      <= '0';
+
+
+    --rtu_rsp(0).valid <= '0';
+    --rtu_rsp(3).valid <= '0';
+    --rtu_rsp(4).valid <= '0';
+    --rtu_rsp(5).valid <= '0';
+    -- rtu_rsp(6).valid <= '0';
+    -- rtu_full         <= (others => '0');
+
+    -- wire the NIC directly to EP0
+    --endpoint_src_in(0) <= endpoint_snk_out(6);
+    --endpoint_snk_in(0) <= endpoint_src_out(6);
+    --endpoint_src_in(6) <= endpoint_snk_out(0);
+    --endpoint_snk_in(6) <= endpoint_src_out(0);
+
+
+
+    -- NIC sink
+    TRIG0 <= f_fabric_2_slv(endpoint_snk_in(1), endpoint_snk_out(1));
+    -- NIC source
+    TRIG1 <= f_fabric_2_slv(endpoint_src_out(1), endpoint_src_in(1));
+    -- NIC sink
+    TRIG2 <= f_fabric_2_slv(endpoint_snk_in(2), endpoint_snk_out(2));
+    -- NIC source
+    TRIG3 <= f_fabric_2_slv(endpoint_src_out(2), endpoint_src_in(2));
+    --TRIG3(31) <= rst_n_periph;
+
+    --TRIG2 <= rtu_rsp(c_NUM_PORTS).port_mask(31 downto 0);
+    --TRIG3(0) <= rtu_rsp(c_NUM_PORTS).valid;
+    --TRIG3(1) <= rtu_rsp_ack(c_NUM_PORTS);
+
+
+
 
     U_RTU : xwrsw_rtu
-    generic map (
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE,
-      g_num_ports           => g_num_ports,
-      g_port_mask_bits      => g_num_ports+1)
-    port map (
-      clk_sys_i  => clk_sys,
-      rst_n_i    => rst_n_periph,
-      req_i      => rtu_req(g_num_ports-1 downto 0),
-      req_full_o => rtu_full(g_num_ports-1 downto 0),
-      rsp_o      => rtu_rsp(g_num_ports-1 downto 0),
-      rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
-      wb_i       => cnx_master_out(c_SLAVE_RTU),
-      wb_o       => cnx_master_in(c_SLAVE_RTU));
+      generic map (
+        g_prio_num                        => 8,
+        g_interface_mode                  => PIPELINED,
+        g_address_granularity             => BYTE,
+        g_num_ports                       => g_num_ports,
+        g_port_mask_bits                  => g_num_ports+1,
+        g_handle_only_single_req_per_port => true)
+      port map (
+        clk_sys_i  => clk_sys,
+        rst_n_i    => rst_n_periph,
+        req_i      => rtu_req(g_num_ports-1 downto 0),
+        req_full_o => rtu_full(g_num_ports-1 downto 0),
+        rsp_o      => rtu_rsp(g_num_ports-1 downto 0),
+        rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
+        wb_i       => cnx_master_out(c_SLAVE_RTU),
+        wb_o       => cnx_master_in(c_SLAVE_RTU));
 
   end generate gen_network_stuff;
 
-  gen_no_network_stuff: if(g_without_network= true) generate
-    gen_dummy_resets: for i in 0 to g_num_ports-1 generate
-      phys_o(i).rst <= not rst_n_periph;
+  gen_no_network_stuff : if(g_without_network = true) generate
+    gen_dummy_resets : for i in 0 to g_num_ports-1 generate
+      phys_o(i).rst    <= not rst_n_periph;
       phys_o(i).loopen <= '0';
     end generate gen_dummy_resets;
   end generate gen_no_network_stuff;
-  
+
 
   U_PPS_Gen : xwr_pps_gen
     generic map (
@@ -577,6 +702,10 @@ begin
       wb_o             => cnx_master_in(c_SLAVE_TXTSU));
 
 
+  --TRIG2(15 downto 0) <= txtsu_timestamps(0).frame_id;
+  --TRIG2(21 downto 16) <= txtsu_timestamps(0).port_id;
+  --TRIG2(22) <= txtsu_timestamps(0).valid;
+  
   U_GPIO : xwb_gpio_port
     generic map (
       g_interface_mode         => PIPELINED,
@@ -592,12 +721,37 @@ begin
       gpio_out_o => gpio_o,
       gpio_in_i  => gpio_i);
 
+  U_MiniBackplane_I2C: xwb_i2c_master
+    generic map (
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE)
+    port map (
+      clk_sys_i    => clk_sys,
+      rst_n_i      => rst_n_periph,
+      slave_i      => cnx_master_out(c_SLAVE_I2C),
+      slave_o      => cnx_master_in(c_SLAVE_I2C),
+      desc_o       => open,
+      scl_pad_i    => i2c_mbl0_scl_i,
+      scl_pad_o    => i2c_mbl0_scl_o,
+      scl_padoen_o => i2c_mbl0_scl_oen_o,
+      sda_pad_i    => i2c_mbl0_sda_i,
+      sda_pad_o    => i2c_mbl0_sda_o,
+      sda_padoen_o => i2c_mbl0_sda_oen_o);
+
+  -----------------------------------------------------------------------------
+  -- Interrupt assignment
+  -----------------------------------------------------------------------------
+  
   vic_irqs(0)           <= cnx_master_in(c_SLAVE_NIC).int;
   vic_irqs(1)           <= cnx_master_in(c_SLAVE_TXTSU).int;
   vic_irqs(2)           <= cnx_master_in(c_SLAVE_RTU).int;
   vic_irqs(31 downto 3) <= (others => '0');
 
-  clk_en_o  <= '1';
+-------------------------------------------------------------------------------
+-- Various constant-driven I/Os
+-------------------------------------------------------------------------------
+  
+  clk_en_o  <= '0';
   clk_sel_o <= '0';
   clk_sys_o <= clk_sys;
   
