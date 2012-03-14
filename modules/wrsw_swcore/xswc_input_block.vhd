@@ -508,6 +508,8 @@ architecture syn of xswc_input_block is
   signal lw_pckstart_pg_clred : std_logic;
   signal pckstart_pg_clred    : std_logic;
 
+  signal rtu_dst_port_mask_tmp :  std_logic_vector(g_num_ports - 1 downto 0);
+
   signal zeros    : std_logic_vector(g_num_ports - 1 downto 0);
   -------------------------------------------------------------------------------
   -- Function which calculates number of 1's in a vector
@@ -735,7 +737,7 @@ begin  --arch
                 snk_stall_force_l <= '0';
                 snk_stall_force_h <= '1';
                 rp_drop_on_stuck  <= '1';
-                rp_accept_rtu     <= '1';
+                --rp_accept_rtu     <= '1';
               else                      -- by default: stall when stuck
                 snk_stall_force_h <= '1';
                 snk_stall_force_l <= '1';
@@ -956,7 +958,8 @@ begin  --arch
             
             if(tp_stuck = '0') then     -- un-stuck the input :)
 
-              s_rcv_pck <= S_IDLE;
+              s_rcv_pck         <= S_IDLE;
+              rp_drop_on_stuck  <= '0';
               
             else                        -- still stuck
 
@@ -964,7 +967,8 @@ begin  --arch
               if(g_input_block_cannot_accept_data = "drop_pck") then
                 snk_stall_force_l <= '0';
                 if (in_pck_sof = '1') then
-                  s_rcv_pck <= S_DROP;
+                  s_rcv_pck       <= S_DROP;
+                  rp_accept_rtu   <= '1';
                 end if;
 
                 -- by default: stall when stuck
@@ -979,6 +983,7 @@ begin  --arch
     --===========================================================================================           
     snk_stall_force_h <= '1';
     snk_stall_force_l <= '1';
+    rp_drop_on_stuck  <= '0';
     s_rcv_pck         <= S_IDLE;
   end case;
 
@@ -1217,6 +1222,9 @@ end process p_page_alloc_fsm;
 --------------------------------------------------------------------------------------------------
 --================================================================================================
 
+--rtu_dst_port_mask_tmp <= rtu_dst_port_mask_i and (not f_gen_mask(g_port_index, current_mask'length));
+rtu_dst_port_mask_tmp <= rtu_dst_port_mask_i;
+
 p_register_rtu_rsp : process(clk_i)
 begin
   if rising_edge(clk_i) then
@@ -1233,7 +1241,7 @@ begin
       -- remember input rtu decision
       if(rtu_rsp_valid_i = '1' and rtu_rsp_ack = '0' and rp_accept_rtu = '1') then
         -- make sure we're not forwarding packets to ourselves. 
-        current_mask   <= rtu_dst_port_mask_i and (not f_gen_mask(g_port_index, current_mask'length));
+        current_mask   <= rtu_dst_port_mask_tmp;--rtu_dst_port_mask_i and (not f_gen_mask(g_port_index, current_mask'length));
         current_prio   <= rtu_prio_i;
         current_drop   <= rtu_drop_i;
         current_usecnt <= rtu_dst_port_usecnt;
@@ -1888,7 +1896,8 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 --================================================================================================
 -- Input signals
 --================================================================================================
-rtu_dst_port_usecnt <= std_logic_vector(to_unsigned(cnt(rtu_dst_port_mask_i), g_usecount_width));
+--rtu_dst_port_usecnt <= std_logic_vector(to_unsigned(cnt(rtu_dst_port_mask_i), g_usecount_width));
+rtu_dst_port_usecnt <= std_logic_vector(to_unsigned(cnt(rtu_dst_port_mask_tmp), g_usecount_width));
 
 -- generating output STALL: fifo_full or stall_after_err or stall_when_stuck;
 snk_stall_int <= ((not mpm_dreq_i) or snk_stall_force_h) and snk_stall_force_l;
