@@ -311,7 +311,6 @@ architecture syn of xswc_input_block is
   signal pckstart_usecnt_write    : std_logic_vector(g_usecount_width - 1 downto 0);
   -- previously set usecnt (not necessarly the same as pckstart_usecnt !!!)
   signal pckstart_usecnt_prev     : std_logic_vector(g_usecount_width - 1 downto 0);
-  signal pckstart_usecnt_next     : std_logic_vector(g_usecount_width - 1 downto 0);
   signal pckstart_usecnt_pgaddr   : std_logic_vector(g_page_addr_width - 1 downto 0);
 
   -- interpck page allocation in advance
@@ -396,7 +395,6 @@ architecture syn of xswc_input_block is
   -- used to produce delayed in_pck_sof -- basically, this is illegal by pWB standard, but 
   -- if it happens, we loose, pck, why not to take care of this?
   signal in_pck_sof_on_stall : std_logic;
-  signal in_pck_delayed_sof  : std_logic;
 
   -- indicates that the reception of pck finishes due to :
   -- (1) eof, error    (by in_pck_*)
@@ -631,7 +629,7 @@ begin  --arch
         -- tracks start of frame on the stall (not allowed, but sometimes happen)
         if(snk_cyc_int = '1' and snk_cyc_d0 = '0' and snk_stall_int = '1') then
           in_pck_sof_on_stall <= '1';
-        elsif(in_pck_delayed_sof = '1' and in_pck_sof_on_stall = '1') then
+        elsif(in_pck_sof_delayed = '1' and in_pck_sof_on_stall = '1') then
           in_pck_sof_on_stall <= '0';
         end if;
 
@@ -959,6 +957,8 @@ begin  --arch
             if(tp_stuck = '0') then     -- un-stuck the input :)
 
               s_rcv_pck         <= S_IDLE;
+              snk_stall_force_h <= '1';
+              snk_stall_force_l <= '1';
               rp_drop_on_stuck  <= '0';
               
             else                        -- still stuck
@@ -1222,8 +1222,7 @@ end process p_page_alloc_fsm;
 --------------------------------------------------------------------------------------------------
 --================================================================================================
 
---rtu_dst_port_mask_tmp <= rtu_dst_port_mask_i and (not f_gen_mask(g_port_index, current_mask'length));
-rtu_dst_port_mask_tmp <= rtu_dst_port_mask_i;
+rtu_dst_port_mask_tmp <= rtu_dst_port_mask_i; -- and (not f_gen_mask(g_port_index, current_mask'length));
 
 p_register_rtu_rsp : process(clk_i)
 begin
@@ -1241,7 +1240,7 @@ begin
       -- remember input rtu decision
       if(rtu_rsp_valid_i = '1' and rtu_rsp_ack = '0' and rp_accept_rtu = '1') then
         -- make sure we're not forwarding packets to ourselves. 
-        current_mask   <= rtu_dst_port_mask_tmp;--rtu_dst_port_mask_i and (not f_gen_mask(g_port_index, current_mask'length));
+        current_mask   <= rtu_dst_port_mask_tmp;
         current_prio   <= rtu_prio_i;
         current_drop   <= rtu_drop_i;
         current_usecnt <= rtu_dst_port_usecnt;
@@ -1896,7 +1895,6 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 --================================================================================================
 -- Input signals
 --================================================================================================
---rtu_dst_port_usecnt <= std_logic_vector(to_unsigned(cnt(rtu_dst_port_mask_i), g_usecount_width));
 rtu_dst_port_usecnt <= std_logic_vector(to_unsigned(cnt(rtu_dst_port_mask_tmp), g_usecount_width));
 
 -- generating output STALL: fifo_full or stall_after_err or stall_when_stuck;
