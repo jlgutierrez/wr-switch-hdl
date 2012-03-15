@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-02-16
+-- Last update: 2012-03-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -55,26 +55,26 @@ library work;
 use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
 use work.wr_fabric_pkg.all;
-use work.endpoint_private_pkg.all; -- Tom
-use work.ep_wbgen2_pkg.all; -- tom
+use work.endpoint_private_pkg.all;      -- Tom
+use work.ep_wbgen2_pkg.all;             -- tom
 
 entity xswc_output_block is
-  generic ( 
+  generic (
 
-    g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
-    g_output_block_per_prio_fifo_size  : integer ;--:= c_swc_output_fifo_size
-    g_prio_width                       : integer ;--:= c_swc_prio_width;, c_swc_output_prio_num_width
-    g_prio_num                         : integer ;--:= c_swc_output_prio_num
+    g_max_pck_size_width              : integer;  --:= c_swc_max_pck_size_width  
+    g_output_block_per_prio_fifo_size : integer;  --:= c_swc_output_fifo_size
+    g_prio_width                      : integer;  --:= c_swc_prio_width;, c_swc_output_prio_num_width
+    g_prio_num                        : integer;  --:= c_swc_output_prio_num
     -- new stuff
-    g_mpm_page_addr_width              : integer ;--:= c_swc_page_addr_width;
-    g_mpm_data_width                   : integer ;--:= c_swc_page_addr_width;
-    g_mpm_partial_select_width         : integer ;
-    g_mpm_fetch_next_pg_in_advance     : boolean := false;
-    g_wb_data_width                    : integer ;
-    g_wb_addr_width                    : integer ;
-    g_wb_sel_width                     : integer ;
-    g_wb_ob_ignore_ack                 : boolean := true
-  );
+    g_mpm_page_addr_width             : integer;  --:= c_swc_page_addr_width;
+    g_mpm_data_width                  : integer;  --:= c_swc_page_addr_width;
+    g_mpm_partial_select_width        : integer;
+    g_mpm_fetch_next_pg_in_advance    : boolean := false;
+    g_wb_data_width                   : integer;
+    g_wb_addr_width                   : integer;
+    g_wb_sel_width                    : integer;
+    g_wb_ob_ignore_ack                : boolean := true
+    );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
@@ -83,32 +83,32 @@ entity xswc_output_block is
 -- I/F with Pck Transfer Arbiter
 -------------------------------------------------------------------------------
 
-    pta_transfer_data_valid_i : in   std_logic;
-    pta_pageaddr_i            : in   std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-    pta_prio_i                : in   std_logic_vector(g_prio_width - 1 downto 0);
+    pta_transfer_data_valid_i : in  std_logic;
+    pta_pageaddr_i            : in  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+    pta_prio_i                : in  std_logic_vector(g_prio_width - 1 downto 0);
 --    pta_pck_size_i            : in   std_logic_vector(g_max_pck_size_width - 1 downto 0);
-    pta_transfer_data_ack_o   : out  std_logic;
+    pta_transfer_data_ack_o   : out std_logic;
 
 -------------------------------------------------------------------------------
 -- I/F with Multiport Memory's Read Pump (MMP)
 -------------------------------------------------------------------------------
-   
-    mpm_d_i        : in  std_logic_vector (g_mpm_data_width -1 downto 0);
-    mpm_dvalid_i   : in  std_logic;
-    mpm_dlast_i    : in  std_logic;
-    mpm_dsel_i     : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
-    mpm_dreq_o     : out std_logic;
-    mpm_abort_o    : out std_logic;
-    mpm_pg_addr_o  : out std_logic_vector (g_mpm_page_addr_width -1 downto 0);
-    mpm_pg_valid_o : out std_logic;
-    mpm_pg_req_i   : in  std_logic;   
+
+    mpm_d_i            : in  std_logic_vector (g_mpm_data_width -1 downto 0);
+    mpm_dvalid_i       : in  std_logic;
+    mpm_dlast_i        : in  std_logic;
+    mpm_dsel_i         : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
+    mpm_dreq_o         : out std_logic;
+    mpm_abort_o        : out std_logic;
+    mpm_pg_addr_o      : out std_logic_vector (g_mpm_page_addr_width -1 downto 0);
+    mpm_pg_valid_o     : out std_logic;
+    mpm_pg_req_i       : in  std_logic;
 -------------------------------------------------------------------------------
 -- I/F with Pck's Pages Free Module(PPFM)
 -------------------------------------------------------------------------------      
     -- correctly read pck
-    ppfm_free_o            : out  std_logic;
-    ppfm_free_done_i       : in   std_logic;
-    ppfm_free_pgaddr_o     : out  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+    ppfm_free_o        : out std_logic;
+    ppfm_free_done_i   : in  std_logic;
+    ppfm_free_pgaddr_o : out std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
 
 -------------------------------------------------------------------------------
 -- pWB : output (goes to the Endpoint)
@@ -116,18 +116,18 @@ entity xswc_output_block is
 
     src_i : in  t_wrf_source_in;
     src_o : out t_wrf_source_out
-    
+
     );
 end xswc_output_block;
 
 architecture behavoural of xswc_output_block is
   
-  constant c_per_prio_fifo_size_width : integer := integer(CEIL(LOG2(real(g_output_block_per_prio_fifo_size-1)))); -- c_swc_output_fifo_addr_width
-  
+  constant c_per_prio_fifo_size_width : integer := integer(CEIL(LOG2(real(g_output_block_per_prio_fifo_size-1))));  -- c_swc_output_fifo_addr_width
+
   signal pta_transfer_data_ack : std_logic;
 
-  signal wr_addr               : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
-  signal rd_addr               : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal wr_addr : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal rd_addr : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
 
 -- drop_imp:  
 --   signal drop_addr             : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
@@ -135,129 +135,129 @@ architecture behavoural of xswc_output_block is
 --   signal drop_index            : std_logic_vector(g_prio_width - 1 downto 0);
 --   signal drop_array            : std_logic_vector(g_prio_num - 1 downto 0);
 
-  signal wr_prio               : std_logic_vector(g_prio_width - 1 downto 0);
-  signal rd_prio               : std_logic_vector(g_prio_width - 1 downto 0);
-  signal not_full_array        : std_logic_vector(g_prio_num - 1 downto 0);
-  signal full_array            : std_logic_vector(g_prio_num - 1 downto 0);
-  signal not_empty_array       : std_logic_vector(g_prio_num - 1 downto 0);
-  signal read_array            : std_logic_vector(g_prio_num - 1 downto 0);
-  signal read                  : std_logic_vector(g_prio_num - 1 downto 0);
-  signal write_array           : std_logic_vector(g_prio_num - 1 downto 0);
-  signal write                 : std_logic_vector(g_prio_num - 1 downto 0);
-  signal wr_en                 : std_logic;
-  signal rd_data_valid         : std_logic;
-  signal drop_data_valid       : std_logic;
-  signal zeros                 : std_logic_vector(g_prio_num - 1 downto 0);
+  signal wr_prio         : std_logic_vector(g_prio_width - 1 downto 0);
+  signal rd_prio         : std_logic_vector(g_prio_width - 1 downto 0);
+  signal not_full_array  : std_logic_vector(g_prio_num - 1 downto 0);
+  signal full_array      : std_logic_vector(g_prio_num - 1 downto 0);
+  signal not_empty_array : std_logic_vector(g_prio_num - 1 downto 0);
+  signal read_array      : std_logic_vector(g_prio_num - 1 downto 0);
+  signal read            : std_logic_vector(g_prio_num - 1 downto 0);
+  signal write_array     : std_logic_vector(g_prio_num - 1 downto 0);
+  signal write           : std_logic_vector(g_prio_num - 1 downto 0);
+  signal wr_en           : std_logic;
+  signal rd_data_valid   : std_logic;
+  signal drop_data_valid : std_logic;
+  signal zeros           : std_logic_vector(g_prio_num - 1 downto 0);
 
-  subtype t_head_and_head      is std_logic_vector(c_per_prio_fifo_size_width - 1  downto 0);
+  subtype t_head_and_head is std_logic_vector(c_per_prio_fifo_size_width - 1 downto 0);
 
-  type t_addr_array      is array (g_prio_num - 1 downto 0) of t_head_and_head;  
+  type t_addr_array is array (g_prio_num - 1 downto 0) of t_head_and_head;
 
-  signal wr_array    : t_addr_array;
-  signal rd_array    : t_addr_array;
+  signal wr_array : t_addr_array;
+  signal rd_array : t_addr_array;
 
-  type t_prep_to_send is (S_IDLE, 
-                          S_NEWPCK_PAGE_READY, 
-                          S_NEWPCK_PAGE_SET_IN_ADVANCE, 
+  type t_prep_to_send is (S_IDLE,
+                          S_NEWPCK_PAGE_READY,
+                          S_NEWPCK_PAGE_SET_IN_ADVANCE,
                           S_NEWPCK_PAGE_USED,
                           S_RETRY_PREPARE,
                           S_RETRY_READY
                           );
-  type t_send_pck     is (S_IDLE, 
-                          S_DATA, 
-                          S_FLUSH_STALL, 
-                          S_FINISH_CYCLE, 
+  type t_send_pck is (S_IDLE,
+                          S_DATA,
+                          S_FLUSH_STALL,
+                          S_FINISH_CYCLE,
                           S_EOF,
                           S_RETRY,
-                          S_WAIT_FREE_PCK                          
+                          S_WAIT_FREE_PCK
                           );
 
   signal s_send_pck     : t_send_pck;
   signal s_prep_to_send : t_prep_to_send;
 
-  signal wr_data            : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-  signal rd_data            : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+  signal wr_data : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+  signal rd_data : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
 
-    
-  signal ppfm_free         : std_logic;
-  signal ppfm_free_pgaddr       : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-  
-  signal pck_start_pgaddr       : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-  
-  signal start_free_pck_addr    : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-  signal start_free_pck          : std_logic;
 
-  signal ram_zeros                 : std_logic_vector(g_mpm_page_addr_width- 1 downto 0);
-  signal ram_ones                  : std_logic_vector((g_mpm_page_addr_width+7)/8 - 1 downto 0);
+  signal ppfm_free        : std_logic;
+  signal ppfm_free_pgaddr : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+
+  signal pck_start_pgaddr : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+
+  signal start_free_pck_addr : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+  signal start_free_pck      : std_logic;
+
+  signal ram_zeros : std_logic_vector(g_mpm_page_addr_width- 1 downto 0);
+  signal ram_ones  : std_logic_vector((g_mpm_page_addr_width+7)/8 - 1 downto 0);
 
   signal request_retry : std_logic;
   -- pipelined WB  
   -- source out
-  signal src_adr_int : std_logic_vector(1 downto 0);
-  signal src_dat_int : std_logic_vector(15 downto 0);
-  signal src_dat_d   : std_logic_vector(15 downto 0);
-  signal src_stb_d   : std_logic;
-  signal src_cyc_int : std_logic;
-  signal src_stb_int : std_logic;
-  signal src_we_int  : std_logic;
-  signal src_sel_int : std_logic_vector(1 downto 0);
-  signal out_dat_err : std_logic;
+  signal src_adr_int   : std_logic_vector(1 downto 0);
+  signal src_dat_int   : std_logic_vector(15 downto 0);
+  signal src_dat_d     : std_logic_vector(15 downto 0);
+  signal src_stb_d     : std_logic;
+  signal src_cyc_int   : std_logic;
+  signal src_stb_int   : std_logic;
+  signal src_we_int    : std_logic;
+  signal src_sel_int   : std_logic_vector(1 downto 0);
+  signal out_dat_err   : std_logic;
   -- source in
   signal src_ack_int   : std_logic;
   signal src_stall_int : std_logic;
   signal src_err_int   : std_logic;
   signal src_rty_int   : std_logic;
- 
-  signal mpm_pg_addr_memorized : std_logic_vector(g_mpm_page_addr_width -1 downto 0);
-  signal mpm_pg_addr_memorized_valid: std_logic;
+
+  signal mpm_pg_addr_memorized       : std_logic_vector(g_mpm_page_addr_width -1 downto 0);
+  signal mpm_pg_addr_memorized_valid : std_logic;
 
   signal mpm_dreq     : std_logic;
   signal mpm_abort    : std_logic;
   signal mpm_pg_addr  : std_logic_vector (g_mpm_page_addr_width -1 downto 0);
   signal mpm_pg_valid : std_logic;
-  
-  signal mpm2wb_dat_int  : std_logic_vector (g_wb_data_width -1 downto 0);
-  signal mpm2wb_sel_int  : std_logic_vector (g_wb_sel_width  -1 downto 0);
-  signal mpm2wb_adr_int  : std_logic_vector (g_wb_addr_width -1 downto 0);
+
+  signal mpm2wb_dat_int : std_logic_vector (g_wb_data_width -1 downto 0);
+  signal mpm2wb_sel_int : std_logic_vector (g_wb_sel_width -1 downto 0);
+  signal mpm2wb_adr_int : std_logic_vector (g_wb_addr_width -1 downto 0);
 
   signal src_out_int : t_wrf_source_out;
-  signal tmp_sel : std_logic_vector(g_wb_sel_width  - 1 downto 0);
-  signal tmp_dat : std_logic_vector(g_wb_data_width - 1 downto 0);
-  signal tmp_adr : std_logic_vector(g_wb_addr_width - 1 downto 0);
-  
-  signal ack_count   : unsigned(3 downto 0);
-  
-  signal set_next_pg_addr : std_logic;
+  signal tmp_sel     : std_logic_vector(g_wb_sel_width - 1 downto 0);
+  signal tmp_dat     : std_logic_vector(g_wb_data_width - 1 downto 0);
+  signal tmp_adr     : std_logic_vector(g_wb_addr_width - 1 downto 0);
+
+  signal ack_count : unsigned(3 downto 0);
+
+  signal set_next_pg_addr     : std_logic;
   signal not_set_next_pg_addr : std_logic;
 begin  --  behavoural
   
-  zeros     <=(others => '0');
-  ram_zeros <=(others => '0');
-  ram_ones  <=(others => '1');
-    
+  zeros     <= (others => '0');
+  ram_zeros <= (others => '0');
+  ram_ones  <= (others => '1');
+
   wr_prio <= not pta_prio_i;
-    
+
   wr_data <= pta_pageaddr_i;
-    
-  wr_addr   <= wr_prio    & wr_array(0) when wr_prio    = "000" else
-               wr_prio    & wr_array(1) when wr_prio    = "001" else
-               wr_prio    & wr_array(2) when wr_prio    = "010" else
-               wr_prio    & wr_array(3) when wr_prio    = "011" else
-               wr_prio    & wr_array(4) when wr_prio    = "100" else
-               wr_prio    & wr_array(5) when wr_prio    = "101" else
-               wr_prio    & wr_array(6) when wr_prio    = "110" else
-               wr_prio    & wr_array(7) when wr_prio    = "111" else
+
+  wr_addr <= wr_prio & wr_array(0) when wr_prio = "000" else
+               wr_prio & wr_array(1) when wr_prio = "001" else
+               wr_prio & wr_array(2) when wr_prio = "010" else
+               wr_prio & wr_array(3) when wr_prio = "011" else
+               wr_prio & wr_array(4) when wr_prio = "100" else
+               wr_prio & wr_array(5) when wr_prio = "101" else
+               wr_prio & wr_array(6) when wr_prio = "110" else
+               wr_prio & wr_array(7) when wr_prio = "111" else
                (others => 'X');
-             
-  rd_addr   <= rd_prio    & rd_array(0) when rd_prio    = "000" else
-               rd_prio    & rd_array(1) when rd_prio    = "001" else
-               rd_prio    & rd_array(2) when rd_prio    = "010" else
-               rd_prio    & rd_array(3) when rd_prio    = "011" else
-               rd_prio    & rd_array(4) when rd_prio    = "100" else
-               rd_prio    & rd_array(5) when rd_prio    = "101" else
-               rd_prio    & rd_array(6) when rd_prio    = "110" else
-               rd_prio    & rd_array(7) when rd_prio    = "111" else
-               (others => 'X');  
+  
+  rd_addr <= rd_prio & rd_array(0) when rd_prio = "000" else
+               rd_prio & rd_array(1) when rd_prio = "001" else
+               rd_prio & rd_array(2) when rd_prio = "010" else
+               rd_prio & rd_array(3) when rd_prio = "011" else
+               rd_prio & rd_array(4) when rd_prio = "100" else
+               rd_prio & rd_array(5) when rd_prio = "101" else
+               rd_prio & rd_array(6) when rd_prio = "110" else
+               rd_prio & rd_array(7) when rd_prio = "111" else
+               (others => 'X');
 
 -- drop_imp:
 --   drop_addr <= drop_index & rd_array(0) when drop_index = "000" else
@@ -280,7 +280,7 @@ begin  --  behavoural
       in_i     => not_empty_array,
       onehot_o => read_array,
       out_o    => rd_prio);
-  
+
   write_array <= "00000001" when wr_prio = "000" else
                  "00000010" when wr_prio = "001" else
                  "00000100" when wr_prio = "010" else
@@ -289,9 +289,9 @@ begin  --  behavoural
                  "00100000" when wr_prio = "101" else
                  "01000000" when wr_prio = "110" else
                  "10000000" when wr_prio = "111" else
-                 "00000000" ;
+                 "00000000";
   
-  wr_en       <= write(0) and not_full_array(0) when wr_prio = "000" else
+  wr_en <= write(0) and not_full_array(0) when wr_prio = "000" else
                  write(1) and not_full_array(1) when wr_prio = "001" else
                  write(2) and not_full_array(2) when wr_prio = "010" else
                  write(3) and not_full_array(3) when wr_prio = "011" else
@@ -301,27 +301,27 @@ begin  --  behavoural
                  write(7) and not_full_array(7) when wr_prio = "111" else
                  '0';
   -- I don't like this                 
-  pta_transfer_data_ack_o <= not_full_array(0)  when wr_prio = "000" else
-                             not_full_array(1)  when wr_prio = "001" else
-                             not_full_array(2)  when wr_prio = "010" else
-                             not_full_array(3)  when wr_prio = "011" else
-                             not_full_array(4)  when wr_prio = "100" else
-                             not_full_array(5)  when wr_prio = "101" else
-                             not_full_array(6)  when wr_prio = "110" else
-                             not_full_array(7)  when wr_prio = "111" else                 
-                            '0';
+  pta_transfer_data_ack_o <= not_full_array(0) when wr_prio = "000" else
+                             not_full_array(1) when wr_prio = "001" else
+                             not_full_array(2) when wr_prio = "010" else
+                             not_full_array(3) when wr_prio = "011" else
+                             not_full_array(4) when wr_prio = "100" else
+                             not_full_array(5) when wr_prio = "101" else
+                             not_full_array(6) when wr_prio = "110" else
+                             not_full_array(7) when wr_prio = "111" else
+                             '0';
   
-  prio_ctrl : for i in 0 to g_prio_num - 1 generate 
+  prio_ctrl : for i in 0 to g_prio_num - 1 generate
     
-    write(i)        <= write_array(i) and pta_transfer_data_valid_i ;
-    read(i)         <= read_array(i)  and mpm_pg_valid;
+    write(i) <= write_array(i) and pta_transfer_data_valid_i;
+    read(i)  <= read_array(i) and mpm_pg_valid;
 -- drop_imp:
 --     read(i)         <= (read_array(i)  and mpm_pg_valid) or (drop_array(i) and not mpm_pg_valid);    
-      
+
     PRIO_QUEUE_CTRL : swc_ob_prio_queue
       generic map(
-        g_per_prio_fifo_size_width => c_per_prio_fifo_size_width -- c_swc_output_fifo_addr_width
-       )
+        g_per_prio_fifo_size_width => c_per_prio_fifo_size_width  -- c_swc_output_fifo_addr_width
+        )
       port map (
         clk_i       => clk_i,
         rst_n_i     => rst_n_i,
@@ -329,9 +329,9 @@ begin  --  behavoural
         read_i      => read(i),
         not_full_o  => not_full_array(i),
         not_empty_o => not_empty_array(i),
-        wr_en_o     => open, --wr_en_array(i),
+        wr_en_o     => open,            --wr_en_array(i),
         wr_addr_o   => wr_array(i),
-        rd_addr_o   => rd_array(i) 
+        rd_addr_o   => rd_array(i)
         );
 -- drop_imp:
 --  full_array(i) <= not not_full_array(i);
@@ -347,29 +347,29 @@ begin  --  behavoural
 --       onehot_o => drop_array,
 --       out_o    => drop_index);
 
-   PRIO_QUEUE : generic_dpram
-     generic map (
-       g_data_width       => g_mpm_page_addr_width, -- + g_max_pck_size_width,
-       g_size        => (g_prio_num * g_output_block_per_prio_fifo_size) 
-                 )
-     port map (
-     -- Port A -- writing
-       clka_i => clk_i,
-       bwea_i => (others => '1'), --ram_ones,
-       wea_i  => wr_en,
-       aa_i   => wr_addr,
-       da_i   => wr_data,
-       qa_o   => open,   
- 
+  PRIO_QUEUE : generic_dpram
+    generic map (
+      g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
+      g_size       => (g_prio_num * g_output_block_per_prio_fifo_size)
+      )
+    port map (
+      -- Port A -- writing
+      clka_i => clk_i,
+      bwea_i => (others => '1'),              --ram_ones,
+      wea_i  => wr_en,
+      aa_i   => wr_addr,
+      da_i   => wr_data,
+      qa_o   => open,
+
       -- Port B  -- reading
-       clkb_i => clk_i,
-       bweb_i => (others => '1'), --ram_ones, 
-       web_i  => '0',
-       ab_i   => rd_addr, -- drop_imp : ram_rd_addr,
-       db_i   => (others => '0'), --ram_zeros,
-       qb_o   => rd_data
+      clkb_i => clk_i,
+      bweb_i => (others => '1'),        --ram_ones, 
+      web_i  => '0',
+      ab_i   => rd_addr,                -- drop_imp : ram_rd_addr,
+      db_i   => (others => '0'),        --ram_zeros,
+      qb_o   => rd_data
       );
-  
+
   -- check if there is any valid frame in any output queue
   -- rd_data_valid=HIGH indicates that there is something to send out
   rd_valid : process(clk_i, rst_n_i)
@@ -379,23 +379,23 @@ begin  --  behavoural
         rd_data_valid   <= '0';
         drop_data_valid <= '0';
       else
-         
-       if(not_empty_array = zeros) then
-         rd_data_valid   <= '0';
-       else
-         rd_data_valid   <= '1';
-       end if;
+        
+        if(not_empty_array = zeros) then
+          rd_data_valid <= '0';
+        else
+          rd_data_valid <= '1';
+        end if;
 -- drop_imp :
 --        if(full_array = zeros) then
 --          drop_data_valid <= '0';
 --        else
 --          drop_data_valid <= '1';
 --       end if;       
-     end if;
-   end if;
- end process;
+      end if;
+    end if;
+  end process;
 
- --==================================================================================================
+  --==================================================================================================
   -- FSM to prepare next pck to be send
   --==================================================================================================
   -- This state machine takes data, if available) from the output queue. The data is only the 
@@ -418,132 +418,132 @@ begin  --  behavoural
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-      --========================================
+        --========================================
         s_prep_to_send              <= S_IDLE;
         mpm_pg_addr                 <= (others => '0');
         mpm_pg_valid                <= '0';
         mpm_abort                   <= '0';
         mpm_pg_addr_memorized_valid <= '0';
         mpm_pg_addr_memorized       <= (others => '0');
-      --========================================
-      else 
+        --========================================
+      else
         -- default values
         mpm_pg_valid <= '0';
         mpm_abort    <= '0';
 
-       case s_prep_to_send is
+        case s_prep_to_send is
           --===========================================================================================
           when S_IDLE =>
-          --===========================================================================================   
-            if(request_retry = '1') then      
+            --===========================================================================================   
+            if(request_retry = '1') then
               mpm_abort      <= '1';
               s_prep_to_send <= S_RETRY_PREPARE;
-            elsif(set_next_pg_addr = '1') then 
-              mpm_pg_addr    <= rd_data(g_mpm_page_addr_width - 1 downto 0);
-              mpm_pg_valid   <= '1';
+            elsif(set_next_pg_addr = '1') then
+              mpm_pg_addr  <= rd_data(g_mpm_page_addr_width - 1 downto 0);
+              mpm_pg_valid <= '1';
               if(s_send_pck = S_DATA or s_send_pck = S_FINISH_CYCLE) then
-                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;             
+                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;
               else
-                s_prep_to_send <= S_NEWPCK_PAGE_READY;             
+                s_prep_to_send <= S_NEWPCK_PAGE_READY;
               end if;
             end if;
-          --===========================================================================================
+            --===========================================================================================
           when S_NEWPCK_PAGE_SET_IN_ADVANCE =>
-          --===========================================================================================        
-            if(request_retry = '1') then   
+            --===========================================================================================        
+            if(request_retry = '1') then
               mpm_abort                   <= '1';
               s_prep_to_send              <= S_RETRY_PREPARE;
-              mpm_pg_addr_memorized       <= mpm_pg_addr;     
-              mpm_pg_addr_memorized_valid <= '1';      
+              mpm_pg_addr_memorized       <= mpm_pg_addr;
+              mpm_pg_addr_memorized_valid <= '1';
             elsif(mpm_dlast_i = '1') then
-              s_prep_to_send              <= S_NEWPCK_PAGE_READY;
+              s_prep_to_send <= S_NEWPCK_PAGE_READY;
             end if;
-          --===========================================================================================
+            --===========================================================================================
           when S_NEWPCK_PAGE_READY =>
-          --=========================================================================================== 
+            --=========================================================================================== 
             
-            if(request_retry = '1') then      
-              mpm_abort                   <= '1';
-              s_prep_to_send              <= S_RETRY_PREPARE;
+            if(request_retry = '1') then
+              mpm_abort      <= '1';
+              s_prep_to_send <= S_RETRY_PREPARE;
             elsif(s_send_pck = S_DATA) then
-              s_prep_to_send               <= S_NEWPCK_PAGE_USED;
+              s_prep_to_send <= S_NEWPCK_PAGE_USED;
             end if;
 
 
-          --===========================================================================================
+            --===========================================================================================
           when S_NEWPCK_PAGE_USED =>
-          --=========================================================================================== 
-       
-            if(request_retry = '1') then      
-              mpm_abort                   <= '1';
-              s_prep_to_send              <= S_RETRY_PREPARE;
-            elsif(set_next_pg_addr = '1') then  
-              mpm_pg_addr    <= rd_data(g_mpm_page_addr_width - 1 downto 0);
-              mpm_pg_valid   <= '1';
+            --=========================================================================================== 
+            
+            if(request_retry = '1') then
+              mpm_abort      <= '1';
+              s_prep_to_send <= S_RETRY_PREPARE;
+            elsif(set_next_pg_addr = '1') then
+              mpm_pg_addr  <= rd_data(g_mpm_page_addr_width - 1 downto 0);
+              mpm_pg_valid <= '1';
               if(s_send_pck = S_DATA or s_send_pck = S_FINISH_CYCLE) then
-                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;             
+                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;
               else
-                s_prep_to_send <= S_NEWPCK_PAGE_READY;             
+                s_prep_to_send <= S_NEWPCK_PAGE_READY;
               end if;
-            elsif(not_set_next_pg_addr = '1') then 
+            elsif(not_set_next_pg_addr = '1') then
               s_prep_to_send <= S_IDLE;
             end if;
-            
-          --===========================================================================================
+
+            --===========================================================================================
           when S_RETRY_PREPARE =>
-          --=========================================================================================== 
-            if(mpm_pg_req_i = '1') then 
+            --=========================================================================================== 
+            if(mpm_pg_req_i = '1') then
               mpm_pg_addr    <= pck_start_pgaddr;
               mpm_pg_valid   <= '1';
               s_prep_to_send <= S_RETRY_READY;
             end if;
-          --===========================================================================================
+            --===========================================================================================
           when S_RETRY_READY =>
-          --=========================================================================================== 
+            --=========================================================================================== 
 
-            if(mpm_pg_addr_memorized_valid = '1' and set_next_pg_addr = '1') then 
-              mpm_pg_addr_memorized_valid <= '0';    
-              mpm_pg_addr    <= mpm_pg_addr_memorized;
-              mpm_pg_valid   <= '1';              
+            if(mpm_pg_addr_memorized_valid = '1' and set_next_pg_addr = '1') then
+              mpm_pg_addr_memorized_valid <= '0';
+              mpm_pg_addr                 <= mpm_pg_addr_memorized;
+              mpm_pg_valid                <= '1';
               if(s_send_pck = S_DATA or s_send_pck = S_FINISH_CYCLE) then
-                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;             
+                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;
               else
-                s_prep_to_send <= S_NEWPCK_PAGE_READY;             
+                s_prep_to_send <= S_NEWPCK_PAGE_READY;
               end if;
-            --elsif(rd_data_valid = '1' and mpm_pg_req_i = '1') then
-            elsif(set_next_pg_addr = '1') then  
-              mpm_pg_addr    <= rd_data(g_mpm_page_addr_width - 1 downto 0);
-              mpm_pg_valid   <= '1';
+              --elsif(rd_data_valid = '1' and mpm_pg_req_i = '1') then
+            elsif(set_next_pg_addr = '1') then
+              mpm_pg_addr  <= rd_data(g_mpm_page_addr_width - 1 downto 0);
+              mpm_pg_valid <= '1';
               if(s_send_pck = S_DATA) then
-                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;             
+                s_prep_to_send <= S_NEWPCK_PAGE_SET_IN_ADVANCE;
               else
-                s_prep_to_send <= S_NEWPCK_PAGE_READY;             
+                s_prep_to_send <= S_NEWPCK_PAGE_READY;
               end if;
-            elsif(not_set_next_pg_addr = '1') then 
+            elsif(not_set_next_pg_addr = '1') then
               s_prep_to_send <= S_IDLE;
-            end if;            
+            end if;
 
-          --===========================================================================================
+            --===========================================================================================
           when others =>
-          --=========================================================================================== 
-            s_prep_to_send <= S_IDLE;                      
+            --=========================================================================================== 
+            s_prep_to_send <= S_IDLE;
         end case;
       end if;
     end if;
   end process p_prep_to_send_fsm;
 
-  next_page_set_in_advance: if (g_mpm_fetch_next_pg_in_advance = TRUE) generate
-    set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0') else '0';  
-    not_set_next_pg_addr <= '1' when (rd_data_valid = '0' and mpm_pg_req_i = '1') else '0';  
+  next_page_set_in_advance : if (g_mpm_fetch_next_pg_in_advance = true) generate
+    set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0') else '0';
+    not_set_next_pg_addr <= '1' when (rd_data_valid = '0' and mpm_pg_req_i = '1')                        else '0';
   end generate next_page_set_in_advance;
 
-  next_page_set_after_pck_transmision: if (g_mpm_fetch_next_pg_in_advance = FALSE) generate
-    set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0' and s_send_pck = S_IDLE) else '0'; 
-    not_set_next_pg_addr <= '1' when (mpm_pg_req_i  = '1' and mpm_pg_valid = '0' ) else '0';  
+  next_page_set_after_pck_transmision : if (g_mpm_fetch_next_pg_in_advance = false) generate
+    set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0' and s_send_pck = S_IDLE) else '0';
+    not_set_next_pg_addr <= '1' when (mpm_pg_req_i = '1' and mpm_pg_valid = '0')                                                 else '0';
   end generate next_page_set_after_pck_transmision;
 
 
- --==================================================================================================
+  --==================================================================================================
   -- FSM send pck with pWB I/F
   --==================================================================================================
   -- Forwarding pck read from MPM to pWB interface.
@@ -558,7 +558,7 @@ begin  --  behavoural
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-      --========================================
+        --========================================
         s_send_pck          <= S_IDLE;
         src_out_int.stb     <= '0';
         src_out_int.we      <= '1';
@@ -567,133 +567,133 @@ begin  --  behavoural
         src_out_int.cyc     <= '0';
         src_out_int.sel     <= (others => '0');
         start_free_pck      <= '0';
-        start_free_pck_addr <= (others =>'0');
-        tmp_adr             <= (others =>'0');
-        tmp_dat             <= (others =>'0');
-        tmp_sel             <= (others =>'0');
-      --========================================
-      else 
+        start_free_pck_addr <= (others => '0');
+        tmp_adr             <= (others => '0');
+        tmp_dat             <= (others => '0');
+        tmp_sel             <= (others => '0');
+        --========================================
+      else
         -- default values
-        start_free_pck   <= '0';
-        request_retry    <= '0';
+        start_free_pck <= '0';
+        request_retry  <= '0';
 
-       case s_send_pck is
+        case s_send_pck is
           --===========================================================================================
           when S_IDLE =>
-          --===========================================================================================   
+            --===========================================================================================   
 
             if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0') then
               src_out_int.cyc  <= '1';
               s_send_pck       <= S_DATA;
               pck_start_pgaddr <= mpm_pg_addr;
-            end if;       
-     
-          --===========================================================================================
+            end if;
+
+            --===========================================================================================
           when S_DATA =>
-          --===========================================================================================        
+            --===========================================================================================        
             if(src_i.stall = '0') then
-              if(mpm_dvalid_i = '1') then -- a avoid copying crap (i.e. XXX)
-                src_out_int.adr    <= mpm2wb_adr_int;
-                src_out_int.dat    <= mpm2wb_dat_int;
-                src_out_int.sel    <= mpm2wb_sel_int;
+              if(mpm_dvalid_i = '1') then  -- a avoid copying crap (i.e. XXX)
+                src_out_int.adr <= mpm2wb_adr_int;
+                src_out_int.dat <= mpm2wb_dat_int;
+                src_out_int.sel <= mpm2wb_sel_int;
               end if;
-              src_out_int.stb    <= mpm_dvalid_i;  
-            end if;            
-            
+              src_out_int.stb <= mpm_dvalid_i;
+            end if;
+
             if(src_i.err = '1') then
-              s_send_pck      <= S_EOF; -- we free page in EOF
+              s_send_pck      <= S_EOF;      -- we free page in EOF
               src_out_int.cyc <= '0';
               src_out_int.stb <= '0';
             elsif(out_dat_err = '1') then
-              s_send_pck      <= S_FINISH_CYCLE;  -- to make sure that the error word was sent
+              s_send_pck <= S_FINISH_CYCLE;  -- to make sure that the error word was sent
             elsif(src_i.rty = '1') then
-              src_out_int.cyc  <= '0';
-              src_out_int.stb  <= '0';   
-              request_retry    <= '1';
-              s_send_pck       <= S_RETRY;              
+              src_out_int.cyc <= '0';
+              src_out_int.stb <= '0';
+              request_retry   <= '1';
+              s_send_pck      <= S_RETRY;
             elsif(src_i.stall = '1' and mpm_dvalid_i = '1') then
-              s_send_pck       <= S_FLUSH_STALL;
+              s_send_pck <= S_FLUSH_STALL;
             end if;
 
             if(mpm_dlast_i = '1')then
-              s_send_pck      <= S_FINISH_CYCLE; -- we free page in EOF
-            end if;            
-            if(mpm_dvalid_i = '1') then -- only when dvalid to avoid copying crap (i.e. XXX)
+              s_send_pck <= S_FINISH_CYCLE;  -- we free page in EOF
+            end if;
+            if(mpm_dvalid_i = '1') then  -- only when dvalid to avoid copying crap (i.e. XXX)
               tmp_adr <= mpm2wb_adr_int;
               tmp_dat <= mpm2wb_dat_int;
               tmp_sel <= mpm2wb_sel_int;
             end if;
 
-          --===========================================================================================
+            --===========================================================================================
           when S_FLUSH_STALL =>
-          --===========================================================================================        
+            --===========================================================================================        
             if(src_i.err = '1') then
-              s_send_pck         <= S_EOF; -- we free page in EOF
-              src_out_int.cyc    <= '0';
-              src_out_int.stb    <= '0';
+              s_send_pck      <= S_EOF;  -- we free page in EOF
+              src_out_int.cyc <= '0';
+              src_out_int.stb <= '0';
             elsif(src_i.stall = '0') then
-              src_out_int.dat    <= tmp_dat;
-              src_out_int.adr    <= tmp_adr;
-              src_out_int.stb    <= '1';
-              src_out_int.sel    <= tmp_sel;
-              s_send_pck         <= S_DATA;
+              src_out_int.dat <= tmp_dat;
+              src_out_int.adr <= tmp_adr;
+              src_out_int.stb <= '1';
+              src_out_int.sel <= tmp_sel;
+              s_send_pck      <= S_DATA;
             end if;
-          --===========================================================================================
+            --===========================================================================================
           when S_FINISH_CYCLE =>
-          --===========================================================================================        
+            --===========================================================================================        
             if(src_i.stall = '0') then
               src_out_int.stb <= '0';
             end if;
 
             if(((ack_count = 0) or g_wb_ob_ignore_ack) and src_out_int.stb = '0') then
               src_out_int.cyc <= '0';
-              s_send_pck      <= S_EOF; -- we free page in EOF
+              s_send_pck      <= S_EOF;  -- we free page in EOF
             end if;
 
-          --===========================================================================================
+            --===========================================================================================
           when S_EOF =>
-          --===========================================================================================        
+            --===========================================================================================        
             if(ppfm_free = '0') then
               start_free_pck      <= '1';
               start_free_pck_addr <= pck_start_pgaddr;
-              
+
               if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
                 src_out_int.cyc  <= '1';
                 s_send_pck       <= S_DATA;
-                pck_start_pgaddr <= mpm_pg_addr;             
+                pck_start_pgaddr <= mpm_pg_addr;
               else
-                s_send_pck       <= S_IDLE;
+                s_send_pck <= S_IDLE;
               end if;
             else
-              s_send_pck         <= S_WAIT_FREE_PCK;
-            end if;            
-          --===========================================================================================
+              s_send_pck <= S_WAIT_FREE_PCK;
+            end if;
+            --===========================================================================================
           when S_RETRY =>
-          --===========================================================================================        
-             if(s_prep_to_send = S_RETRY_READY) then
-                src_out_int.cyc  <= '1';
-                s_send_pck       <= S_DATA;
-                pck_start_pgaddr <= mpm_pg_addr;            
-             end if;
-          --===========================================================================================
+            --===========================================================================================        
+            if(s_prep_to_send = S_RETRY_READY) then
+              src_out_int.cyc  <= '1';
+              s_send_pck       <= S_DATA;
+              pck_start_pgaddr <= mpm_pg_addr;
+            end if;
+            --===========================================================================================
           when S_WAIT_FREE_PCK =>
-          --===========================================================================================        
+            --===========================================================================================        
             if(ppfm_free = '0') then
               start_free_pck      <= '1';
               start_free_pck_addr <= pck_start_pgaddr;
-              
+
               if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
-                src_out_int.cyc    <= '1';
-                s_send_pck         <= S_DATA;
-                pck_start_pgaddr   <= mpm_pg_addr;                
+                src_out_int.cyc  <= '1';
+                s_send_pck       <= S_DATA;
+                pck_start_pgaddr <= mpm_pg_addr;
               else
-                s_send_pck       <= S_IDLE;
+                s_send_pck <= S_IDLE;
               end if;
-            end if;  
-          --===========================================================================================
+            end if;
+            --===========================================================================================
           when others =>
-          --=========================================================================================== 
-            s_send_pck <= S_IDLE;                      
+            --=========================================================================================== 
+            s_send_pck <= S_IDLE;
         end case;
       end if;
     end if;
@@ -720,19 +720,19 @@ begin  --  behavoural
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        ppfm_free           <= '0';
-        ppfm_free_pgaddr    <= (others => '0');
+        ppfm_free        <= '0';
+        ppfm_free_pgaddr <= (others => '0');
       else
         if(start_free_pck = '1') then
-          ppfm_free         <= '1';
-          ppfm_free_pgaddr  <=  start_free_pck_addr;
+          ppfm_free        <= '1';
+          ppfm_free_pgaddr <= start_free_pck_addr;
 -- drop_imp:          
 --         elsif(drop_data_valid = '1') then
 --           ppfm_free         <= '1';
 --           ppfm_free_pgaddr  <= rd_data(g_mpm_page_addr_width - 1 downto 0);
         elsif(ppfm_free_done_i = '1') then
-          ppfm_free         <='0';
-          ppfm_free_pgaddr  <= (others => '0');
+          ppfm_free        <= '0';
+          ppfm_free_pgaddr <= (others => '0');
         end if;
       end if;
     end if;
@@ -746,20 +746,20 @@ begin  --  behavoural
   mpm_pg_valid_o <= mpm_pg_valid;
 
   -------------- pWB ----------------------
-  out_dat_err    <= '1' when src_out_int.stb = '1'   and                                -- we have valid data           *and*
-                            (src_out_int.adr = c_WRF_STATUS) and                        -- the address indicates status *and*
-                            (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else -- the status indicates error       
-                     '0';
+  out_dat_err <= '1' when src_out_int.stb = '1' and  -- we have valid data           *and*
+                    (src_out_int.adr = c_WRF_STATUS) and  -- the address indicates status *and*
+                    (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else  -- the status indicates error       
+                    '0';
 
-  mpm2wb_adr_int    <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
-  mpm2wb_sel_int    <= '1' &  mpm_dsel_i ; -- TODO: something generic
-  mpm2wb_dat_int    <= mpm_d_i(g_wb_data_width -1 downto 0);
- 
+  mpm2wb_adr_int <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
+  mpm2wb_sel_int <= '1' & mpm_dsel_i;   -- TODO: something generic
+  mpm2wb_dat_int <= mpm_d_i(g_wb_data_width -1 downto 0);
+
   -- source out
-  src_o     <= src_out_int;
+  src_o              <= src_out_int;
   -------------- PPFM ----------------------
-  ppfm_free_o         <= ppfm_free;
-  ppfm_free_pgaddr_o  <= ppfm_free_pgaddr;
+  ppfm_free_o        <= ppfm_free;
+  ppfm_free_pgaddr_o <= ppfm_free_pgaddr;
   
 
 

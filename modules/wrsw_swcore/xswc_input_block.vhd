@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-28
--- Last update: 2012-03-09
+-- Last update: 2012-03-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -226,7 +226,7 @@ entity xswc_input_block is
 
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
-tap_out_o: out std_logic_vector(49 + 62 downto 0)
+    tap_out_o : out std_logic_vector(49 + 62 downto 0)
     );
 end xswc_input_block;
 
@@ -241,19 +241,19 @@ architecture syn of xswc_input_block is
   
 
   type t_page_alloc is(S_IDLE,          -- waiting for some work :)
-                         S_PCKSTART_SET_USECNT,  -- setting usecnt to a page which was allocated 
-                                  -- in advance to be used for the first page of 
-                                  -- the pck
-                                  -- (only in case of the initially allocated usecnt
-                                  -- is different than required)
-                         S_PCKSTART_PAGE_REQ,  -- allocating in advnace first page of the pck
-                         S_PCKINTER_PAGE_REQ);  -- allocating in advance page to be used by 
-                                  -- all but first page of the pck (inter-packet)
+                       S_PCKSTART_SET_USECNT,  -- setting usecnt to a page which was allocated 
+                       -- in advance to be used for the first page of 
+                       -- the pck
+                       -- (only in case of the initially allocated usecnt
+                       -- is different than required)
+                       S_PCKSTART_PAGE_REQ,  -- allocating in advnace first page of the pck
+                       S_PCKINTER_PAGE_REQ);  -- allocating in advance page to be used by 
+  -- all but first page of the pck (inter-packet)
   type t_transfer_pck is(S_IDLE,  -- wait for some work :), it is used only after reset
                          S_READY,  -- being in S_READY state means that we are in sync with rcv_pck
                          S_WAIT_RTU_VALID,  -- Started receiving pck, wait for RTU decision
                          S_WAIT_SOF,  -- received RTU decision but new pck has not been started
-                                      -- still receiving the old one, or non
+                         -- still receiving the old one, or non
                          S_SET_USECNT,  -- set usecnt of the first page
                          S_WAIT_WITH_TRANSFER,  -- waits for ll_write to clear the first page
                          S_TOO_LONG_TRANSFER,
@@ -261,38 +261,38 @@ architecture syn of xswc_input_block is
 
                          S_TRANSFERED,  -- transfer has been done, waiting for the end of pck (EOF)                         
                          S_DROP  -- after receiving RTU decision to drop the pck,
-                                 -- it still needs to be received
+                         -- it still needs to be received
                          ); 
 
   type t_rcv_pck is(S_IDLE,             -- wait for some work :)
-                         S_READY,  -- Can accept new pck (i.e. the previous pck has been transfered
-                         S_PAUSE,  -- need to pause reception (internal reason, e.g.: next page not allocated) 
-                                   -- still receiving the old one, or non
-                         S_RCV_DATA,    -- accepting pck
-                         S_DROP,        -- if 
-                         S_WAIT_FORCE_FREE,  -- waits for the access to the force freeing process (it
-                                   -- only happens when the previous request has not been handled
-                                   -- (in theory, hardly possible, so it will happen for sure ;=))
-                         S_INPUT_STUCK  -- it might happen that the SWcore gets stack, in such case we need 
-                                   -- to decide what to do (drop/stall/etc), it is recognzied and done
-                                   -- here
-                         );
+                    S_READY,  -- Can accept new pck (i.e. the previous pck has been transfered
+                    S_PAUSE,  -- need to pause reception (internal reason, e.g.: next page not allocated) 
+                    -- still receiving the old one, or non
+                    S_RCV_DATA,         -- accepting pck
+                    S_DROP,             -- if 
+                    S_WAIT_FORCE_FREE,  -- waits for the access to the force freeing process (it
+                    -- only happens when the previous request has not been handled
+                    -- (in theory, hardly possible, so it will happen for sure ;=))
+                    S_INPUT_STUCK  -- it might happen that the SWcore gets stack, in such case we need 
+                    -- to decide what to do (drop/stall/etc), it is recognzied and done
+                    -- here
+                    );
 
   type t_ll_write is(S_IDLE,            -- wait for some work :)
-                          S_READY_FOR_PGR_AND_DLAST,  -- can write both: 
-                              --  (1) request of inter-pck page (mpm_pg_req_i)
-                              --  (2) request of last page write (dlast)                                                       
-                          S_READY_FOR_DLAST_ONLY,  -- can write only last page (dlast) since the
-                              -- inter-pck page has not been allocated yet
-                          S_WRITE,  -- write Linked List (either double write (with 
-                              -- clearing the next page to be used) or just
-                              -- one page (if next page not allocated yet)
-                          S_EOF_ON_WR,  -- request for writting the last page (dlast) 
-                              -- received while writting to Linked List
-                          S_SOF_ON_WR  -- reception of new PCK received while writting
-                          );  -- this might require some work (if the next
-                              -- first page is not cleard) but it also might
-                              -- require no work 
+                     S_READY_FOR_PGR_AND_DLAST,  -- can write both: 
+                     --  (1) request of inter-pck page (mpm_pg_req_i)
+                     --  (2) request of last page write (dlast)                                                       
+                     S_READY_FOR_DLAST_ONLY,  -- can write only last page (dlast) since the
+                     -- inter-pck page has not been allocated yet
+                     S_WRITE,  -- write Linked List (either double write (with 
+                     -- clearing the next page to be used) or just
+                     -- one page (if next page not allocated yet)
+                     S_EOF_ON_WR,  -- request for writting the last page (dlast) 
+                     -- received while writting to Linked List
+                     S_SOF_ON_WR  -- reception of new PCK received while writting
+                     );        -- this might require some work (if the next
+  -- first page is not cleard) but it also might
+  -- require no work 
   -- state machines
   signal s_page_alloc   : t_page_alloc;  -- page allocation and usecnt setting
   signal s_transfer_pck : t_transfer_pck;  -- reception of RTU decision, its transfer to outputs
@@ -507,7 +507,7 @@ architecture syn of xswc_input_block is
   signal lw_pckstart_pg_clred : std_logic;
   signal pckstart_pg_clred    : std_logic;
 
-  signal rtu_dst_port_mask_tmp :  std_logic_vector(g_num_ports - 1 downto 0);
+  signal rtu_dst_port_mask_tmp : std_logic_vector(g_num_ports - 1 downto 0);
 
   signal zeros    : std_logic_vector(g_num_ports - 1 downto 0);
   -------------------------------------------------------------------------------
@@ -533,60 +533,60 @@ architecture syn of xswc_input_block is
 
   function f_gen_mask(index : integer; length : integer)
     return std_logic_vector is
-  variable tmp : std_logic_vector(length-1 downto 0);
+    variable tmp : std_logic_vector(length-1 downto 0);
   begin
-    tmp := (others => '0');
+    tmp        := (others => '0');
     tmp(index) := '1';
     return tmp;
   end f_gen_mask;
-  
-    function f_slv_resize(x: std_logic_vector; len: natural) return std_logic_vector is
+
+  function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector is
     variable tmp : std_logic_vector(len-1 downto 0);
   begin
-    tmp := (others => '0');
+    tmp                      := (others => '0');
     tmp(x'length-1 downto 0) := x;
     return tmp;
   end f_slv_resize;
 
 
 
-  
-function f_enum2nat (enum_arg :t_page_alloc) return std_logic_vector is
-begin
-  for t in t_page_alloc loop
-    if(enum_arg = t) then
-      return std_logic_vector(to_unsigned(t_page_alloc'pos(t),4));
-    end if;
-  end loop;  -- i
-  return "0000";
-end function f_enum2nat;
-function f_enum2nat (enum_arg :t_rcv_pck) return std_logic_vector is
-begin
-  for t in t_rcv_pck loop
-    if(enum_arg = t) then
-      return std_logic_vector(to_unsigned(t_rcv_pck'pos(t),4));
-    end if;
-  end loop;  -- i
-  return "0000";
-end function f_enum2nat;
-function f_enum2nat (enum_arg :t_ll_write) return std_logic_vector is
-begin
-  for t in t_ll_write loop
-    if(enum_arg = t) then
-      return std_logic_vector(to_unsigned(t_ll_write'pos(t),4));
-    end if;
-  end loop;  -- i
-  return "0000";
-end function f_enum2nat;
-function f_enum2nat (enum_arg :t_transfer_pck) return std_logic_vector is
-begin
-  for t in t_transfer_pck loop
-    if(enum_arg = t) then
-      return std_logic_vector(to_unsigned(t_transfer_pck'pos(t),4));
-    end if;
-  end loop;  -- i
-  return "0000";
-end function f_enum2nat;
+
+  function f_enum2nat (enum_arg : t_page_alloc) return std_logic_vector is
+  begin
+    for t in t_page_alloc loop
+      if(enum_arg = t) then
+        return std_logic_vector(to_unsigned(t_page_alloc'pos(t), 4));
+      end if;
+    end loop;  -- i
+    return "0000";
+  end function f_enum2nat;
+  function f_enum2nat (enum_arg : t_rcv_pck) return std_logic_vector is
+  begin
+    for t in t_rcv_pck loop
+      if(enum_arg = t) then
+        return std_logic_vector(to_unsigned(t_rcv_pck'pos(t), 4));
+      end if;
+    end loop;  -- i
+    return "0000";
+  end function f_enum2nat;
+  function f_enum2nat (enum_arg : t_ll_write) return std_logic_vector is
+  begin
+    for t in t_ll_write loop
+      if(enum_arg = t) then
+        return std_logic_vector(to_unsigned(t_ll_write'pos(t), 4));
+      end if;
+    end loop;  -- i
+    return "0000";
+  end function f_enum2nat;
+  function f_enum2nat (enum_arg : t_transfer_pck) return std_logic_vector is
+  begin
+    for t in t_transfer_pck loop
+      if(enum_arg = t) then
+        return std_logic_vector(to_unsigned(t_transfer_pck'pos(t), 4));
+      end if;
+    end loop;  -- i
+    return "0000";
+  end function f_enum2nat;
 
 
 
@@ -630,9 +630,9 @@ begin  --arch
 
   -- detecting error 
   in_pck_err <= '1' when in_pck_dvalid = '1' and
-                   (snk_adr_int = c_WRF_STATUS) and
-                   (f_unmarshall_wrf_status(snk_dat_int).error = '1') else
-                   '0';
+                (snk_adr_int = c_WRF_STATUS) and
+                (f_unmarshall_wrf_status(snk_dat_int).error = '1') else
+                '0';
 
   --detecting end of data in the received frame, the data shall be followed by 
   -- (1) nothing (end of frame) 
@@ -640,9 +640,9 @@ begin  --arch
   -- (3) USER data
   -- so end of data is most often not equal to end of frame
   in_pck_eod <= '1' when (in_pck_dvalid = '1' and
-                                     snk_adr_d0 = c_WRF_DATA and
-                                     (snk_adr_int = c_WRF_OOB or snk_adr_int = c_WRF_USER)) else
-                   '0';
+                          snk_adr_d0 = c_WRF_DATA and
+                          (snk_adr_int = c_WRF_OOB or snk_adr_int = c_WRF_USER)) else
+                '0';
 
   -- converting pWB to an internal format (number of '1's in the sel) just to save few bits
   in_pck_sel <= f_sel2partialSel(snk_sel_int, g_partial_select_width);
@@ -765,9 +765,9 @@ begin  --arch
               -- received when we get the RTU decision, so we are waiting in IDLE.
               -- in such case, we will get tp_drop before getting tp_sync, but we will
               -- still have tp_drop when finally tp_sync is HIGH, so this is why the order of if's
-            elsif(tp_drop            = '1'   and  -- transfer_pck state indicates the drop decision
+            elsif(tp_drop = '1' and  -- transfer_pck state indicates the drop decision
                   mmu_force_free_req = '0') then  -- the pck is not being freed yet
-              
+
               mmu_force_free_addr <= current_pckstart_pageaddr;
 
               if(mmu_force_free_req = '1') then  -- it means that the previous request is still 
@@ -1016,8 +1016,8 @@ begin  --arch
               if(g_input_block_cannot_accept_data = "drop_pck") then
                 snk_stall_force_l <= '0';
                 if (in_pck_sof = '1') then
-                  s_rcv_pck       <= S_DROP;
-                  rp_accept_rtu   <= '1';
+                  s_rcv_pck     <= S_DROP;
+                  rp_accept_rtu <= '1';
                 end if;
 
                 -- by default: stall when stuck
@@ -1271,7 +1271,7 @@ end process p_page_alloc_fsm;
 --------------------------------------------------------------------------------------------------
 --================================================================================================
 
-rtu_dst_port_mask_tmp <= rtu_dst_port_mask_i; -- and (not f_gen_mask(g_port_index, current_mask'length));
+rtu_dst_port_mask_tmp <= rtu_dst_port_mask_i;  -- and (not f_gen_mask(g_port_index, current_mask'length));
 
 p_register_rtu_rsp : process(clk_i)
 begin
@@ -1600,11 +1600,11 @@ begin
           if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then
             s_transfer_pck <= S_READY;
 
-          -- this is to prevent trashing of the drop process (it happened that force_free was
-          -- re-done many times by rcv_pck FSM when transfer_pck FSM stayed in DROP state waiting
-          -- for global sync
+            -- this is to prevent trashing of the drop process (it happened that force_free was
+            -- re-done many times by rcv_pck FSM when transfer_pck FSM stayed in DROP state waiting
+            -- for global sync
           elsif(mmu_force_free_req = '1' and mmu_force_free_done_i = '1') then
-            s_transfer_pck <= S_IDLE;  
+            s_transfer_pck <= S_IDLE;
           end if;
 
           --===========================================================================================
@@ -1919,9 +1919,9 @@ lw_sync_second_stage <= '1' when (s_ll_write = S_READY_FOR_PGR_AND_DLAST and lw_
 lw_sync_2nd_stage_chk <= '1' when (page_word_cnt = to_unsigned(g_page_size - 3, c_page_size_width)) else '0';
 
 -- transfer_pck FSM sync (tp): needs to be true for rcv_pck to enter READY state
-tp_sync <= '1' when (s_transfer_pck = S_IDLE or               -- 
-                                  s_transfer_pck = S_DROP or  -- 
-                                  s_transfer_pck = S_TRANSFERED) else '0';
+tp_sync <= '1' when (s_transfer_pck = S_IDLE or  -- 
+                     s_transfer_pck = S_DROP or  -- 
+                     s_transfer_pck = S_TRANSFERED) else '0';
 
 -- rcv_pck FSM is sync-ed                                  
 rp_sync <= '1' when (s_rcv_pck = S_IDLE) else '0';
@@ -1931,12 +1931,12 @@ tp_stuck <= '1' when (s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
 
 -- transfer_pck FSM indicates that the frame should be dropped
 tp_drop <= '1' when ((s_transfer_pck = S_DROP) or
-                                  ((current_drop = '1' or current_mask = zeros) and rtu_rsp_ack = '1')) else '0';
+                     ((current_drop = '1' or current_mask = zeros) and rtu_rsp_ack = '1')) else '0';
 
 -- transfer_pck FSM indicates that transfer already started or is finished, 
 tp_transfer_valid <= '1' when (s_transfer_pck = S_TRANSFERED or
-                                  s_transfer_pck = S_TRANSFER or
-                                  s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
+                               s_transfer_pck = S_TRANSFER or
+                               s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
 
 -- rcv_pck FSM indicates that there is or was error on the received pck
 rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
@@ -2010,7 +2010,7 @@ ll_wr_req_o                             <= ll_wr_req;
 
 
 tap_out_o <= f_slv_resize(              -- 
- -- f_enum2nat(s_rcv_pck) &               --
+  -- f_enum2nat(s_rcv_pck) &               --
   (mmu_nomem_i) &
   (mmu_page_alloc_done_i) &
   (pckinter_page_alloc_req or pckstart_page_alloc_req) &
@@ -2040,9 +2040,9 @@ tap_out_o <= f_slv_resize(              --
   ll_entry.oob_size &                   -- 49
   ll_entry.next_page &                  -- 39
   ll_entry.next_page_valid &            -- 38
-  "0000000000" & --pta_pageaddr &                        -- 28
+  "0000000000" &  --pta_pageaddr &                        -- 28
   pta_transfer_pck &                    -- 27
-  "0000000000" & --mpm_pg_addr &                         -- 17
+  "0000000000" &  --mpm_pg_addr &                         -- 17
   mpm_pg_req_i,                         -- 16
   50 + 62);
 
