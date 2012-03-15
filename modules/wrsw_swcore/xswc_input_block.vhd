@@ -224,8 +224,9 @@ entity xswc_input_block is
 
     pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
 
-    pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0)
+    pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
+tap_out_o: out std_logic_vector(49 + 62 downto 0)
     );
 end xswc_input_block;
 
@@ -539,8 +540,56 @@ architecture syn of xswc_input_block is
     return tmp;
   end f_gen_mask;
   
+    function f_slv_resize(x: std_logic_vector; len: natural) return std_logic_vector is
+    variable tmp : std_logic_vector(len-1 downto 0);
+  begin
+    tmp := (others => '0');
+    tmp(x'length-1 downto 0) := x;
+    return tmp;
+  end f_slv_resize;
+
+
+
   
-  
+function f_enum2nat (enum_arg :t_page_alloc) return std_logic_vector is
+begin
+  for t in t_page_alloc loop
+    if(enum_arg = t) then
+      return std_logic_vector(to_unsigned(t_page_alloc'pos(t),4));
+    end if;
+  end loop;  -- i
+  return "0000";
+end function f_enum2nat;
+function f_enum2nat (enum_arg :t_rcv_pck) return std_logic_vector is
+begin
+  for t in t_rcv_pck loop
+    if(enum_arg = t) then
+      return std_logic_vector(to_unsigned(t_rcv_pck'pos(t),4));
+    end if;
+  end loop;  -- i
+  return "0000";
+end function f_enum2nat;
+function f_enum2nat (enum_arg :t_ll_write) return std_logic_vector is
+begin
+  for t in t_ll_write loop
+    if(enum_arg = t) then
+      return std_logic_vector(to_unsigned(t_ll_write'pos(t),4));
+    end if;
+  end loop;  -- i
+  return "0000";
+end function f_enum2nat;
+function f_enum2nat (enum_arg :t_transfer_pck) return std_logic_vector is
+begin
+  for t in t_transfer_pck loop
+    if(enum_arg = t) then
+      return std_logic_vector(to_unsigned(t_transfer_pck'pos(t),4));
+    end if;
+  end loop;  -- i
+  return "0000";
+end function f_enum2nat;
+
+
+
 begin  --arch
   
   zeros <= (others => '0');
@@ -1959,5 +2008,42 @@ ll_next_addr_o                          <= ll_entry.next_page;
 ll_next_addr_valid_o                    <= ll_entry.next_page_valid;
 ll_wr_req_o                             <= ll_wr_req;
 
+
+tap_out_o <= f_slv_resize(              -- 
+ -- f_enum2nat(s_rcv_pck) &               --
+  (mmu_nomem_i) &
+  (mmu_page_alloc_done_i) &
+  (pckinter_page_alloc_req or pckstart_page_alloc_req) &
+  snk_stall_int &
+  in_pck_sof_allowed &
+  in_pck_sof_on_stall &
+  snk_stall_d0 &
+  snk_cyc_int &                         -- 94
+  in_pck_sof_delayed &                  -- 93
+  f_enum2nat(s_transfer_pck) &          -- 89
+  lw_sync_second_stage &                -- 88
+  in_pck_err &                          -- 87
+  in_pck_eof &                          -- 86
+  in_pck_sof &                          -- 85
+  f_enum2nat(s_ll_write) &              -- 81
+  f_enum2nat(s_page_alloc) &            -- 77
+  pckinter_pageaddr &                   -- 67
+  pckinter_page_in_advance &            -- 66
+  '1' &                                 -- 65
+
+  ll_wr_req &                           -- 64
+  ll_wr_done_i &                        -- 63
+  ll_entry.addr &                       -- 54
+  ll_entry.valid &                      -- 53
+  ll_entry.eof &                        -- 52
+  ll_entry.dsel &                       -- 51
+  ll_entry.oob_size &                   -- 49
+  ll_entry.next_page &                  -- 39
+  ll_entry.next_page_valid &            -- 38
+  "0000000000" & --pta_pageaddr &                        -- 28
+  pta_transfer_pck &                    -- 27
+  "0000000000" & --mpm_pg_addr &                         -- 17
+  mpm_pg_req_i,                         -- 16
+  50 + 62);
 
 end syn;  -- arch
