@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-03-15
+-- Last update: 2012-03-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -115,8 +115,9 @@ entity xswc_output_block is
 -------------------------------------------------------------------------------  
 
     src_i : in  t_wrf_source_in;
-    src_o : out t_wrf_source_out
+    src_o : out t_wrf_source_out;
 
+    tap_out_o : out std_logic_vector(15 downto 0)
     );
 end xswc_output_block;
 
@@ -164,13 +165,42 @@ architecture behavoural of xswc_output_block is
                           S_RETRY_READY
                           );
   type t_send_pck is (S_IDLE,
-                          S_DATA,
-                          S_FLUSH_STALL,
-                          S_FINISH_CYCLE,
-                          S_EOF,
-                          S_RETRY,
-                          S_WAIT_FREE_PCK
-                          );
+                      S_DATA,
+                      S_FLUSH_STALL,
+                      S_FINISH_CYCLE,
+                      S_EOF,
+                      S_RETRY,
+                      S_WAIT_FREE_PCK
+                      );
+
+  function f_prepstate_2_slv (arg : t_prep_to_send) return std_logic_vector is
+  begin
+    case arg is
+      when S_IDLE                       => return "000";
+      when S_NEWPCK_PAGE_READY          => return "001";
+      when S_NEWPCK_PAGE_SET_IN_ADVANCE => return "010";
+      when S_NEWPCK_PAGE_USED           => return "011";
+      when S_RETRY_PREPARE              => return "100";
+      when S_RETRY_READY                => return "101";
+      when others                       => return "111";
+    end case;
+    return "111";
+  end f_prepstate_2_slv;
+
+  function f_sendstate_2_slv (arg : t_send_pck) return std_logic_vector is
+  begin
+    case arg is
+      when S_IDLE          => return "000";
+      when S_DATA          => return "001";
+      when S_FLUSH_STALL   => return "010";
+      when S_FINISH_CYCLE  => return "011";
+      when S_EOF           => return "100";
+      when S_RETRY         => return "101";
+      when S_WAIT_FREE_PCK => return "110";
+    end case;
+    return "111";
+  end f_sendstate_2_slv;
+
 
   signal s_send_pck     : t_send_pck;
   signal s_prep_to_send : t_prep_to_send;
@@ -229,8 +259,55 @@ architecture behavoural of xswc_output_block is
 
   signal set_next_pg_addr     : std_logic;
   signal not_set_next_pg_addr : std_logic;
-begin  --  behavoural
+
+  signal wr_en_reg   : std_logic;
+  signal wr_addr_reg : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal wr_data_reg : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+
+  signal rd_addr_reg : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+
+  signal cycle_frozen     : std_logic;
+  signal cycle_frozen_cnt : unsigned(5 downto 0);
+
+  function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector is
+    variable tmp : std_logic_vector(len-1 downto 0);
+  begin
+    tmp                      := (others => '0');
+    tmp(x'length-1 downto 0) := x;
+    return tmp;
+  end f_slv_resize;
   
+
+  
+begin  --  behavoural
+
+  --tap_out_o <= f_slv_resize(mpm_d_i & mpm_dvalid_i & mpm_dlast_i & mpm_dreq & mpm_pg_valid & mpm_pg_addr & ppfm_free_pgaddr & ppfm_free
+  --  & f_prepstate_2_slv(s_prep_to_send) & f_sendstate_2_slv(s_send_pck) & cycle_frozen & std_logic_vector(ack_count) & pta_pageaddr_i & pta_transfer_data_ack & pta_transfer_data_valid_i, 80);
+
+  tap_out_o <= f_slv_resize(mpm_dvalid_i & mpm_dlast_i & mpm_dreq & cycle_frozen & pta_pageaddr_i & pta_transfer_data_ack & pta_transfer_data_valid_i, 16);
+
+  p_detect_frozen : process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if rst_n_i = '0' then
+        cycle_frozen     <= '0';
+        cycle_frozen_cnt <= (others => '0');
+      else
+        if(src_out_int.cyc = '1') then
+          if(src_out_int.stb = '1') then
+            cycle_frozen_cnt <= (others => '0');
+          else
+            cycle_frozen_cnt <= cycle_frozen_cnt + 1;
+            if(cycle_frozen_cnt = "111111") then
+              cycle_frozen <= '1';
+            end if;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+
   zeros     <= (others => '0');
   ram_zeros <= (others => '0');
   ram_ones  <= (others => '1');
@@ -240,24 +317,24 @@ begin  --  behavoural
   wr_data <= pta_pageaddr_i;
 
   wr_addr <= wr_prio & wr_array(0) when wr_prio = "000" else
-               wr_prio & wr_array(1) when wr_prio = "001" else
-               wr_prio & wr_array(2) when wr_prio = "010" else
-               wr_prio & wr_array(3) when wr_prio = "011" else
-               wr_prio & wr_array(4) when wr_prio = "100" else
-               wr_prio & wr_array(5) when wr_prio = "101" else
-               wr_prio & wr_array(6) when wr_prio = "110" else
-               wr_prio & wr_array(7) when wr_prio = "111" else
-               (others => 'X');
+             wr_prio & wr_array(1) when wr_prio = "001" else
+             wr_prio & wr_array(2) when wr_prio = "010" else
+             wr_prio & wr_array(3) when wr_prio = "011" else
+             wr_prio & wr_array(4) when wr_prio = "100" else
+             wr_prio & wr_array(5) when wr_prio = "101" else
+             wr_prio & wr_array(6) when wr_prio = "110" else
+             wr_prio & wr_array(7) when wr_prio = "111" else
+             (others => 'X');
   
   rd_addr <= rd_prio & rd_array(0) when rd_prio = "000" else
-               rd_prio & rd_array(1) when rd_prio = "001" else
-               rd_prio & rd_array(2) when rd_prio = "010" else
-               rd_prio & rd_array(3) when rd_prio = "011" else
-               rd_prio & rd_array(4) when rd_prio = "100" else
-               rd_prio & rd_array(5) when rd_prio = "101" else
-               rd_prio & rd_array(6) when rd_prio = "110" else
-               rd_prio & rd_array(7) when rd_prio = "111" else
-               (others => 'X');
+             rd_prio & rd_array(1) when rd_prio = "001" else
+             rd_prio & rd_array(2) when rd_prio = "010" else
+             rd_prio & rd_array(3) when rd_prio = "011" else
+             rd_prio & rd_array(4) when rd_prio = "100" else
+             rd_prio & rd_array(5) when rd_prio = "101" else
+             rd_prio & rd_array(6) when rd_prio = "110" else
+             rd_prio & rd_array(7) when rd_prio = "111" else
+             (others => 'X');
 
 -- drop_imp:
 --   drop_addr <= drop_index & rd_array(0) when drop_index = "000" else
@@ -292,14 +369,14 @@ begin  --  behavoural
                  "00000000";
   
   wr_en <= write(0) and not_full_array(0) when wr_prio = "000" else
-                 write(1) and not_full_array(1) when wr_prio = "001" else
-                 write(2) and not_full_array(2) when wr_prio = "010" else
-                 write(3) and not_full_array(3) when wr_prio = "011" else
-                 write(4) and not_full_array(4) when wr_prio = "100" else
-                 write(5) and not_full_array(5) when wr_prio = "101" else
-                 write(6) and not_full_array(6) when wr_prio = "110" else
-                 write(7) and not_full_array(7) when wr_prio = "111" else
-                 '0';
+           write(1) and not_full_array(1) when wr_prio = "001" else
+           write(2) and not_full_array(2) when wr_prio = "010" else
+           write(3) and not_full_array(3) when wr_prio = "011" else
+           write(4) and not_full_array(4) when wr_prio = "100" else
+           write(5) and not_full_array(5) when wr_prio = "101" else
+           write(6) and not_full_array(6) when wr_prio = "110" else
+           write(7) and not_full_array(7) when wr_prio = "111" else
+           '0';
   -- I don't like this                 
   pta_transfer_data_ack_o <= not_full_array(0) when wr_prio = "000" else
                              not_full_array(1) when wr_prio = "001" else
@@ -356,9 +433,9 @@ begin  --  behavoural
       -- Port A -- writing
       clka_i => clk_i,
       bwea_i => (others => '1'),              --ram_ones,
-      wea_i  => wr_en,
-      aa_i   => wr_addr,
-      da_i   => wr_data,
+      wea_i  => wr_en_reg,
+      aa_i   => wr_addr_reg,
+      da_i   => wr_data_reg,
       qa_o   => open,
 
       -- Port B  -- reading
@@ -369,6 +446,25 @@ begin  --  behavoural
       db_i   => (others => '0'),        --ram_zeros,
       qb_o   => rd_data
       );
+
+
+  wr_ram : process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        wr_en_reg   <= '0';
+        wr_addr_reg <= (others => '0');
+        wr_data_reg <= (others => '0');
+        --rd_addr_reg <= (others => '0');
+      else
+        wr_en_reg   <= wr_en;
+        wr_addr_reg <= wr_addr;
+        wr_data_reg <= wr_data;
+        --rd_addr_reg <= rd_addr;
+      end if;
+    end if;
+  end process wr_ram;
+
 
   -- check if there is any valid frame in any output queue
   -- rd_data_valid=HIGH indicates that there is something to send out
@@ -740,16 +836,17 @@ begin  --  behavoural
   end process free;
 
   -------------- MPM ---------------------
-  mpm_dreq_o     <= not src_i.stall when (s_send_pck = S_DATA or s_send_pck = S_FLUSH_STALL) else '0';
+  mpm_dreq       <= not src_i.stall when (s_send_pck = S_DATA or s_send_pck = S_FLUSH_STALL) else '0';
+  mpm_dreq_o     <= mpm_dreq;
   mpm_abort_o    <= mpm_abort;
   mpm_pg_addr_o  <= mpm_pg_addr;
   mpm_pg_valid_o <= mpm_pg_valid;
 
   -------------- pWB ----------------------
   out_dat_err <= '1' when src_out_int.stb = '1' and  -- we have valid data           *and*
-                    (src_out_int.adr = c_WRF_STATUS) and  -- the address indicates status *and*
-                    (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else  -- the status indicates error       
-                    '0';
+                 (src_out_int.adr = c_WRF_STATUS) and  -- the address indicates status *and*
+                 (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else  -- the status indicates error       
+                 '0';
 
   mpm2wb_adr_int <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
   mpm2wb_sel_int <= '1' & mpm_dsel_i;   -- TODO: something generic
