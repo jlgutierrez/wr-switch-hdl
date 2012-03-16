@@ -278,11 +278,23 @@ begin  -- syn
   ll_write_end_of_list<= write_data_i((write_grant_index + 1) * g_data_width - 2); -- MSB -1 bit
   --ll_write_next_addr  <= ll_write_data(g_addr_width - 1 downto 0);
   ll_write_next_addr  <= write_next_addr_i((write_grant_index + 1) * g_addr_width - 1 downto write_grant_index * g_addr_width);
+
     -- create data and address to be written to memory (both DPRAMs)
-  ll_wr_data          <= (others => '0')    when (ll_write_next_ena = '1' ) else ll_write_data;   
-  ll_wr_addr          <= ll_write_next_addr when (ll_write_next_ena = '1' ) else ll_write_addr;
---   ll_write_ena        <= (write_grant_vec   (write_grant_index) and write_grant_vec_d0(write_grant_index) and not ll_write_end_of_list) or 
---                          (write_grant_vec_d0(write_grant_index)                                           and     ll_write_end_of_list);
+--  ll_wr_data          <= (others => '0')    when (ll_write_next_ena = '1' ) else ll_write_data;
+--reversing the order (16/03/2012) of writing current/cleaning next page
+  ll_wr_data          <= ll_write_data   when (ll_write_next_ena = '1' and write_next_addr_valid_i(write_grant_index) = '1') else  
+                         (others => '0') when (ll_write_ena      = '1' and write_next_addr_valid_i(write_grant_index) = '1') else 
+                         ll_write_data;--   when (ll_write_ena      = '1' and write_next_addr_valid_i(write_grant_index) = '0') else 
+                         --(others => '0'); -- this should not happen
+
+   
+--  ll_wr_addr          <= ll_write_next_addr when (ll_write_next_ena = '1' ) else ll_write_addr;
+--reversing the order (16/03/2012) of writing current/cleaning next page
+  ll_wr_addr          <= ll_write_addr      when (ll_write_next_ena = '1' and write_next_addr_valid_i(write_grant_index) = '1') else 
+                         ll_write_next_addr when (ll_write_ena      = '1' and write_next_addr_valid_i(write_grant_index) = '1') else 
+                         ll_write_addr;--      when (ll_write_ena      = '1' and write_next_addr_valid_i(write_grant_index) = '0') else 
+                         --(others => '1'); -- this should not happen  
+  
   ll_write_ena        <= (write_grant_vec   (write_grant_index) and write_grant_vec_d0(write_grant_index) and        write_next_addr_valid_i(write_grant_index)) or 
                          (write_grant_vec_d0(write_grant_index)                                           and not    write_next_addr_valid_i(write_grant_index));
   ll_write_next_ena   <=  write_grant_vec_d0(write_grant_index) and write_grant_vec_d1(write_grant_index);
