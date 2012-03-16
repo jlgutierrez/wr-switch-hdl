@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-24
--- Last update: 2012-01-24
+-- Last update: 2012-03-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -48,8 +48,8 @@ entity nic_rx_fsm is
 -------------------------------------------------------------------------------
 -- Wishbone regs
 -------------------------------------------------------------------------------           
-        bna_i: in std_logic;
-        
+        bna_i : in std_logic;
+
         regs_i : in  t_nic_out_registers;
         regs_o : out t_nic_in_registers;
 
@@ -151,8 +151,8 @@ begin
   rxdesc_new_o <= cur_rx_desc;
 
   -- some combinatorial helpers to minimize conditions in IFs.
-  wrf_is_payload <= '1' when (fab_in.addr = c_WRF_DATA)                else '0';
-  wrf_is_oob     <= '1' when (fab_in.addr = c_WRF_OOB)                 else '0';
+  wrf_is_payload <= '1' when (fab_in.addr = c_WRF_DATA)               else '0';
+  wrf_is_oob     <= '1' when (fab_in.addr = c_WRF_OOB)                else '0';
   wrf_terminate  <= '1' when (fab_in.eof = '1' or fab_in.error = '1') else '0';
 
 -- process produces the RCOMP interrupt each time a packet has been received
@@ -244,7 +244,7 @@ begin
               state                 <= RX_WAIT_SOF;  -- and start waiting for
                                                      -- incoming traffic
             else
-              rx_dreq_mask <= bna_i;      -- enable RX (but to /dev/null)
+              rx_dreq_mask <= bna_i;    -- enable RX (but to /dev/null)
             end if;
 
 -------------------------------------------------------------------------------
@@ -368,7 +368,8 @@ begin
               -- the descriptor
 
               if(oob_sreg (0) = '1') then  -- 1st OOB word
-                cur_rx_desc.port_id <= '0' & fab_in.data(4 downto 0);
+                cur_rx_desc.port_id      <= '0' & fab_in.data(4 downto 0);
+                cur_rx_desc.ts_incorrect <= fab_in.data(11);
               end if;
 
               if(oob_sreg (1) = '1') then  -- 2nd OOB word
@@ -385,7 +386,7 @@ begin
 
             -- we've got 2 valid word of the payload in rx_buf_data, write them to the
             -- memory
-            if(rx_rdreg_toggle = '1' and fab_in.dvalid = '1' and ( wrf_is_oob = '1' or wrf_is_payload = '1') and wrf_terminate = '0') then
+            if(rx_rdreg_toggle = '1' and fab_in.dvalid = '1' and (wrf_is_oob = '1' or wrf_is_payload = '1') and wrf_terminate = '0') then
               increase_addr <= '1';
               buf_wr_o      <= '1';
 

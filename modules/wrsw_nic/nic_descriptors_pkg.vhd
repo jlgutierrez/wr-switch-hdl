@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-24
--- Last update: 2010-12-01
+-- Last update: 2012-03-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -49,6 +49,9 @@ package nic_descriptors_pkg is
     error   : std_logic;                -- RX error indication
     port_id : std_logic_vector(5 downto 0);   -- Packet source port ID
     got_ts  : std_logic;                -- Got a timestamp?
+    ts_incorrect: std_logic;            -- 1: Timestamp may be incorrect (generated
+                                        -- during time base adjustment)
+    
     ts_r    : std_logic_vector(27 downto 0);  -- Rising edge timestamp
     ts_f    : std_logic_vector(3 downto 0);   -- Falling edge timestamp
     len     : std_logic_vector(c_nic_buf_size_log2-1 downto 0);  -- Length of the allocated buffer
@@ -105,7 +108,7 @@ package body NIC_descriptors_pkg is
     variable tmp : std_logic_vector(31 downto 0);
   begin
     case regnum is
-      when 1      => tmp := "00000000000000000" & desc.got_ts & desc.port_id & "000000" & desc.error & desc.empty;
+      when 1      => tmp := "0000000000000000" & desc.ts_incorrect & desc.got_ts & desc.port_id & "000000" & desc.error & desc.empty;
       when 2      => tmp := desc.ts_f & desc.ts_r;
       when 3      => tmp := f_resize_slv(desc.len, 16) & f_resize_slv(desc.offset, 16);
       when others => null;
@@ -148,6 +151,7 @@ package body NIC_descriptors_pkg is
         desc.error   := mem_input(1);
         desc.port_id := mem_input(13 downto 8);
         desc.got_ts  := mem_input(14);
+        desc.ts_incorrect := mem_input(15);
 
       when 2 =>
         desc.ts_f := mem_input(31 downto 28);
