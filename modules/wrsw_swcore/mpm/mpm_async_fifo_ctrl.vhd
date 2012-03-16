@@ -92,7 +92,7 @@ architecture rtl of mpm_async_fifo_ctrl is
 
   type t_counter_block is record
     bin, bin_next, gray, gray_next : t_counter;
-    bin_x, gray_x                  : t_counter;
+    bin_x, gray_x, gray_xm                       : t_counter;
   end record;
 
 
@@ -137,14 +137,17 @@ begin  -- rtl
   p_sync_read_ptr : process(clk_wr_i)
   begin
     if rising_edge(clk_wr_i) then
-      rcb.gray_x <= rcb.gray;
+      rcb.gray_xm <= rcb.gray;
+      rcb.gray_x <= rcb.gray_xm;
     end if;
   end process;
 
+ 
   p_sync_write_ptr : process(clk_rd_i)
   begin
     if rising_edge(clk_rd_i) then
-      wcb.gray_x <= wcb.gray;
+      wcb.gray_xm <= wcb.gray;
+      wcb.gray_x <= wcb.gray_xm;
     end if;
   end process;
 
