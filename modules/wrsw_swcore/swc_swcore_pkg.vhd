@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-03-12
+-- Last update: 2012-03-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -70,27 +70,28 @@ package swc_swcore_pkg is
       zero_o   : out std_logic);
   end component;
 
+
   component swc_page_allocator
     generic (
-      g_num_pages      : integer;
+      g_num_pages       : integer;
       g_page_addr_width : integer;
-      g_num_ports      : integer ;
-      g_usecount_width : integer);
+      g_num_ports       : integer;
+      g_usecount_width  : integer);
     port (
-      clk_i          : in  std_logic;
-      rst_n_i        : in  std_logic;
-      alloc_i        : in  std_logic;
-      free_i         : in  std_logic;
-      force_free_i   : in std_logic;
-      set_usecnt_i   : in std_logic;
-      usecnt_i       : in  std_logic_vector(g_usecount_width-1 downto 0);
-      pgaddr_i       : in  std_logic_vector(g_page_addr_width -1 downto 0);
-      pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
-      pgaddr_valid_o : out std_logic;
-      idle_o         : out std_logic;
+      clk_i              : in  std_logic;
+      rst_n_i            : in  std_logic;
+      alloc_i            : in  std_logic;
+      free_i             : in  std_logic;
+      force_free_i       : in  std_logic;
+      set_usecnt_i       : in  std_logic;
+      usecnt_i           : in  std_logic_vector(g_usecount_width-1 downto 0);
+      pgaddr_i           : in  std_logic_vector(g_page_addr_width -1 downto 0);
+      pgaddr_o           : out std_logic_vector(g_page_addr_width -1 downto 0);
+      pgaddr_valid_o     : out std_logic;
       free_last_usecnt_o : out std_logic;
-      done_o         : out std_logic;
-      nomem_o        : out std_logic);
+      idle_o             : out std_logic;
+      done_o             : out std_logic;
+      nomem_o            : out std_logic);
   end component;
 
   --component swc_page_allocator
@@ -110,8 +111,6 @@ package swc_swcore_pkg is
       usecnt_i       : in  std_logic_vector(g_usecount_width-1 downto 0);
       pgaddr_i       : in  std_logic_vector(g_page_addr_width -1 downto 0);
       pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
-      pgaddr_valid_o : out std_logic;
-      idle_o         : out std_logic;
       free_last_usecnt_o : out std_logic;
       done_o         : out std_logic;
       nomem_o        : out std_logic);
@@ -137,7 +136,7 @@ package swc_swcore_pkg is
       g_page_num                         : integer;  --:= c_swc_packet_mem_num_pages
       g_size_width                       : integer ;
       g_partial_select_width             : integer ;
-      g_data_width                       : integer  
+      g_data_width                       : integer
     );
     port (
       rst_n_i                : in std_logic;
@@ -221,7 +220,9 @@ package swc_swcore_pkg is
     pta_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
     pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
     pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
-    pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0)
+    pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
+
+    tap_out_o : out std_logic_vector(49+62 downto 0)
 
     );
   end component;
@@ -250,7 +251,8 @@ package swc_swcore_pkg is
       usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
       pgaddr_alloc_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
       free_last_usecnt_o  : out std_logic_vector(g_num_ports - 1 downto 0);
-      nomem_o             : out std_logic
+      nomem_o             : out std_logic;
+      tap_out_o :out std_logic_vector(62 + 49 downto 0)
       );
   
   end component;
@@ -389,7 +391,9 @@ package swc_swcore_pkg is
       ppfm_free_done_i       : in   std_logic;
       ppfm_free_pgaddr_o     : out  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
       src_i : in  t_wrf_source_in;
-      src_o : out t_wrf_source_out
+      src_o : out t_wrf_source_out;
+      tap_out_o : out std_logic_vector(15 downto 0)
+
       );
   end component;
 

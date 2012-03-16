@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-29
--- Last update: 2012-03-12
+-- Last update: 2012-03-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -266,10 +266,48 @@ architecture rtl of xswc_core is
    signal mmu2ppfm_free_last_usecnt : std_logic_vector(g_num_ports-1 downto 0);   
   
    ---- end tmp      
- 
+
+   type t_tap_ib_array is array(0 to g_num_ports-1) of std_logic_vector(49+62 downto 0);
+   type t_tap_ob_array is array(0 to g_num_ports-1) of std_logic_vector(15 downto 0);
+   signal tap_mpm : std_logic_vector(61 downto 0);
+   
+
+   signal tap_ib : t_tap_ib_array;
+   signal tap_ob : t_tap_ob_array;
+   signal tap_alloc : std_logic_vector(62 + 49 downto 0);
+   component chipscope_icon
+    port (
+      CONTROL0 : inout std_logic_vector(35 downto 0));
+  end component;
+  component chipscope_ila
+    port (
+      CONTROL : inout std_logic_vector(35 downto 0);
+      CLK     : in    std_logic;
+      TRIG0   : in    std_logic_vector(31 downto 0);
+      TRIG1   : in    std_logic_vector(31 downto 0);
+      TRIG2   : in    std_logic_vector(31 downto 0);
+      TRIG3   : in    std_logic_vector(31 downto 0));
+  end component;
+
+  signal CONTROL0 : std_logic_vector(35 downto 0);
+   signal tap : std_logic_vector(127 downto 0);
   begin --rtl
    
-   
+  --chipscope_icon_1: chipscope_icon
+  --  port map (
+  --    CONTROL0 => CONTROL0);
+
+  --chipscope_ila_1: chipscope_ila
+  --  port map (
+  --    CONTROL => CONTROL0,
+  --    CLK     => clk_i,
+  --    TRIG0   => tap(31 downto 0),
+  --    TRIG1   => tap(63 downto 32),
+  --    TRIG2   => tap(95 downto 64),
+  --    TRIG3   => tap(127 downto 96));
+
+  tap <= tap_alloc & tap_ob(2);
+    
   gen_blocks : for i in 0 to g_num_ports-1 generate
 
     INPUT_BLOCK : xswc_input_block
@@ -359,8 +397,9 @@ architecture rtl of xswc_core is
         pta_pageaddr_o           => ib_pageaddr_to_pta((i + 1) * c_mpm_page_addr_width-1 downto i * c_mpm_page_addr_width),
         pta_mask_o               => ib_mask           ((i + 1) * g_num_ports          -1 downto i * g_num_ports),
         pta_prio_o               => ib_prio           ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
-        pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width)
-       
+        pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
+
+        tap_out_o => tap_ib(i)
         );
         
         
@@ -418,7 +457,9 @@ architecture rtl of xswc_core is
         -------------------------------------------------------------------------------  
 
         src_i                    => src_i(i),
-        src_o                    => src_o(i)
+        src_o                    => src_o(i),
+
+        tap_out_o => tap_ob(i)
       );        
         
   end generate gen_blocks;
@@ -528,7 +569,8 @@ architecture rtl of xswc_core is
       pgaddr_force_free_i        => ppfm_force_free_pgaddr,
       
       
-      nomem_o                    => mmu_nomem
+      nomem_o                    => mmu_nomem,
+      tap_out_o => tap_alloc
       );
        
   MULTIPORT_MEMORY: mpm_top --(new)

@@ -9,7 +9,6 @@
 
 files = [
 "swc_swcore_pkg.vhd",
-"swc_block_alloc.vhd",
 "swc_core.vhd",
 "swc_multiport_linked_list.vhd",
 "swc_multiport_page_allocator.vhd",
@@ -18,7 +17,7 @@ files = [
 #"swc_packet_mem.vhd",
 #"swc_packet_mem_read_pump.vhd",
 #"swc_packet_mem_write_pump.vhd",
-"swc_page_alloc.vhd",
+#"swc_page_alloc.vhd",
 "swc_page_alloc_old.vhd",
 "swc_pck_pg_free_module.vhd",
 "swc_pck_transfer_arbiter.vhd",

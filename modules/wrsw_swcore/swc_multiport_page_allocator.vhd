@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-02-02
+-- Last update: 2012-03-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -81,7 +81,8 @@ entity swc_multiport_page_allocator is
 
     free_last_usecnt_o    : out std_logic_vector(g_num_ports - 1 downto 0);
 
-    nomem_o           : out std_logic
+    nomem_o           : out std_logic;
+    tap_out_o : out std_logic_vector(62 + 49 downto 0)
     );
 
 end swc_multiport_page_allocator;
@@ -165,6 +166,15 @@ architecture syn of swc_multiport_page_allocator is
 --  signal set_usecnt_done           : std_logic_vector(g_num_ports-1 downto 0);
 
   signal pg_free_last_usecnt            : std_logic;
+
+
+  function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector is
+    variable tmp : std_logic_vector(len-1 downto 0);
+  begin
+    tmp                      := (others => '0');
+    tmp(x'length-1 downto 0) := x;
+    return tmp;
+  end f_slv_resize;
 begin  -- syn
 
 
@@ -322,5 +332,29 @@ begin  -- syn
   set_usecnt_done_o <= set_usecnt_done_feedback;--set_usecnt_done;
   force_free_done_o <= force_free_done;
   nomem_o           <= pg_nomem;
+
+  tap_out_o <= f_slv_resize
+               (
+                 alloc_i &
+                 free_i &
+                 force_free_i &
+                 set_usecnt_i &
+                 alloc_done&
+                 free_done &
+                 force_free_done&         -- 56
+                 set_usecnt_done_feedback &        -- 48
+                 pg_alloc &               -- 47
+                 pg_free &                -- 46
+                 pg_free_last_usecnt &    -- 45
+                 pg_force_free &          -- 44
+                 pg_set_usecnt &          -- 43
+                 pg_usecnt &              -- 40
+                 pg_addr &                -- 30
+                 pg_addr_alloc &          -- 20
+                 pg_done &                -- 19
+                 pg_nomem &               -- 18
+                 '0' &                     -- 17
+                 '0',                     --  16
+                 50 + 62);
   
 end syn;
