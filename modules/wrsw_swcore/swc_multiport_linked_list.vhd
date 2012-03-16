@@ -143,6 +143,10 @@ architecture syn of swc_multiport_linked_list is
   signal ll_wr_data               : std_logic_vector(g_data_width - 1 downto 0);
   signal ll_wr_ena                : std_logic;
 
+  signal ll_wr_addr_reg           : std_logic_vector(g_addr_width - 1 downto 0);
+  signal ll_wr_data_reg           : std_logic_vector(g_data_width - 1 downto 0);
+  signal ll_wr_ena_reg            : std_logic;
+
   ---------------------- reading process (free pck module) --------------------------------
   -- arbitrating access
   signal free_pck_request_vec     : std_logic_vector(g_num_ports-1 downto 0);
@@ -201,9 +205,9 @@ begin  -- syn
        -- Port A -- writing
        clka_i => clk_i,
        bwea_i => (others => '1'),
-       wea_i  => ll_wr_ena,
-       aa_i   => ll_wr_addr,
-       da_i   => ll_wr_data,
+       wea_i  => ll_wr_ena_reg,
+       aa_i   => ll_wr_addr_reg,
+       da_i   => ll_wr_data_reg,
        qa_o   => open,   
  
        -- Port B  -- reading
@@ -225,9 +229,9 @@ begin  -- syn
        -- Port A -- writing
        clka_i => clk_i,
        bwea_i => (others => '1'),
-       wea_i  => ll_wr_ena,
-       aa_i   => ll_wr_addr,
-       da_i   => ll_wr_data,
+       wea_i  => ll_wr_ena_reg,
+       aa_i   => ll_wr_addr_reg,
+       da_i   => ll_wr_data_reg,
        qa_o   => open,   
  
        -- Port B  -- reading
@@ -357,6 +361,21 @@ begin  -- syn
   ll_free_pck_ena       <= free_pck_grant_valid_d0;
 
   ll_wr_ena             <= ll_write_ena or ll_write_next_ena;
+
+  wr_ram: process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        ll_wr_addr_reg <= (others =>'0');
+        ll_wr_data_reg <= (others =>'0');
+        ll_wr_ena_reg  <= '0';
+      else
+        ll_wr_addr_reg <= ll_wr_addr;
+        ll_wr_data_reg <= ll_wr_data;
+        ll_wr_ena_reg  <= ll_wr_ena;
+      end if;
+    end if;
+  end process wr_ram;
 
 --   wr_done: for i in 0 to g_num_ports -1 generate
 --     write_done_o(i)     <= '1' when ((write_grant_vec_d0(i) = '1'                                 and tmp_write_end_of_list(i) = '1')  or  -- end-of-list, one one write, so write_done faster
