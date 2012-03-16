@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-26
--- Last update: 2012-01-20
+-- Last update: 2012-03-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -66,8 +66,8 @@ entity xwrsw_tx_tsu is
 -- Wishbone bus
 -------------------------------------------------------------------------------
 
-    wb_i: in t_wishbone_slave_in;
-    wb_o: out t_wishbone_slave_out
+    wb_i : in  t_wishbone_slave_in;
+    wb_o : out t_wishbone_slave_out
     );
 
 
@@ -77,42 +77,43 @@ end xwrsw_tx_tsu;
 
 architecture syn of xwrsw_tx_tsu is
 
+
   component wrsw_txtsu_wb
     port (
-      rst_n_i              : in  std_logic;
-      wb_clk_i             : in  std_logic;
-      wb_addr_i            : in  std_logic_vector(2 downto 0);
-      wb_data_i            : in  std_logic_vector(31 downto 0);
-      wb_data_o            : out std_logic_vector(31 downto 0);
-      wb_cyc_i             : in  std_logic;
-      wb_sel_i             : in  std_logic_vector(3 downto 0);
-      wb_stb_i             : in  std_logic;
-      wb_we_i              : in  std_logic;
-      wb_ack_o             : out std_logic;
-      wb_irq_o             : out std_logic;
-      txtsu_tsf_wr_req_i   : in  std_logic;
-      txtsu_tsf_wr_full_o  : out std_logic;
-      txtsu_tsf_wr_empty_o : out std_logic;
-      txtsu_tsf_val_r_i    : in  std_logic_vector(27 downto 0);
-      txtsu_tsf_val_f_i    : in  std_logic_vector(3 downto 0);
-      txtsu_tsf_pid_i      : in  std_logic_vector(4 downto 0);
-      txtsu_tsf_fid_i      : in  std_logic_vector(15 downto 0);
-      irq_nempty_i         : in  std_logic);
+      rst_n_i               : in  std_logic;
+      wb_clk_i              : in  std_logic;
+      wb_addr_i             : in  std_logic_vector(2 downto 0);
+      wb_data_i             : in  std_logic_vector(31 downto 0);
+      wb_data_o             : out std_logic_vector(31 downto 0);
+      wb_cyc_i              : in  std_logic;
+      wb_sel_i              : in  std_logic_vector(3 downto 0);
+      wb_stb_i              : in  std_logic;
+      wb_we_i               : in  std_logic;
+      wb_ack_o              : out std_logic;
+      wb_irq_o              : out std_logic;
+      txtsu_tsf_wr_req_i    : in  std_logic;
+      txtsu_tsf_wr_full_o   : out std_logic;
+      txtsu_tsf_wr_empty_o  : out std_logic;
+      txtsu_tsf_val_r_i     : in  std_logic_vector(27 downto 0);
+      txtsu_tsf_val_f_i     : in  std_logic_vector(3 downto 0);
+      txtsu_tsf_pid_i       : in  std_logic_vector(4 downto 0);
+      txtsu_tsf_fid_i       : in  std_logic_vector(15 downto 0);
+      txtsu_tsf_incorrect_i : in  std_logic;
+      irq_nempty_i          : in  std_logic);
   end component;
 
 
-  signal txtsu_tsf_wr_req   : std_logic;
-  signal txtsu_tsf_wr_full  : std_logic;
-  signal txtsu_tsf_wr_empty : std_logic;
-  signal txtsu_tsf_val_r    : std_logic_vector(27 downto 0);
-  signal txtsu_tsf_val_f    : std_logic_vector(3 downto 0);
-  signal txtsu_tsf_pid      : std_logic_vector(4 downto 0);
-  signal txtsu_tsf_fid      : std_logic_vector(15 downto 0);
+  signal txtsu_tsf_wr_req    : std_logic;
+  signal txtsu_tsf_wr_full   : std_logic;
+  signal txtsu_tsf_wr_empty  : std_logic;
+  signal txtsu_tsf_val_r     : std_logic_vector(27 downto 0);
+  signal txtsu_tsf_val_f     : std_logic_vector(3 downto 0);
+  signal txtsu_tsf_pid       : std_logic_vector(4 downto 0);
+  signal txtsu_tsf_fid       : std_logic_vector(15 downto 0);
+  signal txtsu_tsf_incorrect : std_logic;
 
   signal irq_nempty : std_logic;
-
-
-  signal scan_cntr : unsigned(4 downto 0);
+  signal scan_cntr  : unsigned(4 downto 0);
 
   type t_txtsu_state is (TSU_SCAN, TSU_ACK);
 
@@ -120,8 +121,8 @@ architecture syn of xwrsw_tx_tsu is
 
   signal cur_ep : integer;
 
-  signal wb_out       : t_wishbone_slave_out;
-  signal wb_in        : t_wishbone_slave_in;
+  signal wb_out : t_wishbone_slave_out;
+  signal wb_in  : t_wishbone_slave_in;
   
 begin  -- syn
 
@@ -134,12 +135,12 @@ begin  -- syn
       g_slave_mode         => g_interface_mode,
       g_slave_granularity  => g_address_granularity)
     port map (
-      clk_sys_i  => clk_sys_i,
-      rst_n_i    => rst_n_i,
-      master_i   => wb_out,
-      master_o   => wb_in,
-      slave_i => wb_i,
-      slave_o => wb_o);
+      clk_sys_i => clk_sys_i,
+      rst_n_i   => rst_n_i,
+      master_i  => wb_out,
+      master_o  => wb_in,
+      slave_i   => wb_i,
+      slave_o   => wb_o);
 
   
   cur_ep <= to_integer(scan_cntr);
@@ -159,16 +160,17 @@ begin  -- syn
         case state is
           when TSU_SCAN =>
 
-            if(timestamps_i(cur_ep).valid = '1') then
+            if(timestamps_i(cur_ep).stb = '1') then
               timestamps_ack_o(cur_ep) <= '1';
-              state          <= TSU_ACK;
+              state                    <= TSU_ACK;
 
               if(txtsu_tsf_wr_full = '0') then
-                txtsu_tsf_pid    <= timestamps_i(cur_ep).port_id(4 downto 0);
-                txtsu_tsf_fid    <= timestamps_i(cur_ep).frame_id;
-                txtsu_tsf_val_f  <= timestamps_i(cur_ep).tsval(31 downto 28);
-                txtsu_tsf_val_r  <= timestamps_i(cur_ep).tsval(27 downto 0);
-                txtsu_tsf_wr_req <= '1';
+                txtsu_tsf_pid       <= timestamps_i(cur_ep).port_id(4 downto 0);
+                txtsu_tsf_fid       <= timestamps_i(cur_ep).frame_id;
+                txtsu_tsf_val_f     <= timestamps_i(cur_ep).tsval(31 downto 28);
+                txtsu_tsf_val_r     <= timestamps_i(cur_ep).tsval(27 downto 0);
+                txtsu_tsf_incorrect <= timestamps_i(cur_ep).incorrect;
+                txtsu_tsf_wr_req    <= '1';
               end if;
             else
               if(scan_cntr = g_num_ports-1)then
@@ -178,9 +180,9 @@ begin  -- syn
               end if;
             end if;
           when TSU_ACK =>
-            timestamps_ack_o(cur_ep)   <= '0';
-            txtsu_tsf_wr_req <= '0';
-            state            <= TSU_SCAN;
+            timestamps_ack_o(cur_ep) <= '0';
+            txtsu_tsf_wr_req         <= '0';
+            state                    <= TSU_SCAN;
             if(scan_cntr = g_num_ports-1)then
               scan_cntr <= (others => '0');
             else
@@ -195,25 +197,26 @@ begin  -- syn
 
   U_WB_SLAVE : wrsw_txtsu_wb
     port map (
-      rst_n_i              => rst_n_i,
-      wb_clk_i             => clk_sys_i,
-      wb_addr_i            => wb_in.adr(2 downto 0),
-      wb_data_i            => wb_in.dat,
-      wb_data_o            => wb_out.dat,
-      wb_cyc_i             => wb_in.cyc,
-      wb_sel_i             => wb_in.sel,
-      wb_stb_i             => wb_in.stb,
-      wb_we_i              => wb_in.we,
-      wb_ack_o             => wb_out.ack,
-      wb_irq_o             => wb_out.int,
-      txtsu_tsf_wr_req_i   => txtsu_tsf_wr_req,
-      txtsu_tsf_wr_full_o  => txtsu_tsf_wr_full,
-      txtsu_tsf_wr_empty_o => txtsu_tsf_wr_empty,
-      txtsu_tsf_val_r_i    => txtsu_tsf_val_r,
-      txtsu_tsf_val_f_i    => txtsu_tsf_val_f,
-      txtsu_tsf_pid_i      => txtsu_tsf_pid,
-      txtsu_tsf_fid_i      => txtsu_tsf_fid,
-      irq_nempty_i         => irq_nempty);
+      rst_n_i               => rst_n_i,
+      wb_clk_i              => clk_sys_i,
+      wb_addr_i             => wb_in.adr(2 downto 0),
+      wb_data_i             => wb_in.dat,
+      wb_data_o             => wb_out.dat,
+      wb_cyc_i              => wb_in.cyc,
+      wb_sel_i              => wb_in.sel,
+      wb_stb_i              => wb_in.stb,
+      wb_we_i               => wb_in.we,
+      wb_ack_o              => wb_out.ack,
+      wb_irq_o              => wb_out.int,
+      txtsu_tsf_wr_req_i    => txtsu_tsf_wr_req,
+      txtsu_tsf_wr_full_o   => txtsu_tsf_wr_full,
+      txtsu_tsf_wr_empty_o  => txtsu_tsf_wr_empty,
+      txtsu_tsf_val_r_i     => txtsu_tsf_val_r,
+      txtsu_tsf_val_f_i     => txtsu_tsf_val_f,
+      txtsu_tsf_pid_i       => txtsu_tsf_pid,
+      txtsu_tsf_fid_i       => txtsu_tsf_fid,
+      txtsu_tsf_incorrect_i => txtsu_tsf_incorrect,
+      irq_nempty_i          => irq_nempty);
 
   irq_nempty <= not txtsu_tsf_wr_empty;
   

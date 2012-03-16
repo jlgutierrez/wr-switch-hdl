@@ -19,7 +19,8 @@ peripheral {
                            		 properly (there was no metastability/setup/hold violation)\
 										 Entries also contain information required to identify the endpoint and frame for which the timestamp was taken:\
                      - FID - Frame identifier assigned by the NIC\
-                     - PID - TXTSU port ID to which came the timestamp. Used to distinguish the timestamps for broadcast/multicast frames";
+                     - PID - TXTSU port ID to which came the timestamp. Used to distinguish the timestamps for broadcast/multicast frames;\
+                     - INCORRECT - timestamp may be incorrect, it has been generated during timebase adjustment";
 
 			flags_bus = {FIFO_FULL, FIFO_EMPTY, FIFO_COUNT};
 			flags_dev = {FIFO_FULL, FIFO_EMPTY};
@@ -58,8 +59,16 @@ peripheral {
 				 type = SLV;
 				 size = 16;
 				 align = 16;
-		};
-	};
+		};	
+
+			field {
+				 name = "Timestamp (possibly) incorrect";
+				 description = "1: This timestamp may be incorrect (generated during PPS adjustment)\
+         0: Timestamp is correct.";
+				 prefix = "incorrect";
+				 type = BIT;
+      };
+   };
 
 -- TXTSU interrupts
 	irq {
