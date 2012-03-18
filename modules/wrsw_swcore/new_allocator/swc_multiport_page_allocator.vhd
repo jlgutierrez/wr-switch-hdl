@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-03-16
+-- Last update: 2012-03-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -109,7 +109,12 @@ architecture syn of swc_multiport_page_allocator is
       pgaddr_o                : out std_logic_vector(g_page_addr_width -1 downto 0);
       free_last_usecnt_o      : out std_logic;
       done_o                  : out std_logic;
-      nomem_o                 : out std_logic);
+      nomem_o                 : out std_logic;
+      dbg_double_free_o       : out std_logic;
+      dbg_double_force_free_o : out std_logic;
+      dbg_q_write_o           : out std_logic;
+      dbg_q_read_o            : out std_logic;
+      dbg_initializing_o      : out std_logic);
   end component;
 
   type t_port_state is record
@@ -153,7 +158,6 @@ architecture syn of swc_multiport_page_allocator is
 
   signal dbg_double_force_free, dbg_double_free    : std_logic;
   signal dbg_q_read, dbg_q_write, dbg_initializing : std_logic;
-  signal dbg_rd_ptr, dbg_wr_ptr                    : std_logic_vector(g_page_addr_width-1 downto 0);
 
   function f_bool_2_sl (x : boolean) return std_logic is
   begin
@@ -295,7 +299,12 @@ begin  -- syn
       pgaddr_i                => pg_addr,
       pgaddr_o                => pg_addr_alloc,
       done_o                  => pg_done,
-      nomem_o                 => pg_nomem);
+      nomem_o                 => pg_nomem,
+      dbg_double_force_free_o => dbg_double_force_free,
+      dbg_double_free_o       => dbg_double_free,
+      dbg_q_read_o            => dbg_q_read,
+      dbg_q_write_o           => dbg_q_write,
+      dbg_initializing_o      => dbg_initializing);
 
   nomem_o        <= pg_nomem;
   pgaddr_alloc_o <= pg_addr_alloc;
@@ -342,8 +351,6 @@ begin  -- syn
 
   tap_out_o <= f_slv_resize
                (
-                 dbg_wr_ptr &
-                 dbg_rd_ptr &
                  dbg_q_write &
                  dbg_q_read &
                  dbg_initializing &

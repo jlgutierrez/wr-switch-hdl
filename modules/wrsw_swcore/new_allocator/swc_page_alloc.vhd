@@ -6,16 +6,22 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-03-05
+-- Last update: 2012-03-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
--- Description: Module implements a fast (3 cycle) paged memory allocator.
--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
--- Detailed description of the magic (by mlipinsk): needed
--- 
--- THIS IS STILL BUGGY, IT LOOSES PAGES !!!
--- 
+-- Description: Module implements a fast (2 cycle) paged memory allocator.
+-- The allocator can serve 4 types of requests:
+-- - Allocate a page with given use count (alloc_i = 1). The use count tells
+--   the allocator how many clients requested that page (and hence, how many free
+--   requests are required to return the page to free pages poll)
+-- - Free a page (free_i = 1) - check the use count stored for the page. If it's
+--   bigger than 1, decrease the use count, if it's 1 mark the page as free.
+-- - Force free a page (force_free_i = 1): immediately frees the page regardless
+--   of its current use_count.
+-- - Set use count (set_usecnt_i = 1): sets the use count value for the given page.
+--   Used to define the reference count for pages pre-allocated in advance by
+--   the input blocks.
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
@@ -43,6 +49,7 @@
 -- 2010-10-11  1.1      mlipinsk comments added !!!!!
 -- 2012-01-24  2.0      twlostow completely changed (uses FIFO)
 -- 2012-03-05  2.1      mlipinsk added debugging stuff + made interchangeable with old (still buggy)
+-- 2012-03-15  2.2      twlostow fixed really ugly missing pages bug
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -52,41 +59,32 @@ use ieee.numeric_std.all;
 use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
 
---use std.textio.all;
---use work.pck_fio.all;
-
 entity swc_page_allocator_new is
   generic (
-    -- number of pages we consider
+    -- number of pages in the allocator pool
     g_num_pages : integer := 2048;
 
     -- number of bits of the page address
-    g_page_addr_width: integer := 11; --g_page_addr_bits 
+    g_page_addr_width : integer := 11;
 
-    -- not needed here, but added for inter-changeability withh the old version
-    g_num_ports      : integer ;--:= c_swc_num_ports
+    g_num_ports : integer := 10;
 
-    -- number of bits of the user count value
-    g_usecount_width: integer := 4 --g_usecount_width 
+    -- number of bits of the user (reference) count value
+    g_usecount_width : integer := 4
     );
 
   port (
     clk_i   : in std_logic;             -- clock & reset
     rst_n_i : in std_logic;
 
-    alloc_i : in std_logic;             -- alloc strobe (active HI), starts
-                                        -- allocation process of a page with use
-                                        -- count given on usecnt_i. Address of
-                                        -- the allocated page is returned on
-                                        -- pgaddr_o and is valid when
-                                        -- pgaddr_valid_o is HI..
+    -- "Allocate" command strobe (active HI), starts allocation process of a page with use
+    -- count given on usecnt_i. Address of the allocated page is returned on
+    -- pgaddr_o and is valid when done_o is HI.
+    alloc_i : in std_logic;
 
-    free_i : in std_logic;  -- free strobe (active HI), releases the page
-    -- at address pgaddr_i if it's current
-    -- use count is equal to 1, otherwise
-    -- decreases the use count
-
-
+    -- "Free" command strobe (active HI), releases the page at address pgaddr_i if it's current
+    -- use count is equal to 1, otherwise decreases the page's use count.
+    free_i : in std_logic;
 
     force_free_i : in std_logic;  -- free strobe (active HI), releases the page
     -- at address pgaddr_i regardless of the user 
@@ -110,10 +108,7 @@ entity swc_page_allocator_new is
 
     pgaddr_i : in std_logic_vector(g_page_addr_width -1 downto 0);
 
-    pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
-    pgaddr_valid_o : out std_logic;
-
-    idle_o : out std_logic;
+    pgaddr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
 
     free_last_usecnt_o : out std_logic;
 
@@ -124,14 +119,20 @@ entity swc_page_allocator_new is
                                         -- multiport scheduler can optimize
                                         -- it's performance
 
-    nomem_o : out std_logic
+    nomem_o : out std_logic;
+
+    dbg_double_free_o       : out std_logic;
+    dbg_double_force_free_o : out std_logic;
+    dbg_q_write_o : out std_logic;
+    dbg_q_read_o : out std_logic;
+    dbg_initializing_o : out std_logic    
     );
 
 end swc_page_allocator_new;
 
 architecture syn of swc_page_allocator_new is
 
-  signal nomem : std_logic;
+  signal real_nomem, out_nomem : std_logic;
 
   signal rd_ptr, wr_ptr : unsigned(g_page_addr_width-1 downto 0);
   signal free_pages     : unsigned(g_page_addr_width downto 0);
@@ -139,39 +140,40 @@ architecture syn of swc_page_allocator_new is
   signal q_write , q_read : std_logic;
   signal pending_free     : std_logic;
   signal read_usecnt      : std_logic_vector(g_usecount_width-1 downto 0);
-  signal q_init_data      : unsigned(g_page_addr_width -1 downto 0);
 
   signal initializing : std_logic;
 
   signal usecnt_write                 : std_logic;
   signal usecnt_addr                  : std_logic_vector(g_page_addr_width-1 downto 0);
   signal usecnt_rddata, usecnt_wrdata : std_logic_vector(g_usecount_width-1 downto 0);
-  
-  signal q_output_addr                : std_logic_vector(g_page_addr_width-1 downto 0);
-  signal alloc_d0                     : std_logic;
-  signal free_d0                      : std_logic;
-  signal done_int                     : std_logic;
-   signal ram_ones     : std_logic_vector(g_page_addr_width + g_usecount_width -1 downto 0);
-   
+
+  signal q_output_addr : std_logic_vector(g_page_addr_width-1 downto 0);
+  signal alloc_d0      : std_logic;
+  signal force_free_d0 : std_logic;
+  signal free_d0       : std_logic;
+  signal done_int      : std_logic;
+  signal ram_ones      : std_logic_vector(g_page_addr_width + g_usecount_width -1 downto 0);
+
 
   --debuggin sygnals
   signal tmp_dbg_dealloc : std_logic;  -- used for symulation debugging, don't remove
-  signal tmp_page : std_logic_vector(g_page_addr_width -1 downto 0);
-  signal free_blocks : unsigned(g_page_addr_width downto 0);
-
+  signal tmp_page        : std_logic_vector(g_page_addr_width -1 downto 0);
+  signal free_blocks     : unsigned(g_page_addr_width downto 0);
+  signal usecnt_not_zero : std_logic;
+  signal real_nomem_d0   : std_logic;
 begin  -- syn
-ram_ones  <=(others => '1');
+  ram_ones <= (others => '1');
 
   U_Queue_RAM : generic_dpram
     generic map (
-      g_data_width       => g_page_addr_width,
-      g_size             => 2**g_page_addr_width,
-      g_with_byte_enable => false,
-      g_dual_clock       => false)
+      g_data_width               => g_page_addr_width,
+      g_size                     => 2**g_page_addr_width,
+      g_with_byte_enable         => false,
+      g_dual_clock               => false)
     port map (
       rst_n_i => rst_n_i,
       clka_i  => clk_i,
-      bwea_i => ram_ones((g_page_addr_width+7)/8 - 1 downto 0),
+      bwea_i  => ram_ones((g_page_addr_width+7)/8 - 1 downto 0),
       wea_i   => q_write,
       aa_i    => std_logic_vector(wr_ptr),
       da_i    => pgaddr_i,
@@ -186,13 +188,31 @@ ram_ones  <=(others => '1');
   
 
   usecnt_addr  <= q_output_addr when alloc_d0 = '1' else pgaddr_i;
-  usecnt_write <= (alloc_d0 or set_usecnt_i or free_d0 or force_free_i) and not initializing;
+  usecnt_write <= (alloc_d0 or set_usecnt_i or free_d0 or force_free_d0) and not initializing;
 
   usecnt_wrdata <= usecnt_i when (set_usecnt_i = '1' or alloc_d0 = '1') else
                    f_gen_dummy_vec('0', g_usecount_width) when force_free_i = '1' else
                    std_logic_vector(unsigned(usecnt_rddata) - 1);
-  
-  
+
+  p_debug : process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+
+      if(free_d0 = '1' and unsigned(usecnt_rddata) = 0) then
+        dbg_double_free_o <= '1';
+      else
+        dbg_double_free_o <= '0';
+      end if;
+
+      if(force_free_d0 = '1' and unsigned(usecnt_rddata) = 0) then
+        dbg_double_force_free_o <= '1';
+      else
+        dbg_double_force_free_o <= '0';
+      end if;
+
+    end if;
+  end process;
+
   U_UseCnt_RAM : generic_dpram
     generic map (
       g_data_width       => g_usecount_width,
@@ -203,13 +223,13 @@ ram_ones  <=(others => '1');
       rst_n_i => rst_n_i,
       clka_i  => clk_i,
       wea_i   => usecnt_write,
-       bwea_i => ram_ones((g_usecount_width+7)/8 - 1 downto 0),
+      bwea_i  => ram_ones((g_usecount_width+7)/8 - 1 downto 0),
       aa_i    => usecnt_addr,
       da_i    => usecnt_wrdata,
       qa_o    => usecnt_rddata,
 
       clkb_i => clk_i,
-       bweb_i => ram_ones((g_usecount_width+7)/8 - 1 downto 0),
+      bweb_i => ram_ones((g_usecount_width+7)/8 - 1 downto 0),
       web_i  => initializing,
       ab_i   => std_logic_vector(rd_ptr),
       db_i   => f_gen_dummy_vec('0', g_usecount_width));
@@ -220,8 +240,11 @@ ram_ones  <=(others => '1');
       if rst_n_i = '0' then
         initializing <= '1';
         rd_ptr       <= (others => '0');
-        nomem        <= '0';
+        real_nomem   <= '0';
       else
+
+        real_nomem_d0 <= real_nomem;
+
         if(initializing = '1') then
           free_pages <= to_unsigned(g_num_pages-1, free_pages'length);
           wr_ptr     <= to_unsigned(g_num_pages-1, wr_ptr'length);
@@ -240,11 +263,11 @@ ram_ones  <=(others => '1');
           end if;
 
           if(q_write = '1' and q_read = '0') then
-            nomem      <= '0';
+            real_nomem <= '0';
             free_pages <= free_pages + 1;
           elsif (q_write = '0' and q_read = '1') then
             if(free_pages = 1) then
-              nomem <= '1';
+              real_nomem <= '1';
             end if;
             free_pages <= free_pages - 1;
           end if;
@@ -257,17 +280,18 @@ ram_ones  <=(others => '1');
   begin
     if rising_edge(clk_i) then
       if rst_n_i = '0' or initializing = '1' then
-        alloc_d0 <= '0';
-        free_d0  <= '0';
+        alloc_d0      <= '0';
+        free_d0       <= '0';
+        force_free_d0 <= '0';
       else
-        alloc_d0 <= alloc_i and not alloc_d0;
-        free_d0  <= free_i and not free_d0;
+        alloc_d0      <= alloc_i and not alloc_d0;
+        free_d0       <= free_i and not free_d0;
+        force_free_d0 <= force_free_i and not force_free_d0;
       end if;
     end if;
   end process;
 
-  pgaddr_o       <= q_output_addr;
-  pgaddr_valid_o <= alloc_d0;
+  pgaddr_o <= q_output_addr;
 
   p_gen_done : process(clk_i)
   begin
@@ -277,38 +301,47 @@ ram_ones  <=(others => '1');
       else
         if(done_int = '1')then
           done_int <= '0';
-        elsif((alloc_i = '1' or set_usecnt_i = '1' or free_i = '1' or force_free_i = '1') and initializing = '0') then
+        elsif(((alloc_i = '1' and real_nomem = '0') or set_usecnt_i = '1' or free_i = '1' or force_free_i = '1') and initializing = '0') then
           done_int <= '1';
         end if;
       end if;
     end if;
   end process;
 
-  done_o  <= done_int;-- and not(free_d0 or alloc_d0);
-  q_write <= (not initializing) when (free_d0 = '1' and unsigned(usecnt_rddata) = 1) or (force_free_i = '1') else '0';
-  q_read  <= '1'                when (alloc_d0 = '1') and (nomem = '0')                                      else '0';
+  done_o  <= done_int;                  -- and not(free_d0 or alloc_d0);
+--  q_write <= (not initializing) when (free_d0 = '1' and unsigned(usecnt_rddata) = 1) or (force_free_i = '1' and done_int = '0') else '0';
+  q_write <= (not initializing) when
+             (free_d0 = '1' and unsigned(usecnt_rddata) = 1)
+             or (force_free_d0 = '1') else '0';
 
-  nomem_o <= nomem;
+  q_read <= '1' when (alloc_d0 = '1') and (real_nomem_d0 = '0') else '0';
 
-  idle_o <= not (initializing or free_d0 or alloc_d0);
-  
-  free_last_usecnt_o <= (not initializing) when (free_d0 = '1' and unsigned(usecnt_rddata) = 1) else '0';
-  
-  -- generating debugging signals
-  
 
-  p_dbg : process(clk_i)
+  p_gen_nomem_output : process(clk_i)
   begin
     if rising_edge(clk_i) then
       if rst_n_i = '0' then
-        tmp_page                       <= (others => '0');
+        out_nomem <= '0';
       else
-        tmp_page        <= pgaddr_i;      
-        tmp_dbg_dealloc <= done_int and (free_i or force_free_i); -- not sure whether force as well
+        if(out_nomem = '0' and (free_blocks < to_unsigned(3, free_blocks'length))) then
+          out_nomem <= real_nomem;
+        elsif(out_nomem = '1' and (free_blocks > to_unsigned((3*g_num_ports), free_blocks'length))) then
+          out_nomem <= real_nomem;
+        end if;
       end if;
     end if;
   end process;
+
+
+  nomem_o <= out_nomem;
+
+--  idle_o <= not (initializing or free_d0 or alloc_d0);
+
+  free_last_usecnt_o <= (not initializing) when (free_d0 = '1' and unsigned(usecnt_rddata) = 1) else '0';
+
   free_blocks <= free_pages;
 
-
+  dbg_q_read_o <= q_read;
+  dbg_q_write_o <= q_write;
+  dbg_initializing_o <= initializing;
 end syn;
