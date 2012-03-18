@@ -111,7 +111,7 @@ entity scb_top_bare is
     i2c_mbl0_sda_oen_o : out std_logic;
     i2c_mbl0_sda_o     : out std_logic;
     i2c_mbl0_sda_i     : in  std_logic := '1'
-  );
+    );
 end scb_top_bare;
 
 architecture rtl of scb_top_bare is
@@ -263,7 +263,7 @@ architecture rtl of scb_top_bare is
 
   signal cyc_d0    : std_logic_vector(g_num_ports-1 downto 0);
   signal pps_csync : std_logic;
-  
+
   component chipscope_icon
     port (
       CONTROL0 : inout std_logic_vector(35 downto 0));
@@ -283,17 +283,17 @@ begin
 
 
 
-  CS_ICON : chipscope_icon
-    port map (
-     CONTROL0 => CONTROL0);
-  CS_ILA : chipscope_ila
-    port map (
-      CONTROL => CONTROL0,
-      CLK     => clk_sys,
-      TRIG0   => TRIG0,
-      TRIG1   => TRIG1,
-      TRIG2   => TRIG2,
-      TRIG3   => TRIG3);
+  --CS_ICON : chipscope_icon
+  --  port map (
+  --   CONTROL0 => CONTROL0);
+  --CS_ILA : chipscope_ila
+  --  port map (
+  --    CONTROL => CONTROL0,
+  --    CLK     => clk_sys,
+  --    TRIG0   => TRIG0,
+  --    TRIG1   => TRIG1,
+  --    TRIG2   => TRIG2,
+  --    TRIG3   => TRIG3);
 
 
   cnx_slave_in(0) <= cpu_wb_i;
@@ -476,11 +476,12 @@ begin
           phy_rx_enc_err_i   => phys_i(i).rx_enc_err,
           phy_rx_bitslide_i  => phys_i(i).rx_bitslide,
 
-          txtsu_port_id_o  => txtsu_timestamps(i).port_id(4 downto 0),
-          txtsu_frame_id_o => txtsu_timestamps(i).frame_id,
-          txtsu_tsval_o    => txtsu_timestamps(i).tsval,
-          txtsu_valid_o    => txtsu_timestamps(i).valid,
-          txtsu_ack_i      => txtsu_timestamps_ack(i),
+          txtsu_port_id_o      => txtsu_timestamps(i).port_id(4 downto 0),
+          txtsu_frame_id_o     => txtsu_timestamps(i).frame_id,
+          txtsu_ts_value_o     => txtsu_timestamps(i).tsval,
+          txtsu_ts_incorrect_o => txtsu_timestamps(i).incorrect,
+          txtsu_stb_o          => txtsu_timestamps(i).stb,
+          txtsu_ack_i          => txtsu_timestamps_ack(i),
 
           rtu_full_i         => rtu_full(i),
           rtu_rq_strobe_p1_o => rtu_req(i).valid,
@@ -536,7 +537,7 @@ begin
         g_wb_ob_ignore_ack                => false,
         g_mpm_mem_size                    => 65536,
         g_mpm_page_size                   => 64,
-        g_mpm_ratio                       => 8,  --2
+        g_mpm_ratio                       => 4,  --2
         g_mpm_fifo_size                   => 8,
         g_mpm_fetch_next_pg_in_advance    => false)
       port map (
@@ -721,7 +722,7 @@ begin
       gpio_out_o => gpio_o,
       gpio_in_i  => gpio_i);
 
-  U_MiniBackplane_I2C: xwb_i2c_master
+  U_MiniBackplane_I2C : xwb_i2c_master
     generic map (
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE)
@@ -750,7 +751,7 @@ begin
 -------------------------------------------------------------------------------
 -- Various constant-driven I/Os
 -------------------------------------------------------------------------------
-  
+
   clk_en_o  <= '0';
   clk_sel_o <= '0';
   clk_sys_o <= clk_sys;

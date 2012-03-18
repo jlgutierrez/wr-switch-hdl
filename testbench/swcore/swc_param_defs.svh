@@ -21,7 +21,7 @@
  * 
  */
 ////////////////////////////////////////////////////////////////
-`define  c_num_ports                         16 //MAX: 16     //
+`define  c_num_ports                         7 //MAX: 16     //
 ////////////////////////////////////////////////////////////////
 
 `define  c_prio_num                          8                // c_swc_output_prio_num, [does not work, output block]
@@ -30,7 +30,7 @@
 
 `define  c_mpm_mem_size                      65536            //c_swc_packet_mem_size,
 `define  c_mpm_page_size                     64               //c_swc_page_size,
-`define  c_mpm_ratio                         2
+`define  c_mpm_ratio                         4
 `define  c_mpm_fifo_size                     4
 `define  c_mpm_fetch_next_pg_in_advance      0
 

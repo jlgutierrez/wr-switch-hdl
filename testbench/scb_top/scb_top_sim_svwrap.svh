@@ -48,7 +48,7 @@ module scb_top_sim_svwrap
    clk_swc_mpm_core_i
    );
 
-   parameter g_num_ports = 15;
+   parameter g_num_ports = 6;
    
 
    
@@ -259,8 +259,8 @@ scb_top_sim
    .clk_startup_i       ( clk_sys_i),
    .clk_ref_i           ( clk_ref_i),
    .clk_dmtd_i            ( clk_ref_i),
-   .clk_sys_i           ( clk_sys_i),
-   .clk_swc_mpm_core_i   ( clk_swc_mpm_core_i),
+//   .clk_sys_i           ( clk_sys_i),
+   .clk_aux_i   ( clk_swc_mpm_core_i),
    .wb_adr_i            ( cpu.master.adr),
    .wb_dat_i            ( cpu.master.dat_o),
    .wb_dat_o            ( cpu.master.dat_i),

@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-26
--- Last update: 2012-03-12
+-- Last update: 2012-03-18
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -53,13 +53,13 @@ use work.gencores_pkg.all;
 
 entity swc_multiport_linked_list is
   generic ( 
-    g_num_ports                        : integer; --:= c_swc_num_ports
-    g_addr_width                       : integer; --:= c_swc_page_addr_width;
-    g_page_num                         : integer;  --:= c_swc_packet_mem_num_pages
+    g_num_ports                        : integer := 7; --:= c_swc_num_ports
+    g_addr_width                       : integer := 10; --:= c_swc_page_addr_width;
+    g_page_num                         : integer := 1024;  --:= c_swc_packet_mem_num_pages
     -- new stuff
-    g_size_width                       : integer ;
-    g_partial_select_width             : integer ;
-    g_data_width                       : integer   --:= c_swc_packet_mem_num_pages    + 2
+    g_size_width                       : integer := 10;
+    g_partial_select_width             : integer := 1;
+    g_data_width                       : integer := 18  --:= c_swc_packet_mem_num_pages    + 2
 
   ----------------------------------------------------------------------------------------
   -- the following relation is needed for the things to work
@@ -194,54 +194,78 @@ begin  -- syn
 
   zeros     <= (others => '0');
 
-   -- this memory is read by the output of the MPM (called read pump)
-   PAGE_INDEX_LINKED_LIST_MPM : generic_dpram
-     generic map (
-       g_data_width  => g_data_width,-- one bit for validating the data
-       g_size        => g_page_num,
-       g_dual_clock=> false
-                 )
-     port map (
-       -- Port A -- writing
-       clka_i => clk_i,
-       bwea_i => (others => '1'),
-       wea_i  => ll_wr_ena_reg,
-       aa_i   => ll_wr_addr_reg,
-       da_i   => ll_wr_data_reg,
-       qa_o   => open,   
+  PAGE_INDEX_LINKED_LIST_MPM: swc_rd_wr_ram
+    generic map (
+      g_data_width  => g_data_width,-- one bit for validating the data
+       g_size        => g_page_num)
+    port map (
+      clk_i => clk_i,
+      we_i  => ll_wr_ena_reg,
+      wa_i  => ll_wr_addr_reg,
+      wd_i  => ll_wr_data_reg,
+      ra_i  => mpm_rpath_addr_i,
+      rd_o  => mpm_rpath_data_o);
+  
+   ---- this memory is read by the output of the MPM (called read pump)
+   --PAGE_INDEX_LINKED_LIST_MPM : generic_dpram
+   --  generic map (
+   --    g_data_width  => g_data_width,-- one bit for validating the data
+   --    g_size        => g_page_num,
+   --    g_dual_clock=> false
+   --              )
+   --  port map (
+   --    -- Port A -- writing
+   --    clka_i => clk_i,
+   --    bwea_i => (others => '1'),
+   --    wea_i  => ll_wr_ena_reg,
+   --    aa_i   => ll_wr_addr_reg,
+   --    da_i   => ll_wr_data_reg,
+   --    qa_o   => open,   
  
-       -- Port B  -- reading
-       clkb_i => clk_i,
-       bweb_i => (others => '1'), 
-       web_i  => '0',
-       ab_i   => mpm_rpath_addr_i,
-       db_i   => (others => '0'),
-       qb_o   => mpm_rpath_data_o
-       );
+   --    -- Port B  -- reading
+   --    clkb_i => clk_i,
+   --    bweb_i => (others => '1'), 
+   --    web_i  => '0',
+   --    ab_i   => mpm_rpath_addr_i,
+   --    db_i   => (others => '0'),
+   --    qb_o   => mpm_rpath_data_o
+   --    );
 
-   -- this memory is read by the process that force-frees pck on error
-   PAGE_INDEX_LINKED_LIST_FREE_PCK : generic_dpram
-     generic map (
-       g_data_width  => g_data_width,-- one bit for validating the data
-       g_size        => g_page_num
-                 )
-     port map (
-       -- Port A -- writing
-       clka_i => clk_i,
-       bwea_i => (others => '1'),
-       wea_i  => ll_wr_ena_reg,
-       aa_i   => ll_wr_addr_reg,
-       da_i   => ll_wr_data_reg,
-       qa_o   => open,   
+  PAGE_INDEX_LINKED_LIST_FREE_PCK: swc_rd_wr_ram
+    generic map (
+      g_data_width => g_data_width,
+      g_size       => g_page_num)
+    port map (
+      clk_i => clk_i,
+      we_i  => ll_wr_ena_reg,
+      wa_i  => ll_wr_addr_reg,
+      wd_i  => ll_wr_data_reg,
+      ra_i  => ll_free_pck_addr,
+      rd_o  => ll_free_pck_data);
+
+   ---- this memory is read by the process that force-frees pck on error
+   --PAGE_INDEX_LINKED_LIST_FREE_PCK : generic_dpram
+   --  generic map (
+   --    g_data_width  => g_data_width,-- one bit for validating the data
+   --    g_size        => g_page_num
+   --              )
+   --  port map (
+   --    -- Port A -- writing
+   --    clka_i => clk_i,
+   --    bwea_i => (others => '1'),
+   --    wea_i  => ll_wr_ena_reg,
+   --    aa_i   => ll_wr_addr_reg,
+   --    da_i   => ll_wr_data_reg,
+   --    qa_o   => open,   
  
-       -- Port B  -- reading
-       clkb_i => clk_i,
-       bweb_i => (others => '1'),
-       web_i  => '0',
-       ab_i   => ll_free_pck_addr,
-       db_i   => (others => '0'),
-       qb_o   => ll_free_pck_data
-       );
+   --    -- Port B  -- reading
+   --    clkb_i => clk_i,
+   --    bweb_i => (others => '1'),
+   --    web_i  => '0',
+   --    ab_i   => ll_free_pck_addr,
+   --    db_i   => (others => '0'),
+   --    qb_o   => ll_free_pck_data
+   --    );
 
   gen_write_request_vec : for i in 0 to g_num_ports - 1 generate
     tmp_write_end_of_list(i) <= write_data_i((i + 1) * g_data_width - 2);

@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-03-15
+-- Last update: 2012-03-18
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -47,6 +47,8 @@ use ieee.math_real.log2;
 library work;
 use work.wr_fabric_pkg.all;
 use work.wrsw_shared_types_pkg.all;
+use work.genram_pkg.all;
+
 
 package swc_swcore_pkg is
 
@@ -70,6 +72,20 @@ package swc_swcore_pkg is
       zero_o   : out std_logic);
   end component;
 
+  component swc_rd_wr_ram
+    generic (
+      g_data_width : integer;
+      g_size       : integer;
+      g_use_native : boolean := true);
+    port (
+      clk_i : in  std_logic;
+      rst_n_i : in std_logic := '1';
+      we_i  : in  std_logic;
+      wa_i  : in  std_logic_vector(f_log2_size(g_size)-1 downto 0);
+      wd_i  : in  std_logic_vector(g_data_width-1 downto 0);
+      ra_i  : in  std_logic_vector(f_log2_size(g_size)-1 downto 0);
+      rd_o  : out std_logic_vector(g_data_width-1 downto 0));
+  end component;
 
   component swc_page_allocator
     generic (

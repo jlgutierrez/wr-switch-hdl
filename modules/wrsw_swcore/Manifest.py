@@ -9,16 +9,23 @@
 
 files = [
 "swc_swcore_pkg.vhd",
+"swc_rd_wr_ram.vhd",
 "swc_core.vhd",
 "swc_multiport_linked_list.vhd",
-"swc_multiport_page_allocator.vhd",
+
+"new_allocator_generic_rams/swc_multiport_page_allocator.vhd",
+"new_allocator_generic_rams/swc_page_alloc.vhd",
+
+#"swc_multiport_page_allocator.vhd",
+#"swc_page_alloc_old.vhd",
+
+
 "swc_multiport_pck_pg_free_module.vhd",
 "swc_ob_prio_queue.vhd",
 #"swc_packet_mem.vhd",
 #"swc_packet_mem_read_pump.vhd",
 #"swc_packet_mem_write_pump.vhd",
 #"swc_page_alloc.vhd",
-"swc_page_alloc_old.vhd",
 "swc_pck_pg_free_module.vhd",
 "swc_pck_transfer_arbiter.vhd",
 "swc_pck_transfer_input.vhd",
@@ -30,5 +37,8 @@ files = [
 "xswc_input_block.vhd",
 "../wrsw_shared_types_pkg.vhd",
 "swc_ll_read_data_validation.vhd",
-]
+"buggy_ram_synth.vhd"];
+
+#"buggy_ram.vhd",
+#"buggy_ram.ngc"]
 modules = modules = {"local": ["mpm"]}

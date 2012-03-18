@@ -53,9 +53,11 @@
 `include "wb_packet_sink.svh"
 
 `include "swc_core_wrapper_generic.svh"
-`include "swc_param_defs.svh"   // all swcore parameters here
+`include "swc_param_defs.svh"   // all // swcore parameters here
 
-`define DBG_ALLOC //if defined, the allocation debugging is active: we track the number of allocated
+`include "allocator/common.svh"
+
+//`define DBG_ALLOC //if defined, the allocation debugging is active: we track the number of allocated
                   //and de-allocated pages
 
 typedef struct {
@@ -99,7 +101,22 @@ module main_generic;
          
    virtual IWishboneMaster #(2,16) v_wrf_source[`c_num_ports];
    virtual IWishboneSlave  #(2,16) v_wrf_sink[`c_num_ports];
-   
+      alloc_request_t rqs[$];
+
+     task traceback_page(alloc_request_t rqs[$], int page);
+        int i;
+        
+        $display("History traceback, page %-1d", page);
+
+        for(i=rqs.size()-1; i>=0;i--)
+          begin
+             if(rqs[i].page == page)
+               begin
+                  $display("time %t, rq_type: %d, use_cnt: %d", rqs[i].t_event,  rqs[i].t, rqs[i].use_count);
+                  if(rqs[i].t== ALLOC) break;
+               end
+          end
+     endtask // traceback_page
    
    reg  [`c_num_ports-1:0]                         rtu_rsp_valid        = 0;     
    wire [`c_num_ports-1:0]                         rtu_rsp_ack;       
@@ -348,7 +365,7 @@ module main_generic;
       src[5]    = new(U_wrf_source[5].get_accessor());
       src[6]    = new(U_wrf_source[6].get_accessor());
    
-      src[7]    = new(U_wrf_source[7].get_accessor());
+     /* src[7]    = new(U_wrf_source[7].get_accessor());
       src[8]    = new(U_wrf_source[8].get_accessor());
       src[9]    = new(U_wrf_source[9].get_accessor());
       src[10]   = new(U_wrf_source[10].get_accessor());
@@ -356,7 +373,7 @@ module main_generic;
       src[12]   = new(U_wrf_source[12].get_accessor());
       src[13]   = new(U_wrf_source[13].get_accessor());
       src[14]   = new(U_wrf_source[14].get_accessor());
-      src[15]   = new(U_wrf_source[15].get_accessor());
+      src[15]   = new(U_wrf_source[15].get_accessor());*/
 /*        src[16]   = new(U_wrf_source[16].get_accessor());
       src[17]   = new(U_wrf_source[17].get_accessor());
       */
@@ -369,7 +386,7 @@ module main_generic;
       sink[5]   = new(U_wrf_sink[5].get_accessor()); 
       sink[6]   = new(U_wrf_sink[6].get_accessor()); 
     
-      sink[7]   = new(U_wrf_sink[7].get_accessor()); 
+/*      sink[7]   = new(U_wrf_sink[7].get_accessor()); 
       sink[8]   = new(U_wrf_sink[8].get_accessor()); 
       sink[9]   = new(U_wrf_sink[9].get_accessor()); 
       sink[10]  = new(U_wrf_sink[10].get_accessor()); 
@@ -377,7 +394,7 @@ module main_generic;
       sink[12]  = new(U_wrf_sink[12].get_accessor()); 
       sink[13]  = new(U_wrf_sink[13].get_accessor()); 
       sink[14]  = new(U_wrf_sink[14].get_accessor()); 
-      sink[15]  = new(U_wrf_sink[15].get_accessor()); 
+      sink[15]  = new(U_wrf_sink[15].get_accessor()); */
  /*       sink[16]  = new(U_wrf_sink[16].get_accessor()); 
       sink[17]  = new(U_wrf_sink[17].get_accessor()); 
       */
@@ -428,7 +445,6 @@ module main_generic;
 
       
 //////////////////////////////////////////////////////////////////////////////////////////////////
-
        fork 
           begin
             automatic int  p = 0;
@@ -627,18 +643,39 @@ module main_generic;
         end 
 */
 
-
-
-
+   
+`define MMU DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit
+ `define MMUC DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core
 
   wait_cycles(1000);        
   // U_wrf_sink[0].permanent_stall_disable();
   
-  wait_cycles(60000); 
+  wait_cycles(40000); 
   
   transferReport(); // here we wait for all pcks to be received and then make statistics
   memoryLeakageReport();
-  
+
+   
+     
+`ifdef New_Allocator     
+    begin
+      int peak, occupied, i;
+      
+      count_occupied_pages(rqs, peak,occupied, 0, 1, 0);
+      $display("PEak %d occupied afterwards: %d\n", peak, occupied);
+
+       $display("Pages in usecnt_ram: ");
+       
+       for(i=0;i<1024;i++)
+        if(`MMUC.U_UseCnt_RAM.ram[i])
+          traceback_page(rqs, i);
+       
+       //   $display(i);
+       
+      
+      
+    end // UNMATCHED !!
+`endif
   end // initial
   
    ////////////////////////// sending frames /////////////////////////////////////////
@@ -677,29 +714,97 @@ module main_generic;
          rtu_rsp_valid[i] = rtu_rsp_valid[i] & !rtu_rsp_ack[i];
          rtu_drop[i]      = rtu_drop[i]      & !rtu_rsp_ack[i];
        end
-     end	    
+     end
+   `ifdef New_Allocator
+  always@(posedge clk) 
+     begin
+        alloc_request_t rq;
+
+        if(`MMUC.done_o)
+          begin
+             rq.t_event = $time;
+           //  $display("PagingRQ");
+             if(`MMUC.alloc_i)
+               begin
+                  rq.t = ALLOC;
+                  rq.page = `MMUC.pgaddr_o;
+                  rq.use_count = `MMUC.usecnt_i;
+               end else if(`MMUC.free_i) begin
+                    rq.t = FREE;
+                    rq.page = `MMUC.pgaddr_i;
+               end else if(`MMUC.force_free_i) begin
+                  rq.t = FORCE_FREE;
+                  rq.page = `MMUC.pgaddr_i;
+               end else if(`MMUC.set_usecnt_i) begin
+                  rq.t = SET_USECOUNT;
+                  rq.page = `MMUC.pgaddr_i;
+                  rq.use_count = `MMUC.usecnt_i;
+               end
+             rqs.push_back(rq);
+       end // if (`MMUC.done_o)
+     end // always@ (posedge clk)
+`endif
+  // initial    
         
 `ifdef DBG_ALLOC   // alloc debugging not yet 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////// Monitoring allocation of pages  /////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 //   always @(posedge clk) if(DUT.memory_management_unit.pg_addr_valid)
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_alloc & DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_done)
+
+   
+   function automatic int onehot2int(input [6:0] in);
+      int i;
+
+      for(i=0;i<=6;i++)
+        if(in[i]) return i;
+      return 0;
+   endfunction // onehot2int
+   
+ 
+   int    monitor_page = 430, mon_file;
+
+   initial
+     mon_file = $fopen("page_mon.txt","w"); // For writing
+   
+
+ 
+ 
+   
+/* -----\/----- EXCLUDED -----\/-----
+   
+   always@(posedge clk) 
+     begin
+        if(`MMUC.alloc_i && `MMUC.done_o && `MMUC.pgaddr_o == monitor_page) begin
+           $fwrite(mon_file,"%t: PageMon: alloc %-1d [use_count %-1d]\n", $time, monitor_page, `MMUC.usecnt_i);
+           
+        end else if(`MMUC.done_o && `MMUC.pgaddr_i == monitor_page)  begin
+           $fwrite(mon_file,"%t: PageMon: free %1b force_free %1b set_usecnt %1b page %-1d\n", 
+                   $time, `MMUC.free_i, `MMUC.force_free_i, `MMUC.set_usecnt_i, monitor_page);
+           $fflush(mon_file);
+        end
+     end
+
+ -----/\----- EXCLUDED -----/\----- */
+
+
+   
+   always @(posedge clk) if(`MMU.pg_alloc & `MMU.pg_done)
 
      begin
      int address;  
      int usecnt;
      
-     usecnt = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_usecnt;
+     usecnt = `MMU.pg_usecnt;
      
-     wait(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_addr_valid);
+    //     wait(`MMU.pg_addr_valid);
      
-     address =  DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_addr_alloc;
+     address =  `MMU.pgaddr_alloc_o;
      pg_alloc_cnt[address][pg_alloc_cnt[address][0]+1]= usecnt;
      pg_alloc_cnt[address][0]++;
      
      alloc_table[address].usecnt[alloc_table[address].cnt]   = usecnt;
-     alloc_table[address].port[alloc_table[address].cnt]     = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.in_sel;
+        alloc_table[address].port[alloc_table[address].cnt]     = 0;//onehot2int(`MMU.in_sel;
      alloc_table[address].cnt++;
      
    end   
@@ -708,11 +813,11 @@ module main_generic;
 ///////// Monitoring deallocation of pages  /////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
    	   
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.tmp_dbg_dealloc)
+   always @(posedge clk) if(`MMU.alloc_core.tmp_dbg_dealloc)
      begin
      int address;  
     
-     address =  DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.tmp_page;  
+     address =  `MMU.alloc_core.tmp_page;  
      pg_dealloc_cnt[address][0]++;
      dealloc_table[address].cnt++;  
        
@@ -721,15 +826,16 @@ module main_generic;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////// Monitoring freeing of pages  /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////// 
-          
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_free & DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_done)
+
+   
+   always @(posedge clk) if(`MMU.pg_free & `MMU.pg_done)
      begin
      int address;  
      int port_mask;
      int port;
      
-     port      = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.in_sel;    
-     address   = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_addr;  
+//     port      = `MMU.in_sel;    
+     address   = `MMU.pg_addr;  
      port_mask = dealloc_table[address].port[dealloc_table[address].cnt ] ;
      
      pg_dealloc_cnt[address][pg_dealloc_cnt[address][0] + 1]++;
@@ -743,13 +849,13 @@ module main_generic;
 ///////// Monitoring setting of pages' usecnt /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////     
      
-   always @(posedge clk) if(DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_set_usecnt & DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_done)
+   always @(posedge clk) if(`MMU.pg_set_usecnt & `MMU.pg_done)
      begin
      int address;  
 
-     address =  DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_addr;  
-     pg_alloc_cnt[address][pg_alloc_cnt[address][0] + 1] =  DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_usecnt;
-     alloc_table[address].usecnt[alloc_table[address].cnt - 1]   = DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.pg_usecnt;;
+     address =  `MMU.pg_addr;  
+     pg_alloc_cnt[address][pg_alloc_cnt[address][0] + 1] =  `MMU.pg_usecnt;
+     alloc_table[address].usecnt[alloc_table[address].cnt - 1]   = `MMU.pg_usecnt;;
        
      end 	
 `endif
@@ -773,10 +879,10 @@ module main_generic;
         $display("MEM LEAKGE Report:  number of lost pages = %2d" , 
 		 (cnt - (2*`c_num_ports)));
         $display("free_blocks=%4d={should be}= pg_num - cnt =%4d-%4d=%4d", 
-		 DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.free_blocks,
-		 DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.g_num_pages,
+		 `MMU.alloc_core.free_blocks,
+		 `MMU.alloc_core.g_num_pages,
 		 cnt,
-		 (DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core.g_num_pages - cnt));
+		 (`MMU.alloc_core.g_num_pages - cnt));
 
         $display("=================================== DBG ===============================");
  `endif

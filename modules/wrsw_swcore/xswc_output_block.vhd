@@ -424,28 +424,41 @@ begin  --  behavoural
 --       onehot_o => drop_array,
 --       out_o    => drop_index);
 
-  PRIO_QUEUE : generic_dpram
+  PRIO_QUEUE: swc_rd_wr_ram
     generic map (
       g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
-      g_size       => (g_prio_num * g_output_block_per_prio_fifo_size)
-      )
+      g_size       => (g_prio_num * g_output_block_per_prio_fifo_size))
     port map (
-      -- Port A -- writing
-      clka_i => clk_i,
-      bwea_i => (others => '1'),              --ram_ones,
-      wea_i  => wr_en_reg,
-      aa_i   => wr_addr_reg,
-      da_i   => wr_data_reg,
-      qa_o   => open,
+      clk_i => clk_i,
+      we_i  => wr_en_reg,
+      wa_i  => wr_addr_reg,
+      wd_i  => wr_data_reg,
+      ra_i  => rd_addr,
+      rd_o  => rd_data);
+  
+  
+  --PRIO_QUEUE : generic_dpram
+  --  generic map (
+  --    g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
+  --    g_size       => (g_prio_num * g_output_block_per_prio_fifo_size)
+  --    )
+  --  port map (
+  --    -- Port A -- writing
+  --    clka_i => clk_i,
+  --    bwea_i => (others => '1'),              --ram_ones,
+  --    wea_i  => wr_en_reg,
+  --    aa_i   => wr_addr_reg,
+  --    da_i   => wr_data_reg,
+  --    qa_o   => open,
 
-      -- Port B  -- reading
-      clkb_i => clk_i,
-      bweb_i => (others => '1'),        --ram_ones, 
-      web_i  => '0',
-      ab_i   => rd_addr,                -- drop_imp : ram_rd_addr,
-      db_i   => (others => '0'),        --ram_zeros,
-      qb_o   => rd_data
-      );
+  --    -- Port B  -- reading
+  --    clkb_i => clk_i,
+  --    bweb_i => (others => '1'),        --ram_ones, 
+  --    web_i  => '0',
+  --    ab_i   => rd_addr,                -- drop_imp : ram_rd_addr,
+  --    db_i   => (others => '0'),        --ram_zeros,
+  --    qb_o   => rd_data
+  --    );
 
 
   wr_ram : process(clk_i, rst_n_i)

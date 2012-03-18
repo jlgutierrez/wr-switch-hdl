@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2011-03-15
+-- Last update: 2012-03-18
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -104,12 +104,12 @@ use work.genram_pkg.all;
 entity swc_page_allocator is
   generic (
     -- number of pages we consider
-    g_num_pages : integer := 2048;
+    g_num_pages : integer := 1024;
 
     -- number of bits of the page address
-    g_page_addr_width: integer := 11; --g_page_addr_bits 
+    g_page_addr_width: integer := 10; --g_page_addr_bits 
 
-    g_num_ports      : integer ;--:= c_swc_num_ports
+    g_num_ports      : integer := 7;--:= c_swc_num_ports
 
     -- number of bits of the user count value
     g_usecount_width: integer := 4 --g_use_count_bits 
@@ -275,53 +275,80 @@ begin  -- syn
       out_o    => l0_first_free);
 
 
-  L0_LUT : generic_dpram
+  --L0_LUT : generic_dpram
+  --  generic map (
+  --    g_data_width => 32,
+  --    --      g_addr_bits => c_l1_bitmap_addrbits,
+  --    g_size       => c_l1_bitmap_size,
+  --    g_dual_clock => false,
+  --    g_addr_conflict_resolution => "read_first")
+  --  port map (
+  --    clka_i => clk_i,
+  --    clkb_i => clk_i,
+
+  --    aa_i   => l0_wr_addr,
+  --    da_i   => l0_wr_data,
+  --    qa_o   => open,
+  --    bwea_i => x"0",
+  --    wea_i  => l0_wr,
+
+  --    ab_i   => l0_rd_addr,
+  --    db_i   => x"00000000",
+  --    qb_o   => l0_rd_data,
+  --    bweb_i => x"0",
+  --    web_i  => '0');
+
+
+
+  L0_LUT: swc_rd_wr_ram
     generic map (
       g_data_width => 32,
-      --      g_addr_bits => c_l1_bitmap_addrbits,
       g_size       => c_l1_bitmap_size,
-      g_dual_clock => false)
+      g_use_native => true)
     port map (
-      clka_i => clk_i,
-      clkb_i => clk_i,
+      clk_i => clk_i,
+      rst_n_i => rst_n_i,
+      we_i  => l0_wr,
+      wa_i  => l0_wr_addr,
+      wd_i  => l0_wr_data,
+      ra_i  => l0_rd_addr,
+      rd_o  => l0_rd_data);
+--  L0_UCNTMEM : generic_dpram
+--    generic map (
+--      g_data_width => g_usecount_width,
+----      g_addr_bits => g_page_addr_width,
+--      g_size       => g_num_pages,
+--      g_dual_clock => false,
+--      g_addr_conflict_resolution => "read_first")
+--    port map (
+--      clka_i => clk_i,
+--      clkb_i => clk_i,
+      
+--      da_i   => usecnt_mem_wrdata,
+--      aa_i   => usecnt_mem_wraddr,
+--      qa_o   => open,
+--      wea_i  => usecnt_mem_wr,
+--      bwea_i => ones((g_usecount_width+7)/8 -1 downto 0),--ones((g_usecount_width+7)/8 -1 downto 0),
 
-      aa_i   => l0_wr_addr,
-      da_i   => l0_wr_data,
-      qa_o   => open,
-      bwea_i => x"0",
-      wea_i  => l0_wr,
+--      ab_i   => usecnt_mem_rdaddr,
+--      qb_o   => usecnt_mem_rddata,
+--      db_i   => ones(g_usecount_width-1 downto 0),
+--      bweb_i => ones((g_usecount_width+7)/8-1 downto 0), --ones((g_usecount_width+7)/8-1 downto 0),
+--      web_i  => '0'
+--      );
 
-      ab_i   => l0_rd_addr,
-      db_i   => x"00000000",
-      qb_o   => l0_rd_data,
-      bweb_i => x"0",
-      web_i  => '0');
-
-
-  L0_UCNTMEM : generic_dpram
+  L0_UCNTMEM: swc_rd_wr_ram
     generic map (
       g_data_width => g_usecount_width,
---      g_addr_bits => g_page_addr_width,
       g_size       => g_num_pages)
     port map (
-      clka_i => clk_i,
-      clkb_i => clk_i,
-      
-      da_i   => usecnt_mem_wrdata,
-      aa_i   => usecnt_mem_wraddr,
-      qa_o   => open,
-      wea_i  => usecnt_mem_wr,
-      bwea_i => ones((g_usecount_width+7)/8 -1 downto 0),--ones((g_usecount_width+7)/8 -1 downto 0),
-
-      ab_i   => usecnt_mem_rdaddr,
-      qb_o   => usecnt_mem_rddata,
-      db_i   => ones(g_usecount_width-1 downto 0),
-      bweb_i => ones((g_usecount_width+7)/8-1 downto 0), --ones((g_usecount_width+7)/8-1 downto 0),
-      web_i  => '0'
-      );
-
-
-
+      clk_i => clk_i,
+      rst_n_i => rst_n_i,
+      we_i  => usecnt_mem_wr,
+      wa_i  => usecnt_mem_wraddr,
+      wd_i  => usecnt_mem_wrdata,
+      ra_i  => usecnt_mem_rdaddr,
+      rd_o  => usecnt_mem_rddata);
 
   fsm : process(clk_i, rst_n_i)
 --  variable l:line;
