@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-29
--- Last update: 2012-03-16
+-- Last update: 2012-03-18
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -569,8 +569,8 @@ architecture rtl of xswc_core is
       pgaddr_force_free_i        => ppfm_force_free_pgaddr,
       
       
-      nomem_o                    => mmu_nomem,
-      tap_out_o => tap_alloc
+      nomem_o                    => mmu_nomem
+--      tap_out_o => tap_alloc
       );
        
   MULTIPORT_MEMORY: mpm_top --(new)

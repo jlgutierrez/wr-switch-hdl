@@ -267,8 +267,8 @@ package swc_swcore_pkg is
       usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
       pgaddr_alloc_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
       free_last_usecnt_o  : out std_logic_vector(g_num_ports - 1 downto 0);
-      nomem_o             : out std_logic;
-      tap_out_o :out std_logic_vector(62 + 49 downto 0)
+      nomem_o             : out std_logic
+--      tap_out_o :out std_logic_vector(62 + 49 downto 0)
       );
   
   end component;
