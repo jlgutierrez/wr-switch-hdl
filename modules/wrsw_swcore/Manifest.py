@@ -8,13 +8,15 @@
 
 
 files = [
-"swc_swcore_pkg.vhd",
-"swc_rd_wr_ram.vhd",
 "swc_core.vhd",
 "swc_multiport_linked_list.vhd",
 
-"new_allocator_generic_rams/swc_multiport_page_allocator.vhd",
-"new_allocator_generic_rams/swc_page_alloc.vhd",
+#"new_allocator/swc_multiport_page_allocator.vhd",
+#"new_allocator/swc_page_alloc_ram_bug.vhd",
+
+
+"old_allocator/swc_multiport_page_allocator.vhd",
+"old_allocator/swc_page_alloc_old.vhd",
 
 #"swc_multiport_page_allocator.vhd",
 #"swc_page_alloc_old.vhd",
@@ -37,8 +39,15 @@ files = [
 "xswc_input_block.vhd",
 "../wrsw_shared_types_pkg.vhd",
 "swc_ll_read_data_validation.vhd",
-"buggy_ram_synth.vhd"];
+"swc_swcore_pkg.vhd",
+"ram_bug/swc_rd_wr_ram.vhd"];
 
 #"buggy_ram.vhd",
 #"buggy_ram.ngc"]
-modules = modules = {"local": ["mpm"]}
+modules = {"local": ["mpm"]}
+
+
+if (action == "simulation"):
+	files.append("ram_bug/buggy_ram_synth.vhd")
+else:
+	files.append("ram_bug/buggy_ram.ngc")
