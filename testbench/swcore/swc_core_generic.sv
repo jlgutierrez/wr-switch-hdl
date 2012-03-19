@@ -425,7 +425,7 @@ module main_generic;
       int j;
       int n_ports = `c_num_ports;
       int mask_opt=1;     
-      int n_packets =100;
+      int n_packets =500;
       // initialization
       initPckSrcAndSink(src, sink, n_ports);
       gen       = new;
@@ -655,7 +655,6 @@ module main_generic;
   transferReport(); // here we wait for all pcks to be received and then make statistics
   memoryLeakageReport();
 
-   
      
 `ifdef New_Allocator     
     begin
