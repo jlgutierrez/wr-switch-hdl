@@ -213,12 +213,12 @@ architecture Behavioral of scb_top_synthesis is
       led_link_o          : out std_logic_vector(g_num_ports-1 downto 0);
       led_act_o           : out std_logic_vector(g_num_ports-1 downto 0);
       gpio_i              : in  std_logic_vector(31 downto 0) := x"00000000";
-      i2c_mbl0_scl_oen_o : out std_logic;
-      i2c_mbl0_scl_o     : out std_logic;
-      i2c_mbl0_scl_i     : in  std_logic := '1';
-      i2c_mbl0_sda_oen_o : out std_logic;
-      i2c_mbl0_sda_o     : out std_logic;
-      i2c_mbl0_sda_i     : in  std_logic := '1'
+      i2c_mbl_scl_oen_o : out std_logic_vector(1 downto 0);
+      i2c_mbl_scl_o     : out std_logic_vector(1 downto 0);
+      i2c_mbl_scl_i     : in  std_logic_vector(1 downto 0) := "11";
+      i2c_mbl_sda_oen_o : out std_logic_vector(1 downto 0);
+      i2c_mbl_sda_o     : out std_logic_vector(1 downto 0);
+      i2c_mbl_sda_i     : in  std_logic_vector(1 downto 0) := "11"
       ) ;
   end component;
 
@@ -262,8 +262,8 @@ architecture Behavioral of scb_top_synthesis is
   signal TRIG3   : std_logic_vector(31 downto 0);
 begin
 
-  mbl_scl_b <= i2c_mbl0_scl_out when i2c_mbl0_scl_oen = '0' else 'Z';
-  mbl_sda_b <= i2c_mbl0_sda_out when i2c_mbl0_sda_oen = '0' else 'Z';
+--  mbl_scl_b <= i2c_mbl0_scl_out when i2c_mbl0_scl_oen = '0' else 'Z';
+--  mbl_sda_b <= i2c_mbl0_sda_out when i2c_mbl0_sda_oen = '0' else 'Z';
 
   
   --chipscope_icon_1 : chipscope_icon
@@ -468,7 +468,6 @@ begin
   -- "Bare" top module instantiation
   -----------------------------------------------------------------------------
 
-  pps_o <=from_phys(0).rx_clk;
   
   -- gen_with_top : if(g_chipscope_only = false) generate
 
@@ -487,7 +486,7 @@ begin
       cpu_wb_o            => top_master_in,
       cpu_irq_n_o         => cpu_irq_n_o,
       pps_i               => pps_i,
-      pps_o               => open, --pps_o,
+      pps_o               => pps_o,
       dac_helper_sync_n_o => dac_helper_sync_n_o,
       dac_helper_sclk_o   => dac_helper_sclk_o,
       dac_helper_data_o   => dac_helper_data_o,
@@ -508,13 +507,7 @@ begin
       phys_o              => to_phys,
       phys_i              => from_phys,
       led_link_o          => led_link_o,
-      led_act_o           => led_act_o,
-      i2c_mbl0_scl_oen_o  => i2c_mbl0_scl_oen,
-      i2c_mbl0_scl_o      => i2c_mbl0_scl_out,
-      i2c_mbl0_scl_i      => mbl_scl_b,
-      i2c_mbl0_sda_oen_o  => i2c_mbl0_sda_oen,
-      i2c_mbl0_sda_o      => i2c_mbl0_sda_out,
-      i2c_mbl0_sda_i      => mbl_scl_b);
+      led_act_o           => led_act_o);
   
   -- end generate gen_with_top;
 

@@ -105,18 +105,18 @@ entity scb_top_bare is
     -- Mini-backplane I/O
     ---------------------------------------------------------------------------
 
-    i2c_mbl0_scl_oen_o : out std_logic;
-    i2c_mbl0_scl_o     : out std_logic;
-    i2c_mbl0_scl_i     : in  std_logic := '1';
-    i2c_mbl0_sda_oen_o : out std_logic;
-    i2c_mbl0_sda_o     : out std_logic;
-    i2c_mbl0_sda_i     : in  std_logic := '1'
+    i2c_mbl_scl_oen_o : out std_logic_vector(1 downto 0);
+    i2c_mbl_scl_o     : out std_logic_vector(1 downto 0);
+    i2c_mbl_scl_i     : in  std_logic_vector(1 downto 0) := "11";
+    i2c_mbl_sda_oen_o : out std_logic_vector(1 downto 0);
+    i2c_mbl_sda_o     : out std_logic_vector(1 downto 0);
+    i2c_mbl_sda_i     : in  std_logic_vector(1 downto 0) := "11"
     );
 end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 9;
+  constant c_NUM_WB_SLAVES : integer := 10;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
 
@@ -133,11 +133,13 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_PPS_GEN      : integer := 5;
   constant c_SLAVE_RTU          : integer := 6;
   constant c_SLAVE_GPIO         : integer := 7;
-  constant c_SLAVE_I2C          : integer := 8;
+  constant c_SLAVE_MBL_I2C0     : integer := 8;
+  constant c_SLAVE_MBL_I2C1     : integer := 9;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
-      x"00054000",                      -- I2C
+      x"00055000",                      -- MBL-I2C1
+      x"00054000",                      -- MBL-I2C0
       x"00053000",                      -- GPIO
       x"00060000",                      -- RTU
       x"00052000",                      -- PPSgen
@@ -150,6 +152,7 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000f0000",
      x"000ff000",
@@ -259,6 +262,16 @@ architecture rtl of scb_top_bare is
     return tmp;
   end f_fabric_2_slv;
 
+  function f_swc_ratio return integer is
+    begin
+      if(g_num_ports < 12) then
+        return 4;
+      else
+        return 8;
+      end if;
+    end f_swc_ratio;
+
+  
   signal cpu_irq_n : std_logic;
 
   signal cyc_d0    : std_logic_vector(g_num_ports-1 downto 0);
@@ -455,7 +468,8 @@ begin
           g_with_dpi_classifier => false,
           g_with_vlans          => false,
           g_with_rtu            => true,
-          g_with_leds           => true)
+          g_with_leds           => true,
+          g_with_dmtd           => true)
         port map (
           clk_ref_i          => clk_ref_i,
           clk_sys_i          => clk_sys,
@@ -537,7 +551,7 @@ begin
         g_wb_ob_ignore_ack                => false,
         g_mpm_mem_size                    => 65536,
         g_mpm_page_size                   => 64,
-        g_mpm_ratio                       => 4,  --2
+        g_mpm_ratio                       => f_swc_ratio,  --2
         g_mpm_fifo_size                   => 8,
         g_mpm_fetch_next_pg_in_advance    => false)
       port map (
@@ -682,12 +696,12 @@ begin
       slave_o         => cnx_master_in(c_SLAVE_PPS_GEN),
       pps_in_i        => '0',
       pps_csync_o     => pps_csync,
-      pps_out_o       => open,          -- fixme: was pps_o
+      pps_out_o       => pps_o,
       tm_utc_o        => open,
       tm_cycles_o     => open,
       tm_time_valid_o => open);
 
-  pps_o <= clk_sys;
+--  pps_o <= clk_sys;
 
   U_Tx_TSU : xwrsw_tx_tsu
     generic map (
@@ -722,22 +736,39 @@ begin
       gpio_out_o => gpio_o,
       gpio_in_i  => gpio_i);
 
-  U_MiniBackplane_I2C : xwb_i2c_master
+  U_MiniBackplane_I2C0 : xwb_i2c_master
     generic map (
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE)
     port map (
       clk_sys_i    => clk_sys,
       rst_n_i      => rst_n_periph,
-      slave_i      => cnx_master_out(c_SLAVE_I2C),
-      slave_o      => cnx_master_in(c_SLAVE_I2C),
+      slave_i      => cnx_master_out(c_SLAVE_MBL_I2C0),
+      slave_o      => cnx_master_in(c_SLAVE_MBL_I2C0),
       desc_o       => open,
-      scl_pad_i    => i2c_mbl0_scl_i,
-      scl_pad_o    => i2c_mbl0_scl_o,
-      scl_padoen_o => i2c_mbl0_scl_oen_o,
-      sda_pad_i    => i2c_mbl0_sda_i,
-      sda_pad_o    => i2c_mbl0_sda_o,
-      sda_padoen_o => i2c_mbl0_sda_oen_o);
+      scl_pad_i    => i2c_mbl_scl_i(0),
+      scl_pad_o    => i2c_mbl_scl_o(0),
+      scl_padoen_o => i2c_mbl_scl_oen_o(0),
+      sda_pad_i    => i2c_mbl_sda_i(0),
+      sda_pad_o    => i2c_mbl_sda_o(0),
+      sda_padoen_o => i2c_mbl_sda_oen_o(0));
+
+  U_MiniBackplane_I2C1 : xwb_i2c_master
+    generic map (
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE)
+    port map (
+      clk_sys_i    => clk_sys,
+      rst_n_i      => rst_n_periph,
+      slave_i      => cnx_master_out(c_SLAVE_MBL_I2C1),
+      slave_o      => cnx_master_in(c_SLAVE_MBL_I2C1),
+      desc_o       => open,
+      scl_pad_i    => i2c_mbl_scl_i(1),
+      scl_pad_o    => i2c_mbl_scl_o(1),
+      scl_padoen_o => i2c_mbl_scl_oen_o(1),
+      sda_pad_i    => i2c_mbl_sda_i(1),
+      sda_pad_o    => i2c_mbl_sda_o(1),
+      sda_padoen_o => i2c_mbl_sda_oen_o(1));
 
   -----------------------------------------------------------------------------
   -- Interrupt assignment
