@@ -1,3 +1,43 @@
+-------------------------------------------------------------------------------
+-- Title      : White Rabbit Softcore PLL (new generation) - SoftPLL-ng
+-- Project    : White Rabbit
+-------------------------------------------------------------------------------
+-- File       : wr_softpll_ng.vhd
+-- Author     : Tomasz Włostowski
+-- Company    : CERN BE-CO-HT
+-- Created    : 2011-01-29
+-- Last update: 2012-03-26
+-- Platform   : FPGA-generic
+-- Standard   : VHDL'93
+-------------------------------------------------------------------------------
+-- Description: 
+--
+-- The hardware part of the revised softcore PLL. Incorporates a user-defined
+-- number of DDMTD taggers, a FIFO allowing for sequential readout of
+-- the phase tags and ports for driving oscillator tuning DACs.
+-- The rest of the magic is done in the software.
+-------------------------------------------------------------------------------
+--
+-- Copyright (c) 2012 CERN
+--
+-- This source file is free software; you can redistribute it   
+-- and/or modify it under the terms of the GNU Lesser General   
+-- Public License as published by the Free Software Foundation; 
+-- either version 2.1 of the License, or (at your option) any   
+-- later version.                                               
+--
+-- This source is distributed in the hope that it will be       
+-- useful, but WITHOUT ANY WARRANTY; without even the implied   
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      
+-- PURPOSE.  See the GNU Lesser General Public License for more 
+-- details.                                                     
+--
+-- You should have received a copy of the GNU Lesser General    
+-- Public License along with this source; if not, download it   
+-- from http://www.gnu.org/licenses/lgpl-2.1.html
+--
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -8,13 +48,31 @@ use work.spll_wbgen2_pkg.all;
 
 entity wr_softpll_ng is
   generic(
-    g_tag_bits            : integer;
-    g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
-    g_address_granularity : t_wishbone_address_granularity := BYTE;
-    g_num_ref_inputs      : integer                        := 1;
-    g_num_outputs         : integer                        := 1;
+-- Number of bits in phase tags produced by DDMTDs.
+-- Must be large enough to cover at least a hundred of DDMTD periods to ensure
+-- correct operation of the SoftPLL software servo algorithm - that
+-- means, for a typical DMTD frequency offset N=16384, there number of tag bits
+-- should be log2(N) + 7 == 21. Note: the value must match the TAG_BITS constant
+-- in spll_defs.h file!
+    g_tag_bits : integer;
 
-    g_with_period_detector: boolean := false
+-- These two are obvious:
+    g_num_ref_inputs : integer := 1;
+    g_num_outputs    : integer := 1;
+
+-- When true, an additional period detector is provided, measuring the
+-- frequency offset between the DDMTD clock and a chosen reference input clock.
+-- The feature is not required by the current version of the SoftPLL servo
+-- algorithm, but is kept for testing/debugging purposes.
+    g_with_period_detector : boolean := false;
+
+-- When true, an additional FIFO is instantiated, providing a realtime record
+-- of user-selectable SoftPLL parameters (e.g. tag values, phase error, DAC drive).
+-- These values can be read by "spll_dbg_proxy" daemon for further analysis.
+    g_with_debug_fifo : boolean := false;
+
+    g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
+    g_address_granularity : t_wishbone_address_granularity := BYTE
     );
 
   port(
@@ -22,37 +80,47 @@ entity wr_softpll_ng is
     rst_n_i   : in std_logic;
 
 -- Reference inputs (i.e. the RX clocks recovered by the PHYs)
-    clk_ref_i  : in std_logic_vector(g_num_ref_inputs-1 downto 0);
--- Feedback clocks (i.e. the outputs of the main or aux oscillator)
-    clk_fb_i   : in std_logic_vector(g_num_outputs-1 downto 0);
+    clk_ref_i : in std_logic_vector(g_num_ref_inputs-1 downto 0);
+
+-- Feedback clocks (i.e. the outputs of the main or auxillary oscillator)
+-- Note: clk_fb_i(0) must be always connected to the primary board's oscillator
+-- (i.e. the one driving the PTP and Ethernet PHY) to ensure correct operation
+-- of the PTP core.
+    clk_fb_i : in std_logic_vector(g_num_outputs-1 downto 0);
+
 -- DMTD Offset clock
     clk_dmtd_i : in std_logic;
 
-
 -- DMTD oscillator drive
     dac_dmtd_data_o : out std_logic_vector(15 downto 0);
+-- When HI, load the data from dac_dmtd_data_o to the DAC.
     dac_dmtd_load_o : out std_logic;
 
 -- Output channel DAC value
     dac_out_data_o : out std_logic_vector(15 downto 0);
--- Output channel select (0 = channel 0, etc. )
+-- Output channel select (0 = Output channel 0, 1 == OC 1, etc...)
     dac_out_sel_o  : out std_logic_vector(3 downto 0);
     dac_out_load_o : out std_logic;
 
+-- Output enable input: when HI, enables locking the output(s)
+-- to the reference clock(s)
     out_enable_i : in  std_logic_vector(g_num_outputs-1 downto 0);
+-- When HI, the respective clock output is locked.
     out_locked_o : out std_logic_vector(g_num_outputs-1 downto 0);
 
-    wb_adr_i       : in  std_logic_vector(6 downto 0);
-    wb_dat_i       : in  std_logic_vector(31 downto 0);
-    wb_dat_o       : out std_logic_vector(31 downto 0);
-    wb_cyc_i       : in  std_logic;
-    wb_sel_i       : in  std_logic_vector(3 downto 0);
-    wb_stb_i       : in  std_logic;
-    wb_we_i        : in  std_logic;
-    wb_ack_o       : out std_logic;
-    wb_stall_o     : out std_logic;
-    wb_irq_o       : out std_logic;
-    debug_o        : out std_logic_vector(3 downto 0);
+    wb_adr_i   : in  std_logic_vector(6 downto 0);
+    wb_dat_i   : in  std_logic_vector(31 downto 0);
+    wb_dat_o   : out std_logic_vector(31 downto 0);
+    wb_cyc_i   : in  std_logic;
+    wb_sel_i   : in  std_logic_vector(3 downto 0);
+    wb_stb_i   : in  std_logic;
+    wb_we_i    : in  std_logic;
+    wb_ack_o   : out std_logic;
+    wb_stall_o : out std_logic;
+    wb_irq_o   : out std_logic;
+    debug_o    : out std_logic_vector(3 downto 0);
+
+-- Debug FIFO readout interrupt
     dbg_fifo_irq_o : out std_logic
     );
 
@@ -280,7 +348,7 @@ begin  -- rtl
     end process;
     
   end generate gen_ref_channels_clk_enables;
-  
+
 
   resized_addr(6 downto 0)                          <= wb_adr_i;
   resized_addr(c_wishbone_address_width-1 downto 7) <= (others => '0');
@@ -395,56 +463,56 @@ begin  -- rtl
 
   wb_irq_o <= wb_irq_out;
 
-  
- gen_with_period_detector: if(g_with_period_detector) generate
-  
-  per_clk_ref(g_num_ref_inputs-1 downto 0) <= clk_ref_i;-- and g_period_detector_ref_mask(g_num_ref_inputs-1 downto 0);
-  per_clk_ref(g_num_ref_inputs)            <= clk_fb_i(0);
 
-  -- Frequency/Period detector (to speed up locking)
-  U_Period_Detector : spll_period_detect
-    generic map (
-      g_num_ref_inputs => g_num_ref_inputs + 1)
-    port map (
-      clk_ref_i        => per_clk_ref,
-      clk_dmtd_i       => clk_dmtd_i,
-      clk_sys_i        => clk_sys_i,
-      rst_n_dmtdclk_i  => rst_n_dmtdclk,
-      rst_n_sysclk_i   => rst_n_i,
-      freq_err_o       => dmtd_freq_err,
-      freq_err_stb_p_o => dmtd_freq_err_stb_p,
-      in_sel_i         => regs_in.csr_per_sel_o(4 downto 0));
+  gen_with_period_detector : if(g_with_period_detector) generate
+    
+    per_clk_ref(g_num_ref_inputs-1 downto 0) <= clk_ref_i;  -- and g_period_detector_ref_mask(g_num_ref_inputs-1 downto 0);
+    per_clk_ref(g_num_ref_inputs)            <= clk_fb_i(0);
 
-  p_collect_tags_hpll : process(clk_sys_i)
-  begin
-    if rising_edge(clk_sys_i) then
-      if(rst_n_i = '0') then
-        regs_out.per_hpll_valid_i <= '0';
-        regs_out.per_hpll_error_i <= (others => '0');
-        
-      else
+    -- Frequency/Period detector (to speed up locking)
+    U_Period_Detector : spll_period_detect
+      generic map (
+        g_num_ref_inputs => g_num_ref_inputs + 1)
+      port map (
+        clk_ref_i        => per_clk_ref,
+        clk_dmtd_i       => clk_dmtd_i,
+        clk_sys_i        => clk_sys_i,
+        rst_n_dmtdclk_i  => rst_n_dmtdclk,
+        rst_n_sysclk_i   => rst_n_i,
+        freq_err_o       => dmtd_freq_err,
+        freq_err_stb_p_o => dmtd_freq_err_stb_p,
+        in_sel_i         => regs_in.csr_per_sel_o(4 downto 0));
 
-        if(dmtd_freq_err_stb_p = '1')then
-          regs_out.per_hpll_error_i(11 downto 0)  <= dmtd_freq_err;
-          regs_out.per_hpll_error_i(15 downto 12) <= (others => dmtd_freq_err(dmtd_freq_err'left));
-        end if;
-
-        if(dmtd_freq_err_stb_p = '1' and regs_in.csr_per_en_o = '1') then
-          regs_out.per_hpll_valid_i <= '1';
-        elsif(tag_hpll_rd_period_ack = '1' or regs_in.csr_per_en_o = '0') then
+    p_collect_tags_hpll : process(clk_sys_i)
+    begin
+      if rising_edge(clk_sys_i) then
+        if(rst_n_i = '0') then
           regs_out.per_hpll_valid_i <= '0';
+          regs_out.per_hpll_error_i <= (others => '0');
+          
+        else
+
+          if(dmtd_freq_err_stb_p = '1')then
+            regs_out.per_hpll_error_i(11 downto 0)  <= dmtd_freq_err;
+            regs_out.per_hpll_error_i(15 downto 12) <= (others => dmtd_freq_err(dmtd_freq_err'left));
+          end if;
+
+          if(dmtd_freq_err_stb_p = '1' and regs_in.csr_per_en_o = '1') then
+            regs_out.per_hpll_valid_i <= '1';
+          elsif(tag_hpll_rd_period_ack = '1' or regs_in.csr_per_en_o = '0') then
+            regs_out.per_hpll_valid_i <= '0';
+          end if;
         end if;
       end if;
-    end if;
-  end process;
+    end process;
 
- end generate gen_with_period_detector;
-  
-  gen_without_period_detector: if(g_with_period_detector = false) generate
+  end generate gen_with_period_detector;
+
+  gen_without_period_detector : if(g_with_period_detector = false) generate
     regs_out.per_hpll_valid_i <= '0';
   end generate gen_without_period_detector;
-  
-  
+
+
   dac_dmtd_load_o <= regs_in.dac_hpll_wr_o;
   dac_dmtd_data_o <= regs_in.dac_hpll_o;
 
@@ -472,7 +540,7 @@ begin  -- rtl
   end process;
 
   -- Drive back the respective registers
-  regs_out.ocer_i(g_num_outputs-1 downto 0) <= ocer_int;
+  regs_out.ocer_i(g_num_outputs-1 downto 0)    <= ocer_int;
   regs_out.rcer_i(g_num_ref_inputs-1 downto 0) <= rcer_int;
 
   p_latch_tags_hpll : process(clk_sys_i)
@@ -570,54 +638,62 @@ begin  -- rtl
   -- Debugging FIFO
   -----------------------------------------------------------------------------
 
-  dbg_fifo_almostfull <= '1' when unsigned(regs_in.dfr_host_wr_usedw_o) > 8180 else '0';
+  gen_with_debug_fifo : if(g_with_debug_fifo = true) generate
+    
+    dbg_fifo_almostfull <= '1' when unsigned(regs_in.dfr_host_wr_usedw_o) > 8180 else '0';
 
-  p_request_counter : process(clk_sys_i)
-  begin
-    if rising_edge(clk_sys_i) then
-      if rst_n_i = '0' then
-        dbg_seq_id <= (others => '0');
-      else
-        if(regs_in.dfr_spll_eos_o = '1' and regs_in.dfr_spll_eos_wr_o = '1') then
-          dbg_seq_id <= dbg_seq_id + 1;
+    p_request_counter : process(clk_sys_i)
+    begin
+      if rising_edge(clk_sys_i) then
+        if rst_n_i = '0' then
+          dbg_seq_id <= (others => '0');
+        else
+          if(regs_in.dfr_spll_eos_o = '1' and regs_in.dfr_spll_eos_wr_o = '1') then
+            dbg_seq_id <= dbg_seq_id + 1;
+          end if;
         end if;
       end if;
-    end if;
-  end process;
+    end process;
 
-  p_fifo_permit_write : process(clk_sys_i)
-  begin
-    if rising_edge(clk_sys_i) then
-      if rst_n_i = '0' then
-        dbg_fifo_permit_write <= '1';
-      else
-        if(dbg_fifo_almostfull = '0') then
+    p_fifo_permit_write : process(clk_sys_i)
+    begin
+      if rising_edge(clk_sys_i) then
+        if rst_n_i = '0' then
           dbg_fifo_permit_write <= '1';
-        elsif(regs_in.dfr_spll_eos_o = '1' and regs_in.dfr_spll_eos_wr_o = '1') then
-          dbg_fifo_permit_write <= '0';
+        else
+          if(dbg_fifo_almostfull = '0') then
+            dbg_fifo_permit_write <= '1';
+          elsif(regs_in.dfr_spll_eos_o = '1' and regs_in.dfr_spll_eos_wr_o = '1') then
+            dbg_fifo_permit_write <= '0';
+          end if;
         end if;
       end if;
-    end if;
-  end process;
+    end process;
 
-  p_coalesce_fifo_irq : process(clk_sys_i)
-  begin
-    if rising_edge(clk_sys_i) then
-      if rst_n_i = '0' then
-        dbg_fifo_irq_o <= '0';
-      else
-        if(unsigned(regs_in.dfr_host_wr_usedw_o) = 0) then
+    p_coalesce_fifo_irq : process(clk_sys_i)
+    begin
+      if rising_edge(clk_sys_i) then
+        if rst_n_i = '0' then
           dbg_fifo_irq_o <= '0';
-        elsif(unsigned(regs_in.dfr_host_wr_usedw_o) = c_DBG_FIFO_COALESCE) then
-          dbg_fifo_irq_o <= '1';
+        else
+          if(unsigned(regs_in.dfr_host_wr_usedw_o) = 0) then
+            dbg_fifo_irq_o <= '0';
+          elsif(unsigned(regs_in.dfr_host_wr_usedw_o) = c_DBG_FIFO_COALESCE) then
+            dbg_fifo_irq_o <= '1';
+          end if;
         end if;
       end if;
-    end if;
-  end process;
+    end process;
 
-  regs_out.dfr_host_wr_req_i <= regs_in.dfr_spll_value_wr_o and dbg_fifo_permit_write;
-  regs_out.dfr_host_value_i  <= regs_in.dfr_spll_eos_o & regs_in.dfr_spll_value_o;
-  regs_out.dfr_host_seq_id_i <= std_logic_vector(dbg_seq_id);
+    regs_out.dfr_host_wr_req_i <= regs_in.dfr_spll_value_wr_o and dbg_fifo_permit_write;
+    regs_out.dfr_host_value_i  <= regs_in.dfr_spll_eos_o & regs_in.dfr_spll_value_o;
+    regs_out.dfr_host_seq_id_i <= std_logic_vector(dbg_seq_id);
+
+  end generate gen_with_debug_fifo;
+
+  gen_without_debug_fifo: if(g_with_debug_fifo = false) generate
+    regs_out.dfr_host_wr_req_i <= '0';
+  end generate gen_without_debug_fifo;
 
   -----------------------------------------------------------------------------
   -- CSR N_OUT/N_REF fields
