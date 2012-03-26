@@ -67,7 +67,8 @@ architecture rtl of wrsw_rt_subsystem is
       g_address_granularity      : t_wishbone_address_granularity;
       g_num_ref_inputs           : integer;
       g_num_outputs              : integer;
-      g_period_detector_ref_mask : std_logic_vector(31 downto 0) := x"ffffffff"
+     	g_with_debug_fifo: boolean := true
+
       );
     port (
       clk_sys_i       : in  std_logic;
@@ -206,8 +207,7 @@ begin  -- rtl
       g_interface_mode           => PIPELINED,
       g_address_granularity      => BYTE,
       g_num_ref_inputs           => g_num_rx_clocks + 2,
-      g_num_outputs              => 1,
-      g_period_detector_ref_mask => f_mask_single_bit(g_num_rx_clocks, 32))
+      g_num_outputs              => 1)
     port map (
       clk_sys_i       => clk_sys_i,
       rst_n_i         => rst_n_i,
