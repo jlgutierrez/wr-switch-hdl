@@ -40,3 +40,11 @@ xlnx_auto_0_xdb
 _xmsgs
 *.xmsgs
 xst
+*.bin
+*.htm
+*.html
+*.sh
+iseconfig
+*.tcl
+*.psr
+*planA*
