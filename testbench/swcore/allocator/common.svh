@@ -219,7 +219,6 @@ interface IAllocatorPort (input clk_i);
    
 endinterface // IAllocatorPort
 
-`ifdef nulll
 typedef virtual IAllocatorPort VIAllocatorPort;
 
 task automatic execute_requests(VIAllocatorPort port, ref alloc_request_t rqs[$], input int verbose =0);
@@ -273,4 +272,3 @@ task automatic execute_requests(VIAllocatorPort port, ref alloc_request_t rqs[$]
            endcase // case (rqs[i].t)
         end
    endtask // execute_requests
-`endif
