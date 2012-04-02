@@ -89,10 +89,17 @@ package swc_swcore_pkg is
 
   component swc_page_allocator
     generic (
-      g_num_pages       : integer;
-      g_page_addr_width : integer;
-      g_num_ports       : integer;
-      g_usecount_width  : integer);
+      g_num_pages             : integer;
+      g_page_addr_width       : integer;
+      g_num_ports             : integer;
+      g_usecount_width        : integer;
+      --- management
+      g_page_size             : integer := 64;
+      g_max_pck_size          : integer := 759; 
+      g_special_res_num_pages : integer := 256;
+      g_resource_num          : integer := 3;   
+      g_resource_num_width    : integer := 2
+);
     port (
       clk_i              : in  std_logic;
       rst_n_i            : in  std_logic;
@@ -107,7 +114,15 @@ package swc_swcore_pkg is
       free_last_usecnt_o : out std_logic;
       idle_o             : out std_logic;
       done_o             : out std_logic;
-      nomem_o            : out std_logic);
+      nomem_o            : out std_logic;
+      resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
+      resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
+      free_resource_valid_i : in std_logic;
+      rescnt_page_num_i      : in  std_logic_vector(g_page_addr_width -1 downto 0);
+      res_full_o             : out std_logic_vector(g_resource_num    -1 downto 0);
+      res_almost_full_o      : out std_logic_vector(g_resource_num    -1 downto 0)            
+      );
+
   end component;
 
   --component swc_page_allocator
@@ -190,7 +205,10 @@ package swc_swcore_pkg is
     g_page_size                        : integer ;
     g_partial_select_width             : integer ;
     g_ll_data_width                    : integer ;
-    g_port_index : integer
+    g_port_index                       : integer ;
+    --- resource management
+    g_resource_num                     : integer;
+    g_resource_num_width               : integer
   );
   port (
     clk_i   : in std_logic;
@@ -210,6 +228,15 @@ package swc_swcore_pkg is
     mmu_set_usecnt_done_i : in std_logic;
     mmu_usecnt_o        : out std_logic_vector(g_usecount_width - 1 downto 0);
     mmu_nomem_i         : in std_logic;
+
+    --- management
+    mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
+    mmu_resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
+    mmu_free_resource_valid_o  : out std_logic;
+    mmu_rescnt_page_num_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
+    mmu_res_almost_full_i      : in  std_logic_vector(g_resource_num   -1 downto 0); 
+    mmu_res_full_i             : in  std_logic_vector(g_resource_num   -1 downto 0);
+
 
     rtu_rsp_valid_i     : in  std_logic;
     rtu_rsp_ack_o       : out std_logic;
@@ -248,7 +275,13 @@ package swc_swcore_pkg is
       g_page_addr_width                  : integer ;--:= c_swc_page_addr_width;
       g_num_ports                        : integer ;--:= c_swc_num_ports
       g_page_num                         : integer ;--:= c_swc_packet_mem_num_pages
-      g_usecount_width                   : integer --:= c_swc_usecount_width
+      g_usecount_width                   : integer ;--:= c_swc_usecount_width
+    --- resource manager
+      g_max_pck_size                     : integer ;
+      g_page_size                        : integer ; 
+      g_special_res_num_pages            : integer ;
+      g_resource_num                     : integer ; -- this include 1 for unknown
+      g_resource_num_width               : integer        
     );  
     port (
       rst_n_i             : in std_logic;
@@ -264,11 +297,16 @@ package swc_swcore_pkg is
       pgaddr_free_i       : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
       pgaddr_force_free_i : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
       pgaddr_usecnt_i     : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
+      usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width  - 1 downto 0);
       pgaddr_alloc_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
       free_last_usecnt_o  : out std_logic_vector(g_num_ports - 1 downto 0);
-      nomem_o             : out std_logic
---      tap_out_o :out std_logic_vector(62 + 49 downto 0)
+      nomem_o             : out std_logic;
+      resource_i             : in  std_logic_vector(g_num_ports * g_resource_num_width-1 downto 0);
+      resource_o             : out std_logic_vector(g_num_ports * g_resource_num_width-1 downto 0);
+      free_resource_valid_i  : in  std_logic_vector(g_num_ports - 1 downto 0);
+      rescnt_page_num_i      : in  std_logic_vector(g_num_ports * g_page_addr_width-1 downto 0);
+      res_full_o             : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0);
+      res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0)    
       );
   
   end component;
@@ -542,9 +580,33 @@ component  swc_multiport_pck_pg_free_module is
       write_data_valid_i    : in std_logic;
       write_data_ready_i    : in std_logic;
 
-      read_data_o          : out std_logic_vector(g_data_width - 1 downto 0);
-      read_data_valid_o    : out std_logic
+      read_data_o           : out std_logic_vector(g_data_width - 1 downto 0);
+      read_data_valid_o     : out std_logic
   );
+  end component;
+  
+  component swc_alloc_resource_manager is
+  generic (
+    g_num_ports             : integer ;
+    g_max_pck_size          : integer;
+    g_page_size             : integer;
+    g_total_num_pages       : integer := 2048;
+    g_total_num_pages_width : integer := 11;
+    g_special_res_num_pages : integer := 248;
+    g_resource_num          : integer := 3; -- this include 1 for unknown
+    g_resource_num_width    : integer := 2
+    );
+  port (
+    clk_i                   : in std_logic;             -- clock & reset
+    rst_n_i                 : in std_logic;
+    resource_i              : in std_logic_vector(g_resource_num_width-1 downto 0);
+    alloc_i                 : in std_logic;
+    free_i                  : in std_logic;    
+    rescnt_set_i            : in std_logic;
+    rescnt_page_num_i       : in std_logic_vector(g_total_num_pages_width-1 downto 0);
+    res_full_o              : out std_logic_vector(g_resource_num- 1 downto 0);
+    res_almost_full_o       : out std_logic_vector(g_resource_num- 1 downto 0)
+    );  
   end component;
 
   function f_sel2partialSel(sel       : std_logic_vector; partialSelWidth: integer) return std_logic_vector;

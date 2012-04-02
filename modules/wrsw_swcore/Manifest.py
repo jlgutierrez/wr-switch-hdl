@@ -18,6 +18,8 @@ files = [
 "old_allocator/swc_multiport_page_allocator.vhd",
 "old_allocator/swc_page_alloc_old.vhd",
 
+"swc_alloc_resource_manager.vhd",
+
 #"swc_multiport_page_allocator.vhd",
 #"swc_page_alloc_old.vhd",
 

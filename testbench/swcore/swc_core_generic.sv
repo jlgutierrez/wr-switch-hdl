@@ -57,7 +57,7 @@
 
 `include "allocator/common.svh"
 
-//`define DBG_ALLOC //if defined, the allocation debugging is active: we track the number of allocated
+`define DBG_ALLOC //if defined, the allocation debugging is active: we track the number of allocated
                   //and de-allocated pages
 
 typedef struct {
@@ -229,8 +229,12 @@ module main_generic;
 //        end
 //	begin
 //	  automatic int tmp_rtu_wait = (77*((global_seed*100)/3))%400 ;
-	  wait_cycles(tmp_rtu_wait);
-	  $display("rtu wait: %4d cycles",tmp_rtu_wait);
+	  
+	  
+	  //wait_cycles(tmp_rtu_wait);
+	  //$display("rtu wait: %4d cycles",tmp_rtu_wait);
+	  
+	  
           set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
 //        end        
 //      join
@@ -425,7 +429,7 @@ module main_generic;
       int j;
       int n_ports = `c_num_ports;
       int mask_opt=1;     
-      int n_packets =500;
+      int n_packets =50; //200
       // initialization
       initPckSrcAndSink(src, sink, n_ports);
       gen       = new;
@@ -441,7 +445,7 @@ module main_generic;
 
       //for(j=0;j<`c_num_ports;j++) begin
       
-      //U_wrf_sink[0].permanent_stall_enable();
+      //U_wrf_sink[1].permanent_stall_enable();
 
       
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -644,11 +648,11 @@ module main_generic;
 */
 
    
-`define MMU DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit
+ `define MMU DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit
  `define MMUC DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core
 
-  wait_cycles(1000);        
-  // U_wrf_sink[0].permanent_stall_disable();
+  wait_cycles(70000);        
+   U_wrf_sink[1].permanent_stall_disable();
   
   wait_cycles(40000); 
   

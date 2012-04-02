@@ -25,4 +25,5 @@ package wrsw_shared_types_pkg is
   type t_rtu_request_array is array(integer range <>) of t_rtu_request;
   type t_rtu_response_array is array(integer range <>) of t_rtu_response;
 
+
 end wrsw_shared_types_pkg;

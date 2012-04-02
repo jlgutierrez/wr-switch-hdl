@@ -113,7 +113,12 @@ entity xswc_input_block is
     g_partial_select_width : integer;
     g_ll_data_width        : integer;
     g_max_oob_size         : integer;   -- on words (16 bits)
-    g_port_index           : integer    -- ID of this port
+    g_port_index           : integer;    -- ID of this port
+
+    --- resource management
+    g_resource_num         : integer;
+    g_resource_num_width   : integer
+    
     );
   port (
     clk_i   : in std_logic;
@@ -160,6 +165,24 @@ entity xswc_input_block is
 
     -- memory full
     mmu_nomem_i : in std_logic;
+
+    --------------------------- resource management ----------------------------------
+    -- resource number
+    mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
+    
+    -- outputed when freeing
+    mmu_resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
+
+    -- used only when freeing page, 
+    -- if HIGH then the input resource_i value will be used
+    -- if LOW  then the value read from memory will be used (stored along with usecnt)
+    mmu_free_resource_valid_o  : out  std_logic;
+    
+    -- number of pages added to the resurce
+    mmu_rescnt_page_num_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
+    mmu_res_full_i             : in  std_logic_vector(g_resource_num   -1 downto 0);
+    mmu_res_almost_full_i      : in  std_logic_vector(g_resource_num   -1 downto 0); 
+
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
@@ -2040,5 +2063,13 @@ tap_out_o <= f_slv_resize(              --
   "0000000000" & --mpm_pg_addr &                         -- 17
   mpm_pg_req_i,                         -- 16
   50 + 62);
+
+------------------ resource management -----------------------------
+
+mmu_rescnt_page_num_o          <= (others => '0');
+mmu_free_resource_valid_o      <= '0';
+mmu_resource_o                 <= (others => '0');
+
+
 
 end syn;  -- arch

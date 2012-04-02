@@ -57,7 +57,7 @@ entity xswc_core is
   generic( 
 
     g_prio_num                         : integer ;--:= c_swc_output_prio_num; [works only for value of 8, output_block-causes problem]
-    g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
+    g_max_pck_size                     : integer ;-- in 16bits words --:= c_swc_max_pck_size
     g_max_oob_size                     : integer ;
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
@@ -69,8 +69,8 @@ entity xswc_core is
     g_wb_addr_width                    : integer ;
     g_wb_sel_width                     : integer ;
     g_wb_ob_ignore_ack                 : boolean := true ;
-    g_mpm_mem_size                     : integer ;
-    g_mpm_page_size                    : integer ;
+    g_mpm_mem_size                     : integer ; -- in 16bits words 
+    g_mpm_page_size                    : integer ; -- in 16bits words 
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
     g_mpm_fetch_next_pg_in_advance     : boolean 
@@ -116,10 +116,16 @@ architecture rtl of xswc_core is
    constant c_mpm_partial_sel_width : integer := integer(g_wb_sel_width-1);
    constant c_mpm_page_size_width   : integer := integer(CEIL(LOG2(real(g_mpm_page_size-1))));
 
-
-
    constant c_ll_addr_width         : integer := c_mpm_page_addr_width;
    constant c_ll_data_width         : integer := c_mpm_page_addr_width + c_max_oob_size_width + 3;
+
+   -- resource management -----------------------
+   constant c_res_mmu_max_pck_size            : integer := 759; -- in 16 bit words (1518 [octets])/(2 [octets])
+   constant c_res_mmu_special_res_num_pages   : integer := 256; 
+   constant c_res_mmu_resource_num            : integer := 3;   -- (1) unknown; (2) special; (3) normal
+   constant c_res_mmu_resource_num_width      : integer := 2;
+   ----------------------------------------------
+
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Memory Management Unit<<
    ----------------------------------------------------------------------------------------------------
@@ -291,6 +297,19 @@ architecture rtl of xswc_core is
 
   signal CONTROL0 : std_logic_vector(35 downto 0);
    signal tap : std_logic_vector(127 downto 0);
+
+
+   ----------------------------------------------------------------------------------------------------
+   -- signals connecting >>Input Block (IB) << with >>Page allocator (MMU)<< -- resource management 
+   ----------------------------------------------------------------------------------------------------   
+
+   signal mmu2ib_resource             : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width   -1 downto 0);
+   signal ib2mmu_resource             : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width   -1 downto 0);
+   signal ib2mmu_free_resource_valid  : std_logic_vector(g_num_ports                                -1 downto 0);
+   signal ib2mmu_rescnt_page_num      : std_logic_vector(g_num_ports*c_mpm_page_addr_width          -1 downto 0);
+   signal mmu2ib_res_full             : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
+   signal mmu2ib_res_almost_full      : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
+
   begin --rtl
    
   --chipscope_icon_1: chipscope_icon
@@ -324,7 +343,10 @@ architecture rtl of xswc_core is
         g_page_size                        => g_mpm_page_size,
         g_partial_select_width             => c_mpm_partial_sel_width,
         g_ll_data_width                    => c_ll_data_width,
-        g_port_index => i
+        g_port_index                       => i, 
+        -- resource management
+        g_resource_num                     => c_res_mmu_resource_num,
+        g_resource_num_width               => c_res_mmu_resource_num_width
       )
       port map (
         clk_i                    => clk_i,
@@ -349,6 +371,14 @@ architecture rtl of xswc_core is
         mmu_nomem_i              => mmu_nomem,
         mmu_pageaddr_o           => ib_pageaddr_output((i + 1) * c_mpm_page_addr_width - 1 downto i * c_mpm_page_addr_width),
                 
+        -- resource management         
+        mmu_resource_i           => mmu2ib_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
+        mmu_resource_o           => ib2mmu_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
+        mmu_free_resource_valid_o=> ib2mmu_free_resource_valid(i),
+        mmu_rescnt_page_num_o    => ib2mmu_rescnt_page_num   ((i+1)*c_mpm_page_addr_width        -1 downto i*c_mpm_page_addr_width),
+        mmu_res_full_i           => mmu2ib_res_full          ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
+        mmu_res_almost_full_i    => mmu2ib_res_almost_full   ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
+
         -------------------------------------------------------------------------------
         -- I/F with Pck's Pages Freeing Module (PPFM)
         -------------------------------------------------------------------------------      
@@ -544,7 +574,13 @@ architecture rtl of xswc_core is
       g_page_addr_width         => c_mpm_page_addr_width,
       g_num_ports               => g_num_ports,
       g_page_num                => c_mpm_page_num,
-      g_usecount_width          => c_usecount_width
+      g_usecount_width          => c_usecount_width,
+      -- management
+      g_max_pck_size            => c_res_mmu_max_pck_size,
+      g_page_size               => g_mpm_page_size,
+      g_special_res_num_pages   => c_res_mmu_special_res_num_pages,
+      g_resource_num            => c_res_mmu_resource_num,
+      g_resource_num_width      => c_res_mmu_resource_num_width
     )
     port map (
       rst_n_i                    => rst_n_i,   
@@ -568,8 +604,15 @@ architecture rtl of xswc_core is
       force_free_done_o          => mmu_force_free_done,
       pgaddr_force_free_i        => ppfm_force_free_pgaddr,
       
-      
-      nomem_o                    => mmu_nomem
+      nomem_o                    => mmu_nomem,
+      --------------------------- resource management ----------------------------------
+      resource_i                 => ib2mmu_resource,
+      resource_o                 => mmu2ib_resource,
+      free_resource_valid_i      => ib2mmu_free_resource_valid,
+      rescnt_page_num_i          => ib2mmu_rescnt_page_num,
+      res_full_o                 => mmu2ib_res_full,
+      res_almost_full_o          => mmu2ib_res_almost_full
+
 --      tap_out_o => tap_alloc
       );
        

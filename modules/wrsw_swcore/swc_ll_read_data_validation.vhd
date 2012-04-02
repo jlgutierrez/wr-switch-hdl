@@ -114,7 +114,7 @@ begin
   -- the data being written to the Linked List DPRAM is what we are wating for and it's valid.
   valid_data_write    <= '1' when (read_addr_i = write_addr_i and write_data_valid_i = '1' and write_data_ready_i = '1') else '0';
 
-  process(clk_i, rst_n_i)
+  process(clk_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
