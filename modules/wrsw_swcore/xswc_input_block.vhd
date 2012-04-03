@@ -173,11 +173,6 @@ entity xswc_input_block is
     -- outputed when freeing
     mmu_resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
 
-    -- used only when freeing page, 
-    -- if HIGH then the input resource_i value will be used
-    -- if LOW  then the value read from memory will be used (stored along with usecnt)
-    mmu_free_resource_valid_o  : out  std_logic;
-    
     -- number of pages added to the resurce
     mmu_rescnt_page_num_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
     mmu_res_full_i             : in  std_logic_vector(g_resource_num   -1 downto 0);
@@ -190,6 +185,7 @@ entity xswc_input_block is
     rtu_rsp_valid_i     : in  std_logic;
     rtu_rsp_ack_o       : out std_logic;
     rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
+    rtu_broadcast_i     : in  std_logic; 
     rtu_drop_i          : in  std_logic;
     rtu_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
 
@@ -246,6 +242,12 @@ entity xswc_input_block is
     pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
 
     pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+
+    -- information about resoruce allocation
+    pta_resource_o : out std_logic_vector(g_resource_num_width - 1 downto 0);
+    
+    -- broadcast traffic
+    pta_broadcast_o : out std_logic;
 
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
@@ -349,10 +351,12 @@ architecture syn of xswc_input_block is
   signal rtu_rsp_ack         : std_logic;
 
   -- rtu decision stored for the current pck
-  signal current_prio   : std_logic_vector(g_prio_width - 1 downto 0);
-  signal current_mask   : std_logic_vector(g_num_ports - 1 downto 0);
-  signal current_usecnt : std_logic_vector(g_usecount_width - 1 downto 0);
-  signal current_drop   : std_logic;
+  signal current_prio      : std_logic_vector(g_prio_width - 1 downto 0);
+  signal current_mask      : std_logic_vector(g_num_ports - 1 downto 0);
+  signal current_res_info  : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal current_broadcast : std_logic;
+  signal current_usecnt    : std_logic_vector(g_usecount_width - 1 downto 0);
+  signal current_drop      : std_logic;
 
   -- this is stored when first page is taken from the allocated in advanced register
   signal current_pckstart_pageaddr : std_logic_vector(g_page_addr_width - 1 downto 0);
@@ -363,6 +367,8 @@ architecture syn of xswc_input_block is
   signal pta_transfer_pck : std_logic;
   signal pta_pageaddr     : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal pta_mask         : std_logic_vector(g_num_ports - 1 downto 0);
+  signal pta_resource     : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pta_broadcast    : std_logic;
   signal pta_prio         : std_logic_vector(g_prio_width - 1 downto 0);
 --   signal pta_pck_size              : std_logic_vector(g_max_pck_size_width - 1 downto 0);  
 
@@ -562,7 +568,7 @@ architecture syn of xswc_input_block is
     tmp := (others => '0');
     tmp(index) := '1';
     return tmp;
-  end f_gen_mask;
+  end function f_gen_mask;
   
   function f_slv_resize(x: std_logic_vector; len: natural) return std_logic_vector is
     variable tmp : std_logic_vector(len-1 downto 0);
@@ -570,7 +576,7 @@ architecture syn of xswc_input_block is
     tmp := (others => '0');
     tmp(x'length-1 downto 0) := x;
     return tmp;
-  end f_slv_resize;
+  end function f_slv_resize;
 
 
 
@@ -613,6 +619,17 @@ begin
 end function f_enum2nat;
 
 constant c_force_usecnt             : boolean := TRUE;
+
+-- resource management
+  signal mmu_resource_out           : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal mmu_rescnt_page_num        : std_logic_vector(g_page_addr_width-1 downto 0);
+  signal mmu_res_full               : std_logic_vector(g_resource_num   -1 downto 0);
+  signal mmu_res_almost_full        : std_logic_vector(g_resource_num   -1 downto 0); 
+
+  signal unknown_res_page_cnt       : unsigned(g_page_addr_width-1 downto 0);
+
+  signal res_info_valid             : std_logic;
+  signal res_info                   : std_logic_vector(g_resource_num_width-1 downto 0);
 
 begin  --arch
   
@@ -1148,6 +1165,10 @@ begin
       pckstart_usecnt_write  <= (others => '0');
       pckstart_usecnt_prev   <= (others => '0');
       pckstart_usecnt_pgaddr <= (others => '0');
+      
+      --- management
+      mmu_resource_out       <= (others => '0');
+      mmu_rescnt_page_num    <= (others => '0');
 
       --========================================
     else
@@ -1170,18 +1191,34 @@ begin
             pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
             pckstart_usecnt_write  <= current_usecnt;
             pckstart_usecnt_prev   <= current_usecnt;
+            ---------- source management  --------------
+            mmu_resource_out       <= res_info; 
+            mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
+            -------------------------------------------
             
           elsif(pckstart_page_in_advance = '0') then
             
             pckstart_page_alloc_req <= '1';
             s_page_alloc            <= S_PCKSTART_PAGE_REQ;
             pckstart_usecnt_write   <= pckstart_usecnt_prev;
+            ---------- source management  --------------
+            mmu_resource_out        <= (others => '0'); -- always zero, even if we know (rare case)
+            mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
+            -------------------------------------------
             
           elsif(pckinter_page_in_advance = '0') then
             
             pckinter_page_alloc_req <= '1';
             s_page_alloc            <= S_PCKINTER_PAGE_REQ;
             pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
+            ---------- source management  --------------
+            if(res_info_valid = '1') then
+              mmu_resource_out        <= res_info;
+            else
+              mmu_resource_out        <= (others => '0');            
+            end if;
+            mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
+            -------------------------------------------  
 
           end if;
 
@@ -1197,12 +1234,24 @@ begin
               pckstart_page_alloc_req <= '1';
               s_page_alloc            <= S_PCKSTART_PAGE_REQ;
               pckstart_usecnt_write   <= pckstart_usecnt_prev;
+              ---------- source management  --------------
+              mmu_resource_out        <= (others => '0'); -- always zero, even if we know (rare case)
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
+              -------------------------------------------
               
             elsif(pckinter_page_in_advance = '0') then
               
               pckinter_page_alloc_req <= '1';
               s_page_alloc            <= S_PCKINTER_PAGE_REQ;
               pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
+              ---------- source management  --------------
+              if(res_info_valid = '1') then
+                mmu_resource_out        <= res_info;
+              else
+                mmu_resource_out        <= (others => '0');            
+              end if;
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
+              ------------------------------------------- 
               
             else
               
@@ -1230,12 +1279,24 @@ begin
               pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
               pckstart_usecnt_write  <= current_usecnt;
               pckstart_usecnt_prev   <= current_usecnt;
+              ---------- source management  --------------
+              mmu_resource_out       <= res_info; 
+              mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
+              -------------------------------------------
               
             elsif(pckinter_page_in_advance = '0') then
               
               pckinter_page_alloc_req <= '1';
               s_page_alloc            <= S_PCKINTER_PAGE_REQ;
               pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
+              ---------- source management  --------------
+              if(res_info_valid = '1') then
+                mmu_resource_out        <= res_info;
+              else
+                mmu_resource_out        <= (others => '0');            
+              end if;
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
+              ------------------------------------------- 
               
             else
               
@@ -1260,12 +1321,20 @@ begin
               pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
               pckstart_usecnt_write  <= current_usecnt;
               pckstart_usecnt_prev   <= current_usecnt;
+              ---------- source management  --------------
+              mmu_resource_out       <= res_info; 
+              mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
+              -------------------------------------------
               
             elsif(pckstart_page_in_advance = '0') then
               
               pckstart_page_alloc_req <= '1';
               s_page_alloc            <= S_PCKSTART_PAGE_REQ;
               pckstart_usecnt_write   <= pckstart_usecnt_prev;
+              ---------- source management  --------------
+              mmu_resource_out        <= (others => '0'); -- always zero, even if we know (rare case)
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
+              -------------------------------------------
               
             else
               
@@ -1295,21 +1364,25 @@ begin
   if rising_edge(clk_i) then
     if(rst_n_i = '0') then
       --========================================
-      current_mask   <= (others => '0');
-      current_drop   <= '0';
-      current_usecnt <= (others => '0');
-      current_prio   <= (others => '0');
-      current_usecnt <= (others => '0');
-      rtu_rsp_ack    <= '0';
+      current_mask      <= (others => '0');
+      current_res_info  <= (others => '0');
+      current_broadcast <= '0';
+      current_drop      <= '0';
+      current_usecnt    <= (others => '0');
+      current_prio      <= (others => '0');
+      current_usecnt    <= (others => '0');
+      rtu_rsp_ack       <= '0';
       --========================================
     else
       -- remember input rtu decision
       if(rtu_rsp_valid_i = '1' and rtu_rsp_ack = '0' and rp_accept_rtu = '1') then
         -- make sure we're not forwarding packets to ourselves. 
-        current_mask   <= rtu_dst_port_mask_i; -- and (not f_gen_mask(g_port_index, current_mask'length));
-        current_prio   <= rtu_prio_i;
-        current_drop   <= rtu_drop_i;
-        current_usecnt <= rtu_dst_port_usecnt;
+        current_mask      <= rtu_dst_port_mask_i; -- and (not f_gen_mask(g_port_index, current_mask'length));
+        current_res_info  <= res_info;
+        current_broadcast <= rtu_broadcast_i;
+        current_prio      <= rtu_prio_i;
+        current_drop      <= rtu_drop_i;
+        current_usecnt    <= rtu_dst_port_usecnt;
 
         rtu_rsp_ack <= '1';
       else
@@ -1427,6 +1500,8 @@ begin
       pta_transfer_pck <= '0';
       pta_pageaddr     <= (others => '0');
       pta_mask         <= (others => '0');
+      pta_resource     <= (others => '0');
+      pta_broadcast    <= '0';
       pta_prio         <= (others => '0');
       --========================================
     else
@@ -1462,6 +1537,8 @@ begin
                 s_transfer_pck   <= S_TRANSFER;
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
+                pta_resource     <= current_res_info;
+                pta_broadcast    <= current_broadcast;
                 pta_prio         <= current_prio;
                 -- we take stright from allocated in 
                 -- advance because we are on SOF
@@ -1508,6 +1585,8 @@ begin
                 pta_transfer_pck <= '1';
                 pta_pageaddr     <= current_pckstart_pageaddr;
                 pta_mask         <= current_mask;
+                pta_resource     <= current_res_info;
+                pta_broadcast    <= current_broadcast;                
                 pta_prio         <= current_prio;
                 -- wait for the first page to be cleard, sync-ing transfer_pck and rcv_pck and ll_wrie
               else
@@ -1534,6 +1613,8 @@ begin
                 s_transfer_pck   <= S_TRANSFER;
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
+                pta_resource     <= current_res_info;
+                pta_broadcast    <= current_broadcast;                
                 pta_prio         <= current_prio;
                 -- take directly from allocation in advanc !!!
                 pta_pageaddr     <= pckstart_pageaddr;
@@ -1564,6 +1645,8 @@ begin
                 s_transfer_pck   <= S_TRANSFER;
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
+                pta_resource     <= current_res_info;
+                pta_broadcast    <= current_broadcast;
                 pta_prio         <= current_prio;
                 pta_pageaddr     <= current_pckstart_pageaddr;
               else
@@ -1591,6 +1674,8 @@ begin
             s_transfer_pck   <= S_TRANSFER;
             pta_transfer_pck <= '1';
             pta_mask         <= current_mask;
+            pta_resource     <= current_res_info;
+            pta_broadcast    <= current_broadcast;
             pta_prio         <= current_prio;
             pta_pageaddr     <= current_pckstart_pageaddr;
           end if;
@@ -1957,6 +2042,64 @@ tp_transfer_valid <= '1' when (s_transfer_pck = S_TRANSFERED or
 -- rcv_pck FSM indicates that there is or was error on the received pck
 rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 
+
+--================================================================================================
+--------------------------------------------------------------------------------------------------
+--------------------------------        resource management       --------------------------------
+--------------------------------------------------------------------------------------------------
+--================================================================================================
+
+  -- generate signal indicating that the inforamtion about resource number for a given
+  -- pck is valid (based on RTU decision), it is used during allocation of a new
+  -- inter-pck page to indicate that the previous page was allocated to a give resource
+  res_info_valid <= '1' when ((s_transfer_pck = S_WAIT_SOF           or
+                               s_transfer_pck = S_SET_USECNT         or
+                               s_transfer_pck = S_WAIT_WITH_TRANSFER or
+                               s_transfer_pck = S_TOO_LONG_TRANSFER  or
+                               s_transfer_pck = S_TRANSFER           or
+                               s_transfer_pck = S_TRANSFERED       ) and
+                              (s_rcv_pck      = S_RCV_DATA           or 
+                               s_rcv_pck      = S_PAUSE            ))else 
+                    '0';
+
+  ---------------------------------------------
+  -- mapping of RTU decision into resources
+  res_info        <= f_map_rtu_rsp_to_mmu_res(rtu_prio_i, rtu_broadcast_i, g_resource_num_width);
+  ---------------------------------------------
+  
+  p_cnt_unused_pages: process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        --================================================
+        unknown_res_page_cnt <= to_unsigned(0,unknown_res_page_cnt'length);
+        --================================================
+      else
+      
+        -- reset the count of pages allocated to unknown resource when sync-ing FSMs
+        if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then 
+          unknown_res_page_cnt <= to_unsigned(1,unknown_res_page_cnt'length);
+        elsif(mpm_pg_req_i = '1' and mpm_dlast = '0' and s_transfer_pck = S_WAIT_RTU_VALID) then
+          unknown_res_page_cnt <= unknown_res_page_cnt + 1;
+        end if;
+
+      end if;  -- if(rst_n_i = '0') then
+    end if;  --rising_edge(clk_i) then
+
+  end process;
+
+
+ mmu_resource_o        <= mmu_resource_out;
+ mmu_rescnt_page_num_o <= mmu_rescnt_page_num;
+
+
+
+--================================================================================================
+--------------------------------------------------------------------------------------------------
+--------------------------------         inputs/outputs           --------------------------------
+--------------------------------------------------------------------------------------------------
+--================================================================================================
+
 --================================================================================================
 -- Input signals
 --================================================================================================
@@ -1993,6 +2136,8 @@ mpm_data_o    <= mpm_data;
 pta_transfer_pck_o <= pta_transfer_pck;
 pta_pageaddr_o     <= pta_pageaddr;
 pta_mask_o         <= pta_mask;         --current_mask;
+pta_resource_o     <= pta_resource;
+pta_broadcast_o    <= pta_broadcast;
 pta_prio_o         <= pta_prio;         --current_prio;
 pta_pck_size_o     <= (others => '0');  -- unused
 
@@ -2003,11 +2148,6 @@ snk_sel_int <= snk_i.sel;
 snk_cyc_int <= snk_i.cyc;
 snk_stb_int <= snk_i.stb;
 snk_we_int  <= snk_i.we;
-
--- old
---  ll_data_eof(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width) <= ll_entry.dsel;
---  ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
---  ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others =>'0');
 
 ll_data_eof(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width) <= ll_entry.oob_dsel;
 ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
@@ -2064,11 +2204,6 @@ tap_out_o <= f_slv_resize(              --
   mpm_pg_req_i,                         -- 16
   50 + 62);
 
------------------- resource management -----------------------------
-
-mmu_rescnt_page_num_o          <= (others => '0');
-mmu_free_resource_valid_o      <= '0';
-mmu_resource_o                 <= (others => '0');
 
 
 

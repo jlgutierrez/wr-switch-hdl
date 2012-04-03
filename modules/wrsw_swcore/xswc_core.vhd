@@ -374,7 +374,7 @@ architecture rtl of xswc_core is
         -- resource management         
         mmu_resource_i           => mmu2ib_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
         mmu_resource_o           => ib2mmu_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
-        mmu_free_resource_valid_o=> ib2mmu_free_resource_valid(i),
+       -- mmu_free_resource_valid_o=> ib2mmu_free_resource_valid(i),
         mmu_rescnt_page_num_o    => ib2mmu_rescnt_page_num   ((i+1)*c_mpm_page_addr_width        -1 downto i*c_mpm_page_addr_width),
         mmu_res_full_i           => mmu2ib_res_full          ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
         mmu_res_almost_full_i    => mmu2ib_res_almost_full   ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
@@ -392,6 +392,7 @@ architecture rtl of xswc_core is
         rtu_rsp_ack_o            => rtu_ack_o(i),        
 	rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
         rtu_dst_port_mask_i      => rtu_rsp_i(i).port_mask(g_num_ports  - 1 downto 0),
+        rtu_broadcast_i          => '0', -- TODO: add stuff to RTU
         rtu_drop_i               => rtu_rsp_i(i).drop,
         rtu_prio_i               => rtu_rsp_i(i).prio(c_prio_width - 1 downto 0),
 
@@ -428,6 +429,8 @@ architecture rtl of xswc_core is
         pta_mask_o               => ib_mask           ((i + 1) * g_num_ports          -1 downto i * g_num_ports),
         pta_prio_o               => ib_prio           ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
         pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
+        pta_resource_o           => open,
+        pta_broadcast_o          => open,
 
         tap_out_o => tap_ib(i)
         );

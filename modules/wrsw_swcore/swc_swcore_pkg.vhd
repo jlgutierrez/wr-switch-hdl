@@ -41,6 +41,7 @@
 
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 use ieee.math_real.CEIL;
 use ieee.math_real.log2;
 
@@ -232,7 +233,6 @@ package swc_swcore_pkg is
     --- management
     mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
     mmu_resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
-    mmu_free_resource_valid_o  : out std_logic;
     mmu_rescnt_page_num_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
     mmu_res_almost_full_i      : in  std_logic_vector(g_resource_num   -1 downto 0); 
     mmu_res_full_i             : in  std_logic_vector(g_resource_num   -1 downto 0);
@@ -241,6 +241,7 @@ package swc_swcore_pkg is
     rtu_rsp_valid_i     : in  std_logic;
     rtu_rsp_ack_o       : out std_logic;
     rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
+    rtu_broadcast_i     : in  std_logic;
     rtu_drop_i          : in  std_logic;
     rtu_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
 
@@ -263,6 +264,8 @@ package swc_swcore_pkg is
     pta_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
     pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
     pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    pta_resource_o : out std_logic_vector(g_resource_num_width - 1 downto 0);
+    pta_broadcast_o : out std_logic;
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
     tap_out_o : out std_logic_vector(49+62 downto 0)
@@ -611,7 +614,13 @@ component  swc_multiport_pck_pg_free_module is
 
   function f_sel2partialSel(sel       : std_logic_vector; partialSelWidth: integer) return std_logic_vector;
   function f_partialSel2sel(partialSel: std_logic_vector; selWidth       : integer) return std_logic_vector;
-
+  function f_map_rtu_rsp_to_mmu_res(rtu_prio     : std_logic_vector; 
+                                    rtu_broadcast: std_logic; 
+                                    res_num_width: integer)          return std_logic_vector;
+  function f_map_rtu_rsp_and_mmu_res_to_out_queue(rtu_prio      : std_logic_vector; 
+                                                  rtu_broadcast : std_logic; 
+                                                  resource      : std_logic_vector;
+                                                  queue_num     : integer) return std_logic_vector;
 end swc_swcore_pkg;
 
 package body swc_swcore_pkg is
@@ -644,5 +653,48 @@ package body swc_swcore_pkg is
     end if;
     return tmp;
   end function; 
+  
+  
+  function f_map_rtu_rsp_to_mmu_res(rtu_prio     : std_logic_vector; 
+                                    rtu_broadcast: std_logic; 
+                                    res_num_width: integer)          return std_logic_vector is
+    variable tmp  : std_logic_vector(7 downto 0); -- assuming max resource number of 8 (far over-estimated)
+    variable ones : std_logic_vector(rtu_prio'length downto 0);
+  begin
+    ones := (others => '0');
+    ---------- the mapping as you please ------------------
+    if(rtu_prio = ones and rtu_broadcast = '0') then -- todo: change when RTU changed
+      tmp := x"02";
+    else
+      tmp := x"01";
+    end if;
+    -------------------------------------------------------
+    
+    return tmp(res_num_width-1 downto 0);-- adjust the vector width
+  end function;
+
+  function f_map_rtu_rsp_and_mmu_res_to_out_queue(rtu_prio      : std_logic_vector; 
+                                                  rtu_broadcast : std_logic; 
+                                                  resource      : std_logic_vector;
+                                                  queue_num     : integer) return std_logic_vector is
+    variable tmp     : unsigned(integer(CEIL(LOG2(real(queue_num+1))))-1 downto 0);
+    variable res2    : std_logic_vector(7 downto 0);
+    variable tmp_prio: std_logic_vector(9 downto 0); -- one bit more
+  begin
+    res2     := x"02";
+    tmp_prio(9                 downto rtu_prio'length) := (others => '0');
+    tmp_prio(rtu_prio'length-1 downto 0              ) := rtu_prio;
+    if(resource = res2(resource'length -1 downto 0)) then
+      tmp   := to_unsigned(0,tmp'length ); 
+    else
+      if(unsigned(tmp_prio) + 1 >= to_unsigned(queue_num,9)) then
+        tmp := to_unsigned(queue_num,tmp'length);
+      else
+        tmp := unsigned(tmp_prio) + 1;
+      end if;
+    end if;
+    return std_logic_vector(tmp);
+  end function;
+
 
 end swc_swcore_pkg;
