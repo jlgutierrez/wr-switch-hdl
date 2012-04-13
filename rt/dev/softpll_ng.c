@@ -22,14 +22,29 @@ static volatile struct SPLL_WB *SPLL = (volatile struct SPLL_WB *) BASE_SOFTPLL;
 #include "spll_helper.h"
 #include "spll_main.h"
 #include "spll_ptracker.h"
+#include "spll_external.h"
+
+#define CHAN_TCXO 4
+#define CHAN_EXT 5
 
 static volatile struct spll_helper_state helper;
+static volatile struct spll_external_state extpll;
 static volatile struct spll_main_state mpll;
+static volatile struct spll_ptracker_state ptrackers[MAX_PTRACKERS];
+
+#define MODE_GRAND_MASTER 0
+#define MODE_FREERUNNING_MASTER 1
+#define MODE_SLAVE 2
+
+static volatile int mode = MODE_GRAND_MASTER;
+static volatile int helper_locked = 0;
+
 
 void _irq_entry()
 {
 	volatile uint32_t trr;
 	int src = -1, tag;
+	int i;
 
 	if(! (SPLL->CSR & SPLL_TRR_CSR_EMPTY))
 	{
@@ -37,27 +52,64 @@ void _irq_entry()
 		src = SPLL_TRR_R0_CHAN_ID_R(trr);
 		tag = SPLL_TRR_R0_VALUE_R(trr);
 
-		helper_update(&helper, tag, src);
-		mpll_update(&mpll, tag, src);
+		switch(mode) {
+			case MODE_GRAND_MASTER:
+				external_update(&extpll, tag, src);
+				break;
+		};
+
+//		helper_update(&helper, tag, src);
+
+/*		if(helper.ld.locked && !helper_locked)
+		{
+			for(i=0;i<n_chan_ref; i++)
+				ptracker_init(&ptrackers[i], CHAN_TCXO, i, 512);
+		}
+
+		if(helper.ld.locked)
+		{
+			for(i=0;i<n_chan_ref; i++)
+				ptracker_update(&ptrackers[i], tag, src);
+			
+		} else {
+			for(i=0;i<n_chan_ref; i++)
+				ptrackers[i].ready = 0;
+		}
+*/
+/*
+		if(helper.ld.locked && !helper_locked)
+		{
+			if(!master_mode) mpll_start(&mpll);
+			helper_locked=  1;
+		}
+		
+
+		if(helper.ld.locked && !master_mode)
+		{
+			mpll_update(&mpll, tag, src);	
+		}*/
+
+		
 	}
 
-		irq_count++;
-		clear_irq();
+	irq_count++;
+	clear_irq();
 }
 
-void spll_init()
+void spll_init(int _master_mode, int ref_channel)
 {
 	volatile int dummy;
 	disable_irq();
 
-	
 	n_chan_ref = SPLL_CSR_N_REF_R(SPLL->CSR);
 	n_chan_out = SPLL_CSR_N_OUT_R(SPLL->CSR);
 
-	TRACE("SPLL_Init: %d ref channels, %d out channels\n", n_chan_ref, n_chan_out);
+	helper_locked = 0;
+//	master_mode = _master_mode;
+
+	TRACE("SPLL_Init: %s mode, %d ref channels, %d out channels\n", _master_mode ? "Master" : "Slave", n_chan_ref, n_chan_out);
 	SPLL->DAC_HPLL = 0;
-	timer_delay(100000);
-	
+	timer_delay(100000);	
 	SPLL->CSR= 0 ;
 	SPLL->OCER = 0;
 	SPLL->RCER = 0;
@@ -67,44 +119,23 @@ void spll_init()
 	while(! (SPLL->TRR_CSR & SPLL_TRR_CSR_EMPTY)) dummy = SPLL->TRR_R0;
 	dummy = SPLL->PER_HPLL;
 	SPLL->EIC_IER = 1;
+
+//	helper_init(&helper, master_mode ? CHAN_TCXO : ref_channel);
+
+//	if(!master_mode)
+//		mpll_init(&mpll, ref_channel, CHAN_TCXO);
+	
+//	helper_start(&helper);
+	external_init(&extpll, CHAN_EXT);
+	external_start(&extpll, 1);
+
+	enable_irq();
+
+	for(;;) mprintf("irqcount %d t %d lock %d\n", irq_count, eee, extpll.ld.locked);
 }
 
 int spll_check_lock()
 {
-	return helper.ld.locked ? 1 : 0;
+	return 0;
+//	return helper.ld.locked & (mpll.ld.locked || master_mode) ? 1 : 0;
 }
-
-#define CHAN_TCXO 8
-
-void spll_test()
-{
-	int i = 0;
-	volatile	int dummy;
-
-
-	spll_init();
-	helper_init(&helper, 0);
-	helper_start(&helper);
-	mpll_init(&mpll, 0, CHAN_TCXO);
-	enable_irq();
-
-//	mpll_init(&mpll, 0, CHAN_TCXO);
-	while(!helper.ld.locked) ;//TRACE("%d\n", helper.phase.ld.locked);
-	TRACE("Helper locked, starting main\n");
-	mpll_start(&mpll);
-
-}
-
-/*
-#define CHAN_AUX 7
-#define CHAN_EXT 6
-
-
-int spll_gm_measure_ext_phase()
-{
-	SPLL->CSR = 0;
-	SPLL->DCCR = SPLL_DCCR_GATE_DIV_W(25);
-	SPLL->RCGER = (1<<CHAN_AUX);
-	SPLL->RCGER = (1<<CHAN_EXT);
-}
-*/

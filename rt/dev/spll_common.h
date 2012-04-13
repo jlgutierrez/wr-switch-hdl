@@ -34,6 +34,11 @@ typedef struct {
   	int locked;					/* Non-zero: we are locked */
 } spll_lock_det_t;
 
+/* simple, 1st-order lowpass filter */
+typedef struct {
+		int alpha;
+		int y_d;
+} spll_lowpass_t;
 
 /* Processes a single sample (x) with PI control algorithm (pi). Returns the value (y) to 
 	 drive the actuator. */
@@ -111,6 +116,24 @@ static void ld_init(spll_lock_det_t *ld)
 {
  	ld->locked = 0;
  	ld->lock_cnt = 0;
+}
+
+static void lowpass_init(spll_lowpass_t *lp, int alpha)
+{
+	lp->y_d = 0x80000000;
+	lp->alpha = alpha;
+}
+
+static int lowpass_update(spll_lowpass_t *lp, int x)
+{
+	if(lp->y_d == 0x80000000)
+	{
+		lp->y_d = x;
+		return x;
+	} else {
+		lp->y_d = lp->y_d + ((lp->alpha * (x - lp->y_d)) >> 16);
+		return lp->y_d;
+	}
 }
 
 
