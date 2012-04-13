@@ -231,7 +231,7 @@ package swc_swcore_pkg is
     mmu_nomem_i         : in std_logic;
 
     --- management
-    mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
+--    mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
     mmu_resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
     mmu_rescnt_page_num_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
     mmu_res_almost_full_i      : in  std_logic_vector(g_resource_num   -1 downto 0); 
@@ -306,7 +306,10 @@ package swc_swcore_pkg is
       nomem_o             : out std_logic;
       resource_i             : in  std_logic_vector(g_num_ports * g_resource_num_width-1 downto 0);
       resource_o             : out std_logic_vector(g_num_ports * g_resource_num_width-1 downto 0);
-      free_resource_valid_i  : in  std_logic_vector(g_num_ports - 1 downto 0);
+      free_resource_i             : in  std_logic_vector(g_num_ports * g_resource_num_width - 1 downto 0);
+      free_resource_valid_i       : in  std_logic_vector(g_num_ports                        - 1 downto 0);
+      force_free_resource_i       : in  std_logic_vector(g_num_ports * g_resource_num_width - 1 downto 0);
+      force_free_resource_valid_i : in  std_logic_vector(g_num_ports                        - 1 downto 0);
       rescnt_page_num_i      : in  std_logic_vector(g_num_ports * g_page_addr_width-1 downto 0);
       res_full_o             : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0);
       res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0)    
@@ -459,7 +462,8 @@ component  swc_multiport_pck_pg_free_module is
     g_num_ports             : integer ; --:= c_swc_num_ports
     g_page_addr_width       : integer ;--:= c_swc_page_addr_width;
     g_pck_pg_free_fifo_size : integer ;--:= c_swc_freeing_fifo_size
-    g_data_width            : integer
+    g_data_width            : integer ;
+    g_resource_num_width    : integer
       ); 
   port (
     clk_i   : in std_logic;
@@ -479,14 +483,20 @@ component  swc_multiport_pck_pg_free_module is
     ll_read_req_o           : out std_logic_vector(g_num_ports-1 downto 0);
     ll_read_valid_data_i    : in  std_logic_vector(g_num_ports-1 downto 0);
 
-    mmu_free_o              : out std_logic_vector(g_num_ports-1 downto 0);
-    mmu_free_done_i         : in  std_logic_vector(g_num_ports-1 downto 0);
-    mmu_free_pgaddr_o       : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
-    mmu_free_last_usecnt_i  : in  std_logic_vector(g_num_ports-1 downto 0);
+    mmu_resource_i                  : in std_logic_vector(g_num_ports * g_resource_num_width -1 downto 0);
 
-    mmu_force_free_o        : out std_logic_vector(g_num_ports-1 downto 0);
-    mmu_force_free_done_i   : in  std_logic_vector(g_num_ports-1 downto 0);
-    mmu_force_free_pgaddr_o : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0)
+    mmu_free_o                      : out std_logic_vector(g_num_ports-1 downto 0);
+    mmu_free_done_i                 : in  std_logic_vector(g_num_ports-1 downto 0);
+    mmu_free_last_usecnt_i          : in  std_logic_vector(g_num_ports-1 downto 0);
+    mmu_free_pgaddr_o               : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
+    mmu_free_resource_o             : out std_logic_vector(g_num_ports * g_resource_num_width -1 downto 0);
+    mmu_free_resource_valid_o       : out std_logic_vector(g_num_ports-1 downto 0);       
+
+    mmu_force_free_o                : out std_logic_vector(g_num_ports-1 downto 0);
+    mmu_force_free_done_i           : in  std_logic_vector(g_num_ports-1 downto 0);
+    mmu_force_free_pgaddr_o         : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
+    mmu_force_free_resource_o       : out std_logic_vector(g_num_ports * g_resource_num_width -1 downto 0);
+    mmu_force_free_resource_valid_o : out std_logic_vector(g_num_ports-1 downto 0)
     );
   end component;
 
@@ -494,7 +504,8 @@ component  swc_multiport_pck_pg_free_module is
     generic( 
       g_page_addr_width       : integer ;--:= c_swc_page_addr_width;
       g_pck_pg_free_fifo_size : integer ;--:= c_swc_freeing_fifo_size
-      g_data_width            : integer
+      g_data_width            : integer ;
+      g_resource_num_width    : integer 
       );  
     port (
       clk_i   : in std_logic;
@@ -513,14 +524,20 @@ component  swc_multiport_pck_pg_free_module is
       ll_read_req_o           : out std_logic;
       ll_read_valid_data_i    : in  std_logic;
   
-      mmu_free_o              : out std_logic;
-      mmu_free_done_i         : in  std_logic;
-      mmu_free_pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
-      mmu_free_last_usecnt_i  : in  std_logic;
-      
-      mmu_force_free_o        : out std_logic;
-      mmu_force_free_done_i   : in  std_logic;
-      mmu_force_free_pgaddr_o : out std_logic_vector(g_page_addr_width -1 downto 0)
+      mmu_resource_i             : in std_logic_vector(g_resource_num_width -1 downto 0);
+
+      mmu_free_o                      : out std_logic;
+      mmu_free_done_i                 : in  std_logic;
+      mmu_free_last_usecnt_i          : in  std_logic;
+      mmu_free_pgaddr_o               : out std_logic_vector(g_page_addr_width -1 downto 0);
+      mmu_free_resource_o             : out std_logic_vector(g_resource_num_width -1 downto 0);
+      mmu_free_resource_valid_o       : out std_logic;
+        
+      mmu_force_free_o                : out std_logic;
+      mmu_force_free_done_i           : in  std_logic;
+      mmu_force_free_pgaddr_o         : out std_logic_vector(g_page_addr_width -1 downto 0);
+      mmu_force_free_resource_o       : out std_logic_vector(g_resource_num_width -1 downto 0);
+      mmu_force_free_resource_valid_o : out std_logic
       );
   end component;
   
@@ -659,7 +676,7 @@ package body swc_swcore_pkg is
                                     rtu_broadcast: std_logic; 
                                     res_num_width: integer)          return std_logic_vector is
     variable tmp  : std_logic_vector(7 downto 0); -- assuming max resource number of 8 (far over-estimated)
-    variable ones : std_logic_vector(rtu_prio'length downto 0);
+    variable ones : std_logic_vector(rtu_prio'length - 1 downto 0);
   begin
     ones := (others => '0');
     ---------- the mapping as you please ------------------
@@ -685,13 +702,21 @@ package body swc_swcore_pkg is
     tmp_prio(9                 downto rtu_prio'length) := (others => '0');
     tmp_prio(rtu_prio'length-1 downto 0              ) := rtu_prio;
     if(resource = res2(resource'length -1 downto 0)) then
-      tmp   := to_unsigned(0,tmp'length ); 
+      tmp   := to_unsigned(7,tmp'length ); 
     else
-      if(unsigned(tmp_prio) + 1 >= to_unsigned(queue_num,9)) then
-        tmp := to_unsigned(queue_num,tmp'length);
+
+      if(unsigned(tmp_prio) > to_unsigned(0,9)) then
+        tmp := to_unsigned(0,tmp'length);
       else
-        tmp := unsigned(tmp_prio) + 1;
+        tmp := unsigned(tmp_prio) - 1;
       end if;
+
+
+--       if(unsigned(tmp_prio) + 1 >= to_unsigned(queue_num,9)) then
+--         tmp := to_unsigned(queue_num,tmp'length);
+--       else
+--         tmp := unsigned(tmp_prio) + 1;
+--       end if;
     end if;
     return std_logic_vector(tmp);
   end function;

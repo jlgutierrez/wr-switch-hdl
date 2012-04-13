@@ -283,7 +283,7 @@ architecture syn of swc_page_allocator is
 
   signal res_mgr_alloc           : std_logic;
   signal res_mgr_free            : std_logic;
-  signal res_mgr_rescnt_page_num : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal res_mgr_res_num         : std_logic_vector(g_resource_num_width-1 downto 0);
   signal res_mgr_rescnt_set      : std_logic;
 -----------------------------
 
@@ -655,7 +655,8 @@ begin  -- syn
 
   res_mgr_alloc           <= alloc_i and done;
   res_mgr_free            <= ((free_i and free_last_usecnt) or force_free_i) and done;
-  res_mgr_rescnt_page_num <= resource_i when (free_resource_valid_i='1') else rescnt_mem_rddata;
+  res_mgr_res_num         <= rescnt_mem_rddata  when (free_resource_valid_i='0' and (free_i='1' or force_free_i='1')) else 
+                             resource_i;
   res_mgr_rescnt_set      <= set_usecnt_i and done;
   
   ------ resource management 
@@ -673,7 +674,7 @@ begin  -- syn
   port map (
     clk_i                    => clk_i,
     rst_n_i                  => rst_n_i,
-    resource_i               => resource_i,
+    resource_i               => res_mgr_res_num,
     alloc_i                  => res_mgr_alloc,
     free_i                   => res_mgr_free,
     rescnt_set_i             => res_mgr_rescnt_set,

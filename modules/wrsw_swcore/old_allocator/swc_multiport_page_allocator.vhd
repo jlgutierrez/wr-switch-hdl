@@ -99,7 +99,10 @@ entity swc_multiport_page_allocator is
     -- used only when freeing page, 
     -- if HIGH then the input resource_i value will be used
     -- if LOW  then the value read from memory will be used (stored along with usecnt)
-    free_resource_valid_i : in  std_logic_vector(g_num_ports - 1 downto 0);
+    free_resource_i             : in  std_logic_vector(g_num_ports * g_resource_num_width - 1 downto 0);
+    free_resource_valid_i       : in  std_logic_vector(g_num_ports                        - 1 downto 0);
+    force_free_resource_i       : in  std_logic_vector(g_num_ports * g_resource_num_width - 1 downto 0);
+    force_free_resource_valid_i : in  std_logic_vector(g_num_ports                        - 1 downto 0);
     
     -- number of pages added to the resurce
     rescnt_page_num_i      : in  std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
@@ -193,6 +196,9 @@ architecture syn of swc_multiport_page_allocator is
   --------------------------- resource management ----------------------------------
     -- resource number
   signal pg_resource_in           : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pg_alloc_usecnt_resource : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pg_free_resource         : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pg_force_free_resource   : std_logic_vector(g_resource_num_width-1 downto 0);
   signal pg_resource_out          : std_logic_vector(g_resource_num_width-1 downto 0);
   signal pg_free_resource_valid   : std_logic;
   signal pg_rescnt_page_num       : std_logic_vector(g_page_addr_width-1 downto 0);
@@ -386,9 +392,16 @@ begin  -- syn
   --                               Resource Manager logic and instantiation
   --------------------------------------------------------------------------------------------------
 
-  pg_resource_in         <= resource_i          ((in_sel+1)*g_resource_num_width   -1 downto in_sel*g_resource_num_width);
-  pg_free_resource_valid <= free_resource_valid_i(in_sel);
-  pg_rescnt_page_num     <= rescnt_page_num_i   ((in_sel+1)*g_page_addr_width-1 downto in_sel*g_page_addr_width);
+  pg_alloc_usecnt_resource <= resource_i                ((in_sel+1)*g_resource_num_width   -1 downto in_sel*g_resource_num_width);
+  pg_free_resource         <= free_resource_i           ((in_sel+1)*g_resource_num_width   -1 downto in_sel*g_resource_num_width);
+  pg_force_free_resource   <= force_free_resource_i     ((in_sel+1)*g_resource_num_width   -1 downto in_sel*g_resource_num_width);
+  pg_resource_in           <= pg_force_free_resource                when (pg_force_free = '1') else 
+                              pg_free_resource                      when (pg_free = '1')       else 
+                              pg_alloc_usecnt_resource;
+  pg_free_resource_valid   <= force_free_resource_valid_i(in_sel)   when (pg_force_free = '1') else 
+                              free_resource_valid_i      (in_sel)   when (pg_free = '1')       else 
+                              '0';
+  pg_rescnt_page_num       <= rescnt_page_num_i         ((in_sel+1)*g_page_addr_width-1 downto in_sel*g_page_addr_width);
   
 
   MUX2: process(clk_i)

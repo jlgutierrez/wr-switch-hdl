@@ -168,7 +168,7 @@ entity xswc_input_block is
 
     --------------------------- resource management ----------------------------------
     -- resource number
-    mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
+    --mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
     
     -- outputed when freeing
     mmu_resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);

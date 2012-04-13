@@ -299,13 +299,18 @@ architecture rtl of xswc_core is
    signal tap : std_logic_vector(127 downto 0);
 
 
+   signal ppfm2mmu_free_resource              : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width -1 downto 0);
+   signal ppfm2mmu_free_resource_valid        : std_logic_vector(g_num_ports                              -1 downto 0);
+   signal ppfm2mmu_force_free_resource        : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width -1 downto 0);
+   signal ppfm2mmu_force_free_resource_valid  : std_logic_vector(g_num_ports                              -1 downto 0);
+
+   signal mmu2ppfm_resource                   : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width   -1 downto 0);
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block (IB) << with >>Page allocator (MMU)<< -- resource management 
    ----------------------------------------------------------------------------------------------------   
 
    signal mmu2ib_resource             : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width   -1 downto 0);
    signal ib2mmu_resource             : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width   -1 downto 0);
-   signal ib2mmu_free_resource_valid  : std_logic_vector(g_num_ports                                -1 downto 0);
    signal ib2mmu_rescnt_page_num      : std_logic_vector(g_num_ports*c_mpm_page_addr_width          -1 downto 0);
    signal mmu2ib_res_full             : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
    signal mmu2ib_res_almost_full      : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
@@ -372,9 +377,8 @@ architecture rtl of xswc_core is
         mmu_pageaddr_o           => ib_pageaddr_output((i + 1) * c_mpm_page_addr_width - 1 downto i * c_mpm_page_addr_width),
                 
         -- resource management         
-        mmu_resource_i           => mmu2ib_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
+--        mmu_resource_i           => mmu2ib_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
         mmu_resource_o           => ib2mmu_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
-       -- mmu_free_resource_valid_o=> ib2mmu_free_resource_valid(i),
         mmu_rescnt_page_num_o    => ib2mmu_rescnt_page_num   ((i+1)*c_mpm_page_addr_width        -1 downto i*c_mpm_page_addr_width),
         mmu_res_full_i           => mmu2ib_res_full          ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
         mmu_res_almost_full_i    => mmu2ib_res_almost_full   ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
@@ -500,36 +504,43 @@ architecture rtl of xswc_core is
 
   PCK_PAGES_FREEEING_MODULE: swc_multiport_pck_pg_free_module
     generic map( 
-      g_num_ports             => g_num_ports,
-      g_page_addr_width       => c_mpm_page_addr_width,
-      g_pck_pg_free_fifo_size => g_pck_pg_free_fifo_size,
-      g_data_width            => c_ll_data_width
+      g_num_ports                     => g_num_ports,
+      g_page_addr_width               => c_mpm_page_addr_width,
+      g_pck_pg_free_fifo_size         => g_pck_pg_free_fifo_size,
+      g_data_width                    => c_ll_data_width,
+      g_resource_num_width            => c_res_mmu_resource_num_width
       )
     port map(
-      clk_i                   => clk_i,
-      rst_n_i                 => rst_n_i,
+      clk_i                           => clk_i,
+      rst_n_i                         => rst_n_i,
   
-      ib_force_free_i         => ib_force_free,
-      ib_force_free_done_o    => ppfm_force_free_done_to_ib,
-      ib_force_free_pgaddr_i  => ib_force_free_pgaddr,
+      ib_force_free_i                 => ib_force_free,
+      ib_force_free_done_o            => ppfm_force_free_done_to_ib,
+      ib_force_free_pgaddr_i          => ib_force_free_pgaddr,
   
-      ob_free_i               => ob_free,
-      ob_free_done_o          => ppfm_free_done_to_ob,
-      ob_free_pgaddr_i        => ob_free_pgaddr,
+      ob_free_i                       => ob_free,
+      ob_free_done_o                  => ppfm_free_done_to_ob,
+      ob_free_pgaddr_i                => ob_free_pgaddr,
       
-      ll_read_addr_o          => fp2ll_addr, --ppfm_read_addr,
-      ll_read_data_i          => ll2fp_data, --ll_data,
-      ll_read_req_o           => fp2ll_rd_req, --ppfm_read_req,
-      ll_read_valid_data_i    => ll2fp_read_done, --ll_read_valid_data,
+      ll_read_addr_o                  => fp2ll_addr, --ppfm_read_addr,
+      ll_read_data_i                  => ll2fp_data, --ll_data,
+      ll_read_req_o                   => fp2ll_rd_req, --ppfm_read_req,
+      ll_read_valid_data_i            => ll2fp_read_done, --ll_read_valid_data,
       
-      mmu_force_free_o        => ppfm_force_free,
-      mmu_force_free_done_i   => mmu_force_free_done,
-      mmu_force_free_pgaddr_o => ppfm_force_free_pgaddr,
+      mmu_resource_i                  => mmu2ppfm_resource,
+
+      mmu_force_free_o                => ppfm_force_free,
+      mmu_force_free_done_i           => mmu_force_free_done,
+      mmu_force_free_pgaddr_o         => ppfm_force_free_pgaddr,
+      mmu_free_resource_o             => ppfm2mmu_free_resource,
+      mmu_free_resource_valid_o       => ppfm2mmu_free_resource_valid,
       
-      mmu_free_o              => ppfm_free,
-      mmu_free_done_i         => mmu_free_done,
-      mmu_free_pgaddr_o       => ppfm_free_pgaddr,
-      mmu_free_last_usecnt_i  => mmu2ppfm_free_last_usecnt
+      mmu_free_o                      => ppfm_free,
+      mmu_free_done_i                 => mmu_free_done,
+      mmu_free_pgaddr_o               => ppfm_free_pgaddr,
+      mmu_free_last_usecnt_i          => mmu2ppfm_free_last_usecnt,
+      mmu_force_free_resource_o       => ppfm2mmu_force_free_resource,
+      mmu_force_free_resource_valid_o => ppfm2mmu_force_free_resource_valid
 
       );
 
@@ -610,8 +621,13 @@ architecture rtl of xswc_core is
       nomem_o                    => mmu_nomem,
       --------------------------- resource management ----------------------------------
       resource_i                 => ib2mmu_resource,
-      resource_o                 => mmu2ib_resource,
-      free_resource_valid_i      => ib2mmu_free_resource_valid,
+      resource_o                 => mmu2ppfm_resource,
+
+      free_resource_i            => ppfm2mmu_free_resource,
+      free_resource_valid_i      => ppfm2mmu_free_resource_valid,
+      force_free_resource_i      => ppfm2mmu_force_free_resource,
+      force_free_resource_valid_i=> ppfm2mmu_force_free_resource_valid,
+
       rescnt_page_num_i          => ib2mmu_rescnt_page_num,
       res_full_o                 => mmu2ib_res_full,
       res_almost_full_o          => mmu2ib_res_almost_full
