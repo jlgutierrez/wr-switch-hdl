@@ -199,26 +199,6 @@ void ad9516_sync_outputs()
 	ad9516_write_reg(0x232, 1);
 	ad9516_write_reg(0x230, 0);
 	ad9516_write_reg(0x232, 1);
-
-	/* VCO divider: /6 mode */
-//	ad9516_write_reg(0x1E0, 0x4);
-//	ad9516_write_reg(0x232, 0x1);
-}
-
-
-
-void ad9516_set_gm_mode()
-{
-	ad9516_set_output_divider(9, 25, 0);
-
-	
-
-/*	int i;
-	ad9516_sync_outputs();	
-	for(i=0;i<100000;i++) asm volatile("nop");
-	TRACE("Sync!\n");*/
-	
-	
 }
 
 int ad9516_init(int ref_source)
@@ -246,19 +226,15 @@ int ad9516_init(int ref_source)
 
 	ad9516_load_regset(ad9516_base_config, ARRAY_SIZE(ad9516_base_config), 0);
 	ad9516_load_regset(ad9516_ref_tcxo, ARRAY_SIZE(ad9516_ref_tcxo), 1);
-//	ad9516_load_regset(ad9516_ref_ext, ARRAY_SIZE(ad9516_ref_ext), 1);
 	ad9516_wait_lock();
 
 	ad9516_sync_outputs();
 	ad9516_set_output_divider(9, 4, 0);  /* AUX/SWCore = 187.5 MHz */
 	ad9516_set_output_divider(7, 12, 0); /* REF = 62.5 MHz */
-	ad9516_set_output_divider(4, 6, 0);  /* GTX = 125 MHz */
+	ad9516_set_output_divider(4, 12, 0);  /* GTX = 62.5 MHz */
 	ad9516_sync_outputs();
 	ad9516_set_vco_divider(2); 
 	
-
-//	ad9516_set_gm_mode();
-
 	TRACE("AD9516 locked.\n");
 
 	gpio_out(GPIO_SYS_CLK_SEL, 1); /* switch the system clock to the PLL reference */
