@@ -166,5 +166,5 @@ static void spll_enable_tagger(int channel, int enable)
 			SPLL->RCER &= ~ (1<<channel);
 	}
 
-	TRACE("%s: ch %d, OCER 0x%x, RCER 0x%x\n", __FUNCTION__, channel, SPLL->OCER, SPLL->RCER);
+//	TRACE("%s: ch %d, OCER 0x%x, RCER 0x%x\n", __FUNCTION__, channel, SPLL->OCER, SPLL->RCER);
 }

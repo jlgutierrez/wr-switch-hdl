@@ -48,7 +48,7 @@ struct spll_external_state {
 	int ref_src;
 	int sample_n;
 	int ph_err_offset, ph_err_cur, ph_err_d0, ph_raw_d0;
-	int realign_start_state;
+	int realign_clocks;
 	int realign_state;
 	int realign_timer;
  	spll_pi_t pi; 
@@ -76,7 +76,8 @@ static void external_init(struct spll_external_state *s, int ext_ref, int realig
 	s->ph_err_d0 = 0;
 	s->ph_raw_d0 = 0;
 	
-	s->realign_start_state = (realign_clocks ? REALIGN_STAGE1 : REALIGN_DISABLED);
+	s->realign_clocks = realign_clocks;
+	s->realign_state = (realign_clocks ? REALIGN_STAGE1 : REALIGN_DISABLED);
 		
 	pi_init(&s->pi);
 	ld_init(&s->ld);
@@ -138,9 +139,7 @@ static inline void realign_fsm(struct spll_external_state *s)
 		case REALIGN_PPS_INVALID:
 		case REALIGN_DISABLED:
 		case REALIGN_DONE:
-			break;
-
-		return 0;			
+			return ;			
 	}
 }
 
@@ -177,6 +176,12 @@ static int external_update(struct spll_external_state *s, int tag, int source)
 	  y2 = lowpass_update(&s->lp_short, y);
 	  ylt = lowpass_update(&s->lp_long, y);
 
+		if(! (SPLL->ECCR & SPLL_ECCR_EXT_REF_PRESENT)) /* no reference? de-lock now */
+		{
+			ld_init(&s->ld);
+			y2 = 32000;
+		}
+
 		SPLL->DAC_MAIN = y2 & 0xffff;
 
 		spll_debug(DBG_ERR | DBG_EXT, ylt, 0);
@@ -197,10 +202,14 @@ static void external_start(struct spll_external_state *s)
 	SPLL->ECCR = 0;
 
 	s->sample_n = 0;
-	s->realign_state = s->realign_start_state;
+	s->realign_state = (s->realign_clocks ? REALIGN_STAGE1 : REALIGN_DISABLED);
 	
 	SPLL->ECCR = SPLL_ECCR_EXT_EN;
 	
 	spll_debug(DBG_EVENT |  DBG_EXT, DBG_EVT_START, 1);
 }
 
+static inline int external_locked(struct spll_external_state *s)
+{
+	return (s->ld.locked && (s->realign_clocks ? s->realign_state == REALIGN_DONE : 1));
+}

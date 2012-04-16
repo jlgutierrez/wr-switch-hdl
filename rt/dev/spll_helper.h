@@ -31,22 +31,12 @@ static void helper_init(struct spll_helper_state *s, int ref_channel)
 	s->pi.ki = (int)(0.03 * 32.0 * 3.0); 
 	
 	s->pi.anti_windup = 1;
- /* Set the bias to the upper end of tuning range. This is to ensure that
- 		the HPLL will always lock on positive frequency offset. */
-	s->pi.bias = s->pi.y_max;
 	
 	/* Phase branch lock detection */
 	s->ld.threshold = 200;
 	s->ld.lock_samples = 1000;
 	s->ld.delock_samples = 900;
 	s->ref_src = ref_channel;
-	s->p_setpoint = 0;	
-	s->p_adder = 0;
-	s->sample_n = 0;
-	s->tag_d0 = -1;
-
-	pi_init(&s->pi);
-	ld_init(&s->ld);
 }
 
 static int helper_update(struct spll_helper_state *s, int tag, int source)
@@ -100,8 +90,21 @@ static int helper_update(struct spll_helper_state *s, int tag, int source)
 }
 
 
+
 static void helper_start(struct spll_helper_state *s)
 {
+ /* Set the bias to the upper end of tuning range. This is to ensure that
+ 		the HPLL will always lock on positive frequency offset. */
+	s->pi.bias = s->pi.y_max;
+
+	s->p_setpoint = 0;	
+	s->p_adder = 0;
+	s->sample_n = 0;
+	s->tag_d0 = -1;
+
+	pi_init(&s->pi);
+	ld_init(&s->ld);
+
 	spll_enable_tagger(s->ref_src, 1);
 	spll_debug(DBG_EVENT |  DBG_HELPER, DBG_EVT_START, 1);
 }

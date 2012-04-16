@@ -30,6 +30,13 @@ static void mpll_init(struct spll_main_state *s, int id_ref, int id_out)
 	s->ld.threshold = 120;
 	s->ld.lock_samples = 400;
 	s->ld.delock_samples = 390;
+	s->id_ref = id_ref;
+	s->id_out = id_out;
+
+}
+
+static void mpll_start(struct spll_main_state *s)
+{
 	s->adder_ref = s->adder_out = 0;
 	s->tag_ref = -1;
 	s->tag_out = -1;
@@ -38,20 +45,16 @@ static void mpll_init(struct spll_main_state *s, int id_ref, int id_out)
 	
 	s->phase_shift_target = 0;
 	s->phase_shift_current = 0;
-	s->id_ref = id_ref;
-	s->id_out = id_out;
 	s->sample_n=  0;
 
 	pi_init(&s->pi);
 	ld_init(&s->ld);
-}
 
-static void mpll_start(struct spll_main_state *s)
-{
 	spll_enable_tagger(s->id_ref, 1);
 	spll_enable_tagger(s->id_out, 1);
 	spll_debug(DBG_EVENT | DBG_MAIN, DBG_EVT_START, 1);
 }
+
 
 static int mpll_update(struct spll_main_state *s, int tag, int source)
 {
