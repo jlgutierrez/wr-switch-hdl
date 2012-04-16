@@ -3,8 +3,9 @@
 White Rabbit Softcore PLL (SoftPLL) - common definitions
 
 Copyright (c) 2010 - 2012 CERN / BE-CO-HT (Tomasz Włostowski)
-
 Licensed under LGPL 2.1.
+
+spll_common.h - common data structures and functions
 
 */
 
@@ -131,7 +132,8 @@ static int lowpass_update(spll_lowpass_t *lp, int x)
 		lp->y_d = x;
 		return x;
 	} else {
-		lp->y_d = lp->y_d + ((lp->alpha * (x - lp->y_d)) >> 16);
+		int scaled = (lp->alpha * (x - lp->y_d)) >> 15;
+		lp->y_d = lp->y_d + (scaled >> 1) + (scaled & 1);
 		return lp->y_d;
 	}
 }

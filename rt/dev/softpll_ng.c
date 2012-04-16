@@ -5,12 +5,14 @@
 #include "timer.h"
 #include "trace.h"
 #include "hw/softpll_regs.h"
+#include "hw/pps_gen_regs.h"
 
 #include "irq.h"
 
 volatile int irq_count = 0,eee,yyy,py;
 
 static volatile struct SPLL_WB *SPLL = (volatile struct SPLL_WB *) BASE_SOFTPLL;
+static volatile struct PPSG_WB *PPSG = (volatile struct PPSG_WB *) BASE_PPS_GEN;
 
 /* The includes below contain code (not only declarations) to enable the compiler
    to inline functions where necessary and save some CPU cycles */
@@ -24,8 +26,8 @@ static volatile struct SPLL_WB *SPLL = (volatile struct SPLL_WB *) BASE_SOFTPLL;
 #include "spll_ptracker.h"
 #include "spll_external.h"
 
-#define CHAN_TCXO 4
-#define CHAN_EXT 5
+#define CHAN_TCXO 2
+#define CHAN_EXT 3
 
 static volatile struct spll_helper_state helper;
 static volatile struct spll_external_state extpll;
@@ -126,12 +128,14 @@ void spll_init(int _master_mode, int ref_channel)
 //		mpll_init(&mpll, ref_channel, CHAN_TCXO);
 	
 //	helper_start(&helper);
-	external_init(&extpll, CHAN_EXT);
-	external_start(&extpll, 1);
 
 	enable_irq();
 
-	for(;;) mprintf("irqcount %d t %d lock %d\n", irq_count, eee, extpll.ld.locked);
+	external_init(&extpll, CHAN_EXT, 1);
+	external_start(&extpll);
+
+
+	for(;;) mprintf("irqcount %d t %d lock %d Alignstate %d TmrTics %d\n", irq_count, eee, extpll.ld.locked, extpll.realign_state, timer_get_tics());
 }
 
 int spll_check_lock()

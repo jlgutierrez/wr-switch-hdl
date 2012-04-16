@@ -1,10 +1,15 @@
 /*
 
-White Rabbit Softcore PLL (SoftPLL) - debugging/diagnostic interface
+White Rabbit Softcore PLL (SoftPLL) - common definitions
+
+Copyright (c) 2010 - 2012 CERN / BE-CO-HT (Tomasz Włostowski)
+Licensed under LGPL 2.1.
+
+spll_debug.h - debugging/diagnostic interface
 
 The so-called debug inteface is a large, interrupt-driven FIFO which passes
 various realtime parameters (e.g. error value, tags, DAC drive) to an external
-application where they can be analyzed. It's very useful for optimizing PI coefficients
+application where they are further analyzed. It's very useful for optimizing PI coefficients
 and/or lock thresholds.
 
 The data is organized as a stream of samples, where each sample can store a number of parameters.
