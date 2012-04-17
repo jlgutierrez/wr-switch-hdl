@@ -425,18 +425,12 @@ begin  -- syn
         -- is about to finish. It's solely for request vector composition purpose
         L1: for i in 0 to g_num_ports-1 loop
           if(pg_done = '1' and (in_sel = i)) then
-            
             resources_feedback(i).resource    <= pg_resource_out;
-            resources_feedback(i).full        <= pg_res_full;
-            resources_feedback(i).almost_full <= pg_res_almost_full;
-
           else
-          
             resources_feedback(i).resource    <= (others => '0');
-            resources_feedback(i).full        <= (others => '0');
-            resources_feedback(i).almost_full <= (others => '0');
-
           end if;
+          resources_feedback(i).full          <= pg_res_full;
+          resources_feedback(i).almost_full   <= pg_res_almost_full;
         end loop L1;  -- i
 
        resources_out <=  resources_feedback;

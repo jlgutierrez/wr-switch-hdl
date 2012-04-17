@@ -316,24 +316,24 @@ begin  --  behavoural
 
   wr_data <= pta_pageaddr_i;
 
-  wr_addr <= wr_prio & wr_array(0) when wr_prio = "000" else
-             wr_prio & wr_array(1) when wr_prio = "001" else
-             wr_prio & wr_array(2) when wr_prio = "010" else
-             wr_prio & wr_array(3) when wr_prio = "011" else
-             wr_prio & wr_array(4) when wr_prio = "100" else
-             wr_prio & wr_array(5) when wr_prio = "101" else
-             wr_prio & wr_array(6) when wr_prio = "110" else
-             wr_prio & wr_array(7) when wr_prio = "111" else
+  wr_addr <= wr_prio & wr_array(0) when wr_prio = "000" else -- prio = 7
+             wr_prio & wr_array(1) when wr_prio = "001" else -- prio = 6
+             wr_prio & wr_array(2) when wr_prio = "010" else -- prio = 5
+             wr_prio & wr_array(3) when wr_prio = "011" else -- prio = 4
+             wr_prio & wr_array(4) when wr_prio = "100" else -- prio = 3
+             wr_prio & wr_array(5) when wr_prio = "101" else -- prio = 2
+             wr_prio & wr_array(6) when wr_prio = "110" else -- prio = 1
+             wr_prio & wr_array(7) when wr_prio = "111" else -- prio = 0
              (others => 'X');
   
-  rd_addr <= rd_prio & rd_array(0) when rd_prio = "000" else
-             rd_prio & rd_array(1) when rd_prio = "001" else
-             rd_prio & rd_array(2) when rd_prio = "010" else
-             rd_prio & rd_array(3) when rd_prio = "011" else
-             rd_prio & rd_array(4) when rd_prio = "100" else
-             rd_prio & rd_array(5) when rd_prio = "101" else
-             rd_prio & rd_array(6) when rd_prio = "110" else
-             rd_prio & rd_array(7) when rd_prio = "111" else
+  rd_addr <= rd_prio & rd_array(0) when rd_prio = "000" else -- prio = 7
+             rd_prio & rd_array(1) when rd_prio = "001" else -- prio = 6
+             rd_prio & rd_array(2) when rd_prio = "010" else -- prio = 5
+             rd_prio & rd_array(3) when rd_prio = "011" else -- prio = 4
+             rd_prio & rd_array(4) when rd_prio = "100" else -- prio = 3
+             rd_prio & rd_array(5) when rd_prio = "101" else -- prio = 2
+             rd_prio & rd_array(6) when rd_prio = "110" else -- prio = 1
+             rd_prio & rd_array(7) when rd_prio = "111" else -- prio = 0
              (others => 'X');
 
 -- drop_imp:

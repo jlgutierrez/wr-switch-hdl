@@ -678,12 +678,12 @@ package body swc_swcore_pkg is
     variable tmp  : std_logic_vector(7 downto 0); -- assuming max resource number of 8 (far over-estimated)
     variable ones : std_logic_vector(rtu_prio'length - 1 downto 0);
   begin
-    ones := (others => '0');
+    ones := (others => '1');
     ---------- the mapping as you please ------------------
     if(rtu_prio = ones and rtu_broadcast = '0') then -- todo: change when RTU changed
-      tmp := x"02";
-    else
       tmp := x"01";
+    else
+      tmp := x"02";
     end if;
     -------------------------------------------------------
     
@@ -694,14 +694,14 @@ package body swc_swcore_pkg is
                                                   rtu_broadcast : std_logic; 
                                                   resource      : std_logic_vector;
                                                   queue_num     : integer) return std_logic_vector is
-    variable tmp     : unsigned(integer(CEIL(LOG2(real(queue_num+1))))-1 downto 0);
-    variable res2    : std_logic_vector(7 downto 0);
-    variable tmp_prio: std_logic_vector(9 downto 0); -- one bit more
+    variable tmp        : unsigned(integer(CEIL(LOG2(real(queue_num+1))))-1 downto 0);
+    variable resSpecial : std_logic_vector(7 downto 0);
+    variable tmp_prio   : std_logic_vector(9 downto 0); -- one bit more
   begin
-    res2     := x"02";
+    resSpecial     := x"01";
     tmp_prio(9                 downto rtu_prio'length) := (others => '0');
     tmp_prio(rtu_prio'length-1 downto 0              ) := rtu_prio;
-    if(resource = res2(resource'length -1 downto 0)) then
+    if(resource = resSpecial(resource'length -1 downto 0)) then
       tmp   := to_unsigned(7,tmp'length ); 
     else
 

@@ -631,6 +631,14 @@ constant c_force_usecnt             : boolean := TRUE;
   signal res_info_valid             : std_logic;
   signal res_info                   : std_logic_vector(g_resource_num_width-1 downto 0);
 
+  -- the number of pages reserved for a given resource (res_num) is not enough to accommodate
+  -- max_size ethernet frame. In most cases we don't know what the received frame's sie will be
+  -- (unless we needed to wait for RTU's decision to the end of reception) so we drop the frame
+  -- if the resoruce is almost full
+  signal res_info_almsot_full       : std_logic;
+  
+  -- a currently requested resource is full
+  signal res_info_full              : std_logic;
 begin  --arch
   
   zeros <= (others => '0');
@@ -1381,7 +1389,7 @@ begin
         current_res_info  <= res_info;
         current_broadcast <= rtu_broadcast_i;
         current_prio      <= rtu_prio_i;
-        current_drop      <= rtu_drop_i;
+        current_drop      <= rtu_drop_i or res_info_almsot_full;
         current_usecnt    <= rtu_dst_port_usecnt;
 
         rtu_rsp_ack <= '1';
@@ -2064,7 +2072,9 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 
   ---------------------------------------------
   -- mapping of RTU decision into resources
-  res_info        <= f_map_rtu_rsp_to_mmu_res(rtu_prio_i, rtu_broadcast_i, g_resource_num_width);
+  res_info             <= f_map_rtu_rsp_to_mmu_res(rtu_prio_i, rtu_broadcast_i, g_resource_num_width);
+  res_info_almsot_full <= mmu_res_almost_full_i(to_integer(unsigned(res_info)));
+  res_info_full        <= mmu_res_full_i(to_integer(unsigned(res_info)));
   ---------------------------------------------
   
   p_cnt_unused_pages: process(clk_i)
