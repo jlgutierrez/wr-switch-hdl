@@ -13,9 +13,7 @@
 #ifndef __MINIPC_H__
 #define __MINIPC_H__
 
-#include <stdio.h>
 #include <stdint.h>
-
 #if __STDC_HOSTED__ /* freestanding servers have less material */
 #include <stdio.h>
 #include <sys/select.h>

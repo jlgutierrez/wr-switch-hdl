@@ -1,6 +1,9 @@
+#ifndef __RT_IPC_H
+#define __RT_IPC_H
+
 #include <stdint.h>
 
-#define RTS_PLL_CHANNELS 32
+#define RTS_PLL_CHANNELS 18
 
 /* Individual channel flags */
 /* Reference input frequency valid */
@@ -9,9 +12,10 @@
 #define CHAN_FREQ_OUT_OF_RANGE (1<<1)
 /* Phase is drifting too fast */
 #define CHAN_DRIFTING (1<<2)
-
-#define LOCK_DISABLED -1
-
+/* Channel phase measurement is ready */
+#define CHAN_PMEAS_READY (1<<3)
+/* Channel not available/disabled */
+#define CHAN_DISABLED (1<<4)
 
 /* DMTD clock is present */
 #define RTS_DMTD_LOCKED (1<<0)
@@ -35,13 +39,16 @@
 #define RTS_HOLDOVER_ACTIVE (1<<6)
 
 /* Grandmaster mode active (uses 10 MHz / 1-PPS reference) */
-#define RTS_MODE_GRANDMASTER (1<<7)
+#define RTS_MODE_GM_EXTERNAL 1
+
+/* Free-running grandmaster (uses local TCXO) */
+#define RTS_MODE_GM_FREERUNNING 2
 
 /* Boundary clock mode active (uses network reference) */
-#define RTS_MODE_BC (1<<8)
+#define RTS_MODE_BC 3
 
-/* When set, phase_loopback contains a valid phase measurement */
-#define RTS_LOOPBACK_PHASE_READY (1<<9)
+/* PLL disabled */
+#define RTS_MODE_DISABLED 4
 
 /* null reference input */
 #define REF_NONE 255
@@ -52,23 +59,28 @@ struct rts_pll_state {
 /* State of an individual input channel (i.e. switch port) */
 	struct channel {
 		/* Switchover priority: 0 = highest, 1 - 254 = high..low, 255 = channel disabled (a master port) */
-		uint32_t priority; 
-		/* channel phase setpoint in picoseconds << 16. Used only when channel is a slave. */
-		int32_t phase_setpoint; 
-		/* TX-RX Loopback phase measurement in picoseconds << 16. */
-		int32_t phase_looback;
+		uint32_t priority;
+		/* channel phase setpoint in picoseconds. Used only when channel is a slave. */
+		int32_t phase_setpoint;
+		/* current phase shift in picoseconds. Used only when channel is a slave. */
+		int32_t phase_current;
+		/* TX-RX Loopback phase measurement in picoseconds. */
+		int32_t phase_loopback;
 		/* flags (per channel - see CHAN_xxx defines) */
-		uint32_t flags; 
+		uint32_t flags;
 	} channels[RTS_PLL_CHANNELS];
 
-	/* flags (global - RTS_xxx defines) */	
-	uint32_t flags; 
+	/* flags (global - RTS_xxx defines) */
+	uint32_t flags;
 
 	/* duration of current holdover period in 10us units */
 	int32_t holdover_duration;
-	
+
 	/* current reference source - or REF_NONE if free-running or grandmaster */
 	uint32_t current_ref;
+
+	/* mode of operation (RTS_MODE_xxx) */
+	uint32_t mode;
 };
 
 /* API */
@@ -77,10 +89,13 @@ struct rts_pll_state {
 int rts_get_state(struct rts_pll_state *state);
 
 /* Sets the phase setpoint on a given channel */
-int rts_adjust_phase(uint8_t channel, int32_t phase_setpoint);
+int rts_adjust_phase(int channel, int32_t phase_setpoint);
 
 /* Sets the RT subsystem mode (Boundary Clock or Grandmaster) */
-int rts_set_mode(uint32_t mode);
+int rts_set_mode(int mode);
 
 /* Reference channel configuration (BC mode only) */
-int rts_lock_channel(uint32_t channel, int32_t priority);
+int rts_lock_channel(int channel, int priority);
+
+
+#endif

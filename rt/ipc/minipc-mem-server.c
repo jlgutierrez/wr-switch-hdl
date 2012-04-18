@@ -50,8 +50,6 @@ struct minipc_ch *minipc_server_create(const char *name, int flags)
 	}
 	link->flags |= MPC_FLAG_SHMEM; /* needed? */
 
-	mprintf("BaseAddr: 0x%x\n", addr);
-
 	link->memaddr = (void *)addr;
 	link->memsize = memsize;
 	link->pid = 0; /* hack: nrequest */
@@ -79,7 +77,7 @@ static void *calloc(size_t unused, size_t unused2)
 	struct mpc_flist *p;
 
 	for (p = __static_flist, i = 0; i < MINIPC_MAX_EXPORT; p++, i++)
-		if (!p->next)
+		if (!p->pd)
 			break;
 	if (i == MINIPC_MAX_EXPORT) {
 		errno = ENOMEM;
@@ -91,7 +89,7 @@ static void *calloc(size_t unused, size_t unused2)
 static void free(void *ptr)
 {
 	struct mpc_flist *p = ptr;
-	p->next = NULL;
+	p->pd = NULL;
 }
 
 
