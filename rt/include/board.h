@@ -12,5 +12,6 @@
 #define BASE_SPI 0x10200
 #define BASE_GPIO 0x10300
 #define BASE_TIMER 0x10400
+#define BASE_PPS_GEN 0x10500
 
 #endif
