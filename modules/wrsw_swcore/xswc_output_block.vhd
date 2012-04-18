@@ -142,6 +142,7 @@ architecture behavoural of xswc_output_block is
   signal full_array      : std_logic_vector(g_prio_num - 1 downto 0);
   signal not_empty_array : std_logic_vector(g_prio_num - 1 downto 0);
   signal read_array      : std_logic_vector(g_prio_num - 1 downto 0);
+  signal read_array_d0   : std_logic_vector(g_prio_num - 1 downto 0);
   signal read            : std_logic_vector(g_prio_num - 1 downto 0);
   signal write_array     : std_logic_vector(g_prio_num - 1 downto 0);
   signal write           : std_logic_vector(g_prio_num - 1 downto 0);
@@ -277,7 +278,14 @@ architecture behavoural of xswc_output_block is
     return tmp;
   end f_slv_resize;
   
-
+  -- supresses rd_data_valid after new rd_addr is provided, otherwise we would read
+  -- old data but update new counters in the PRIO_QUEUE_CTRL. We always want to read data
+  -- from updated address, even if we need to wait one cycle. This is because, if the address
+  -- changes, it means that queue with higher priority was received (so we want to send it as soon
+  -- as possible. If we just read old data (from old address), the data with the higher priority
+  -- would need to wait for the frame to be sent out (this increases the switch latency)
+  signal rd_data_valid_supress : std_logic;
+  signal rd_data_valid_raw     : std_logic;
   
 begin  --  behavoural
 
@@ -485,15 +493,18 @@ begin  --  behavoural
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        rd_data_valid   <= '0';
-        drop_data_valid <= '0';
+        rd_data_valid_raw     <= '0';
+        drop_data_valid       <= '0';
+        read_array_d0         <= (others =>'0');
       else
         
         if(not_empty_array = zeros) then
-          rd_data_valid <= '0';
+          rd_data_valid_raw <= '0';
         else
-          rd_data_valid <= '1';
+          rd_data_valid_raw <= '1';
         end if;
+
+        read_array_d0 <= read_array;
 -- drop_imp :
 --        if(full_array = zeros) then
 --          drop_data_valid <= '0';
@@ -504,6 +515,9 @@ begin  --  behavoural
     end if;
   end process;
 
+  -- we need one cycle to read new data from the new address
+  -- after read array (so the rd_addr) changes
+  rd_data_valid_supress <= '1' when (read_array_d0 /=read_array) else '0';
   --==================================================================================================
   -- FSM to prepare next pck to be send
   --==================================================================================================
@@ -640,7 +654,11 @@ begin  --  behavoural
       end if;
     end if;
   end process p_prep_to_send_fsm;
-
+   
+  -- this is to prevent reading in the cycle following read_array change. 
+  -- In other words, we need to give memory one cycle to update output (read) data after changing input address
+  rd_data_valid <= rd_data_valid_raw and (not rd_data_valid_supress);
+  
   next_page_set_in_advance : if (g_mpm_fetch_next_pg_in_advance = true) generate
     set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0') else '0';
     not_set_next_pg_addr <= '1' when (rd_data_valid = '0' and mpm_pg_req_i = '1')                        else '0';
