@@ -46,6 +46,8 @@ static int ptracker_update(struct spll_ptracker_state *s, int tag, int source)
 	{
 		int delta = (s->tag_a - s->tag_b) & ((1<<HPLL_N) - 1);
 		
+		s->sample_n++;
+		
 		if(s->avg_count == 0)
 		{
 		
@@ -55,8 +57,8 @@ static int ptracker_update(struct spll_ptracker_state *s, int tag, int source)
 				s->preserve_sign = 1;
 			else
 				s->preserve_sign = 0;
-	
-			
+
+			s->avg_count++;
 			s->acc = delta;
 		} else {
 		
@@ -78,6 +80,7 @@ static int ptracker_update(struct spll_ptracker_state *s, int tag, int source)
 			}
 		
 		}	
+
 		s->tag_b = s->tag_a = -1;
   }
 

@@ -55,6 +55,11 @@ static void mpll_start(struct spll_main_state *s)
 	spll_debug(DBG_EVENT | DBG_MAIN, DBG_EVT_START, 1);
 }
 
+static void mpll_stop(struct spll_main_state *s)
+{
+	spll_enable_tagger(s->id_out, 0);
+}
+
 
 static int mpll_update(struct spll_main_state *s, int tag, int source)
 {

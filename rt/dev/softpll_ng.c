@@ -43,6 +43,7 @@ struct softpll_state {
 	struct spll_helper_state helper;
 	struct spll_external_state ext;
 	struct spll_main_state mpll;
+	struct spll_main_state aux[MAX_CHAN_AUX];
 	struct spll_ptracker_state ptrackers[MAX_PTRACKERS];
 };
 
@@ -53,6 +54,7 @@ void _irq_entry()
 {
 	volatile uint32_t trr;
 	int src = -1, tag, i;
+	struct softpll_state *s = (struct softpll_state *) &softpll;
 
 /* check if there are more tags in the FIFO */
 	if(! (SPLL->CSR & SPLL_TRR_CSR_EMPTY))
@@ -66,67 +68,67 @@ void _irq_entry()
 		{
 			case SEQ_DISABLED:
 				break;
-			
-			case SEQ_START_EXT:		
-				external_update((struct spll_external_state *) &softpll.ext, tag, src);
-				external_start((struct spll_external_state *)&softpll.ext);
+
+			case SEQ_START_EXT:
+				external_update((struct spll_external_state *) &s->ext, tag, src);
+				external_start((struct spll_external_state *) &s->ext);
 				softpll.seq_state = SEQ_WAIT_EXT;
 				break;
 
 			case SEQ_WAIT_EXT:
-				if(external_locked((struct spll_external_state *)&softpll.ext))
+				if(external_locked((struct spll_external_state *) &s->ext))
 					softpll.seq_state = SEQ_START_HELPER;
 				break;
-				
+
 			case SEQ_START_HELPER:
 				softpll.helper_locked = 0;
-				helper_start((struct spll_helper_state *)&softpll.helper);
+				helper_start((struct spll_helper_state *) &s->helper);
 				softpll.seq_state = SEQ_WAIT_HELPER;
 				break;
-			
+
 			case SEQ_WAIT_HELPER:
 				if(softpll.helper.ld.locked && !softpll.helper_locked)
 				{
 					softpll.helper_locked = 1;
-					
-					if(softpll.mode == MODE_SLAVE)
+
+					if(softpll.mode == SPLL_MODE_SLAVE)
 						softpll.seq_state = SEQ_START_MAIN;
 					else {
-//						for(i=0;i<n_chan_ref; i++)
-//							ptracker_start((struct spll_ptracker_state *) &softpll.ptrackers[i]); 
+						for(i=0;i<n_chan_ref; i++)
+							ptracker_start((struct spll_ptracker_state *) &s->ptrackers[i]);
 						softpll.seq_state = SEQ_READY;
 					}
 				}
 				break;
 
-			case SEQ_START_MAIN: 
-				mpll_start((struct spll_main_state *) &softpll.mpll);
+			case SEQ_START_MAIN:
+				mpll_start((struct spll_main_state *) &s->mpll);
 				softpll.seq_state = SEQ_WAIT_MAIN;
 				break;
 
-			case SEQ_WAIT_MAIN: 
+			case SEQ_WAIT_MAIN:
 				if(softpll.mpll.ld.locked)
 				{
 					softpll.seq_state = SEQ_READY;
 
-//					for(i=0;i<n_chan_ref; i++)
-//							ptracker_start((struct spll_ptracker_state *) &softpll.ptrackers[i]); 
+					for(i=0;i<n_chan_ref; i++)
+						ptracker_start((struct spll_ptracker_state *) &s->ptrackers[i]);
 				}
 				break;
 
 			case SEQ_READY:
 				if(!softpll.helper.ld.locked)
-				{				
+				{
 //					SPLL->OCER = 0;
 //					SPLL->RCER = 0;
 					//softpll.seq_state = SEQ_START_HELPER;
-				} else if (softpll.mode == MODE_GRAND_MASTER && !external_locked((struct spll_external_state *) &softpll.ext))
+				} else if (softpll.mode == SPLL_MODE_GRAND_MASTER && !external_locked((struct spll_external_state *) &s->ext))
 				{
 //					SPLL->OCER = 0;
 //					SPLL->RCER = 0;
 //					SPLL->ECCR = 0;
 					softpll.seq_state = SEQ_START_EXT;
-				} else if (softpll.mode == MODE_SLAVE && !softpll.mpll.ld.locked)
+				} else if (softpll.mode == SPLL_MODE_SLAVE && !softpll.mpll.ld.locked)
 				{
 					softpll.seq_state = SEQ_START_MAIN;
 				};
@@ -137,30 +139,33 @@ void _irq_entry()
 		switch(softpll.seq_state)
 		{
 			case SEQ_WAIT_EXT:
-				external_update((struct spll_external_state *) &softpll.ext, tag, src);
+				external_update((struct spll_external_state *) &s->ext, tag, src);
 				break;
 
 			case SEQ_WAIT_HELPER:
-				if(softpll.mode == MODE_GRAND_MASTER)
-					external_update((struct spll_external_state *) &softpll.ext, tag, src);
-				helper_update((struct spll_helper_state *)&softpll.helper, tag, src);
+				if(softpll.mode == SPLL_MODE_GRAND_MASTER)
+					external_update((struct spll_external_state *) &s->ext, tag, src);
+				helper_update((struct spll_helper_state *) &s->helper, tag, src);
 				break;
 
 			case SEQ_WAIT_MAIN:
 			case SEQ_READY:
-				helper_update((struct spll_helper_state *)&softpll.helper, tag, src);
+				helper_update((struct spll_helper_state *) &s->helper, tag, src);
 
-				if(softpll.mode == MODE_GRAND_MASTER)
-					external_update((struct spll_external_state *) &softpll.ext, tag, src);
-				if(softpll.mode == MODE_SLAVE)
-					mpll_update((struct spll_main_state *) &softpll.mpll, tag, src);
+				if(softpll.mode == SPLL_MODE_GRAND_MASTER)
+					external_update((struct spll_external_state *) &s->ext, tag, src);
+				if(softpll.mode == SPLL_MODE_SLAVE)
+					mpll_update((struct spll_main_state *) &s->mpll, tag, src);
+
+					for(i=0;i<n_chan_ref; i++)
+						ptracker_update((struct spll_ptracker_state *) &s->ptrackers[i], tag, src);
 
 				break;
-				
-					
-							
+
+
+
 		}
-		
+
 
 	}
 
@@ -172,18 +177,20 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 {
 	char mode_str[20];
 	volatile int dummy;
-	
+	int i;
+
 	disable_irq();
 
 	n_chan_ref = SPLL_CSR_N_REF_R(SPLL->CSR);
 	n_chan_out = SPLL_CSR_N_OUT_R(SPLL->CSR);
 	softpll.helper_locked = 0;
 	softpll.mode = mode;
-	
+
 	SPLL->DAC_HPLL = 0;
 	SPLL->DAC_MAIN = 0;
 
-	timer_delay(100000);	
+	//timer_delay(100000);
+
 	SPLL->CSR= 0 ;
 	SPLL->OCER = 0;
 	SPLL->RCER = 0;
@@ -196,34 +203,41 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 
 	switch(mode)
 	{
-		case MODE_DISABLED:
+		case SPLL_MODE_DISABLED:
 			strcpy(mode_str, "Disabled");
 			softpll.seq_state = SEQ_DISABLED;
 			break;
 
-		case MODE_GRAND_MASTER:
+		case SPLL_MODE_GRAND_MASTER:
 			strcpy(mode_str, "Grand Master");
 
 			softpll.seq_state = SEQ_START_EXT;
 			external_init(&softpll.ext, n_chan_ref + n_chan_out, align_pps);
-			helper_init(&softpll.helper, n_chan_ref); 
+			helper_init(&softpll.helper, n_chan_ref);
 			break;
 
-		case MODE_FREE_RUNNING_MASTER:
+		case SPLL_MODE_FREE_RUNNING_MASTER:
 			strcpy(mode_str, "Free-running Master");
 
 			softpll.seq_state = SEQ_START_HELPER;
-			helper_init(&softpll.helper, n_chan_ref); 
+			helper_init(&softpll.helper, n_chan_ref);
 			break;
 
-		case MODE_SLAVE:
+		case SPLL_MODE_SLAVE:
 			strcpy(mode_str, "Slave");
 
 			softpll.seq_state = SEQ_START_HELPER;
-			helper_init(&softpll.helper, slave_ref_channel); 
+			helper_init(&softpll.helper, slave_ref_channel);
 			mpll_init(&softpll.mpll, slave_ref_channel, n_chan_ref);
+
+			for(i=0;i<n_chan_out-1;i++)
+				mpll_init(&softpll.aux[i], slave_ref_channel, n_chan_ref + i + 1);
 			break;
-	}					
+	}
+
+	for(i=0; i<n_chan_ref;i++)
+		ptracker_init(&softpll.ptrackers[i], i, n_chan_ref, PTRACKER_AVERAGE_SAMPLES);
+
 
 	TRACE("SPLL_Init: running as %s, %d ref channels, %d out channels\n", mode_str, n_chan_ref, n_chan_out);
 
@@ -237,10 +251,95 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 
 	enable_irq();
 
-	for(;;) mprintf("irqcount %d Seqstate %d TmrTics %d m %d ast %d\n", irq_count, softpll.seq_state, timer_get_tics(), softpll.mode, softpll.ext.realign_state);
+/*	for(;;)
+	{
+		mprintf("irqcount %d Seqstate %d TmrTics %d m %d ast %d ", irq_count, softpll.seq_state, timer_get_tics(), softpll.mode, softpll.ext.realign_state);
+		for(i=0;i<n_chan_ref;i++)
+		{
+			int ph, ready;
+			ready =	spll_read_ptracker(i, &ph);
+			mprintf("rp%d[%d]: %dps ", i, ready, ph);
+		}
+		mprintf("\n");
+	}*/
+
 }
 
-int spll_check_lock()
+void spll_shutdown()
 {
-	return softpll.seq_state == SEQ_READY;
+	SPLL->OCER = 0;
+	SPLL->RCER = 0;
+	SPLL->ECCR = 0;
+	SPLL->EIC_IDR = 1;
+}
+
+void spll_start_channel(int channel)
+{
+	if (softpll.seq_state != SEQ_READY || !channel)
+		return;
+
+	mpll_start(&softpll.aux[channel-1]);
+}
+
+void spll_stop_channel(int channel)
+{
+	if(!channel)
+		return -1;
+
+	mpll_stop(&softpll.aux[channel-1]);
+}
+
+int spll_check_lock(int channel)
+{
+		if(!channel)
+			return (softpll.seq_state == SEQ_READY);
+		else
+			return (softpll.seq_state == SEQ_READY) && softpll.aux[channel-1].ld.locked;
+}
+
+static int32_t from_picos(int32_t ps)
+{
+	return (int32_t) ((int64_t)ps * (int64_t)(1<<HPLL_N) / (int64_t)CLOCK_PERIOD_PICOSECONDS);
+}
+
+static int32_t to_picos(int32_t units)
+{
+	return (int32_t) (((int64_t)units * (int64_t)CLOCK_PERIOD_PICOSECONDS) >> HPLL_N);
+}
+
+/* Channel 0 = local PLL reference, 1...N = aux oscillators */
+void spll_set_phase_shift(int channel, int32_t value_picoseconds)
+{
+	volatile struct spll_main_state *st = (!channel ? &softpll.mpll : &softpll.aux[channel-1]);
+	mpll_set_phase_shift(st, from_picos(value_picoseconds));
+}
+
+void spll_get_phase_shift(int channel, int32_t *current, int32_t *target)
+{
+	volatile struct spll_main_state *st = (!channel ? &softpll.mpll : &softpll.aux[channel-1]);
+    if(current) *current = to_picos(st->phase_shift_current);
+	if(target) *target = to_picos(st->phase_shift_target);
+}
+
+int spll_read_ptracker(int channel, int32_t *phase_ps)
+{
+	volatile struct spll_ptracker_state *st = &softpll.ptrackers[channel];
+	*phase_ps = to_picos(st->phase_val);
+	return st->ready;
+}
+
+void spll_get_num_channels(int *n_ref, int *n_out)
+{
+    if(n_ref) *n_ref = n_chan_ref;
+    if(n_out) *n_out = n_chan_out;
+}
+
+void spll_show_stats()
+{
+    if(softpll.mode > 0)
+    TRACE("Irq_count %d Sequencer_state %d mode %d Alignment_state %d HL%d EL%d ML%d HY=%d MY=%d\n",
+            irq_count, softpll.seq_state, softpll.mode, softpll.ext.realign_state,
+            softpll.helper.ld.locked, softpll.ext.ld.locked, softpll.mpll.ld.locked,
+            softpll.helper.pi.y, softpll.mpll.pi.y);
+
 }

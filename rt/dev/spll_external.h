@@ -56,7 +56,7 @@ struct spll_external_state {
  	spll_lock_det_t ld;
 };
 	
-static void external_init(struct spll_external_state *s, int ext_ref, int realign_clocks)
+static void external_init( struct spll_external_state *s, int ext_ref, int realign_clocks)
 {
 	
 	s->pi.y_min = 5;
@@ -85,9 +85,9 @@ static void external_init(struct spll_external_state *s, int ext_ref, int realig
 	lowpass_init(&s->lp_long, 300);
 }
 
-static inline void realign_fsm(struct spll_external_state *s)
+static inline void realign_fsm( struct spll_external_state *s)
 {
-	volatile uint32_t eccr;
+	 uint32_t eccr;
 
 	
 	switch(s->realign_state)
@@ -143,7 +143,7 @@ static inline void realign_fsm(struct spll_external_state *s)
 	}
 }
 
-static int external_update(struct spll_external_state *s, int tag, int source)
+static int external_update( struct spll_external_state *s, int tag, int source)
 {
 	int err, y, y2, yd, ylt;
 
@@ -195,9 +195,9 @@ static int external_update(struct spll_external_state *s, int tag, int source)
 }
 
 
-static void external_start(struct spll_external_state *s)
+static void external_start( struct spll_external_state *s)
 {
-	mprintf("ExtStartup\n");
+//	mprintf("ExtStartup\n");
 
 	SPLL->ECCR = 0;
 
@@ -209,7 +209,7 @@ static void external_start(struct spll_external_state *s)
 	spll_debug(DBG_EVENT |  DBG_EXT, DBG_EVT_START, 1);
 }
 
-static inline int external_locked(struct spll_external_state *s)
+static inline int external_locked( struct spll_external_state *s)
 {
 	return (s->ld.locked && (s->realign_clocks ? s->realign_state == REALIGN_DONE : 1));
 }
