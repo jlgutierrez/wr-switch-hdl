@@ -35,6 +35,7 @@ files = [
 "swc_pck_transfer_input.vhd",
 "swc_pck_transfer_output.vhd",
 "swc_prio_encoder.vhd",
+"swc_output_queue_scheduler.vhd",
 "swc_rr_arbiter.vhd",
 "xswc_core.vhd",
 "xswc_output_block.vhd",

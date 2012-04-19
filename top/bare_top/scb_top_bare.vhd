@@ -545,12 +545,13 @@ begin
     U_Swcore : xswc_core
       generic map (
         g_prio_num                        => 8,
+        g_output_queue_num                => 8,
         g_max_pck_size                    => 10 * 1024,
         g_max_oob_size                    => 3,
         g_num_ports                       => g_num_ports+1,
         g_pck_pg_free_fifo_size           => ((65536/64)/2),
         g_input_block_cannot_accept_data  => "drop_pck",
-        g_output_block_per_prio_fifo_size => 64,
+        g_output_block_per_queue_fifo_size=> 64,
         g_wb_data_width                   => 16,
         g_wb_addr_width                   => 2,
         g_wb_sel_width                    => 2,

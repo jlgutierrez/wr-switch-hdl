@@ -209,12 +209,13 @@ package wrsw_components_pkg is
   component xswc_core is
     generic( 
       g_prio_num                         : integer ;
+      g_output_queue_num                 : integer ;
       g_max_pck_size                     : integer ;
       g_max_oob_size                     : integer ;
       g_num_ports                        : integer ;
       g_pck_pg_free_fifo_size            : integer ;
       g_input_block_cannot_accept_data   : string  ;
-      g_output_block_per_prio_fifo_size  : integer ;
+      g_output_block_per_queue_fifo_size : integer ;
 
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;

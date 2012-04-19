@@ -55,12 +55,13 @@ use work.wrsw_shared_types_pkg.all;
 entity swc_core is
   generic( 
     g_prio_num                         : integer ;--:= c_swc_output_prio_num;
+    g_output_queue_num                 : integer ;
     g_max_pck_size                     : integer ;--:= 2^c_swc_max_pck_size
     g_max_oob_size                     : integer ;
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
-    g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+    g_output_block_per_queue_fifo_size : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
     -- new
     g_wb_data_width                    : integer ;
     g_wb_addr_width                    : integer ;
@@ -134,12 +135,13 @@ architecture rtl of swc_core is
   xswcore: xswc_core
     generic map( 
       g_prio_num                         => g_prio_num,
+      g_output_queue_num                 => g_output_queue_num,
       g_max_pck_size                     => g_max_pck_size,
       g_max_oob_size                     => g_max_oob_size,
       g_num_ports                        => g_num_ports,
       g_pck_pg_free_fifo_size            => g_pck_pg_free_fifo_size,
       g_input_block_cannot_accept_data   => g_input_block_cannot_accept_data,
-      g_output_block_per_prio_fifo_size  => g_output_block_per_prio_fifo_size,
+      g_output_block_per_queue_fifo_size => g_output_block_per_queue_fifo_size,
 
       g_wb_data_width                    => g_wb_data_width,
       g_wb_addr_width                    => g_wb_addr_width,

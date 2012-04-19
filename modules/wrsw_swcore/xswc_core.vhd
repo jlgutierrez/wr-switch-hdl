@@ -57,12 +57,13 @@ entity xswc_core is
   generic( 
 
     g_prio_num                         : integer ;--:= c_swc_output_prio_num; [works only for value of 8, output_block-causes problem]
+    g_output_queue_num                 : integer ;
     g_max_pck_size                     : integer ;-- in 16bits words --:= c_swc_max_pck_size
     g_max_oob_size                     : integer ;
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
-    g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+    g_output_block_per_queue_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
 
     -- new
     g_wb_data_width                    : integer ;
@@ -107,6 +108,7 @@ end xswc_core;
 architecture rtl of xswc_core is
    constant c_usecount_width        : integer := integer(CEIL(LOG2(real(g_num_ports+1))));
    constant c_prio_width            : integer := integer(CEIL(LOG2(real(g_prio_num-1)))); -- g_prio_width
+   constant c_output_queue_num_width: integer := integer(CEIL(LOG2(real(g_output_queue_num-1))));
    constant c_max_pck_size_width    : integer := integer(CEIL(LOG2(real(g_max_pck_size-1)))); -- c_swc_max_pck_size_width 
    constant c_max_oob_size_width    : integer := integer(CEIL(LOG2(real(g_max_oob_size + 1))));
 
@@ -176,6 +178,9 @@ architecture rtl of xswc_core is
    signal pta_pageaddr               : std_logic_vector(g_num_ports * c_mpm_page_addr_width- 1 downto 0);
    signal pta_prio                   : std_logic_vector(g_num_ports * c_prio_width         - 1 downto 0);
    signal pta_pck_size               : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
+
+   signal pta2ob_broadcast           : std_logic_vector(g_num_ports -1 downto 0);
+   signal pta2ob_resource            : std_logic_vector(g_num_ports *c_res_mmu_resource_num_width -1 downto 0);
 
    -- Input Block -> Pck Transfer Arbiter
    signal ob_ack                    : std_logic_vector(g_num_ports -1 downto 0);
@@ -444,14 +449,18 @@ architecture rtl of xswc_core is
     OUTPUT_BLOCK: xswc_output_block
       generic map( 
         g_max_pck_size_width               => c_max_pck_size_width,
-        g_output_block_per_prio_fifo_size  => g_output_block_per_prio_fifo_size,
-        g_prio_width                       => c_prio_width,
-        g_prio_num                         => g_prio_num,
+        g_output_block_per_queue_fifo_size => g_output_block_per_queue_fifo_size,
+        g_queue_num_width                  => c_output_queue_num_width,
+        g_queue_num                        => g_output_queue_num,
+        
+        g_prio_num_width                   => c_prio_width,
         
         g_mpm_page_addr_width              => c_mpm_page_addr_width,
         g_mpm_data_width                   => c_mpm_data_width,
         g_mpm_partial_select_width         => c_mpm_partial_sel_width,
         g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance,
+
+        g_mmu_resource_num_width           => c_res_mmu_resource_num_width,
 
         g_wb_data_width                    => g_wb_data_width,
         g_wb_addr_width                    => g_wb_addr_width,
@@ -467,6 +476,9 @@ architecture rtl of xswc_core is
         pta_transfer_data_valid_i=> pta_data_valid(i),
         pta_pageaddr_i           => pta_pageaddr((i + 1) * c_mpm_page_addr_width-1 downto i * c_mpm_page_addr_width),
         pta_prio_i               => pta_prio    ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
+        
+        pta_broadcast_i          => pta2ob_broadcast(i),
+        pta_resource_i           => pta2ob_resource((i + 1) * c_res_mmu_resource_num_width -1 downto i * c_res_mmu_resource_num_width),
 --        pta_pck_size_i           => pta_pck_size((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
         pta_transfer_data_ack_o  => ob_ack(i),
         -------------------------------------------------------------------------------

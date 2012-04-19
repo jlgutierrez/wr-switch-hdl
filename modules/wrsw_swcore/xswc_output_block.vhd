@@ -39,6 +39,7 @@
 -- 2012-01-19  2.0      twlostow added buffer-FIFO
 -- 2012-02-02  3.0      mlipinsk generic-azed
 -- 2012-02-16  4.0      mlipinsk adapted to the new (async) MPM
+-- 2012-04-19  4.1      mlipinsk adapted to muti-resource MMU implementation
 -------------------------------------------------------------------------------
 -- TODO:
 -- 1) mpm_dsel_i - needs to be made it generic
@@ -62,14 +63,15 @@ entity xswc_output_block is
   generic (
 
     g_max_pck_size_width              : integer;  --:= c_swc_max_pck_size_width  
-    g_output_block_per_prio_fifo_size : integer;  --:= c_swc_output_fifo_size
-    g_prio_width                      : integer;  --:= c_swc_prio_width;, c_swc_output_prio_num_width
-    g_prio_num                        : integer;  --:= c_swc_output_prio_num
-    -- new stuff
+    g_output_block_per_queue_fifo_size : integer;  --:= c_swc_output_fifo_size
+    g_queue_num_width                 : integer;  --
+    g_queue_num                       : integer;  --
+    g_prio_num_width                  : integer;  --                      
     g_mpm_page_addr_width             : integer;  --:= c_swc_page_addr_width;
     g_mpm_data_width                  : integer;  --:= c_swc_page_addr_width;
     g_mpm_partial_select_width        : integer;
     g_mpm_fetch_next_pg_in_advance    : boolean := false;
+    g_mmu_resource_num_width          : integer;
     g_wb_data_width                   : integer;
     g_wb_addr_width                   : integer;
     g_wb_sel_width                    : integer;
@@ -84,9 +86,10 @@ entity xswc_output_block is
 -------------------------------------------------------------------------------
 
     pta_transfer_data_valid_i : in  std_logic;
-    pta_pageaddr_i            : in  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-    pta_prio_i                : in  std_logic_vector(g_prio_width - 1 downto 0);
---    pta_pck_size_i            : in   std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    pta_pageaddr_i            : in  std_logic_vector(g_mpm_page_addr_width    - 1 downto 0);
+    pta_prio_i                : in  std_logic_vector(g_prio_num_width         - 1 downto 0);
+    pta_broadcast_i           : in  std_logic;
+    pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);
     pta_transfer_data_ack_o   : out std_logic;
 
 -------------------------------------------------------------------------------
@@ -123,37 +126,37 @@ end xswc_output_block;
 
 architecture behavoural of xswc_output_block is
   
-  constant c_per_prio_fifo_size_width : integer := integer(CEIL(LOG2(real(g_output_block_per_prio_fifo_size-1))));  -- c_swc_output_fifo_addr_width
+  constant c_per_queue_fifo_size_width : integer := integer(CEIL(LOG2(real(g_output_block_per_queue_fifo_size-1))));  -- c_swc_output_fifo_addr_width
 
   signal pta_transfer_data_ack : std_logic;
 
-  signal wr_addr : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
-  signal rd_addr : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal wr_addr : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal rd_addr : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
 
 -- drop_imp:  
---   signal drop_addr             : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
---   signal ram_rd_addr           : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
---   signal drop_index            : std_logic_vector(g_prio_width - 1 downto 0);
---   signal drop_array            : std_logic_vector(g_prio_num - 1 downto 0);
+--   signal drop_addr             : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+--   signal ram_rd_addr           : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+--   signal drop_index            : std_logic_vector(g_queue_num_width - 1 downto 0);
+--   signal drop_array            : std_logic_vector(g_queue_num - 1 downto 0);
 
-  signal wr_prio         : std_logic_vector(g_prio_width - 1 downto 0);
-  signal rd_prio         : std_logic_vector(g_prio_width - 1 downto 0);
-  signal not_full_array  : std_logic_vector(g_prio_num - 1 downto 0);
-  signal full_array      : std_logic_vector(g_prio_num - 1 downto 0);
-  signal not_empty_array : std_logic_vector(g_prio_num - 1 downto 0);
-  signal read_array      : std_logic_vector(g_prio_num - 1 downto 0);
-  signal read_array_d0   : std_logic_vector(g_prio_num - 1 downto 0);
-  signal read            : std_logic_vector(g_prio_num - 1 downto 0);
-  signal write_array     : std_logic_vector(g_prio_num - 1 downto 0);
-  signal write           : std_logic_vector(g_prio_num - 1 downto 0);
+  signal wr_queue        : std_logic_vector(g_queue_num_width - 1 downto 0);
+  signal rd_queue        : std_logic_vector(g_queue_num_width - 1 downto 0);
+  signal not_full_array  : std_logic_vector(g_queue_num - 1 downto 0);
+  signal full_array      : std_logic_vector(g_queue_num - 1 downto 0);
+  signal not_empty_array : std_logic_vector(g_queue_num - 1 downto 0);
+  signal read_array      : std_logic_vector(g_queue_num - 1 downto 0);
+  signal read_array_d0   : std_logic_vector(g_queue_num - 1 downto 0);
+  signal read            : std_logic_vector(g_queue_num - 1 downto 0);
+  signal write_array     : std_logic_vector(g_queue_num - 1 downto 0);
+  signal write           : std_logic_vector(g_queue_num - 1 downto 0);
   signal wr_en           : std_logic;
   signal rd_data_valid   : std_logic;
   signal drop_data_valid : std_logic;
-  signal zeros           : std_logic_vector(g_prio_num - 1 downto 0);
+  signal zeros           : std_logic_vector(g_queue_num - 1 downto 0);
 
-  subtype t_head_and_head is std_logic_vector(c_per_prio_fifo_size_width - 1 downto 0);
+  subtype t_head_and_head is std_logic_vector(c_per_queue_fifo_size_width - 1 downto 0);
 
-  type t_addr_array is array (g_prio_num - 1 downto 0) of t_head_and_head;
+  type t_addr_array is array (g_queue_num - 1 downto 0) of t_head_and_head;
 
   signal wr_array : t_addr_array;
   signal rd_array : t_addr_array;
@@ -262,10 +265,10 @@ architecture behavoural of xswc_output_block is
   signal not_set_next_pg_addr : std_logic;
 
   signal wr_en_reg   : std_logic;
-  signal wr_addr_reg : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal wr_addr_reg : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
   signal wr_data_reg : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
 
-  signal rd_addr_reg : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal rd_addr_reg : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
 
   signal cycle_frozen     : std_logic;
   signal cycle_frozen_cnt : unsigned(5 downto 0);
@@ -320,28 +323,35 @@ begin  --  behavoural
   ram_zeros <= (others => '0');
   ram_ones  <= (others => '1');
 
-  wr_prio <= not pta_prio_i;
+--  wr_queue <= pta_prio_i;
+  
+  -- here we map the RTU+resource info into output queues
+  wr_queue <= f_map_rtu_rsp_and_mmu_res_to_out_queue(pta_prio_i,
+                                                     pta_broadcast_i,
+                                                     pta_resource_i,
+                                                     full_array,
+                                                     g_queue_num);
+  
+  wr_data  <= pta_pageaddr_i;
 
-  wr_data <= pta_pageaddr_i;
-
-  wr_addr <= wr_prio & wr_array(0) when wr_prio = "000" else -- prio = 7
-             wr_prio & wr_array(1) when wr_prio = "001" else -- prio = 6
-             wr_prio & wr_array(2) when wr_prio = "010" else -- prio = 5
-             wr_prio & wr_array(3) when wr_prio = "011" else -- prio = 4
-             wr_prio & wr_array(4) when wr_prio = "100" else -- prio = 3
-             wr_prio & wr_array(5) when wr_prio = "101" else -- prio = 2
-             wr_prio & wr_array(6) when wr_prio = "110" else -- prio = 1
-             wr_prio & wr_array(7) when wr_prio = "111" else -- prio = 0
+  wr_addr <= wr_queue & wr_array(0) when wr_queue = "000" else 
+             wr_queue & wr_array(1) when wr_queue = "001" else 
+             wr_queue & wr_array(2) when wr_queue = "010" else 
+             wr_queue & wr_array(3) when wr_queue = "011" else 
+             wr_queue & wr_array(4) when wr_queue = "100" else 
+             wr_queue & wr_array(5) when wr_queue = "101" else 
+             wr_queue & wr_array(6) when wr_queue = "110" else 
+             wr_queue & wr_array(7) when wr_queue = "111" else 
              (others => 'X');
   
-  rd_addr <= rd_prio & rd_array(0) when rd_prio = "000" else -- prio = 7
-             rd_prio & rd_array(1) when rd_prio = "001" else -- prio = 6
-             rd_prio & rd_array(2) when rd_prio = "010" else -- prio = 5
-             rd_prio & rd_array(3) when rd_prio = "011" else -- prio = 4
-             rd_prio & rd_array(4) when rd_prio = "100" else -- prio = 3
-             rd_prio & rd_array(5) when rd_prio = "101" else -- prio = 2
-             rd_prio & rd_array(6) when rd_prio = "110" else -- prio = 1
-             rd_prio & rd_array(7) when rd_prio = "111" else -- prio = 0
+  rd_addr <= rd_queue & rd_array(0) when rd_queue = "000" else 
+             rd_queue & rd_array(1) when rd_queue = "001" else 
+             rd_queue & rd_array(2) when rd_queue = "010" else 
+             rd_queue & rd_array(3) when rd_queue = "011" else 
+             rd_queue & rd_array(4) when rd_queue = "100" else 
+             rd_queue & rd_array(5) when rd_queue = "101" else 
+             rd_queue & rd_array(6) when rd_queue = "110" else 
+             rd_queue & rd_array(7) when rd_queue = "111" else 
              (others => 'X');
 
 -- drop_imp:
@@ -357,55 +367,59 @@ begin  --  behavoural
 
 --  ram_rd_addr <= rd_addr when (mpm_pg_valid = '1') else drop_addr;
   
-  RD_ENCODE : swc_prio_encoder
+  
+  -- here we instantiate a module responsible for output queue scheduling (policy)
+  OUTPUT_SCHEDULER: swc_output_queue_scheduler
     generic map (
-      g_num_inputs  => g_prio_num,
-      g_output_bits => g_prio_width)
+      g_queue_num       => g_queue_num,
+      g_queue_num_width => g_queue_num_width)
     port map (
-      in_i     => not_empty_array,
-      onehot_o => read_array,
-      out_o    => rd_prio);
+      clk_i              => clk_i,
+      rst_n_i            => rst_n_i,
+      not_empty_array_i  => not_empty_array,
+      queue_onehot_o     => read_array,
+      queue_index_o      => rd_queue);
 
-  write_array <= "00000001" when wr_prio = "000" else
-                 "00000010" when wr_prio = "001" else
-                 "00000100" when wr_prio = "010" else
-                 "00001000" when wr_prio = "011" else
-                 "00010000" when wr_prio = "100" else
-                 "00100000" when wr_prio = "101" else
-                 "01000000" when wr_prio = "110" else
-                 "10000000" when wr_prio = "111" else
+  write_array <= "00000001" when wr_queue = "000" else
+                 "00000010" when wr_queue = "001" else
+                 "00000100" when wr_queue = "010" else
+                 "00001000" when wr_queue = "011" else
+                 "00010000" when wr_queue = "100" else
+                 "00100000" when wr_queue = "101" else
+                 "01000000" when wr_queue = "110" else
+                 "10000000" when wr_queue = "111" else
                  "00000000";
   
-  wr_en <= write(0) and not_full_array(0) when wr_prio = "000" else
-           write(1) and not_full_array(1) when wr_prio = "001" else
-           write(2) and not_full_array(2) when wr_prio = "010" else
-           write(3) and not_full_array(3) when wr_prio = "011" else
-           write(4) and not_full_array(4) when wr_prio = "100" else
-           write(5) and not_full_array(5) when wr_prio = "101" else
-           write(6) and not_full_array(6) when wr_prio = "110" else
-           write(7) and not_full_array(7) when wr_prio = "111" else
+  wr_en <= write(0) and not_full_array(0) when wr_queue = "000" else
+           write(1) and not_full_array(1) when wr_queue = "001" else
+           write(2) and not_full_array(2) when wr_queue = "010" else
+           write(3) and not_full_array(3) when wr_queue = "011" else
+           write(4) and not_full_array(4) when wr_queue = "100" else
+           write(5) and not_full_array(5) when wr_queue = "101" else
+           write(6) and not_full_array(6) when wr_queue = "110" else
+           write(7) and not_full_array(7) when wr_queue = "111" else
            '0';
   -- I don't like this                 
-  pta_transfer_data_ack_o <= not_full_array(0) when wr_prio = "000" else
-                             not_full_array(1) when wr_prio = "001" else
-                             not_full_array(2) when wr_prio = "010" else
-                             not_full_array(3) when wr_prio = "011" else
-                             not_full_array(4) when wr_prio = "100" else
-                             not_full_array(5) when wr_prio = "101" else
-                             not_full_array(6) when wr_prio = "110" else
-                             not_full_array(7) when wr_prio = "111" else
+  pta_transfer_data_ack_o <= not_full_array(0) when wr_queue = "000" else
+                             not_full_array(1) when wr_queue = "001" else
+                             not_full_array(2) when wr_queue = "010" else
+                             not_full_array(3) when wr_queue = "011" else
+                             not_full_array(4) when wr_queue = "100" else
+                             not_full_array(5) when wr_queue = "101" else
+                             not_full_array(6) when wr_queue = "110" else
+                             not_full_array(7) when wr_queue = "111" else
                              '0';
   
-  prio_ctrl : for i in 0 to g_prio_num - 1 generate
+  queue_ctrl : for i in 0 to g_queue_num - 1 generate
     
     write(i) <= write_array(i) and pta_transfer_data_valid_i;
     read(i)  <= read_array(i) and mpm_pg_valid;
 -- drop_imp:
 --     read(i)         <= (read_array(i)  and mpm_pg_valid) or (drop_array(i) and not mpm_pg_valid);    
 
-    PRIO_QUEUE_CTRL : swc_ob_prio_queue
+    QUEUE_CTRL : swc_ob_prio_queue
       generic map(
-        g_per_prio_fifo_size_width => c_per_prio_fifo_size_width  -- c_swc_output_fifo_addr_width
+        g_per_queue_fifo_size_width => c_per_queue_fifo_size_width  -- c_swc_output_fifo_addr_width
         )
       port map (
         clk_i       => clk_i,
@@ -420,13 +434,13 @@ begin  --  behavoural
         );
 -- drop_imp:
 --  full_array(i) <= not not_full_array(i);
-  end generate prio_ctrl;
+  end generate queue_ctrl ;
 
 -- drop_imp:
 --   DROP_ENCODE : swc_prio_encoder
 --     generic map (
---       g_num_inputs  => g_prio_num,
---       g_output_bits => g_prio_width)
+--       g_num_inputs  => g_queue_num,
+--       g_output_bits => g_queue_num_width)
 --     port map (
 --       in_i     => full_array,
 --       onehot_o => drop_array,
@@ -435,7 +449,7 @@ begin  --  behavoural
   PRIO_QUEUE: swc_rd_wr_ram
     generic map (
       g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
-      g_size       => (g_prio_num * g_output_block_per_prio_fifo_size))
+      g_size       => (g_queue_num * g_output_block_per_queue_fifo_size))
     port map (
       clk_i => clk_i,
       we_i  => wr_en_reg,
@@ -448,7 +462,7 @@ begin  --  behavoural
   --PRIO_QUEUE : generic_dpram
   --  generic map (
   --    g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
-  --    g_size       => (g_prio_num * g_output_block_per_prio_fifo_size)
+  --    g_size       => (g_queue_num * g_output_block_per_queue_fifo_size)
   --    )
   --  port map (
   --    -- Port A -- writing

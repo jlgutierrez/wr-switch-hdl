@@ -400,7 +400,7 @@ package swc_swcore_pkg is
   
   component swc_ob_prio_queue is
     generic(
-      g_per_prio_fifo_size_width : integer --:= c_swc_output_fifo_addr_width
+      g_per_queue_fifo_size_width : integer --:= c_swc_output_fifo_addr_width
       );
     port (
       clk_i             : in   std_logic;
@@ -410,22 +410,24 @@ package swc_swcore_pkg is
       not_full_o        : out  std_logic;
       not_empty_o       : out  std_logic;
       wr_en_o           : out  std_logic;
-      wr_addr_o         : out  std_logic_vector(g_per_prio_fifo_size_width - 1 downto 0);
-      rd_addr_o         : out  std_logic_vector(g_per_prio_fifo_size_width - 1 downto 0)
+      wr_addr_o         : out  std_logic_vector(g_per_queue_fifo_size_width - 1 downto 0);
+      rd_addr_o         : out  std_logic_vector(g_per_queue_fifo_size_width - 1 downto 0)
       );
   end component;
   
   component xswc_output_block is
     generic ( 
       g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
-      g_output_block_per_prio_fifo_size  : integer ;--:= c_swc_output_fifo_size
-      g_prio_width                       : integer ;--:= c_swc_prio_width;, c_swc_output_prio_num_width
-      g_prio_num                         : integer ;--:= c_swc_output_prio_num
+      g_output_block_per_queue_fifo_size : integer ;--:= c_swc_output_fifo_size
+      g_queue_num_width                  : integer ;--
+      g_queue_num                        : integer ;--      
+      g_prio_num_width                   : integer ;--
       -- new stuff
       g_mpm_page_addr_width              : integer ;--:= c_swc_page_addr_width;
       g_mpm_data_width                   : integer ;--:= c_swc_page_addr_width;
       g_mpm_partial_select_width         : integer ;
       g_mpm_fetch_next_pg_in_advance     : boolean := false;
+      g_mmu_resource_num_width           : integer;
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;
       g_wb_sel_width                     : integer ;
@@ -436,7 +438,9 @@ package swc_swcore_pkg is
       rst_n_i : in std_logic;
       pta_transfer_data_valid_i : in   std_logic;
       pta_pageaddr_i            : in   std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-      pta_prio_i                : in   std_logic_vector(g_prio_width - 1 downto 0);
+      pta_prio_i                : in  std_logic_vector(g_prio_num_width         - 1 downto 0);
+      pta_broadcast_i           : in  std_logic;
+      pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);      
       pta_transfer_data_ack_o   : out  std_logic;
       mpm_d_i        : in  std_logic_vector (g_mpm_data_width -1 downto 0);
       mpm_dvalid_i   : in  std_logic;
@@ -544,12 +548,13 @@ component  swc_multiport_pck_pg_free_module is
   component xswc_core is
     generic( 
       g_prio_num                         : integer ;--:= c_swc_output_prio_num;
+      g_output_queue_num                 : integer ;
       g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
       g_max_oob_size                     : integer ;
       g_num_ports                        : integer ;--:= c_swc_num_ports
       g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
       g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
-      g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+      g_output_block_per_queue_fifo_size : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
 
       -- new
       g_wb_data_width                    : integer ;
@@ -629,6 +634,21 @@ component  swc_multiport_pck_pg_free_module is
     );  
   end component;
 
+
+  component swc_output_queue_scheduler is
+  generic (
+    g_queue_num       : integer range 2 to 64 := 32;
+    g_queue_num_width : integer range 1 to 6  := 5);
+  port (
+    clk_i              : in std_logic;
+    rst_n_i            : in std_logic;
+    not_empty_array_i  : in  std_logic_vector(g_queue_num-1 downto 0);
+    queue_index_o      : out std_logic_vector(g_queue_num_width-1 downto 0);
+    queue_onehot_o     : out std_logic_vector(g_queue_num-1 downto 0)
+    );
+   end component;
+
+
   function f_sel2partialSel(sel       : std_logic_vector; partialSelWidth: integer) return std_logic_vector;
   function f_partialSel2sel(partialSel: std_logic_vector; selWidth       : integer) return std_logic_vector;
   function f_map_rtu_rsp_to_mmu_res(rtu_prio     : std_logic_vector; 
@@ -637,6 +657,7 @@ component  swc_multiport_pck_pg_free_module is
   function f_map_rtu_rsp_and_mmu_res_to_out_queue(rtu_prio      : std_logic_vector; 
                                                   rtu_broadcast : std_logic; 
                                                   resource      : std_logic_vector;
+                                                  queue_full    : std_logic_vector;
                                                   queue_num     : integer) return std_logic_vector;
 end swc_swcore_pkg;
 
@@ -671,7 +692,15 @@ package body swc_swcore_pkg is
     return tmp;
   end function; 
   
-  
+  --------------------------------------------------------------------------------------------------  
+  -- Mapping of RTU decision into available memory resources
+  --------------------------------------------------------------------------------------------------  
+  -- here we can map, as we please the {priority,broadcast} pair into memory resources, i.e.
+  -- we define HighPriority traffic which shall have separate resources, so 
+  -- if (rtu_prio = 7 and broadcast=1) then we assign "special resource" (number 1)
+  -- else                                   we assign "normal  resource" (number 2)
+  --
+  --------------------------------------------------------------------------------------------------  
   function f_map_rtu_rsp_to_mmu_res(rtu_prio     : std_logic_vector; 
                                     rtu_broadcast: std_logic; 
                                     res_num_width: integer)          return std_logic_vector is
@@ -690,35 +719,49 @@ package body swc_swcore_pkg is
     return tmp(res_num_width-1 downto 0);-- adjust the vector width
   end function;
 
+  --------------------------------------------------------------------------------------------------  
+  -- Mapping of RTU decision and resources and output queues availability into output queue
+  --------------------------------------------------------------------------------------------------  
+  -- Here we decide to which output queue a given frame to-be-sent shall be assigned, i.e.
+  -- we assign special resource (nr=1) to output queue number 7 and the rest we distribute
+  -- over 6 other output queues, so
+  -- queue[7] <= resource number 1 (prio=7 and broadcast=1)
+  -- queue[6] <= resource number 0 (prio=7 and broadcast=0)
+  -- queue[5] <= resource number 0 (prio=6 and (broadcast=0 or broadcast=1))
+  -- queue[4] <= resource number 0 (prio=5 and (broadcast=0 or broadcast=1))
+  -- queue[3] <= resource number 0 (prio=4 and (broadcast=0 or broadcast=1))
+  -- queue[2] <= resource number 0 (prio=3 and (broadcast=0 or broadcast=1))
+  -- queue[1] <= resource number 0 (prio=2 and (broadcast=0 or broadcast=1))
+  -- queue[0] <= resource number 0 (prio=1 or prio = 0 and (broadcast=0 or broadcast=1))
+  -- and we ignore whether the queue is full or not
+  --
+  --------------------------------------------------------------------------------------------------  
   function f_map_rtu_rsp_and_mmu_res_to_out_queue(rtu_prio      : std_logic_vector; 
                                                   rtu_broadcast : std_logic; 
                                                   resource      : std_logic_vector;
+                                                  queue_full    : std_logic_vector;
                                                   queue_num     : integer) return std_logic_vector is
-    variable tmp        : unsigned(integer(CEIL(LOG2(real(queue_num+1))))-1 downto 0);
+    variable tmp        : unsigned(integer(CEIL(LOG2(real(queue_num-1))))-1 downto 0);
     variable resSpecial : std_logic_vector(7 downto 0);
-    variable tmp_prio   : std_logic_vector(9 downto 0); -- one bit more
   begin
     resSpecial     := x"01";
-    tmp_prio(9                 downto rtu_prio'length) := (others => '0');
-    tmp_prio(rtu_prio'length-1 downto 0              ) := rtu_prio;
-    if(resource = resSpecial(resource'length -1 downto 0)) then
-      tmp   := to_unsigned(7,tmp'length ); 
-    else
-
-      if(unsigned(tmp_prio) > to_unsigned(0,9)) then
-        tmp := to_unsigned(0,tmp'length);
-      else
-        tmp := unsigned(tmp_prio) - 1;
-      end if;
-
-
---       if(unsigned(tmp_prio) + 1 >= to_unsigned(queue_num,9)) then
---         tmp := to_unsigned(queue_num,tmp'length);
+    
+    return rtu_prio; -- tmp solution
+     
+    -------------------- the correct one
+--     if(resource = resSpecial(resource'length -1 downto 0)) then
+--       tmp   := to_unsigned(7,tmp'length ); 
+--     else
+-- 
+--       if(unsigned(rtu_prio) > to_unsigned(0,rtu_prio'length)) then
+--         tmp := unsigned(rtu_prio) - 1;
 --       else
---         tmp := unsigned(tmp_prio) + 1;
+--         tmp := to_unsigned(0,tmp'length);
 --       end if;
-    end if;
-    return std_logic_vector(tmp);
+-- 
+--     end if;
+--
+--    return std_logic_vector(tmp);
   end function;
 
 
