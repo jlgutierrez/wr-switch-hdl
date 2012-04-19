@@ -226,7 +226,8 @@ package wrsw_components_pkg is
       g_mpm_page_size                    : integer ;
       g_mpm_ratio                        : integer ;
       g_mpm_fifo_size                    : integer ;
-      g_mpm_fetch_next_pg_in_advance     : boolean
+      g_mpm_fetch_next_pg_in_advance     : boolean ;
+      g_drop_outqueue_head_on_full       : boolean
       );
    port (
       clk_i          : in std_logic;

@@ -40,6 +40,7 @@
 -- 2012-02-02  3.0      mlipinsk generic-azed
 -- 2012-02-16  4.0      mlipinsk adapted to the new (async) MPM
 -- 2012-04-19  4.1      mlipinsk adapted to muti-resource MMU implementation
+-- 2012-04-20  4.2      mlipinsk added dropping of frames from queues which are full
 -------------------------------------------------------------------------------
 -- TODO:
 -- 1) mpm_dsel_i - needs to be made it generic
@@ -75,7 +76,8 @@ entity xswc_output_block is
     g_wb_data_width                   : integer;
     g_wb_addr_width                   : integer;
     g_wb_sel_width                    : integer;
-    g_wb_ob_ignore_ack                : boolean := true
+    g_wb_ob_ignore_ack                : boolean := true;
+    g_drop_outqueue_head_on_full      : boolean := true
     );
   port (
     clk_i   : in std_logic;
@@ -134,13 +136,14 @@ architecture behavoural of xswc_output_block is
   signal rd_addr : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
 
 -- drop_imp:  
---   signal drop_addr             : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
---   signal ram_rd_addr           : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
---   signal drop_index            : std_logic_vector(g_queue_num_width - 1 downto 0);
---   signal drop_array            : std_logic_vector(g_queue_num - 1 downto 0);
+  signal drop_addr             : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal ram_rd_addr           : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal ram_rd_addr_d0        : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal drop_index            : std_logic_vector(g_queue_num_width - 1 downto 0);
+  signal drop_array            : std_logic_vector(g_queue_num       - 1 downto 0);
 
-  signal wr_queue        : std_logic_vector(g_queue_num_width - 1 downto 0);
-  signal rd_queue        : std_logic_vector(g_queue_num_width - 1 downto 0);
+  signal write_index        : std_logic_vector(g_queue_num_width - 1 downto 0);
+  signal read_index        : std_logic_vector(g_queue_num_width - 1 downto 0);
   signal not_full_array  : std_logic_vector(g_queue_num - 1 downto 0);
   signal full_array      : std_logic_vector(g_queue_num - 1 downto 0);
   signal not_empty_array : std_logic_vector(g_queue_num - 1 downto 0);
@@ -152,6 +155,7 @@ architecture behavoural of xswc_output_block is
   signal wr_en           : std_logic;
   signal rd_data_valid   : std_logic;
   signal drop_data_valid : std_logic;
+  signal drop_data_valid_raw : std_logic;
   signal zeros           : std_logic_vector(g_queue_num - 1 downto 0);
 
   subtype t_head_and_head is std_logic_vector(c_per_queue_fifo_size_width - 1 downto 0);
@@ -209,9 +213,9 @@ architecture behavoural of xswc_output_block is
   signal s_send_pck     : t_send_pck;
   signal s_prep_to_send : t_prep_to_send;
 
-  signal wr_data : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-  signal rd_data : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-
+  signal wr_data    : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+  signal rd_data    : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+ 
 
   signal ppfm_free        : std_logic;
   signal ppfm_free_pgaddr : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
@@ -269,7 +273,7 @@ architecture behavoural of xswc_output_block is
   signal wr_data_reg : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
 
   signal rd_addr_reg : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
-
+ 
   signal cycle_frozen     : std_logic;
   signal cycle_frozen_cnt : unsigned(5 downto 0);
 
@@ -289,6 +293,19 @@ architecture behavoural of xswc_output_block is
   -- would need to wait for the frame to be sent out (this increases the switch latency)
   signal rd_data_valid_supress : std_logic;
   signal rd_data_valid_raw     : std_logic;
+  
+  -- indicates that there is full queue(s) and it is OK to drop frame (it is not OK if i.e.
+  -- some other frame is being dropped (memory free))
+  signal drop_ready             : std_logic;
+
+  function f_onehot_decode(x : std_logic_vector) return std_logic_vector is
+    variable tmp : std_logic_vector(2**x'length-1 downto 0);
+  begin
+    tmp                          := (others => '0');
+    tmp(to_integer(unsigned(x))) := '1';
+
+    return tmp;
+  end function f_onehot_decode;
   
 begin  --  behavoural
 
@@ -323,49 +340,28 @@ begin  --  behavoural
   ram_zeros <= (others => '0');
   ram_ones  <= (others => '1');
 
---  wr_queue <= pta_prio_i;
+--  write_index <= pta_prio_i;
   
   -- here we map the RTU+resource info into output queues
-  wr_queue <= f_map_rtu_rsp_and_mmu_res_to_out_queue(pta_prio_i,
+  write_index <= f_map_rtu_rsp_and_mmu_res_to_out_queue(pta_prio_i,
                                                      pta_broadcast_i,
                                                      pta_resource_i,
                                                      full_array,
                                                      g_queue_num);
   
-  wr_data  <= pta_pageaddr_i;
+  wr_data   <= pta_pageaddr_i;
+  wr_addr   <= write_index & wr_array(to_integer(unsigned(write_index)));
+  rd_addr   <= read_index  & rd_array(to_integer(unsigned(read_index)));
+  drop_addr <= drop_index  & rd_array(to_integer(unsigned(drop_index)));
 
-  wr_addr <= wr_queue & wr_array(0) when wr_queue = "000" else 
-             wr_queue & wr_array(1) when wr_queue = "001" else 
-             wr_queue & wr_array(2) when wr_queue = "010" else 
-             wr_queue & wr_array(3) when wr_queue = "011" else 
-             wr_queue & wr_array(4) when wr_queue = "100" else 
-             wr_queue & wr_array(5) when wr_queue = "101" else 
-             wr_queue & wr_array(6) when wr_queue = "110" else 
-             wr_queue & wr_array(7) when wr_queue = "111" else 
-             (others => 'X');
-  
-  rd_addr <= rd_queue & rd_array(0) when rd_queue = "000" else 
-             rd_queue & rd_array(1) when rd_queue = "001" else 
-             rd_queue & rd_array(2) when rd_queue = "010" else 
-             rd_queue & rd_array(3) when rd_queue = "011" else 
-             rd_queue & rd_array(4) when rd_queue = "100" else 
-             rd_queue & rd_array(5) when rd_queue = "101" else 
-             rd_queue & rd_array(6) when rd_queue = "110" else 
-             rd_queue & rd_array(7) when rd_queue = "111" else 
-             (others => 'X');
-
--- drop_imp:
---   drop_addr <= drop_index & rd_array(0) when drop_index = "000" else
---                drop_index & rd_array(1) when drop_index = "001" else
---                drop_index & rd_array(2) when drop_index = "010" else
---                drop_index & rd_array(3) when drop_index = "011" else
---                drop_index & rd_array(4) when drop_index = "100" else
---                drop_index & rd_array(5) when drop_index = "101" else
---                drop_index & rd_array(6) when drop_index = "110" else
---                drop_index & rd_array(7) when drop_index = "111" else
---                (others => 'X');   
-
---  ram_rd_addr <= rd_addr when (mpm_pg_valid = '1') else drop_addr;
+  drop_ready <= '1' when (  g_drop_outqueue_head_on_full = true  and -- dropping is enagbled
+                            drop_array                  /= zeros and -- one of queues is full and we 
+                                                                     -- decide to drop frame from there
+                          ( ppfm_free                    = '0'   or  -- we are not corrently freeing 
+                                                                     -- other frame, in such case no sense to drop unless
+                           (ppfm_free='1' and ppfm_free_done_i='1')))-- the previous freeing is done
+           else '0';
+  ram_rd_addr <= drop_addr when (drop_ready = '1') else rd_addr;
   
   
   -- here we instantiate a module responsible for output queue scheduling (policy)
@@ -374,48 +370,26 @@ begin  --  behavoural
       g_queue_num       => g_queue_num,
       g_queue_num_width => g_queue_num_width)
     port map (
-      clk_i              => clk_i,
-      rst_n_i            => rst_n_i,
-      not_empty_array_i  => not_empty_array,
-      queue_onehot_o     => read_array,
-      queue_index_o      => rd_queue);
+      clk_i               => clk_i,
+      rst_n_i             => rst_n_i,
+      not_empty_array_i   => not_empty_array,
+      read_queue_index_o  => read_index,
+      read_queue_onehot_o => read_array,
+      full_array_i        => full_array,
+      drop_queue_index_o  => drop_index,
+      drop_queue_onehot_o => drop_array
+      );
 
-  write_array <= "00000001" when wr_queue = "000" else
-                 "00000010" when wr_queue = "001" else
-                 "00000100" when wr_queue = "010" else
-                 "00001000" when wr_queue = "011" else
-                 "00010000" when wr_queue = "100" else
-                 "00100000" when wr_queue = "101" else
-                 "01000000" when wr_queue = "110" else
-                 "10000000" when wr_queue = "111" else
-                 "00000000";
-  
-  wr_en <= write(0) and not_full_array(0) when wr_queue = "000" else
-           write(1) and not_full_array(1) when wr_queue = "001" else
-           write(2) and not_full_array(2) when wr_queue = "010" else
-           write(3) and not_full_array(3) when wr_queue = "011" else
-           write(4) and not_full_array(4) when wr_queue = "100" else
-           write(5) and not_full_array(5) when wr_queue = "101" else
-           write(6) and not_full_array(6) when wr_queue = "110" else
-           write(7) and not_full_array(7) when wr_queue = "111" else
-           '0';
-  -- I don't like this                 
-  pta_transfer_data_ack_o <= not_full_array(0) when wr_queue = "000" else
-                             not_full_array(1) when wr_queue = "001" else
-                             not_full_array(2) when wr_queue = "010" else
-                             not_full_array(3) when wr_queue = "011" else
-                             not_full_array(4) when wr_queue = "100" else
-                             not_full_array(5) when wr_queue = "101" else
-                             not_full_array(6) when wr_queue = "110" else
-                             not_full_array(7) when wr_queue = "111" else
-                             '0';
+  write_array             <= f_onehot_decode(write_index);
+  wr_en                   <= write(to_integer(unsigned(write_index))) and 
+                             not_full_array(to_integer(unsigned(write_index))); 
+  pta_transfer_data_ack_o <= not_full_array(to_integer(unsigned(write_index)));
   
   queue_ctrl : for i in 0 to g_queue_num - 1 generate
     
     write(i) <= write_array(i) and pta_transfer_data_valid_i;
-    read(i)  <= read_array(i) and mpm_pg_valid;
--- drop_imp:
---     read(i)         <= (read_array(i)  and mpm_pg_valid) or (drop_array(i) and not mpm_pg_valid);    
+    read(i)  <= drop_array(i)                     when (drop_data_valid = '1') else
+               (read_array(i) and mpm_pg_valid);
 
     QUEUE_CTRL : swc_ob_prio_queue
       generic map(
@@ -432,19 +406,8 @@ begin  --  behavoural
         wr_addr_o   => wr_array(i),
         rd_addr_o   => rd_array(i)
         );
--- drop_imp:
---  full_array(i) <= not not_full_array(i);
+    full_array(i) <= not not_full_array(i);
   end generate queue_ctrl ;
-
--- drop_imp:
---   DROP_ENCODE : swc_prio_encoder
---     generic map (
---       g_num_inputs  => g_queue_num,
---       g_output_bits => g_queue_num_width)
---     port map (
---       in_i     => full_array,
---       onehot_o => drop_array,
---       out_o    => drop_index);
 
   PRIO_QUEUE: swc_rd_wr_ram
     generic map (
@@ -455,7 +418,7 @@ begin  --  behavoural
       we_i  => wr_en_reg,
       wa_i  => wr_addr_reg,
       wd_i  => wr_data_reg,
-      ra_i  => rd_addr,
+      ra_i  => ram_rd_addr, --rd_addr,
       rd_o  => rd_data);
   
   
@@ -508,42 +471,46 @@ begin  --  behavoural
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
         rd_data_valid_raw     <= '0';
-        drop_data_valid       <= '0';
+        drop_data_valid_raw   <= '0';
         read_array_d0         <= (others =>'0');
+        ram_rd_addr_d0        <= (others =>'0');
       else
         
-        if(not_empty_array = zeros) then
+        --if(not_empty_array = zeros) then
+        if(read_array = zeros) then
           rd_data_valid_raw <= '0';
         else
           rd_data_valid_raw <= '1';
         end if;
 
-        read_array_d0 <= read_array;
--- drop_imp :
---        if(full_array = zeros) then
---          drop_data_valid <= '0';
---        else
---          drop_data_valid <= '1';
---       end if;       
+        read_array_d0     <= read_array;
+        ram_rd_addr_d0    <= ram_rd_addr;   
+   
+        if(drop_array /= zeros and g_drop_outqueue_head_on_full = true) then
+          drop_data_valid_raw <= '1';
+        else
+          drop_data_valid_raw <= '0';
+       end if;       
       end if;
     end if;
   end process;
 
   -- we need one cycle to read new data from the new address
   -- after read array (so the rd_addr) changes
-  rd_data_valid_supress <= '1' when (read_array_d0 /=read_array) else '0';
+  -- rd_data_valid_supress <= '1' when (read_array_d0 /=read_array) else '0';
+  rd_data_valid_supress <= '1' when (ram_rd_addr_d0 /=ram_rd_addr) else '0';
   --==================================================================================================
   -- FSM to prepare next pck to be send
   --==================================================================================================
-  -- This state machine takes data, if available) from the output queue. The data is only the 
+  -- This state machine takes data (if available) from the output queue. The data is only the 
   -- pckfirst_page address (this is all we need).
-  -- It dane makes the page available for the MPM, once it's set to the MPM, the FSM waits until
+  -- It then makes the page available for the MPM, once it's set to the MPM, the FSM waits until
   -- the MPM is ready to set pckstart_page for the next pck (in current implementation, this can
   -- happen when reading the last word). The pckstart_page is made available to the MPM, and 
   -- so again and again...
   -- The fun starts when the Endpoint requests retry of sending. we need to abort the current 
   -- MPM readout (currently not implemented in the MPM) and set again the same pckstart_page
-  -- (this needs we need to put aside and remember the page which we've already read from the 
+  -- (this requires that we need to put aside and remember the page which we've already read from the 
   -- output queue, if any). once, done, we need to come to the rememberd pckstart_page.
   -- 
   -- REMARK:
@@ -671,8 +638,9 @@ begin  --  behavoural
    
   -- this is to prevent reading in the cycle following read_array change. 
   -- In other words, we need to give memory one cycle to update output (read) data after changing input address
-  rd_data_valid <= rd_data_valid_raw and (not rd_data_valid_supress);
-  
+  rd_data_valid    <= rd_data_valid_raw   and (not rd_data_valid_supress) and (not drop_data_valid_raw);
+  drop_data_valid  <= drop_data_valid_raw and (not rd_data_valid_supress); 
+
   next_page_set_in_advance : if (g_mpm_fetch_next_pg_in_advance = true) generate
     set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0') else '0';
     not_set_next_pg_addr <= '1' when (rd_data_valid = '0' and mpm_pg_req_i = '1')                        else '0';
@@ -715,7 +683,9 @@ begin  --  behavoural
         --========================================
       else
         -- default values
-        start_free_pck <= '0';
+        if(start_free_pck = '1' and ppfm_free = '1') then
+          start_free_pck <= '0';
+        end if;
         request_retry  <= '0';
 
         case s_send_pck is
@@ -864,14 +834,14 @@ begin  --  behavoural
         ppfm_free        <= '0';
         ppfm_free_pgaddr <= (others => '0');
       else
-        if(start_free_pck = '1') then
+        if(start_free_pck = '1' and ppfm_free = '0') then
           ppfm_free        <= '1';
           ppfm_free_pgaddr <= start_free_pck_addr;
 -- drop_imp:          
---         elsif(drop_data_valid = '1') then
---           ppfm_free         <= '1';
---           ppfm_free_pgaddr  <= rd_data(g_mpm_page_addr_width - 1 downto 0);
-        elsif(ppfm_free_done_i = '1') then
+         elsif(drop_data_valid = '1' and ppfm_free = '0') then
+           ppfm_free         <= '1';
+           ppfm_free_pgaddr  <= rd_data(g_mpm_page_addr_width - 1 downto 0);
+        elsif(ppfm_free_done_i = '1' and ppfm_free = '1') then
           ppfm_free        <= '0';
           ppfm_free_pgaddr <= (others => '0');
         end if;

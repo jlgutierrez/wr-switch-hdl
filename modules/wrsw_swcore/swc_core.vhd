@@ -71,7 +71,8 @@ entity swc_core is
     g_mpm_page_size                    : integer ;
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
-    g_mpm_fetch_next_pg_in_advance     : boolean 
+    g_mpm_fetch_next_pg_in_advance     : boolean ;
+    g_drop_outqueue_head_on_full       : boolean 
     );
   port (
     clk_i          : in std_logic;
@@ -151,7 +152,8 @@ architecture rtl of swc_core is
       g_mpm_page_size                    => g_mpm_page_size,
       g_mpm_ratio                        => g_mpm_ratio,
       g_mpm_fifo_size                    => g_mpm_fifo_size,
-      g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance
+      g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance,
+      g_drop_outqueue_head_on_full       => g_drop_outqueue_head_on_full
       )
     port map(
       clk_i          => clk_i,

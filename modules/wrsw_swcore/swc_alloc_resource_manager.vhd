@@ -159,9 +159,9 @@ architecture syn of swc_alloc_resource_manager is
   -- RTU decision). It should be enough for all the ports to receive single max_size frame and
   -- all ports to be ready to receive new pcks
   constant c_unknown_res_page_num  : integer := integer(CEIL(real(g_num_ports * (g_max_pck_size/g_page_size)))) +
-                                                integer(g_num_ports * 2) ;
+                                                integer(g_num_ports * 2) ; --98
 
-  constant c_special_res_page_num  : integer := g_special_res_num_pages;
+  constant c_special_res_page_num  : integer := g_special_res_num_pages; -- 256
   
   -- we can have as many resources as we want, the division of the page pool is following:
   -- 0) unknow resources   : number of pages = c_unknown_res_page_num
@@ -171,10 +171,10 @@ architecture syn of swc_alloc_resource_manager is
   --  [...]
   constant c_normal_res_page_num   : integer := integer(FLOOR(real((g_total_num_pages - 
                                                                     c_unknown_res_page_num - 
-                                                                    c_special_res_page_num)/(g_resource_num-1))));
+                                                                    c_special_res_page_num)/(g_resource_num-2)))); -- 670
 
   -- tells how many pages we need to have for a single max ethernet frame to be stored in FBM
-  constant c_page_num_for_max_pck  : integer := integer(CEIL(real(g_max_pck_size/g_page_size)));
+  constant c_page_num_for_max_pck  : integer := integer(CEIL(real(g_max_pck_size/g_page_size))); -- 12
 
   type t_resource is record
     cnt         : unsigned(g_total_num_pages_width-1 downto 0);
@@ -226,34 +226,40 @@ begin
        
         --------------------- generat ---------------------------------
         -- control "unknown" resources
-        if(resources(0).cnt = to_unsigned(c_unknown_res_page_num - 1,g_total_num_pages_width-1)) then
+        if(resources(0).cnt > to_unsigned(c_unknown_res_page_num - 1,g_total_num_pages_width)) then
           resources(0).full          <='1';
-        elsif(resources(0).cnt > to_unsigned(c_unknown_res_page_num - c_page_num_for_max_pck ,g_total_num_pages_width-1)) then
+        else
+          resources(0).full          <= '0';
+        end if;
+        if(resources(0).cnt > to_unsigned(c_unknown_res_page_num - c_page_num_for_max_pck ,g_total_num_pages_width)) then
           resources(0).almost_full   <= '1';
         else 
           resources(0).almost_full   <= '0';
-          resources(0).full          <= '0';
         end if;
 
         -- control special resources
-        if(resources(1).cnt = to_unsigned(c_special_res_page_num - 1,g_total_num_pages_width-1)) then
+        if(resources(1).cnt > to_unsigned(c_special_res_page_num - 1,g_total_num_pages_width)) then
           resources(1).full          <='1';
-        elsif(resources(1).cnt > to_unsigned(c_special_res_page_num - c_page_num_for_max_pck, g_total_num_pages_width-1)) then
+        else
+          resources(1).full          <= '0';
+        end if;
+        if(resources(1).cnt > to_unsigned(c_special_res_page_num - c_page_num_for_max_pck, g_total_num_pages_width)) then
           resources(1).almost_full   <= '1';
         else 
           resources(1).almost_full   <= '0';
-          resources(1).full          <= '0';
         end if;
         
          -- control "normal" resources
         for i in 2 to g_resource_num-1 loop
-          if(resources(i).cnt = to_unsigned(c_normal_res_page_num - 1,g_total_num_pages_width-1)) then
+          if(resources(i).cnt > to_unsigned(c_normal_res_page_num - 1,g_total_num_pages_width)) then
             resources(i).full        <='1';
-          elsif(resources(i).cnt > to_unsigned(c_normal_res_page_num - c_page_num_for_max_pck, g_total_num_pages_width-1)) then
+          else
+            resources(i).full        <='0';
+          end if;
+          if(resources(i).cnt > to_unsigned(c_normal_res_page_num - c_page_num_for_max_pck, g_total_num_pages_width)) then
             resources(i).almost_full <= '1';
           else  
             resources(i).almost_full <= '0';
-            resources(i).full        <= '0';
           end if;          
         end loop;
         

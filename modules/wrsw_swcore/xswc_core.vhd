@@ -74,7 +74,8 @@ entity xswc_core is
     g_mpm_page_size                    : integer ; -- in 16bits words 
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
-    g_mpm_fetch_next_pg_in_advance     : boolean 
+    g_mpm_fetch_next_pg_in_advance     : boolean ;
+    g_drop_outqueue_head_on_full       : boolean
     );
   port (
     clk_i          : in std_logic;
@@ -465,7 +466,8 @@ architecture rtl of xswc_core is
         g_wb_data_width                    => g_wb_data_width,
         g_wb_addr_width                    => g_wb_addr_width,
         g_wb_sel_width                     => g_wb_sel_width,
-        g_wb_ob_ignore_ack                 => g_wb_ob_ignore_ack
+        g_wb_ob_ignore_ack                 => g_wb_ob_ignore_ack,
+        g_drop_outqueue_head_on_full       => g_drop_outqueue_head_on_full
       )
       port map (
         clk_i                    => clk_i,

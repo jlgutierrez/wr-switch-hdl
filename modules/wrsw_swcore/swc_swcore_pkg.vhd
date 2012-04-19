@@ -431,7 +431,8 @@ package swc_swcore_pkg is
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;
       g_wb_sel_width                     : integer ;
-      g_wb_ob_ignore_ack                 : boolean := true                 
+      g_wb_ob_ignore_ack                 : boolean := true;
+      g_drop_outqueue_head_on_full       : boolean := true                 
     );
     port (
       clk_i   : in std_logic;
@@ -566,7 +567,8 @@ component  swc_multiport_pck_pg_free_module is
       g_mpm_page_size                    : integer ;
       g_mpm_ratio                        : integer ;
       g_mpm_fifo_size                    : integer ;
-      g_mpm_fetch_next_pg_in_advance     : boolean
+      g_mpm_fetch_next_pg_in_advance     : boolean ;
+      g_drop_outqueue_head_on_full       : boolean
       );
    port (
       clk_i          : in std_logic;
@@ -643,8 +645,11 @@ component  swc_multiport_pck_pg_free_module is
     clk_i              : in std_logic;
     rst_n_i            : in std_logic;
     not_empty_array_i  : in  std_logic_vector(g_queue_num-1 downto 0);
-    queue_index_o      : out std_logic_vector(g_queue_num_width-1 downto 0);
-    queue_onehot_o     : out std_logic_vector(g_queue_num-1 downto 0)
+    read_queue_index_o : out std_logic_vector(g_queue_num_width-1 downto 0);
+    read_queue_onehot_o: out std_logic_vector(g_queue_num-1 downto 0);
+    full_array_i       : in  std_logic_vector(g_queue_num-1 downto 0);
+    drop_queue_index_o : out std_logic_vector(g_queue_num_width-1 downto 0);
+    drop_queue_onehot_o: out std_logic_vector(g_queue_num-1 downto 0)
     );
    end component;
 

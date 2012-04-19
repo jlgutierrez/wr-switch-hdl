@@ -560,7 +560,8 @@ begin
         g_mpm_page_size                   => 64,
         g_mpm_ratio                       => f_swc_ratio,  --2
         g_mpm_fifo_size                   => 8,
-        g_mpm_fetch_next_pg_in_advance    => false)
+        g_mpm_fetch_next_pg_in_advance    => false,
+        g_drop_outqueue_head_on_full      => true)
       port map (
         clk_i          => clk_sys,
         clk_mpm_core_i => clk_aux_i,

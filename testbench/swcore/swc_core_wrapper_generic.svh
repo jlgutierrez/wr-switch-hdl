@@ -75,7 +75,8 @@ module swc_core_wrapper_generic
        .g_mpm_page_size                    (`c_mpm_page_size),
        .g_mpm_ratio                        (`c_mpm_ratio),
        .g_mpm_fifo_size                    (`c_mpm_fifo_size),
-       .g_mpm_fetch_next_pg_in_advance     (`c_mpm_fetch_next_pg_in_advance)
+       .g_mpm_fetch_next_pg_in_advance     (`c_mpm_fetch_next_pg_in_advance),
+       .g_drop_outqueue_head_on_full       (`c_drop_outqueue_head_on_full)
        ) DUT_swc_core(
               .clk_i               (clk_i),
               .clk_mpm_core_i      (clk_mpm_core_i),

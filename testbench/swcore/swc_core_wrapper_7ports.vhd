@@ -269,7 +269,8 @@ U_xswc_core: xswc_core
     g_mpm_page_size                    => 64,
     g_mpm_ratio                        => 2,
     g_mpm_fifo_size                    => 4,
-    g_mpm_fetch_next_pg_in_advance     => false
+    g_mpm_fetch_next_pg_in_advance     => false,
+    g_drop_outqueue_head_on_full       => true
   )
   port map(
     clk_i               => clk_i,

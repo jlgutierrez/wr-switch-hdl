@@ -429,7 +429,7 @@ module main_generic;
       int j;
       int n_ports = `c_num_ports;
       int mask_opt=1;//1;     
-      int n_packets =50; //200
+      int n_packets =200; //200
       // initialization
       initPckSrcAndSink(src, sink, n_ports);
       gen       = new;
@@ -445,7 +445,7 @@ module main_generic;
 
       //for(j=0;j<`c_num_ports;j++) begin
       
-      U_wrf_sink[3].permanent_stall_enable();
+     // U_wrf_sink[0].permanent_stall_enable();
 
       
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -462,13 +462,13 @@ module main_generic;
                 mask = (1<<((p)%(`c_num_ports)));	      
               else
                 mask = (1<<((p+1)%(`c_num_ports)));	      
-              //mask = 8;
+              mask = 1;
               prio = (z%8);
-	      //if(prio>3) prio = 7;
+	      if(prio != 7) prio = 0;
               send_random_packet(src,txed, p, 0, prio, mask);  
             end
           end
-         
+/*         
           begin
             automatic int  p = 1;
             automatic bit [`c_num_ports:0] mask;
@@ -563,7 +563,7 @@ module main_generic;
               send_random_packet(src,txed, p, 0,prio , mask);  
             end
           end 
-/*          
+  /*        
           begin
             automatic int  p = 7;
             automatic bit [`c_num_ports:0] mask;
@@ -703,7 +703,7 @@ module main_generic;
  `define MMUC DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core
 
   wait_cycles(7000);        
-   U_wrf_sink[3].permanent_stall_disable();
+   U_wrf_sink[0].permanent_stall_disable();
   
   wait_cycles(80000); 
   

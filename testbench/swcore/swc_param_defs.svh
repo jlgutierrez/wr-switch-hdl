@@ -34,6 +34,7 @@
 `define  c_mpm_ratio                         4
 `define  c_mpm_fifo_size                     4
 `define  c_mpm_fetch_next_pg_in_advance      0
+`define  c_drop_outqueue_head_on_full        1
 
 // these are hard-coded into testbench
 `define  c_wb_data_width                     16               //c_swc_data_width,
