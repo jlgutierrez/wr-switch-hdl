@@ -35,11 +35,15 @@ static volatile struct PPSG_WB *PPSG = (volatile struct PPSG_WB *) BASE_PPS_GEN;
 #define SEQ_WAIT_MAIN 6
 #define SEQ_DISABLED 7
 #define SEQ_READY 8
+#define SEQ_CLEAR_DACS 9
+#define SEQ_WAIT_CLEAR_DACS 10
 
 struct softpll_state {
 	int mode;
 	int seq_state;
 	int helper_locked;
+	int dac_timeout;
+	int default_dac_main;
 	struct spll_helper_state helper;
 	struct spll_external_state ext;
 	struct spll_main_state mpll;
@@ -66,6 +70,19 @@ void _irq_entry()
 
 		switch(softpll.seq_state)
 		{
+            case SEQ_CLEAR_DACS:
+                SPLL->DAC_HPLL = 65535;
+                SPLL->DAC_MAIN = softpll.default_dac_main;
+                SPLL->OCER |= 1;
+                softpll.seq_state = SEQ_WAIT_CLEAR_DACS;
+                softpll.dac_timeout = timer_get_tics();
+                break;
+
+            case SEQ_WAIT_CLEAR_DACS:
+                if(timer_get_tics() - softpll.dac_timeout > 10000)
+                    softpll.seq_state = (softpll.mode == SPLL_MODE_GRAND_MASTER ? SEQ_START_EXT : SEQ_START_HELPER);
+                break;
+
 			case SEQ_DISABLED:
 				break;
 
@@ -121,7 +138,7 @@ void _irq_entry()
 				{
 //					SPLL->OCER = 0;
 //					SPLL->RCER = 0;
-					//softpll.seq_state = SEQ_START_HELPER;
+					softpll.seq_state = SEQ_CLEAR_DACS;
 				} else if (softpll.mode == SPLL_MODE_GRAND_MASTER && !external_locked((struct spll_external_state *) &s->ext))
 				{
 //					SPLL->OCER = 0;
@@ -130,7 +147,7 @@ void _irq_entry()
 					softpll.seq_state = SEQ_START_EXT;
 				} else if (softpll.mode == SPLL_MODE_SLAVE && !softpll.mpll.ld.locked)
 				{
-					softpll.seq_state = SEQ_START_MAIN;
+					softpll.seq_state = SEQ_CLEAR_DACS;
 				};
 				break;
 		};
@@ -173,6 +190,13 @@ void _irq_entry()
 	clear_irq();
 }
 
+void spll_clear_dacs()
+{
+    SPLL->DAC_HPLL = 0;
+	SPLL->DAC_MAIN = 0;
+	timer_delay(10000);
+}
+
 void spll_init(int mode, int slave_ref_channel, int align_pps)
 {
 	char mode_str[20];
@@ -185,6 +209,7 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 	n_chan_out = SPLL_CSR_N_OUT_R(SPLL->CSR);
 	softpll.helper_locked = 0;
 	softpll.mode = mode;
+	softpll.default_dac_main = 0;
 
 	SPLL->DAC_HPLL = 0;
 	SPLL->DAC_MAIN = 0;
@@ -200,6 +225,7 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 	SPLL->DEGLITCH_THR = 1000;
 
 	PPSG->ESCR = 0;
+	PPSG->CR = PPSG_CR_CNT_EN | PPSG_CR_CNT_RST | PPSG_CR_PWIDTH_W(100);
 
 	switch(mode)
 	{
@@ -211,7 +237,7 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 		case SPLL_MODE_GRAND_MASTER:
 			strcpy(mode_str, "Grand Master");
 
-			softpll.seq_state = SEQ_START_EXT;
+			softpll.seq_state = SEQ_CLEAR_DACS;
 			external_init(&softpll.ext, n_chan_ref + n_chan_out, align_pps);
 			helper_init(&softpll.helper, n_chan_ref);
 			break;
@@ -219,14 +245,18 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 		case SPLL_MODE_FREE_RUNNING_MASTER:
 			strcpy(mode_str, "Free-running Master");
 
-			softpll.seq_state = SEQ_START_HELPER;
+			softpll.seq_state = SEQ_CLEAR_DACS;
+			softpll.default_dac_main = 32000;
 			helper_init(&softpll.helper, n_chan_ref);
+
+			PPSG->ESCR = PPSG_ESCR_PPS_VALID | PPSG_ESCR_TM_VALID;
+
 			break;
 
 		case SPLL_MODE_SLAVE:
 			strcpy(mode_str, "Slave");
 
-			softpll.seq_state = SEQ_START_HELPER;
+			softpll.seq_state = SEQ_CLEAR_DACS;
 			helper_init(&softpll.helper, slave_ref_channel);
 			mpll_init(&softpll.mpll, slave_ref_channel, n_chan_ref);
 
@@ -236,7 +266,7 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 	}
 
 	for(i=0; i<n_chan_ref;i++)
-		ptracker_init(&softpll.ptrackers[i], i, n_chan_ref, PTRACKER_AVERAGE_SAMPLES);
+		ptracker_init(&softpll.ptrackers[i], n_chan_ref, i, PTRACKER_AVERAGE_SAMPLES);
 
 
 	TRACE("SPLL_Init: running as %s, %d ref channels, %d out channels\n", mode_str, n_chan_ref, n_chan_out);
@@ -324,7 +354,11 @@ void spll_get_phase_shift(int channel, int32_t *current, int32_t *target)
 int spll_read_ptracker(int channel, int32_t *phase_ps)
 {
 	volatile struct spll_ptracker_state *st = &softpll.ptrackers[channel];
-	*phase_ps = to_picos(st->phase_val);
+    int phase = st->phase_val;
+    if(phase < 0) phase += (1<<HPLL_N);
+    else if (phase >= (1<<HPLL_N)) phase -= (1<<HPLL_N);
+
+	*phase_ps = to_picos(phase);
 	return st->ready;
 }
 
