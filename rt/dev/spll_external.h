@@ -6,12 +6,12 @@
 
 /* Alignment FSM states */
 
-/* 1st alignment stage, done before starting the ext channel PLL: alignment of the rising edge 
-   of the external clock (10 MHz), with the rising edge of the local reference (62.5/125 MHz) 
-   and the PPS signal. Because of non-integer ratio (6.25 or 12.5), the PLL must know which edges 
+/* 1st alignment stage, done before starting the ext channel PLL: alignment of the rising edge
+   of the external clock (10 MHz), with the rising edge of the local reference (62.5/125 MHz)
+   and the PPS signal. Because of non-integer ratio (6.25 or 12.5), the PLL must know which edges
    shall be kept at phase==0. We align to the edge of the 10 MHz clock which comes right after the edge
    of the PPS pulse (see drawing below):
-   
+
 PLL reference (62.5 MHz)   ____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|
 External clock (10 MHz)    ^^^^^^^^^|________________________|^^^^^^^^^^^^^^^^^^^^^^^^^|________________________|^^^^^^^^^^^^^^^^^^^^^^^^^|___
 External PPS               ___________|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -20,15 +20,14 @@ External PPS               ___________|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #define REALIGN_STAGE1_WAIT 2
 
 
-/* 2nd alignment stage, done after the ext channel PLL has locked. We make sure that the switch's internal PPS signal 
+/* 2nd alignment stage, done after the ext channel PLL has locked. We make sure that the switch's internal PPS signal
    is produced exactly on the edge of PLL reference in-phase with 10 MHz clock edge, which has come right after the PPS input
 
 PLL reference (62.5 MHz)   ____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|^^^^|____|
 External clock (10 MHz)    ^^^^^^^^^|________________________|^^^^^^^^^^^^^^^^^^^^^^^^^|________________________|^^^^^^^^^^^^^^^^^^^^^^^^^|___
 External PPS               ___________|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Internal PPS               __________________________________|^^^^^^^^^|______________________________________________________________________
-
-																														 ^ aligned clock edges and PPS
+                                                             ^ aligned clock edges and PPS
 */
 
 #define REALIGN_STAGE2 3
@@ -51,22 +50,22 @@ struct spll_external_state {
 	int realign_clocks;
 	int realign_state;
 	int realign_timer;
- 	spll_pi_t pi; 
- 	spll_lowpass_t lp_short, lp_long; 
+ 	spll_pi_t pi;
+ 	spll_lowpass_t lp_short, lp_long;
  	spll_lock_det_t ld;
 };
-	
+
 static void external_init( struct spll_external_state *s, int ext_ref, int realign_clocks)
 {
-	
+
 	s->pi.y_min = 5;
 	s->pi.y_max = (1 << DAC_BITS) - 5;
  	s->pi.kp = (int)(300);
-	s->pi.ki = (int)(1); 
-	
+	s->pi.ki = (int)(1);
+
 	s->pi.anti_windup = 1;
 	s->pi.bias = 32768;
-	
+
 	/* Phase branch lock detection */
 	s->ld.threshold = 250;
 	s->ld.lock_samples = 10000;
@@ -75,10 +74,10 @@ static void external_init( struct spll_external_state *s, int ext_ref, int reali
 	s->ph_err_cur = 0;
 	s->ph_err_d0 = 0;
 	s->ph_raw_d0 = 0;
-	
+
 	s->realign_clocks = realign_clocks;
 	s->realign_state = (realign_clocks ? REALIGN_STAGE1 : REALIGN_DISABLED);
-		
+
 	pi_init(&s->pi);
 	ld_init(&s->ld);
 	lowpass_init(&s->lp_short, 4000);
@@ -89,16 +88,16 @@ static inline void realign_fsm( struct spll_external_state *s)
 {
 	 uint32_t eccr;
 
-	
+
 	switch(s->realign_state)
 	{
 		case REALIGN_STAGE1:
 			SPLL->ECCR |= SPLL_ECCR_ALIGN_EN;
-			
+
 			s->realign_state = REALIGN_STAGE1_WAIT;
 			s->realign_timer = timer_get_tics();
 			break;
-	
+
 		case REALIGN_STAGE1_WAIT:
 
 			if(SPLL->ECCR & SPLL_ECCR_ALIGN_DONE)
@@ -109,7 +108,7 @@ static inline void realign_fsm( struct spll_external_state *s)
 				s->realign_state = REALIGN_PPS_INVALID;
 			}
 			break;
-		
+
 		case REALIGN_STAGE2:
 			if(s->ld.locked)
 			{
@@ -118,16 +117,16 @@ static inline void realign_fsm( struct spll_external_state *s)
 				PPSG->ADJ_UTCHI = 0;
 				PPSG->ADJ_NSEC = 0;
 				PPSG->ESCR = PPSG_ESCR_SYNC;
-			
+
 				s->realign_state = REALIGN_STAGE2_WAIT;
 				s->realign_timer = timer_get_tics();
 			}
 			break;
-		
+
 		case REALIGN_STAGE2_WAIT:
 			if(PPSG->ESCR & PPSG_ESCR_SYNC)
 			{
-				PPSG->ESCR = PPSG_ESCR_PPS_VALID; /* enable PPS output */
+				PPSG->ESCR = PPSG_ESCR_PPS_VALID | PPSG_ESCR_TM_VALID;
 				s->realign_state = REALIGN_DONE;
 			} else if (timer_get_tics() - s->realign_timer > 2*TICS_PER_SECOND)
 			{
@@ -135,11 +134,11 @@ static inline void realign_fsm( struct spll_external_state *s)
 				s->realign_state = REALIGN_PPS_INVALID;
 			}
 			break;
-			
+
 		case REALIGN_PPS_INVALID:
 		case REALIGN_DISABLED:
 		case REALIGN_DONE:
-			return ;			
+			return ;
 	}
 }
 
@@ -152,7 +151,7 @@ static int external_update( struct spll_external_state *s, int tag, int source)
 		int wrap = tag & (1<<BB_ERROR_BITS) ? 1 : 0;
 
 		realign_fsm(s);
-	
+
 		tag &= ((1<<BB_ERROR_BITS) - 1);
 
 
@@ -160,16 +159,16 @@ static int external_update( struct spll_external_state *s, int tag, int source)
 //		mprintf("err %d\n", tag);
 		if(wrap)
 		{
-	  	if(tag > s->ph_raw_d0) 
+	  	if(tag > s->ph_raw_d0)
 		 		s->ph_err_offset -= (1<<BB_ERROR_BITS);
 		  else if(tag <= s->ph_raw_d0)
   	    s->ph_err_offset += (1<<BB_ERROR_BITS);
 		}
-		
+
 		s->ph_raw_d0 = tag;
 
 		err = (tag + s->ph_err_offset) - s->ph_err_d0;
-		s->ph_err_d0 = (tag + s->ph_err_offset);		
+		s->ph_err_d0 = (tag + s->ph_err_offset);
 
 		y = pi_update(&s->pi, err);
 
@@ -203,9 +202,9 @@ static void external_start( struct spll_external_state *s)
 
 	s->sample_n = 0;
 	s->realign_state = (s->realign_clocks ? REALIGN_STAGE1 : REALIGN_DISABLED);
-	
+
 	SPLL->ECCR = SPLL_ECCR_EXT_EN;
-	
+
 	spll_debug(DBG_EVENT |  DBG_EXT, DBG_EVT_START, 1);
 }
 
