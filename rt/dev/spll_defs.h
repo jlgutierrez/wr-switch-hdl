@@ -28,13 +28,13 @@ WARNING: These parameters must be in sync with the generics of the HDL instantia
 #define PI_FRACBITS 12
 
 /* Max. allowed number of reference channels. Can be used to tweak memory usage. */
-#define MAX_CHAN_REF 7
+#define MAX_CHAN_REF 18
 
 /* Max. allowed number of auxillary channels */
 #define MAX_CHAN_AUX 1
 
 /* Max. allowed number of phase trackers */
-#define MAX_PTRACKERS 6
+#define MAX_PTRACKERS 18
 
 /* Number of bits of the DAC(s) driving the oscillator(s). Must be the same for
    all the outputs. */
