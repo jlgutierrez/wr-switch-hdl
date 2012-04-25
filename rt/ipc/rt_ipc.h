@@ -16,6 +16,8 @@
 #define CHAN_PMEAS_READY (1<<3)
 /* Channel not available/disabled */
 #define CHAN_DISABLED (1<<4)
+/* Channel is busy adjusting phase */
+#define CHAN_SHIFTING (1<<5)
 
 /* DMTD clock is present */
 #define RTS_DMTD_LOCKED (1<<0)

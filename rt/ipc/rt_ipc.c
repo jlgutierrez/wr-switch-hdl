@@ -36,7 +36,7 @@ static void clear_state()
 /* Sets the phase setpoint on a given channel */
 int rts_adjust_phase(int channel, int32_t phase_setpoint)
 {
-    TRACE("Adjusting phase: ref channel %d, setpoint=%d ps.\n", channel, phase_setpoint);
+//    TRACE("Adjusting phase: ref channel %d, setpoint=%d ps.\n", channel, phase_setpoint);
     spll_set_phase_shift(0, phase_setpoint);
     pstate.channels[channel].phase_setpoint = phase_setpoint;
     return 0;
@@ -119,7 +119,11 @@ void rts_update()
             CH.flags = CHAN_DISABLED;
         else {
             if(i==pstate.current_ref)
+            {
                 spll_get_phase_shift(0, &CH.phase_current, NULL);
+		            if(spll_shifter_busy(0))
+		            	CH.flags |= CHAN_SHIFTING;
+						}
             if(spll_read_ptracker(i, &CH.phase_loopback))
             CH.flags |= CHAN_PMEAS_READY;
         }
@@ -141,7 +145,7 @@ static int rts_get_state_func(const struct minipc_pd *pd, uint32_t *args, void *
     struct rts_pll_state *tmp = (struct rts_pll_state *)ret;
     int i;
 
-    TRACE("IPC Call: %s [rv at %x]\n", __FUNCTION__, ret);
+//    TRACE("IPC Call: %s [rv at %x]\n", __FUNCTION__, ret);
 
     /* gaaaah, somebody should write a SWIG plugin for generating this stuff. */
     tmp->current_ref = htonl(pstate.current_ref);
