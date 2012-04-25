@@ -111,7 +111,7 @@ void _irq_entry()
 					if(softpll.mode == SPLL_MODE_SLAVE)
 						softpll.seq_state = SEQ_START_MAIN;
 					else {
-						for(i=0;i<n_chan_ref; i++)
+						for(i=0;i<n_chan_ref/2; i++)
 							ptracker_start((struct spll_ptracker_state *) &s->ptrackers[i]);
 						softpll.seq_state = SEQ_READY;
 					}
@@ -128,7 +128,7 @@ void _irq_entry()
 				{
 					softpll.seq_state = SEQ_READY;
 
-					for(i=0;i<n_chan_ref; i++)
+					for(i=0;i<n_chan_ref/2; i++)
 						ptracker_start((struct spll_ptracker_state *) &s->ptrackers[i]);
 				}
 				break;
@@ -174,7 +174,7 @@ void _irq_entry()
 				if(softpll.mode == SPLL_MODE_SLAVE)
 					mpll_update((struct spll_main_state *) &s->mpll, tag, src);
 
-					for(i=0;i<n_chan_ref; i++)
+					for(i=0;i<n_chan_ref/2; i++)
 						ptracker_update((struct spll_ptracker_state *) &s->ptrackers[i], tag, src);
 
 				break;
@@ -238,8 +238,14 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 			strcpy(mode_str, "Grand Master");
 
 			softpll.seq_state = SEQ_CLEAR_DACS;
+			
 			external_init(&softpll.ext, n_chan_ref + n_chan_out, align_pps);
 			helper_init(&softpll.helper, n_chan_ref);
+
+			mpll_init(&softpll.mpll, slave_ref_channel, n_chan_ref);
+
+			for(i=0;i<n_chan_out-1;i++)
+				mpll_init(&softpll.aux[i], slave_ref_channel, n_chan_ref + i + 1);
 			break;
 
 		case SPLL_MODE_FREE_RUNNING_MASTER:
@@ -249,8 +255,12 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 			softpll.default_dac_main = 32000;
 			helper_init(&softpll.helper, n_chan_ref);
 
-			PPSG->ESCR = PPSG_ESCR_PPS_VALID | PPSG_ESCR_TM_VALID;
+			mpll_init(&softpll.mpll, slave_ref_channel, n_chan_ref);
 
+			for(i=0;i<n_chan_out-1;i++)
+				mpll_init(&softpll.aux[i], slave_ref_channel, n_chan_ref + i + 1);
+
+			PPSG->ESCR = PPSG_ESCR_PPS_VALID | PPSG_ESCR_TM_VALID;
 			break;
 
 		case SPLL_MODE_SLAVE:
@@ -262,6 +272,9 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 
 			for(i=0;i<n_chan_out-1;i++)
 				mpll_init(&softpll.aux[i], slave_ref_channel, n_chan_ref + i + 1);
+
+//			PPSG->ESCR = PPSG_ESCR_PPS_VALID | PPSG_ESCR_TM_VALID;
+
 			break;
 	}
 
@@ -376,4 +389,12 @@ void spll_show_stats()
             softpll.helper.ld.locked, softpll.ext.ld.locked, softpll.mpll.ld.locked,
             softpll.helper.pi.y, softpll.mpll.pi.y);
 
+}
+
+int spll_shifter_busy(int channel)
+{
+		if(!channel)
+			return mpll_shifter_busy(&softpll.mpll);
+		else
+			return mpll_shifter_busy(&softpll.aux[channel-1]);
 }

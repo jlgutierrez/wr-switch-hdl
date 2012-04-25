@@ -20,6 +20,7 @@ void spll_set_phase_shift(int channel, int32_t value_picoseconds);
 void spll_get_phase_shift(int channel, int32_t *current, int32_t *target);
 int spll_read_ptracker(int channel, int32_t *phase_ps);
 void spll_get_num_channels(int *n_ref, int *n_out);
+int spll_shifter_busy(int channel);
 
 #endif
 
