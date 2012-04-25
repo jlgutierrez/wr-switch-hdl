@@ -45,6 +45,8 @@ static void mpll_init(struct spll_main_state *s, int id_ref, int id_out)
 	s->id_ref = id_ref;
 	s->id_out = id_out;
 
+	pi_init(&s->pi);
+	ld_init(&s->ld);
 }
 
 static void mpll_start(struct spll_main_state *s)
