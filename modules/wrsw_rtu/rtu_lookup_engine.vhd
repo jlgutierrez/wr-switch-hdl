@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-22
--- Last update: 2012-04-25
+-- Last update: 2012-04-26
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -224,6 +224,7 @@ begin
             bucket_entry <= bucket_entry + 1;
             
           when OUTPUT_RESULT =>
+            bucket_entry <= (others => '0');
             if(ack_i = '1') then
               lookup_state   <= IDLE;
               found_o <= '0';
