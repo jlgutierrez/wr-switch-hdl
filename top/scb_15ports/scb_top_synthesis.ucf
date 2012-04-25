@@ -106,23 +106,23 @@ NET "clk_en_o" LOC="AD16";
 NET "clk_sel_o" LOC="AK17";
 
 ### GTX PORTS - reversed to match MB port ordering ###
-#NET "gtx0_3_clk_n_i" LOC="AK5";
-#NET "gtx0_3_clk_p_i" LOC="AK6";
+NET "gtx0_3_clk_n_i" LOC="AK5";
+NET "gtx0_3_clk_p_i" LOC="AK6";
       
-#NET "gtx0_3_clk_n_i" IOSTANDARD="LVPECL_25";
-#NET "gtx0_3_clk_p_i" IOSTANDARD="LVPECL_25";
+NET "gtx0_3_clk_n_i" IOSTANDARD="LVPECL_25";
+NET "gtx0_3_clk_p_i" IOSTANDARD="LVPECL_25";
 
-#NET "gtx4_7_clk_n_i" LOC="AD5";
-#NET "gtx4_7_clk_p_i" LOC="AD6";
+NET "gtx4_7_clk_n_i" LOC="AD5";
+NET "gtx4_7_clk_p_i" LOC="AD6";
       
-#NET "gtx4_7_clk_n_i" IOSTANDARD="LVPECL_25";
-#NET "gtx4_7_clk_p_i" IOSTANDARD="LVPECL_25";
+NET "gtx4_7_clk_n_i" IOSTANDARD="LVPECL_25";
+NET "gtx4_7_clk_p_i" IOSTANDARD="LVPECL_25";
 
-#NET "gtx8_11_clk_n_i" LOC="V5";
-#NET "gtx8_11_clk_p_i" LOC="V6";
+NET "gtx8_11_clk_n_i" LOC="V5";
+NET "gtx8_11_clk_p_i" LOC="V6";
       
-#NET "gtx8_11_clk_n_i" IOSTANDARD="LVPECL_25";
-#NET "gtx8_11_clk_p_i" IOSTANDARD="LVPECL_25";
+NET "gtx8_11_clk_n_i" IOSTANDARD="LVPECL_25";
+NET "gtx8_11_clk_p_i" IOSTANDARD="LVPECL_25";
 
 NET "gtx12_15_clk_n_i" LOC="P5";
 NET "gtx12_15_clk_p_i" LOC="P6";
@@ -155,47 +155,47 @@ NET "gtx16_19_clk_p_i" IOSTANDARD="LVPECL_25";
 #NET "gtx_txp_o[2]" LOC="AM1";
 #NET "gtx_txn_o[2]" LOC="AM2";
 
-#NET "gtx_rxp_i[3]" LOC="AJ3";
-#NET "gtx_rxn_i[3]" LOC="AJ4";
+NET "gtx_rxp_i[14]" LOC="AJ3";
+NET "gtx_rxn_i[14]" LOC="AJ4";
 
-#NET "gtx_txp_o[3]" LOC="AK1";
-#NET "gtx_txn_o[3]" LOC="AK2";
+NET "gtx_txp_o[14]" LOC="AK1";
+NET "gtx_txn_o[14]" LOC="AK2";
 
-#NET "gtx_rxp_i[4]" LOC="AG3";
-#NET "gtx_rxn_i[4]" LOC="AG4";
+NET "gtx_rxp_i[13]" LOC="AG3";
+NET "gtx_rxn_i[13]" LOC="AG4";
 
-#NET "gtx_txp_o[4]" LOC="AH1";
-#NET "gtx_txn_o[4]" LOC="AH2";
+NET "gtx_txp_o[13]" LOC="AH1";
+NET "gtx_txn_o[13]" LOC="AH2";
 
-#NET "gtx_rxp_i[5]" LOC="AF5";
-#NET "gtx_rxn_i[5]" LOC="AF6";
+NET "gtx_rxp_i[12]" LOC="AF5";
+NET "gtx_rxn_i[12]" LOC="AF6";
 
-#NET "gtx_txp_o[5]" LOC="AF1";
-#NET "gtx_txn_o[5]" LOC="AF2";
+NET "gtx_txp_o[12]" LOC="AF1";
+NET "gtx_txn_o[12]" LOC="AF2";
 
-#NET "gtx_rxp_i[6]" LOC="AE3";
-#NET "gtx_rxn_i[6]" LOC="AE4";
+NET "gtx_rxp_i[11]" LOC="AE3";
+NET "gtx_rxn_i[11]" LOC="AE4";
 
-#NET "gtx_txp_o[6]" LOC="AD1";
-#NET "gtx_txn_o[6]" LOC="AD2";
+NET "gtx_txp_o[11]" LOC="AD1";
+NET "gtx_txn_o[11]" LOC="AD2";
 
-#NET "gtx_rxp_i[7]" LOC="AC3";
-#NET "gtx_rxn_i[7]" LOC="AC4";
+NET "gtx_rxp_i[10]" LOC="AC3";
+NET "gtx_rxn_i[10]" LOC="AC4";
 
-#NET "gtx_txp_o[7]" LOC="AB1";
-#NET "gtx_txn_o[7]" LOC="AB2";
+NET "gtx_txp_o[10]" LOC="AB1";
+NET "gtx_txn_o[10]" LOC="AB2";
 
-#NET "gtx_rxp_i[8]" LOC="AA3";
-#NET "gtx_rxn_i[8]" LOC="AA4";
+NET "gtx_rxp_i[9]" LOC="AA3";
+NET "gtx_rxn_i[9]" LOC="AA4";
 
-#NET "gtx_txp_o[8]" LOC="Y1";
-#NET "gtx_txn_o[8]" LOC="Y2";
+NET "gtx_txp_o[9]" LOC="Y1";
+NET "gtx_txn_o[9]" LOC="Y2";
 
-#NET "gtx_rxp_i[9]" LOC="W3";
-#NET "gtx_rxn_i[9]" LOC="W4";
+NET "gtx_rxp_i[8]" LOC="W3";
+NET "gtx_rxn_i[8]" LOC="W4";
 
-#NET "gtx_txp_o[9]" LOC="V1";
-#NET "gtx_txn_o[9]" LOC="V2";
+NET "gtx_txp_o[8]" LOC="V1";
+NET "gtx_txn_o[8]" LOC="V2";
 
 NET "gtx_rxp_i[7]" LOC="U3";
 NET "gtx_rxn_i[7]" LOC="U4";
@@ -255,6 +255,15 @@ NET "led_act_o[5]" LOC="AA25";
 NET "led_act_o[6]" LOC="AB27";  
 NET "led_act_o[7]" LOC="AC27";  
 
+NET "led_act_o[8]" LOC="AD29";  
+NET "led_act_o[9]" LOC="AE31";  
+NET "led_act_o[10]" LOC="AA29";  
+NET "led_act_o[11]" LOC="AA30";  
+
+NET "led_act_o[12]" LOC="AC29";  
+NET "led_act_o[13]" LOC="AC32";  
+NET "led_act_o[14]" LOC="AD31";  
+
 
 
 NET "mbl_scl_b[0]" LOC="AF31"; 
@@ -293,55 +302,42 @@ NET "gen_phys[2].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[2].U_PHY/rx_rec_clk_
 TIMESPEC TS_gen_phys_2__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[2].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
 NET "gen_phys[3].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[3].U_PHY/rx_rec_clk_bufin;
 TIMESPEC TS_gen_phys_3__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[3].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-
-#NET "gen_phys[4].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[4].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_4__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[4].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[4].U_PHY/tx_out_clk_bufin" TNM_NET = gen_phys[4].U_PHY/tx_out_clk_bufin;
-#TIMESPEC TS_gen_phys_4__U_PHY_tx_out_clk_bufin = PERIOD "gen_phys[4].U_PHY/tx_out_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[5].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[5].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_5__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[5].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[6].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[6].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_6__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[6].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[7].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[7].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_7__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[7].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[8].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[8].U_PHY/rx_rec_clk_bufin;
+NET "gen_phys[4].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[4].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_4__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[4].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[5].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[5].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_5__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[5].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[6].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[6].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_6__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[6].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[7].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[7].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_7__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[7].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[8].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[8].U_PHY/rx_rec_clk_bufin;
 TIMESPEC TS_gen_phys_8__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[8].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[8].U_PHY/tx_out_clk_bufin" TNM_NET = gen_phys[8].U_PHY/tx_out_clk_bufin;
-#TIMESPEC TS_gen_phys_8__U_PHY_tx_out_clk_bufin = PERIOD "gen_phys[8].U_PHY/tx_out_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[9].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[9].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_9__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[9].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[10].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[10].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_10__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[10].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[11].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[11].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_11__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[11].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[12].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[12].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_12__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[12].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[13].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[13].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_13__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[13].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[14].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[14].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_14__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[14].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[15].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[15].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_15__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[15].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[16].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[16].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_16__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[16].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[16].U_PHY/tx_out_clk_bufin" TNM_NET = gen_phys[16].U_PHY/tx_out_clk_bufin;
-#TIMESPEC TS_gen_phys_16__U_PHY_tx_out_clk_bufin = PERIOD "gen_phys[16].U_PHY/tx_out_clk_bufin" 16 ns HIGH 50%;
-#NET "gen_phys[17].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[17].U_PHY/rx_rec_clk_bufin;
-#TIMESPEC TS_gen_phys_17__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[17].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[9].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[9].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_9__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[9].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[10].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[10].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_10__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[10].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[11].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[11].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_11__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[11].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[12].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[12].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_12__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[12].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[13].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[13].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_13__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[13].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+NET "gen_phys[14].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[14].U_PHY/rx_rec_clk_bufin;
+TIMESPEC TS_gen_phys_14__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[14].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
 
-#NET "gtx0_3_clk_n_i" TNM_NET = gtx0_3_clk_n_i;
-#TIMESPEC TS_gtx0_3_clk_n_i = PERIOD "gtx0_3_clk_n_i" 8 ns HIGH 50%;
-#NET "gtx0_3_clk_p_i" TNM_NET = gtx0_3_clk_p_i;
-#TIMESPEC TS_gtx0_3_clk_p_i = PERIOD "gtx0_3_clk_p_i" 8 ns HIGH 50%;
+NET "gtx0_3_clk_n_i" TNM_NET = gtx0_3_clk_n_i;
+TIMESPEC TS_gtx0_3_clk_n_i = PERIOD "gtx0_3_clk_n_i" 8 ns HIGH 50%;
+NET "gtx0_3_clk_p_i" TNM_NET = gtx0_3_clk_p_i;
+TIMESPEC TS_gtx0_3_clk_p_i = PERIOD "gtx0_3_clk_p_i" 8 ns HIGH 50%;
 
-#NET "gtx4_7_clk_n_i" TNM_NET = gtx4_7_clk_n_i;
-#TIMESPEC TS_gtx4_7_clk_n_i = PERIOD "gtx4_7_clk_n_i" 8 ns HIGH 50%;
-#NET "gtx4_7_clk_p_i" TNM_NET = gtx4_7_clk_p_i;
-#TIMESPEC TS_gtx4_7_clk_p_i = PERIOD "gtx4_7_clk_p_i" 8 ns HIGH 50%;
-#NET "gtx8_11_clk_n_i" TNM_NET = gtx8_11_clk_n_i;
-#TIMESPEC TS_gtx8_11_clk_n_i = PERIOD "gtx8_11_clk_n_i" 8 ns HIGH 50%;
-#NET "gtx8_11_clk_p_i" TNM_NET = gtx8_11_clk_p_i;
-#TIMESPEC TS_gtx8_11_clk_p_i = PERIOD "gtx8_11_clk_p_i" 8 ns HIGH 50%;
+NET "gtx4_7_clk_n_i" TNM_NET = gtx4_7_clk_n_i;
+TIMESPEC TS_gtx4_7_clk_n_i = PERIOD "gtx4_7_clk_n_i" 8 ns HIGH 50%;
+NET "gtx4_7_clk_p_i" TNM_NET = gtx4_7_clk_p_i;
+TIMESPEC TS_gtx4_7_clk_p_i = PERIOD "gtx4_7_clk_p_i" 8 ns HIGH 50%;
+NET "gtx8_11_clk_n_i" TNM_NET = gtx8_11_clk_n_i;
+TIMESPEC TS_gtx8_11_clk_n_i = PERIOD "gtx8_11_clk_n_i" 8 ns HIGH 50%;
+NET "gtx8_11_clk_p_i" TNM_NET = gtx8_11_clk_p_i;
+TIMESPEC TS_gtx8_11_clk_p_i = PERIOD "gtx8_11_clk_p_i" 8 ns HIGH 50%;
 NET "gtx12_15_clk_n_i" TNM_NET = gtx12_15_clk_n_i;
 TIMESPEC TS_gtx12_15_clk_n_i = PERIOD "gtx12_15_clk_n_i" 8 ns HIGH 50%;
 NET "gtx12_15_clk_p_i" TNM_NET = gtx12_15_clk_p_i;

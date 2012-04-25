@@ -110,32 +110,26 @@ entity scb_top_synthesis is
     gtx4_7_clk_n_i : in std_logic;
     gtx4_7_clk_p_i : in std_logic;
 
-    --gtx8_11_clk_n_i : in std_logic;
-    --gtx8_11_clk_p_i : in std_logic;
+    gtx8_11_clk_n_i : in std_logic;
+    gtx8_11_clk_p_i : in std_logic;
 
-    --gtx12_15_clk_n_i : in std_logic;
-    --gtx12_15_clk_p_i : in std_logic;
+    gtx12_15_clk_n_i : in std_logic;
+    gtx12_15_clk_p_i : in std_logic;
 
-    --gtx16_19_clk_n_i : in std_logic;
-    --gtx16_19_clk_p_i : in std_logic;
+    gtx16_19_clk_n_i : in std_logic;
+    gtx16_19_clk_p_i : in std_logic;
 
-    --gtx_rxp_i : in std_logic_vector(17 downto 0);
-    --gtx_rxn_i : in std_logic_vector(17 downto 0);
+    gtx_rxp_i : in std_logic_vector(14 downto 0);
+    gtx_rxn_i : in std_logic_vector(14 downto 0);
 
-    --gtx_txp_o : out std_logic_vector(17 downto 0);
-    --gtx_txn_o : out std_logic_vector(17 downto 0);
-
-    gtx_rxp_i : in std_logic_vector(5 downto 0);
-    gtx_rxn_i : in std_logic_vector(5 downto 0);
-
-    gtx_txp_o : out std_logic_vector(5 downto 0);
-    gtx_txn_o : out std_logic_vector(5 downto 0);
+    gtx_txp_o : out std_logic_vector(14 downto 0);
+    gtx_txn_o : out std_logic_vector(14 downto 0);
 
     ---------------------------------------------------------------------------
     -- Mini-Backplane signals
     ---------------------------------------------------------------------------
 
-    led_act_o : out std_logic_vector(5 downto 0);
+    led_act_o : out std_logic_vector(14 downto 0);
 
     mbl_scl_b : inout std_logic_vector(1 downto 0);
     mbl_sda_b : inout std_logic_vector(1 downto 0)
@@ -146,8 +140,8 @@ end scb_top_synthesis;
 
 architecture Behavioral of scb_top_synthesis is
 
-  constant c_NUM_PHYS : integer := 6;
-  constant c_NUM_PORTS : integer := 6;
+  constant c_NUM_PHYS  : integer := 15;
+  constant c_NUM_PORTS : integer := 15;
 
   function f_bool2int(x : boolean) return integer is
   begin
@@ -262,7 +256,7 @@ architecture Behavioral of scb_top_synthesis is
       i2c_mbl_sda_o       : out std_logic_vector(1 downto 0);
       i2c_mbl_sda_i       : in  std_logic_vector(1 downto 0) := "11");
   end component;
-  
+
   component chipscope_icon
     port (
       CONTROL0 : inout std_logic_vector(35 downto 0));
@@ -285,7 +279,7 @@ architecture Behavioral of scb_top_synthesis is
   signal TRIG3   : std_logic_vector(31 downto 0);
 begin
 
-  gen_i2c_tribufs: for i in 0 to 1 generate
+  gen_i2c_tribufs : for i in 0 to 1 generate
     mbl_scl_b(i) <= i2c_mbl_scl_out(i) when i2c_mbl_scl_oen(i) = '0' else 'Z';
     mbl_sda_b(i) <= i2c_mbl_sda_out(i) when i2c_mbl_sda_oen(i) = '0' else 'Z';
   end generate gen_i2c_tribufs;
@@ -303,7 +297,10 @@ begin
   --    TRIG2   => TRIG2,
   --    TRIG3   => TRIG3);
 
-  --TRIG0(g_cpu_addr_width-1 downto 0) <= cpu_addr_i;
+  --TRIG0(0) <= mbl_scl_b(0);
+  --TRIG0(1) <= mbl_sda_b(0);
+  --TRIG0(2) <= mbl_scl_b(1);
+  --TRIG0(3) <= mbl_sda_b(1);
   --TRIG1                              <= cpu_data_b;
   --TRIG2(0)                           <= cpu_cs_n_i;
   --TRIG2(1)                           <= cpu_rd_n_i;
@@ -331,35 +328,35 @@ begin
       IB    => gtx4_7_clk_n_i
       );
 
-  --U_Clk_Buf_GTX8_11 : IBUFDS_GTXE1
-  --  port map
-  --  (
-  --    O     => clk_gtx8_11,
-  --    ODIV2 => open,
-  --    CEB   => '0',
-  --    I     => gtx8_11_clk_p_i,
-  --    IB    => gtx8_11_clk_n_i
-  --    );
-  
-  --U_Clk_Buf_GTX12_15 : IBUFDS_GTXE1
-  --  port map
-  --  (
-  --    O     => clk_gtx12_15,
-  --    ODIV2 => open,
-  --    CEB   => '0',
-  --    I     => gtx12_15_clk_p_i,
-  --    IB    => gtx12_15_clk_n_i
-  --    );
+  U_Clk_Buf_GTX8_11 : IBUFDS_GTXE1
+    port map
+    (
+      O     => clk_gtx8_11,
+      ODIV2 => open,
+      CEB   => '0',
+      I     => gtx8_11_clk_p_i,
+      IB    => gtx8_11_clk_n_i
+      );
 
-  --U_Clk_Buf_GTX16_19 : IBUFDS_GTXE1
-  --  port map
-  --  (
-  --    O     => clk_gtx16_19,
-  --    ODIV2 => open,
-  --    CEB   => '0',
-  --    I     => gtx16_19_clk_p_i,
-  --    IB    => gtx16_19_clk_n_i
-  --    );
+  U_Clk_Buf_GTX12_15 : IBUFDS_GTXE1
+    port map
+    (
+      O     => clk_gtx12_15,
+      ODIV2 => open,
+      CEB   => '0',
+      I     => gtx12_15_clk_p_i,
+      IB    => gtx12_15_clk_n_i
+      );
+
+  U_Clk_Buf_GTX16_19 : IBUFDS_GTXE1
+    port map
+    (
+      O     => clk_gtx16_19,
+      ODIV2 => open,
+      CEB   => '0',
+      I     => gtx16_19_clk_p_i,
+      IB    => gtx16_19_clk_n_i
+      );
 
   U_Buf_CLK_Startup : IBUFGDS
     generic map (
@@ -485,11 +482,11 @@ begin
 -- GTX PHYs
 -------------------------------------------------------------------------------  
 
-  clk_gtx(3 downto 0)   <= (others => clk_gtx0_3);
-  clk_gtx(5 downto 4)   <= (others => clk_gtx4_7);
---  clk_gtx(11 downto 8)  <= (others => clk_gtx8_11);
---  clk_gtx(14 downto 12) <= (others => clk_gtx12_15);
---  clk_gtx(17 downto 16) <= (others => clk_gtx16_19);
+  clk_gtx(1 downto 0) <= (others => clk_gtx16_19);
+  clk_gtx(5 downto 2) <= (others => clk_gtx12_15);
+  clk_gtx(9 downto 6)   <= (others => clk_gtx8_11);
+  clk_gtx(13 downto 10)  <= (others => clk_gtx4_7);
+  clk_gtx(14 downto 14) <= (others => clk_gtx0_3);
 
   gen_phys : for i in 0 to c_NUM_PHYS-1 generate
 
@@ -498,10 +495,9 @@ begin
         g_simulation         => f_bool2int(g_simulation),
         g_use_slave_tx_clock => f_bool2int(i /= (i/4)*4))
       port map (
-        clk_ref_i => clk_gtx(i),
+        clk_gtx_i => clk_gtx(i),
+        clk_ref_i => clk_ref,
 
-        tx_clk_i       => from_phys((i / 4) * 4).ref_clk,
-        tx_clk_o       => from_phys(i).ref_clk,
         tx_data_i      => to_phys(i).tx_data,
         tx_k_i         => to_phys(i).tx_k,
         tx_disparity_o => from_phys(i).tx_disparity,
@@ -518,16 +514,17 @@ begin
         pad_rxn_i      => gtx_rxn_i(i),
         pad_rxp_i      => gtx_rxp_i(i));
 
+    from_phys(i).ref_clk <= clk_ref;
   end generate gen_phys;
 
-  gen_terminate_unused_phys: for i in c_NUM_PORTS to c_NUM_PHYS-1 generate
+  gen_terminate_unused_phys : for i in c_NUM_PORTS to c_NUM_PHYS-1 generate
     to_phys(i).tx_data <= (others => '0');
-    to_phys(i).tx_k <= (others => '0');
-    to_phys(i).rst <= '1';
-    to_phys(i).loopen <= '0';
-    led_act_o(i) <= '0';
+    to_phys(i).tx_k    <= (others => '0');
+    to_phys(i).rst     <= '1';
+    to_phys(i).loopen  <= '0';
+    led_act_o(i)       <= '0';
   end generate gen_terminate_unused_phys;
-  
+
 
 
   -----------------------------------------------------------------------------
@@ -536,8 +533,8 @@ begin
 
   U_Real_Top : scb_top_bare
     generic map (
-      g_num_ports  => c_NUM_PORTS,
-      g_simulation => g_simulation,
+      g_num_ports       => c_NUM_PORTS,
+      g_simulation      => g_simulation,
       g_without_network => false)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
@@ -568,17 +565,17 @@ begin
       uart_rxd_i          => uart_rxd_i,
       clk_en_o            => clk_en_o,
       clk_sel_o           => clk_sel_o,
-      gpio_i => x"00000000",
+      gpio_i              => x"00000000",
       phys_o              => to_phys(c_NUM_PORTS-1 downto 0),
       phys_i              => from_phys(c_NUM_PORTS-1 downto 0),
 --      led_link_o          => led_link_o,
       led_act_o           => led_act_o(c_NUM_PORTS-1 downto 0),
-      i2c_mbl_scl_oen_o  => i2c_mbl_scl_oen,
-      i2c_mbl_scl_o      => i2c_mbl_scl_out,
-      i2c_mbl_scl_i      => mbl_scl_b,
-      i2c_mbl_sda_oen_o  => i2c_mbl_sda_oen,
-      i2c_mbl_sda_o      => i2c_mbl_sda_out,
-      i2c_mbl_sda_i      => mbl_sda_b);
+      i2c_mbl_scl_oen_o   => i2c_mbl_scl_oen,
+      i2c_mbl_scl_o       => i2c_mbl_scl_out,
+      i2c_mbl_scl_i       => mbl_scl_b,
+      i2c_mbl_sda_oen_o   => i2c_mbl_sda_oen,
+      i2c_mbl_sda_o       => i2c_mbl_sda_out,
+      i2c_mbl_sda_i       => mbl_sda_b);
 
 end Behavioral;
 

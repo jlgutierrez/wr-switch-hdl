@@ -85,8 +85,7 @@ package wrsw_top_pkg is
       g_use_slave_tx_clock : integer);
     port (
       clk_ref_i      : in  std_logic;
-      tx_clk_i       : in  std_logic;
-      tx_clk_o       : out std_logic;
+      clk_gtx_i      : in  std_logic;
       tx_data_i      : in  std_logic_vector(15 downto 0);
       tx_k_i         : in  std_logic_vector(1 downto 0);
       tx_disparity_o : out std_logic;
@@ -160,13 +159,14 @@ package wrsw_top_pkg is
 
   component wrsw_rt_subsystem
     generic (
-      g_num_rx_clocks : integer);
+      g_num_rx_clocks : integer;
+      g_simulation : boolean);
     port (
       clk_ref_i           : in  std_logic;
       clk_sys_i           : in  std_logic;
       clk_dmtd_i          : in  std_logic;
       clk_rx_i            : in  std_logic_vector(g_num_rx_clocks-1 downto 0);
-      clk_aux_i : in std_logic;
+      clk_ext_i           : in  std_logic;
       rst_n_i             : in  std_logic;
       rst_n_o             : out std_logic;
       wb_i                : in  t_wishbone_slave_in;
@@ -179,8 +179,10 @@ package wrsw_top_pkg is
       dac_main_data_o     : out std_logic;
       uart_txd_o          : out std_logic;
       uart_rxd_i          : in  std_logic;
-      pps_p_o             : out std_logic;
-      pps_raw_i           : in  std_logic;
+      pps_csync_o         : out std_logic;
+      pps_valid_o         : out std_logic;
+      pps_ext_i           : in  std_logic;
+      pps_ext_o           : out std_logic;
       sel_clk_sys_o       : out std_logic;
       pll_status_i        : in  std_logic;
       pll_mosi_o          : out std_logic;
@@ -190,7 +192,7 @@ package wrsw_top_pkg is
       pll_sync_n_o        : out std_logic;
       pll_reset_n_o       : out std_logic);
   end component;
-
+  
   component chipscope_icon
     port (
       CONTROL0 : inout std_logic_vector(35 downto 0));
@@ -210,18 +212,19 @@ package wrsw_top_pkg is
 
   component scb_top_bare
     generic (
-      g_num_ports  : integer;
-      g_simulation : boolean);
+      g_num_ports       : integer;
+      g_simulation      : boolean;
+      g_without_network : boolean);
     port (
       sys_rst_n_i         : in  std_logic;
       clk_startup_i       : in  std_logic;
       clk_ref_i           : in  std_logic;
       clk_dmtd_i          : in  std_logic;
---      clk_sys_i           : in  std_logic;
-      clk_aux_i  : in  std_logic;
+      clk_aux_i           : in  std_logic;
+      clk_sys_o           : out std_logic;
       cpu_wb_i            : in  t_wishbone_slave_in;
       cpu_wb_o            : out t_wishbone_slave_out;
-      cpu_irq_n_o :out std_logic;
+      cpu_irq_n_o         : out std_logic;
       pps_i               : in  std_logic;
       pps_o               : out std_logic;
       dac_helper_sync_n_o : out std_logic;
@@ -245,10 +248,15 @@ package wrsw_top_pkg is
       phys_i              : in  t_phyif_input_array(g_num_ports-1 downto 0);
       led_link_o          : out std_logic_vector(g_num_ports-1 downto 0);
       led_act_o           : out std_logic_vector(g_num_ports-1 downto 0);
-      gpio_o : out std_logic_vector(31 downto 0);
-      gpio_i : in  std_logic_vector(31 downto 0));
+      gpio_o              : out std_logic_vector(31 downto 0);
+      gpio_i              : in  std_logic_vector(31 downto 0);
+      i2c_mbl_scl_oen_o   : out std_logic_vector(1 downto 0);
+      i2c_mbl_scl_o       : out std_logic_vector(1 downto 0);
+      i2c_mbl_scl_i       : in  std_logic_vector(1 downto 0) := "11";
+      i2c_mbl_sda_oen_o   : out std_logic_vector(1 downto 0);
+      i2c_mbl_sda_o       : out std_logic_vector(1 downto 0);
+      i2c_mbl_sda_i       : in  std_logic_vector(1 downto 0) := "11");
   end component;
-
   component xswc_core is
     generic( 
       g_prio_num                         : integer ;

@@ -89,7 +89,10 @@ entity scb_top_sim is
 
 
     led_link_o : out std_logic_vector(g_num_ports-1 downto 0);
-    led_act_o  : out std_logic_vector(g_num_ports-1 downto 0)
+    led_act_o  : out std_logic_vector(g_num_ports-1 downto 0);
+
+    mbl_scl_b : inout std_logic_vector(1 downto 0);
+    mbl_sda_b : inout std_logic_vector(1 downto 0)
     );
 
 end scb_top_sim;
@@ -97,14 +100,26 @@ end scb_top_sim;
 architecture rtl of scb_top_sim is
 
   type t_8b10b_disparity_array is array (integer range <>) of t_8b10b_disparity;
-  
-  signal cur_disp : t_8b10b_disparity_array(g_num_ports-1 downto 0);
-  signal cpu_wb_in : t_wishbone_slave_in;
-  signal cpu_wb_out  : t_wishbone_slave_out;
+
+  signal cur_disp   : t_8b10b_disparity_array(g_num_ports-1 downto 0);
+  signal cpu_wb_in  : t_wishbone_slave_in;
+  signal cpu_wb_out : t_wishbone_slave_out;
   signal phys_out   : t_phyif_output_array(g_num_ports-1 downto 0);
   signal phys_in    : t_phyif_input_array(g_num_ports-1 downto 0);
-  signal cpu_irq_n : std_logic;
+  signal cpu_irq_n  : std_logic;
+
+  signal i2c_mbl_scl_oen : std_logic_vector(1 downto 0);
+  signal i2c_mbl_scl_out : std_logic_vector(1 downto 0);
+  signal i2c_mbl_sda_oen : std_logic_vector(1 downto 0);
+  signal i2c_mbl_sda_out : std_logic_vector(1 downto 0);
+
+  
 begin  -- rtl
+
+  gen_i2c_tribufs : for i in 0 to 1 generate
+    mbl_scl_b(i) <= i2c_mbl_scl_out(i) when i2c_mbl_scl_oen(i) = '0' else 'Z';
+    mbl_sda_b(i) <= i2c_mbl_sda_out(i) when i2c_mbl_sda_oen(i) = '0' else 'Z';
+  end generate gen_i2c_tribufs;
 
   cpu_wb_in.adr <= wb_adr_i;
   cpu_wb_in.dat <= wb_dat_i;
@@ -115,19 +130,20 @@ begin  -- rtl
   wb_ack_o      <= cpu_wb_out.ack;
   wb_stall_o    <= cpu_wb_out.stall;
   wb_irq_o      <= not cpu_irq_n;
-  wb_dat_o <= cpu_wb_out.dat;
+  wb_dat_o      <= cpu_wb_out.dat;
 
   U_Wrapped_SCBCore : scb_top_bare
     generic map (
       g_num_ports  => g_num_ports,
-      g_simulation => true)
+      g_simulation => true,
+      g_without_network => false)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_startup_i,
       clk_ref_i           => clk_ref_i,
       clk_dmtd_i          => clk_dmtd_i,
 --      clk_sys_i           => clk_sys_i,
-      clk_aux_i  => clk_aux_i,
+      clk_aux_i           => clk_aux_i,
       cpu_wb_i            => cpu_wb_in,
       cpu_wb_o            => cpu_wb_out,
       cpu_irq_n_o         => cpu_irq_n,
@@ -155,7 +171,13 @@ begin  -- rtl
       led_link_o          => led_link_o,
       led_act_o           => led_act_o,
       gpio_o              => open,
-      gpio_i              => (others => '0')
+      gpio_i              => (others => '0'),
+      i2c_mbl_scl_oen_o   => i2c_mbl_scl_oen,
+      i2c_mbl_scl_o       => i2c_mbl_scl_out,
+      i2c_mbl_scl_i       => mbl_scl_b,
+      i2c_mbl_sda_oen_o   => i2c_mbl_sda_oen,
+      i2c_mbl_sda_o       => i2c_mbl_sda_out,
+      i2c_mbl_sda_i       => mbl_sda_b
       );
 
   gen_phys : for i in 0 to g_num_ports-1 generate
