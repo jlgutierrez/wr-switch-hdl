@@ -9,8 +9,8 @@ OBJS_PLATFORM=target/lm32/crt0.o target/lm32/irq.o
 CC=$(CROSS_COMPILE)gcc
 OBJCOPY=$(CROSS_COMPILE)objcopy
 OBJDUMP=$(CROSS_COMPILE)objdump
-CFLAGS= $(CFLAGS_PLATFORM) -ffunction-sections -fdata-sections -Os -Iinclude -include include/trace.h   -ffreestanding -Iipc
-LDFLAGS= $(LDFLAGS_PLATFORM) -ffunction-sections -fdata-sections -Os -Iinclude -ffreestanding 
+CFLAGS= $(CFLAGS_PLATFORM) -ffunction-sections -fdata-sections -O3 -Iinclude -include include/trace.h   -ffreestanding -Iipc
+LDFLAGS= $(LDFLAGS_PLATFORM) -ffunction-sections -fdata-sections -O3 -Iinclude -ffreestanding 
 SIZE = $(CROSS_COMPILE)size
 OBJS += $(OBJS_PLATFORM)
 
