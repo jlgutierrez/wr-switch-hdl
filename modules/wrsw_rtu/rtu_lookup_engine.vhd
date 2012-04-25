@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-22
--- Last update: 2012-01-25
+-- Last update: 2012-04-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -173,6 +173,7 @@ begin
   begin
     if(start_i = '1' and lookup_state = IDLE) then
       mem_addr <= hash_i & "00";
+      hash_reg <= hash_i;
     else
       mem_addr <= hash_reg &std_logic_vector(bucket_entry);
     end if;
