@@ -230,7 +230,7 @@ begin  -- rtl
 
   U_CPU : xwb_lm32
     generic map (
-      g_profile => "medium_icache")
+      g_profile => "medium_icache_debug")
     port map (
       clk_sys_i => clk_sys_i,
       rst_n_i   => cpu_reset_n,
