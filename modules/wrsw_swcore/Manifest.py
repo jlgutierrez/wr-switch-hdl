@@ -39,6 +39,7 @@ files = [
 "swc_rr_arbiter.vhd",
 "xswc_core.vhd",
 "xswc_output_block.vhd",
+"xswc_output_block_new.vhd",
 "xswc_input_block.vhd",
 "../wrsw_shared_types_pkg.vhd",
 "swc_ll_read_data_validation.vhd",
