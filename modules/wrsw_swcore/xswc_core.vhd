@@ -320,7 +320,7 @@ architecture rtl of xswc_core is
    signal ib2mmu_rescnt_page_num      : std_logic_vector(g_num_ports*c_mpm_page_addr_width          -1 downto 0);
    signal mmu2ib_res_full             : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
    signal mmu2ib_res_almost_full      : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
-
+   signal mmu2ib_set_usecnt_succeeded : std_logic_vector(g_num_ports                                -1 downto 0);
   begin --rtl
    
   --chipscope_icon_1: chipscope_icon
@@ -386,9 +386,10 @@ architecture rtl of xswc_core is
 --        mmu_resource_i           => mmu2ib_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
         mmu_resource_o           => ib2mmu_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
         mmu_rescnt_page_num_o    => ib2mmu_rescnt_page_num   ((i+1)*c_mpm_page_addr_width        -1 downto i*c_mpm_page_addr_width),
+        mmu_set_usecnt_succeeded_i => mmu2ib_set_usecnt_succeeded(i),
         mmu_res_full_i           => mmu2ib_res_full          ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
         mmu_res_almost_full_i    => mmu2ib_res_almost_full   ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
-
+        
         -------------------------------------------------------------------------------
         -- I/F with Pck's Pages Freeing Module (PPFM)
         -------------------------------------------------------------------------------      
@@ -446,8 +447,8 @@ architecture rtl of xswc_core is
         );
         
         
---    OUTPUT_BLOCK: swc_output_block 
-    OUTPUT_BLOCK: xswc_output_block
+    OUTPUT_BLOCK: xswc_output_block_new 
+--    OUTPUT_BLOCK: xswc_output_block
       generic map( 
         g_max_pck_size_width               => c_max_pck_size_width,
         g_output_block_per_queue_fifo_size => g_output_block_per_queue_fifo_size,
@@ -643,6 +644,8 @@ architecture rtl of xswc_core is
       force_free_resource_valid_i=> ppfm2mmu_force_free_resource_valid,
 
       rescnt_page_num_i          => ib2mmu_rescnt_page_num,
+      set_usecnt_succeeded_o     => mmu2ib_set_usecnt_succeeded, 
+      
       res_full_o                 => mmu2ib_res_full,
       res_almost_full_o          => mmu2ib_res_almost_full
 

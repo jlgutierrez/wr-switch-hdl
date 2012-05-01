@@ -106,6 +106,10 @@ entity swc_multiport_page_allocator is
     
     -- number of pages added to the resurce
     rescnt_page_num_i      : in  std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
+
+    -- indicates whether the resources where re-located to the proper resource, if not, then the
+    -- whole usecnt operation is abandoned
+    set_usecnt_succeeded_o : out std_logic_vector(g_num_ports                     -1 downto 0);
     res_full_o             : out std_logic_vector(g_num_ports * g_resource_num    -1 downto 0);
     res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num    -1 downto 0)    
     );
@@ -187,7 +191,8 @@ architecture syn of swc_multiport_page_allocator is
   signal force_free_done           : std_logic_vector(g_num_ports-1 downto 0);
 
 
-  signal set_usecnt_done_feedback  : std_logic_vector(g_num_ports-1 downto 0);
+  signal set_usecnt_req_succeeded_feedback : std_logic_vector(g_num_ports-1 downto 0);
+  signal set_usecnt_req_finished_feedback  : std_logic_vector(g_num_ports-1 downto 0);
 --  signal set_usecnt_done           : std_logic_vector(g_num_ports-1 downto 0);
 
   signal pg_free_last_usecnt            : std_logic;
@@ -213,9 +218,10 @@ architecture syn of swc_multiport_page_allocator is
  
   type t_port_resource_out_array is array(integer range <>) of t_port_resource_out;
   
-  signal resources_feedback : t_port_resource_out_array(g_num_ports-1 downto 0);
-  signal resources_out      : t_port_resource_out_array(g_num_ports-1 downto 0);
-
+  signal resources_feedback      : t_port_resource_out_array(g_num_ports-1 downto 0);
+  signal resources_out           : t_port_resource_out_array(g_num_ports-1 downto 0);
+  signal pg_set_usecnt_succeeded : std_logic;
+  signal set_usecnt_succeeded    : std_logic_vector(g_num_ports -1 downto 0);
 begin  -- syn
 
   -- one allocator/deallocator for all ports
@@ -248,6 +254,7 @@ begin  -- syn
       done_o                 => pg_done,
       nomem_o                => pg_nomem,
       -------- resource management --------
+      set_usecnt_succeeded_o => pg_set_usecnt_succeeded,
       resource_i             => pg_resource_in,
       resource_o             => pg_resource_out,
       free_resource_valid_i  => pg_free_resource_valid,
@@ -263,7 +270,7 @@ begin  -- syn
   gen_request_vec : for i in 0 to g_num_ports - 1 generate
     request_vec(4 * i + 0) <= alloc_i(i)      and (not (alloc_done_feedback(i)      or alloc_done(i))) and (not pg_nomem);
     request_vec(4 * i + 1) <= free_i(i)       and (not (free_done_feedback(i)       or free_done(i)));
-    request_vec(4 * i + 2) <= set_usecnt_i(i) and (not (set_usecnt_done_feedback(i)));-- or set_usecnt_done(i)));
+    request_vec(4 * i + 2) <= set_usecnt_i(i) and (not (set_usecnt_req_finished_feedback(i)));-- or set_usecnt_done(i)));
     request_vec(4 * i + 3) <= force_free_i(i) and (not (force_free_done_feedback(i) or force_free_done(i)));
   end generate gen_request_vec;
 
@@ -321,12 +328,19 @@ begin  -- syn
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        alloc_done_feedback       <= (others => '0');
-        free_done_feedback        <= (others => '0');
-        set_usecnt_done_feedback  <= (others => '0');
-        force_free_done_feedback  <= (others => '0');
+      
+        alloc_done                        <= (others => '0');    
+        free_done                         <= (others => '0');    
+        free_last_usecnt                  <= (others => '0');        
+        force_free_done                   <= (others => '0');    
+        set_usecnt_succeeded              <= (others => '0');    
         
-        free_last_usecnt          <= (others => '0');
+        alloc_done_feedback               <= (others => '0');
+        free_done_feedback                <= (others => '0');
+        set_usecnt_req_finished_feedback  <= (others => '0');
+        set_usecnt_req_succeeded_feedback <= (others => '0');
+        force_free_done_feedback          <= (others => '0');
+
       else
 
         -- recognizing on which port the allocation/deallocation/freeing process
@@ -349,9 +363,11 @@ begin  -- syn
             end if;
 
             if(request_grant(1 downto 0) = b"10") then
-               set_usecnt_done_feedback(i) <= '1';
+               set_usecnt_req_finished_feedback(i) <= '1';
+               set_usecnt_req_succeeded_feedback(i)<= pg_set_usecnt_succeeded;
             else
-               set_usecnt_done_feedback(i) <= '0';
+               set_usecnt_req_finished_feedback(i) <= '0';
+               set_usecnt_req_succeeded_feedback(i)<= '0';
             end if;
 
             if(request_grant(1 downto 0) = b"11") then
@@ -361,32 +377,33 @@ begin  -- syn
             end if;
 
           else
-            alloc_done_feedback(i)       <= '0';
-            free_done_feedback(i)        <= '0';
-            free_last_usecnt_feedback(i)     <= '0';
-            set_usecnt_done_feedback(i)  <= '0';
-            force_free_done_feedback(i)  <= '0';
+            alloc_done_feedback(i)               <= '0';
+            free_done_feedback(i)                <= '0';
+            free_last_usecnt_feedback(i)         <= '0';
+            set_usecnt_req_finished_feedback(i)  <= '0';
+            set_usecnt_req_succeeded_feedback(i) <= '0';
+            force_free_done_feedback(i)          <= '0';
           end if;
         end loop;  -- i
 
-        alloc_done       <= alloc_done_feedback;
-        free_done        <= free_done_feedback;
-        free_last_usecnt <= free_last_usecnt_feedback;
-        force_free_done  <= force_free_done_feedback;
-        
+        alloc_done           <= alloc_done_feedback;
+        free_done            <= free_done_feedback;
+        free_last_usecnt     <= free_last_usecnt_feedback;
+        force_free_done      <= force_free_done_feedback;
+        set_usecnt_succeeded <= set_usecnt_req_succeeded_feedback;
 
         
       end if;
     end if;
   end process MUX1;
 
-  alloc_done_o      <= alloc_done;
-  free_done_o       <= free_done;
-  free_last_usecnt_o<= free_last_usecnt;
-  set_usecnt_done_o <= set_usecnt_done_feedback;--set_usecnt_done;
-  force_free_done_o <= force_free_done;
-  nomem_o           <= pg_nomem;
-
+  alloc_done_o           <= alloc_done;
+  free_done_o            <= free_done;
+  free_last_usecnt_o     <= free_last_usecnt;
+  set_usecnt_done_o      <= set_usecnt_req_finished_feedback;--set_usecnt_done;
+  force_free_done_o      <= force_free_done;
+  nomem_o                <= pg_nomem;
+  set_usecnt_succeeded_o <= set_usecnt_req_succeeded_feedback;--set_usecnt_succeeded;
 
   --------------------------------------------------------------------------------------------------
   --                               Resource Manager logic and instantiation

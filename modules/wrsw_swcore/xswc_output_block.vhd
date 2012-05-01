@@ -136,7 +136,7 @@ architecture behavoural of xswc_output_block is
   signal rd_addr : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
 
 -- drop_imp:  
-  signal drop_addr             : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal dp_addr             : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
   signal ram_rd_addr           : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
   signal ram_rd_addr_d0        : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
   signal drop_index            : std_logic_vector(g_queue_num_width - 1 downto 0);
@@ -349,10 +349,14 @@ begin  --  behavoural
                                                      full_array,
                                                      g_queue_num);
   
-  wr_data   <= pta_pageaddr_i;
-  wr_addr   <= write_index & wr_array(to_integer(unsigned(write_index)));
-  rd_addr   <= read_index  & rd_array(to_integer(unsigned(read_index)));
-  drop_addr <= drop_index  & rd_array(to_integer(unsigned(drop_index)));
+  wr_data    <= pta_pageaddr_i;
+  wr_addr    <= write_index & wr_array(to_integer(unsigned(write_index)));
+  wr_en      <= write(to_integer(unsigned(write_index))) and not_full_array(to_integer(unsigned(write_index))); 
+
+  rd_addr    <= read_index  & rd_array(to_integer(unsigned(read_index)));
+  dp_addr    <= drop_index  & rd_array(to_integer(unsigned(drop_index)));
+
+  
 
   drop_ready <= '1' when (  g_drop_outqueue_head_on_full = true  and -- dropping is enagbled
                             drop_array                  /= zeros and -- one of queues is full and we 
@@ -361,9 +365,10 @@ begin  --  behavoural
                                                                      -- other frame, in such case no sense to drop unless
                            (ppfm_free='1' and ppfm_free_done_i='1')))-- the previous freeing is done
            else '0';
-  ram_rd_addr <= drop_addr when (drop_ready = '1') else rd_addr;
+  ram_rd_addr <= dp_addr when (drop_ready = '1') else rd_addr;
   
-  
+  write_array <= f_onehot_decode(write_index);
+
   -- here we instantiate a module responsible for output queue scheduling (policy)
   OUTPUT_SCHEDULER: swc_output_queue_scheduler
     generic map (
@@ -372,21 +377,21 @@ begin  --  behavoural
     port map (
       clk_i               => clk_i,
       rst_n_i             => rst_n_i,
-      not_empty_array_i   => not_empty_array,
-      read_queue_index_o  => read_index,
-      read_queue_onehot_o => read_array,
-      full_array_i        => full_array,
-      drop_queue_index_o  => drop_index,
-      drop_queue_onehot_o => drop_array
+      not_empty_array_i   => not_empty_array, -- vector with '1' bit corresponding to non_empty queue
+      read_queue_index_o  => read_index,      -- decision which queue read now (unsigned)
+      read_queue_onehot_o => read_array,      -- the above decision in vector form
+      full_array_i        => full_array,      -- indicates which queue(s) is full (vector)
+      drop_queue_index_o  => drop_index,      -- indicate from from which queue the oldest entry shall be dropped (unsinged)
+      drop_queue_onehot_o => drop_array       -- the above in vector form
       );
 
-  write_array             <= f_onehot_decode(write_index);
-  wr_en                   <= write(to_integer(unsigned(write_index))) and 
-                             not_full_array(to_integer(unsigned(write_index))); 
   pta_transfer_data_ack_o <= not_full_array(to_integer(unsigned(write_index)));
   
+  --------------------------------------------------------------------------------------------------
+  --  generating control for each output queue
+  --------------------------------------------------------------------------------------------------
   queue_ctrl : for i in 0 to g_queue_num - 1 generate
-    
+  --------------------------------------------------------------------------------------------------  
     write(i) <= write_array(i) and pta_transfer_data_valid_i;
     read(i)  <= drop_array(i)                     when (drop_data_valid = '1') else
                (read_array(i) and mpm_pg_valid);
@@ -398,16 +403,18 @@ begin  --  behavoural
       port map (
         clk_i       => clk_i,
         rst_n_i     => rst_n_i,
-        write_i     => write(i),
-        read_i      => read(i),
-        not_full_o  => not_full_array(i),
-        not_empty_o => not_empty_array(i),
-        wr_en_o     => open,            --wr_en_array(i),
-        wr_addr_o   => wr_array(i),
-        rd_addr_o   => rd_array(i)
+        write_i     => write(i),         -- strobe to indicate we wrote one entry (increment head)
+        read_i      => read(i),          -- strobe to indicate we read  one entry (increment tail)
+        not_full_o  => not_full_array(i),-- indicates we can add entries (tail < head-1
+        not_empty_o => not_empty_array(i),-- tail != head
+        wr_en_o     => open,             --wr_en_array(i),
+        wr_addr_o   => wr_array(i),      -- head (which is used to create addresse to which we write in RAM)
+        rd_addr_o   => rd_array(i)       -- tail (which is used to create addresse from which we aread from RAM) 
         );
     full_array(i) <= not not_full_array(i);
+  --------------------------------------------------------------------------------------------------
   end generate queue_ctrl ;
+  --------------------------------------------------------------------------------------------------
 
   PRIO_QUEUE: swc_rd_wr_ram
     generic map (
@@ -420,8 +427,7 @@ begin  --  behavoural
       wd_i  => wr_data_reg,
       ra_i  => ram_rd_addr, --rd_addr,
       rd_o  => rd_data);
-  
-  
+    
   --PRIO_QUEUE : generic_dpram
   --  generic map (
   --    g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
@@ -686,13 +692,14 @@ begin  --  behavoural
         if(start_free_pck = '1' and ppfm_free = '1') then
           start_free_pck <= '0';
         end if;
-        request_retry  <= '0';
+        
 
         case s_send_pck is
           --===========================================================================================
           when S_IDLE =>
             --===========================================================================================   
-
+            request_retry  <= '0';
+            
             if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0') then
               src_out_int.cyc  <= '1';
               s_send_pck       <= S_DATA;
@@ -781,8 +788,10 @@ begin  --  behavoural
             --===========================================================================================
           when S_RETRY =>
             --===========================================================================================        
+            request_retry   <= '1';
             if(s_prep_to_send = S_RETRY_READY) then
               src_out_int.cyc  <= '1';
+              request_retry    <= '0';
               s_send_pck       <= S_DATA;
               pck_start_pgaddr <= mpm_pg_addr;
             end if;

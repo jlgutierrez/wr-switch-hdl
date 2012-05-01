@@ -177,6 +177,7 @@ entity swc_page_allocator is
                                         -- multiport scheduler can optimize
                                         -- it's performance
 
+
     nomem_o : out std_logic;
 
     --------------------------- resource management ----------------------------------
@@ -193,6 +194,15 @@ entity swc_page_allocator is
     
     -- number of pages added to the resurce
     rescnt_page_num_i             : in  std_logic_vector(g_page_addr_width   -1 downto 0);
+
+    -- valid when (done_o and usecnt_i) = HIGH
+    -- set_usecnt_succeeded_o = LOW ->> indicates that the usecnt was not set and the resources
+    --                                were not moved from unknown to resource_o because there is
+    --                                not enough resources
+    -- set_usecnt_succeeded_o = HIGH->> indicates that usecnt_i requres was handled successfully    
+    set_usecnt_succeeded_o        : out std_logic;
+    
+
     res_full_o                    : out std_logic_vector(g_resource_num      -1 downto 0);
     res_almost_full_o             : out std_logic_vector(g_resource_num      -1 downto 0)
 
@@ -218,7 +228,7 @@ architecture syn of swc_page_allocator is
 
   type t_state is (IDLE, ALLOC_LOOKUP_L1, ALLOC_LOOKUP_L0_UPDATE,
                    FREE_CHECK_USECNT, FREE_RELEASE_PAGE, FREE_DECREASE_UCNT,
-                   SET_UCNT, NASTY_WAIT, DUMMY  --, FORCE_FREE_RELEASE_PAGE
+                   SET_UCNT,NOT_SET_UCNT, NASTY_WAIT, DUMMY  --, FORCE_FREE_RELEASE_PAGE
                    );
 
   -- this represents high part of the page address (bit mapping)
@@ -285,6 +295,8 @@ architecture syn of swc_page_allocator is
   signal res_mgr_free            : std_logic;
   signal res_mgr_res_num         : std_logic_vector(g_resource_num_width-1 downto 0);
   signal res_mgr_rescnt_set      : std_logic;
+  signal set_usecnt_succeeded    : std_logic;
+  signal res_almost_full         : std_logic_vector(g_resource_num      -1 downto 0);
 -----------------------------
 
 begin  -- syn
@@ -382,6 +394,8 @@ begin  -- syn
         was_reset                      <= '1';
         first_addr                     <= '1';
         
+        set_usecnt_succeeded           <= '0';
+        
       elsif(was_reset = '1') then
         
         if(first_addr = '1') then
@@ -409,11 +423,10 @@ begin  -- syn
             l0_wr          <= '0';
             pgaddr_valid_o <= '0';
             usecnt_mem_wr  <= '0';
-
             page_freeing_in_last_operation <= '0';
             --usecnt_mem_rdaddr <= pgaddr_i;
             usecnt_mem_wraddr              <= pgaddr_i;
-
+            set_usecnt_succeeded           <= '0';
             -- check if we have any free blocks and drive the nomem_o line.
             -- last address (all '1') reserved for end-of-page marker in
             -- linked list
@@ -492,10 +505,21 @@ begin  -- syn
             if(set_usecnt_i = '1') then
               
               idle_o            <= '0';
-              state             <= SET_UCNT;
-              usecnt_mem_wrdata <= usecnt_i;
-              rescnt_mem_wrdata <= resource_i;
-              usecnt_mem_wraddr <= pgaddr_i;
+               
+              -- check if we have enough resources !!!!
+              if(res_almost_full(to_integer(unsigned(resource_i))) = '1') then
+                -- not enough to accommodate max size frame, sorry we cannot serve the request
+                state                <= NOT_SET_UCNT;       
+                set_usecnt_succeeded <= '0';
+              else
+                -- enough resources
+                state                <= SET_UCNT;              
+                usecnt_mem_wrdata    <= usecnt_i;
+                rescnt_mem_wrdata    <= resource_i;
+                usecnt_mem_wraddr    <= pgaddr_i;
+                set_usecnt_succeeded <= '1';
+
+              end if;
               done              <= '1';  -- assert the done signal early enough
                                          -- so the multiport allocator will also
                                          -- take 3 cycles per request
@@ -611,17 +635,23 @@ begin  -- syn
 
             --   fprint(fout, l, "     Free page: %d (usecnt = %d)\n",fo(tmp_page),fo(std_logic_vector(unsigned(usecnt_mem_rddata) - 1)));
 
-            
           when SET_UCNT =>
             
-            usecnt_mem_wrdata <= usecnt_i;
-            rescnt_mem_wrdata <= resource_i;
-            usecnt_mem_wr     <= '1';
-            state             <= IDLE;
-            done              <= '0';
+            usecnt_mem_wrdata    <= usecnt_i;
+            rescnt_mem_wrdata    <= resource_i;
+            usecnt_mem_wr        <= '1';
+            state                <= IDLE;
+            done                 <= '0';
+            set_usecnt_succeeded <= '0';
 
             --    fprint(fout, l, "     Usecnt set: %d (usecnt = %d)\n",fo(tmp_page),fo(usecnt_i));
-            
+
+          when NOT_SET_UCNT =>
+
+            state                <= IDLE;
+            done                 <= '0';          
+            set_usecnt_succeeded <= '0';
+                        
           when others =>
             state  <= IDLE;
             done   <= '0';
@@ -648,7 +678,8 @@ begin  -- syn
   done_o                  <= done;
   free_last_usecnt_o      <= free_last_usecnt;
   resource_o              <= rescnt_mem_rddata;
-
+  set_usecnt_succeeded_o  <= set_usecnt_succeeded;
+  res_almost_full_o       <= res_almost_full;
   --------------------------------------------------------------------------------------------------
   --                               Resource Manager logic and instantiation
   --------------------------------------------------------------------------------------------------
@@ -657,7 +688,7 @@ begin  -- syn
   res_mgr_free            <= ((free_i and free_last_usecnt) or force_free_i) and done;
   res_mgr_res_num         <= rescnt_mem_rddata  when (free_resource_valid_i='0' and (free_i='1' or force_free_i='1')) else 
                              resource_i;
-  res_mgr_rescnt_set      <= set_usecnt_i and done;
+  res_mgr_rescnt_set      <= set_usecnt_i and done and set_usecnt_succeeded;
   
   ------ resource management 
   RESOURCE_MANAGEMENT: swc_alloc_resource_manager
@@ -680,7 +711,7 @@ begin  -- syn
     rescnt_set_i             => res_mgr_rescnt_set,
     rescnt_page_num_i        => rescnt_page_num_i,
     res_full_o               => res_full_o,
-    res_almost_full_o        => res_almost_full_o
+    res_almost_full_o        => res_almost_full
     );
   
 end syn;

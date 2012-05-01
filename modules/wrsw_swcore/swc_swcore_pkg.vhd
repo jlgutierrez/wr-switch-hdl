@@ -120,6 +120,7 @@ package swc_swcore_pkg is
       resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
       free_resource_valid_i : in std_logic;
       rescnt_page_num_i      : in  std_logic_vector(g_page_addr_width -1 downto 0);
+      set_usecnt_succeeded_o : out std_logic;
       res_full_o             : out std_logic_vector(g_resource_num    -1 downto 0);
       res_almost_full_o      : out std_logic_vector(g_resource_num    -1 downto 0)            
       );
@@ -234,6 +235,7 @@ package swc_swcore_pkg is
 --    mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
     mmu_resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
     mmu_rescnt_page_num_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
+    mmu_set_usecnt_succeeded_i : in  std_logic;
     mmu_res_almost_full_i      : in  std_logic_vector(g_resource_num   -1 downto 0); 
     mmu_res_full_i             : in  std_logic_vector(g_resource_num   -1 downto 0);
 
@@ -311,6 +313,7 @@ package swc_swcore_pkg is
       force_free_resource_i       : in  std_logic_vector(g_num_ports * g_resource_num_width - 1 downto 0);
       force_free_resource_valid_i : in  std_logic_vector(g_num_ports                        - 1 downto 0);
       rescnt_page_num_i      : in  std_logic_vector(g_num_ports * g_page_addr_width-1 downto 0);
+      set_usecnt_succeeded_o : out std_logic_vector(g_num_ports                    -1 downto 0);
       res_full_o             : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0);
       res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0)    
       );
@@ -416,6 +419,53 @@ package swc_swcore_pkg is
   end component;
   
   component xswc_output_block is
+    generic ( 
+      g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
+      g_output_block_per_queue_fifo_size : integer ;--:= c_swc_output_fifo_size
+      g_queue_num_width                  : integer ;--
+      g_queue_num                        : integer ;--      
+      g_prio_num_width                   : integer ;--
+      -- new stuff
+      g_mpm_page_addr_width              : integer ;--:= c_swc_page_addr_width;
+      g_mpm_data_width                   : integer ;--:= c_swc_page_addr_width;
+      g_mpm_partial_select_width         : integer ;
+      g_mpm_fetch_next_pg_in_advance     : boolean := false;
+      g_mmu_resource_num_width           : integer;
+      g_wb_data_width                    : integer ;
+      g_wb_addr_width                    : integer ;
+      g_wb_sel_width                     : integer ;
+      g_wb_ob_ignore_ack                 : boolean := true;
+      g_drop_outqueue_head_on_full       : boolean := true                 
+    );
+    port (
+      clk_i   : in std_logic;
+      rst_n_i : in std_logic;
+      pta_transfer_data_valid_i : in   std_logic;
+      pta_pageaddr_i            : in   std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+      pta_prio_i                : in  std_logic_vector(g_prio_num_width         - 1 downto 0);
+      pta_broadcast_i           : in  std_logic;
+      pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);      
+      pta_transfer_data_ack_o   : out  std_logic;
+      mpm_d_i        : in  std_logic_vector (g_mpm_data_width -1 downto 0);
+      mpm_dvalid_i   : in  std_logic;
+      mpm_dlast_i    : in  std_logic;
+      mpm_dsel_i     : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
+      mpm_dreq_o     : out std_logic;
+      mpm_abort_o    : out std_logic;
+      mpm_pg_addr_o  : out std_logic_vector (g_mpm_page_addr_width -1 downto 0);
+      mpm_pg_valid_o : out std_logic;
+      mpm_pg_req_i   : in  std_logic;   
+      ppfm_free_o            : out  std_logic;
+      ppfm_free_done_i       : in   std_logic;
+      ppfm_free_pgaddr_o     : out  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+      src_i : in  t_wrf_source_in;
+      src_o : out t_wrf_source_out;
+      tap_out_o : out std_logic_vector(15 downto 0)
+
+      );
+  end component;
+
+  component xswc_output_block_new is
     generic ( 
       g_max_pck_size_width               : integer ;--:= c_swc_max_pck_size_width  
       g_output_block_per_queue_fifo_size : integer ;--:= c_swc_output_fifo_size

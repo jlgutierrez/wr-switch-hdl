@@ -44,7 +44,7 @@
 
 `define  c_pck_pg_free_fifo_size            ((65536/64)/2)    //c_swc_freeing_fifo_size,
 `define  c_input_block_cannot_accept_data    "drop_pck"       //"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
-`define  c_output_block_per_queue_fifo_size  64               //c_swc_output_fifo_size,
+`define  c_output_block_per_queue_fifo_size  16               //c_swc_output_fifo_size,
 
 `define array_copy(a, ah, al, b, bl) \
    for (k=al; k<=ah; k=k+1) a[k] <= b[bl+k-al];

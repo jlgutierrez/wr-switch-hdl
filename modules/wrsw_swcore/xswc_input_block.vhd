@@ -175,6 +175,7 @@ entity xswc_input_block is
 
     -- number of pages added to the resurce
     mmu_rescnt_page_num_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
+    mmu_set_usecnt_succeeded_i : in  std_logic;
     mmu_res_full_i             : in  std_logic_vector(g_resource_num   -1 downto 0);
     mmu_res_almost_full_i      : in  std_logic_vector(g_resource_num   -1 downto 0); 
 
@@ -639,6 +640,8 @@ constant c_force_usecnt             : boolean := TRUE;
   
   -- a currently requested resource is full
   signal res_info_full              : std_logic;
+  
+  signal dbg_dropped_on_res_full    : std_logic;
 begin  --arch
   
   zeros <= (others => '0');
@@ -1389,7 +1392,7 @@ begin
         current_res_info  <= res_info;
         current_broadcast <= rtu_broadcast_i;
         current_prio      <= rtu_prio_i;
-        current_drop      <= rtu_drop_i or res_info_almsot_full;
+        current_drop      <= rtu_drop_i;-- or res_info_almsot_full;
         current_usecnt    <= rtu_dst_port_usecnt;
 
         rtu_rsp_ack <= '1';
@@ -1646,6 +1649,11 @@ begin
 
             -- error coming from rcv_pck FSM, ignore transfer
             if (rp_in_pck_error = '1') then
+              s_transfer_pck <= S_DROP;
+              
+            -- there is no resources available so the set_usecnt operation was not successfull
+            -- we need to drop the pck
+            elsif(mmu_set_usecnt_succeeded_i = '0') then
               s_transfer_pck <= S_DROP;
             else
               -- first page is cleared in the Linked List      
@@ -2029,7 +2037,7 @@ lw_sync_2nd_stage_chk <= '1' when (page_word_cnt = to_unsigned(g_page_size - 3, 
 
 -- transfer_pck FSM sync (tp): needs to be true for rcv_pck to enter READY state
 tp_sync <= '1' when (s_transfer_pck = S_IDLE or               -- 
-                                  s_transfer_pck = S_DROP or  -- 
+                                 -- s_transfer_pck = S_DROP or  -- 
                                   s_transfer_pck = S_TRANSFERED) else '0';
 
 -- rcv_pck FSM is sync-ed                                  
@@ -2175,7 +2183,7 @@ ll_next_addr_valid_o                    <= ll_entry.next_page_valid;
 ll_wr_req_o                             <= ll_wr_req;
 
 
-
+dbg_dropped_on_res_full <= pckstart_usecnt_req and mmu_set_usecnt_done_i and (not mmu_set_usecnt_succeeded_i);
 
 tap_out_o <= f_slv_resize(              -- 
  -- f_enum2nat(s_rcv_pck) &               --
