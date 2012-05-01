@@ -117,7 +117,7 @@ architecture behavioral of mpm_rpath_io_block is
 
 
   -- Page fetcher signals
-  type   t_page_fetch_state is (FIRST_PAGE, NEXT_LINK, WAIT_LAST_ACK, WAIT_ACK);
+  type   t_page_fetch_state is (FIRST_PAGE, NEXT_LINK, WAIT_LAST_ACK, WAIT_ACK, NASTY_WAIT);
   signal page_state : t_page_fetch_state;
   signal cur_page   : std_logic_vector(g_page_addr_width-1 downto 0);
   signal cur_ll     : t_ll_entry;
@@ -175,6 +175,7 @@ architecture behavioral of mpm_rpath_io_block is
   signal min_pck_size_reached : std_logic;
   
   signal d_counter_equal : std_logic;
+  signal d_pre_fetch     : std_logic;
 begin  -- behavioral
 
 
@@ -208,6 +209,7 @@ begin  -- behavioral
   wait_next_valid_ll_read <= '1' when ((words_total <  words_xmitted+2) and 
                                        last_int   = '0'               and 
                                        page_state  /= FIRST_PAGE        and
+                                       d_pre_fetch  = '0'               and
                                        fetch_first  = '0' )             else '0';
   min_pck_size_reached  <= '0' when (start_cnt < to_unsigned(g_min_packet_size, start_cnt'length ) ) else '1';
   
@@ -216,8 +218,15 @@ begin  -- behavioral
   begin
     if rising_edge(clk_io_i) then
       if rst_n_io_i = '0' or (last_int = '1' and d_valid_int = '1') then
-        words_total     <= (others => '0');
-        dsel_words_total<= (others => '0');
+        -- ML : pre-fetching
+        if(d_pre_fetch = '1') then
+          words_total      <= resize(fetch_pg_words, words_total'length);
+          dsel_words_total <= resize(fetch_dsel_words, dsel_words_total'length);          
+        else
+          words_total     <= (others => '0');
+          dsel_words_total<= (others => '0');
+        end if;
+        -----
         words_xmitted   <= to_unsigned(1, words_xmitted'length);
         -- ML
         -- last_int      <= '0'; 
@@ -235,9 +244,10 @@ begin  -- behavioral
           words_xmitted <= words_xmitted + 1;
         end if;
 
-        if(fetch_ack = '1') then
+        if(fetch_ack = '1' and d_pre_fetch = '0') then
         --if(fetch_valid = '1') then
-          if(fetch_first = '1') then
+          --if(fetch_first = '1') then -- ML : prefetching
+          if(fetch_first = '1' ) then
             words_total      <= resize(fetch_pg_words, words_total'length);
             dsel_words_total <= resize(fetch_dsel_words, dsel_words_total'length);
           else
@@ -276,6 +286,25 @@ begin  -- behavioral
       end if;
     end if;
   end process;
+
+  p_gen_pre_fetch : process(clk_io_i)
+  begin
+    if rising_edge(clk_io_i) then
+      if rst_n_io_i = '0' then
+        d_pre_fetch <= '0';
+      else
+        
+        if(fetch_last = '1' and rport_pg_valid_i = '1' and df_empty_i = '0') then
+          d_pre_fetch <= '1';
+        elsif(d_pre_fetch='1' and last_int = '1') then
+          d_pre_fetch <= '0';
+        end if;
+
+      end if;
+    end if;
+  end process;
+
+
 
   df_flush_o <= last_int;-- counters_equal;
   
@@ -344,7 +373,7 @@ begin  -- behavioral
 
         if((cur_ll.valid = '1' or min_pck_size_reached = '1' or page_state = WAIT_ACK or page_state = WAIT_LAST_ACK) and fetch_first = '1') then
           wait_first_fetched <='0';
-        elsif(fetch_first = '1' and (df_empty_i = '0' or min_pck_size_reached = '0')) then
+        elsif(fetch_first = '1' and (df_empty_i = '0' or min_pck_size_reached = '0') and  d_pre_fetch = '0') then
           wait_first_fetched <='1';
         end if;
 
@@ -400,7 +429,11 @@ begin  -- behavioral
                 fetch_pg_addr  <= cur_page;
                 fetch_pg_addr  <= cur_page;
                 fvalid_int     <= '1';
-                fetch_last     <= '0';
+                if(fetch_first = '1') then -- prefetching conditin
+                  fetch_last     <= '1';
+                else                       -- normal condition
+                  fetch_last     <= '0';
+                end if;
               end if;
               ll_req_int <= '0';
             else
@@ -414,9 +447,11 @@ begin  -- behavioral
               ll_req_int    <= '1';
               fetch_first <= '0';
               fvalid_int  <= '0';
-
-
-              page_state <= NEXT_LINK;
+              if(d_pre_fetch = '1' and last_int = '0') then
+                page_state     <= NASTY_WAIT;
+              else
+                page_state <= NEXT_LINK;
+              end if;
             end if;
 
           when WAIT_LAST_ACK =>
@@ -426,7 +461,13 @@ begin  -- behavioral
               fvalid_int     <= '0';
               page_state     <= FIRST_PAGE;
             end if;
-            
+          when NASTY_WAIT =>
+            if(fetch_abort = '1') then
+              page_state <= FIRST_PAGE;
+              fetch_last     <= '0';
+            elsif(last_int = '1') then
+              page_state <= NEXT_LINK;
+            end if;
         end case;
       end if;
     end if;
