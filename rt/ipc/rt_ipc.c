@@ -12,6 +12,8 @@
 #include <sys/types.h>
 
 #include "minipc.h"
+
+#define RTIPC_EXPORT_STRUCTURES
 #include "rt_ipc.h"
 
 #include <softpll_ng.h>
@@ -102,7 +104,8 @@ void rts_update()
 {
     int i;
     int n_ref;
-
+		int enabled;
+		
     spll_get_num_channels(&n_ref, NULL);
 
     pstate.flags = (spll_check_lock(0) ? RTS_DMTD_LOCKED | RTS_REF_LOCKED : 0);
@@ -124,8 +127,11 @@ void rts_update()
 		            if(spll_shifter_busy(0))
 		            	CH.flags |= CHAN_SHIFTING;
 						}
-            if(spll_read_ptracker(i, &CH.phase_loopback))
-            CH.flags |= CHAN_PMEAS_READY;
+            if(spll_read_ptracker(i, &CH.phase_loopback, &enabled))
+	            CH.flags |= CHAN_PMEAS_READY;
+	          
+	          CH.flags |= (enabled ? CHAN_PTRACKER_ENABLED : 0);
+
         }
 
 #undef CH
@@ -152,7 +158,8 @@ static int rts_get_state_func(const struct minipc_pd *pd, uint32_t *args, void *
     tmp->flags = htonl(pstate.flags);
     tmp->holdover_duration = htonl(pstate.holdover_duration);
     tmp->mode = htonl(pstate.mode);
-
+		tmp->delock_count = spll_get_delock_count();
+		
     for(i=0; i<RTS_PLL_CHANNELS;i++)
     {
         tmp->channels[i].priority = htonl(pstate.channels[i].priority);
@@ -181,47 +188,11 @@ static int rts_adjust_phase_func(const struct minipc_pd *pd, uint32_t *args, voi
     *(int *) ret = rts_adjust_phase((int)args[0], (int)args[1]);
 }
 
+static int rts_enable_ptracker_func(const struct minipc_pd *pd, uint32_t *args, void *ret)
+{
+    *(int *) ret = spll_enable_ptracker((int)args[0], (int)args[1]);
+}
 
-const struct minipc_pd rtipc_rts_get_state_struct = {
-	.f = rts_get_state_func,
-	.name = "aaaa",
-	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_STRUCT, struct rts_pll_state),
-	.args = {
-		MINIPC_ARG_END
-	},
-};
-
-const struct minipc_pd rtipc_rts_set_mode_struct = {
-	.f = rts_set_mode_func,
-	.name = "bbbb",
-	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
-	.args = {
-	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
-	    MINIPC_ARG_END
-	},
-};
-
-const struct minipc_pd rtipc_rts_lock_channel_struct = {
-	.f = rts_lock_channel_func,
-	.name = "cccc",
-	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
-	.args = {
-	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
-	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
-	    MINIPC_ARG_END
-	},
-};
-
-const struct minipc_pd rtipc_rts_adjust_phase_struct = {
-	.f = rts_adjust_phase_func,
-	.name = "dddd",
-	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
-	.args = {
-	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
-	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
-	    MINIPC_ARG_END
-	},
-};
 
 
 /* The mailbox is mapped at 0x7000 in the linker script */
@@ -235,10 +206,17 @@ int rtipc_init()
 	if (!server)
 		return 1;
 
+	rtipc_rts_set_mode_struct.f = rts_set_mode_func;
+	rtipc_rts_get_state_struct.f = rts_get_state_func;
+	rtipc_rts_lock_channel_struct.f = rts_lock_channel_func;
+	rtipc_rts_adjust_phase_struct.f = rts_adjust_phase_func;
+	rtipc_rts_enable_ptracker_struct.f = rts_enable_ptracker_func;
+	
 	minipc_export(server, &rtipc_rts_set_mode_struct);
 	minipc_export(server, &rtipc_rts_get_state_struct);
 	minipc_export(server, &rtipc_rts_lock_channel_struct);
-    minipc_export(server, &rtipc_rts_adjust_phase_struct);
+  minipc_export(server, &rtipc_rts_adjust_phase_struct);
+  minipc_export(server, &rtipc_rts_enable_ptracker_struct);
 
 
 	return 0;

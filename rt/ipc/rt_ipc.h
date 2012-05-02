@@ -18,6 +18,8 @@
 #define CHAN_DISABLED (1<<4)
 /* Channel is busy adjusting phase */
 #define CHAN_SHIFTING (1<<5)
+/* Channel is busy adjusting phase */
+#define CHAN_PTRACKER_ENABLED (1<<6)
 
 /* DMTD clock is present */
 #define RTS_DMTD_LOCKED (1<<0)
@@ -83,6 +85,8 @@ struct rts_pll_state {
 
 	/* mode of operation (RTS_MODE_xxx) */
 	uint32_t mode;
+
+	uint32_t delock_count;
 };
 
 /* API */
@@ -99,5 +103,58 @@ int rts_set_mode(int mode);
 /* Reference channel configuration (BC mode only) */
 int rts_lock_channel(int channel, int priority);
 
+/* Enabled/disables phase tracking on a particular port */
+int rts_enable_ptracker(int channel, int enable);
+
+#ifdef RTIPC_EXPORT_STRUCTURES
+
+static struct minipc_pd rtipc_rts_get_state_struct = {
+	.name = "aaaa",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_STRUCT, struct rts_pll_state),
+	.args = {
+		MINIPC_ARG_END
+	},
+};
+
+static struct minipc_pd rtipc_rts_set_mode_struct = {
+	.name = "bbbb",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
+	.args = {
+	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
+	    MINIPC_ARG_END
+	},
+};
+
+static struct minipc_pd rtipc_rts_lock_channel_struct = {
+	.name = "cccc",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
+	.args = {
+	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
+	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
+	    MINIPC_ARG_END
+	},
+};
+
+static struct minipc_pd rtipc_rts_adjust_phase_struct = {
+	.name = "dddd",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
+	.args = {
+	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
+	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
+	    MINIPC_ARG_END
+	},
+};
+
+static struct minipc_pd rtipc_rts_enable_ptracker_struct = {
+	.name = "eeee",
+	.retval = MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int),
+	.args = {
+	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
+	    MINIPC_ARG_ENCODE(MINIPC_ATYPE_INT, int ),
+	    MINIPC_ARG_END
+	},
+};
+
+#endif
 
 #endif
