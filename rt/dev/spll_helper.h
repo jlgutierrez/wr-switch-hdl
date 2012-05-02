@@ -17,6 +17,7 @@ struct spll_helper_state {
  	int p_setpoint, tag_d0;
  	int ref_src;
  	int sample_n;
+ 	int delock_count;
  	spll_pi_t pi; 
  	spll_lock_det_t ld;
 };
@@ -27,16 +28,17 @@ static void helper_init(struct spll_helper_state *s, int ref_channel)
 	/* Phase branch PI controller */
 	s->pi.y_min = 5;
 	s->pi.y_max = (1 << DAC_BITS) - 5;
- 	s->pi.kp = (int)(0.3 * 32.0 * 16.0);
-	s->pi.ki = (int)(0.03 * 32.0 * 3.0); 
+ 	s->pi.kp = (int)(0.3 * 32.0 * 16.0);// / 2;
+	s->pi.ki = (int)(0.03 * 32.0 * 3.0);// / 2; 
 	
 	s->pi.anti_windup = 1;
 	
 	/* Phase branch lock detection */
 	s->ld.threshold = 200;
-	s->ld.lock_samples = 1000;
-	s->ld.delock_samples = 900;
+	s->ld.lock_samples = 10000;
+	s->ld.delock_samples = 100;
 	s->ref_src = ref_channel;
+	s->delock_count = 0;
 }
 
 static int helper_update(struct spll_helper_state *s, int tag, int source)

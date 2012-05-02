@@ -25,6 +25,7 @@ struct spll_main_state {
  	int phase_shift_current;
 	int id_ref, id_out; /* IDs of the reference and the output channel */
 	int sample_n;
+	int delock_count;
 };
 
 
@@ -35,13 +36,14 @@ static void mpll_init(struct spll_main_state *s, int id_ref, int id_out)
 	s->pi.y_max = 65530;
 	s->pi.anti_windup = 1;
 	s->pi.bias = 65000;
-	s->pi.kp = 1100;
-	s->pi.ki = 30;
+	s->pi.kp = 1100;// / 2;
+	s->pi.ki = 30;// / 2;
+	s->delock_count = 0;
 
 	/* Freqency branch lock detection */
-	s->ld.threshold = 120;
-	s->ld.lock_samples = 400;
-	s->ld.delock_samples = 390;
+	s->ld.threshold = 1200;
+	s->ld.lock_samples = 1000;
+	s->ld.delock_samples = 100;
 	s->id_ref = id_ref;
 	s->id_out = id_out;
 
