@@ -793,7 +793,9 @@ begin  --arch
         mpm_dlast           <= '0';
         mpm_dvalid          <= '0';
         in_pck_eof_on_pause <= '0';
-        new_pck_first_page  <= '0';
+        --if(s_ll_write = S_WRITE) then
+          new_pck_first_page  <= '0';
+        --end if;
 
         case s_rcv_pck is
           --===========================================================================================
@@ -1096,7 +1098,7 @@ begin  --arch
   -- requestd, but the request takes time (more then 1 cycle). so we delay setting of 
   -- *rp_rcv_first_page* to be able to copie the addr to be clearted (in ll_write FSM) from 
   -- current_pckstart_pageaddr in case *rp_rcv_first_page* is asserted
-  if(new_pck_first_page = '1') then
+  if(new_pck_first_page = '1' and rp_rcv_first_page = '0') then
     rp_rcv_first_page <= '1';
   elsif((mpm_pg_req_i = '1' or mpm_dlast = '1') and rp_rcv_first_page = '1') then
     rp_rcv_first_page <= '0';

@@ -565,7 +565,8 @@ begin  --  behavoural
               s_prep_to_send              <= S_RETRY_PREPARE;
               mpm_pg_addr_memorized_valid <= '1';
               mpm_pg_addr_memorized       <= mpm_pg_addr;
-            elsif(mpm_dlast_i = '1') then
+            --elsif(mpm_dlast_i = '1') then
+            elsif(s_send_pck = S_EOF) then
               s_prep_to_send <= S_NEWPCK_PAGE_READY;
             end if;
           --===========================================================================================
