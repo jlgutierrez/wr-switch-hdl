@@ -178,6 +178,11 @@ architecture behavioral of mpm_rpath_io_block is
   signal pre_fetch       : std_logic;
   signal supress_pre_fetch       : std_logic;
   
+  -- indicates the count (word number) from which the last page starts,
+  -- this is to activate output req_page signal only on last page
+  signal last_pg_start_ptr  : unsigned(c_word_count_width-1 downto 0);
+  signal allow_rport_pg_req : std_logic;
+  
 begin  -- behavioral
 
 
@@ -360,6 +365,22 @@ begin  -- behavioral
       end if;
     end if;  
   end process;
+  
+--   p_delay_pg_req : process(clk_io_i)
+--   begin
+--     if rising_edge(clk_io_i) then
+--       if rst_n_io_i = '0'  then
+--         allow_rport_pg_req <= '0';
+--       else
+--         if(words_xmitted >= last_pg_start_ptr	) then
+--           allow_rport_pg_req <='1';
+--         elsif(page_state = NEXT_LINK ) then
+--           allow_rport_pg_req <='0';
+--         end if;
+-- 
+--       end if;
+--     end if;  
+--   end process;
 
   p_page_fsm : process(clk_io_i)
   begin
@@ -376,6 +397,7 @@ begin  -- behavioral
         fetch_oob_dsel  <=  (others =>'0');
         wait_first_fetched <='1';
         fetch_first     <= '0';
+        last_pg_start_ptr <= (others => '0');
       else
 
         ll_grant_d0 <= ll_grant_i;
@@ -399,7 +421,8 @@ begin  -- behavioral
               ll_addr_o      <= rport_pg_addr_i;
               page_state     <= NEXT_LINK;
               fetch_first    <= '1';
-            else
+            --else
+            elsif(words_xmitted >= last_pg_start_ptr) then -- ML: to delay req -- only during last page
               rport_pg_req <= '1';
             end if;
 
@@ -424,7 +447,18 @@ begin  -- behavioral
                 fetch_last     <= '1';
                 fetch_dsel       <= cur_ll.dsel;
                 fetch_dsel_words <= unsigned(cur_ll.size) - unsigned(cur_ll.oob_size);
+                
+                -- remember the total up to before the last page starts
+                if(fetch_first = '1') then -- this is first and last page
+                  last_pg_start_ptr <= resize(unsigned(cur_ll.size), words_total'length );
+                else
+                  last_pg_start_ptr <= words_total;
+                end if;
+                
               else
+              
+                last_pg_start_ptr <= (others =>'0');
+                
                 page_state <= WAIT_ACK;
                 
                 if(unsigned(cur_ll.oob_size) /= to_unsigned(0, c_max_oob_size_width)) then
@@ -454,19 +488,26 @@ begin  -- behavioral
             if(fetch_abort = '1') then
               page_state <= FIRST_PAGE;
             elsif(fetch_ack = '1') then
-              ll_req_int    <= '1';
+              --ll_req_int    <= '1';
               fetch_first <= '0';
               fvalid_int  <= '0';
               if(pre_fetch = '1' and last_int = '0') then
+                ll_req_int    <= '0';
                 page_state     <= NASTY_WAIT;
               else
+                ll_req_int    <= '1';
                 page_state <= NEXT_LINK;
               end if;
             end if;
 
           when WAIT_LAST_ACK =>
             if(fetch_ack = '1') then
-              rport_pg_req <= '1';
+              if(words_xmitted >= last_pg_start_ptr) then -- ML: to delay req -- only during last page
+                rport_pg_req <= '1';
+              else
+                rport_pg_req <= '0';
+              end if;
+              
               fetch_first    <= '0';
               fvalid_int     <= '0';
               page_state     <= FIRST_PAGE;
