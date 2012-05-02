@@ -879,6 +879,10 @@ begin  --arch
             --===========================================================================================
           when S_RCV_DATA =>
             --===========================================================================================
+            -- to extend the span of new_pck_first_page into s_ll_write = S_IDLE, when there is S_SOF
+            if(s_ll_write = S_SOF_ON_WR and new_pck_first_page = '1') then
+              new_pck_first_page <='1';
+            end if;
             if(in_pck_dvalid = '1') then
               in_pck_dvalid_d0 <= in_pck_dvalid;
               in_pck_dat_d0    <= in_pck_dat;
