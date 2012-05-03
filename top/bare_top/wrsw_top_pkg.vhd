@@ -259,25 +259,25 @@ package wrsw_top_pkg is
   end component;
   component xswc_core is
     generic( 
-      g_prio_num                         : integer ;
-      g_max_pck_size                     : integer ;
+      g_prio_num                         : integer ;--:= c_swc_output_prio_num; [works only for value of 8, output_block-causes problem]
+      g_output_queue_num                 : integer ;
+      g_max_pck_size                     : integer ;-- in 16bits words --:= c_swc_max_pck_size
       g_max_oob_size                     : integer ;
-      g_num_ports                        : integer ;
-      g_pck_pg_free_fifo_size            : integer ;
-      g_input_block_cannot_accept_data   : string  ;
-      g_output_block_per_prio_fifo_size  : integer ;
-
+      g_num_ports                        : integer ;--:= c_swc_num_ports
+      g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
+      g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
+      g_output_block_per_queue_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;
       g_wb_sel_width                     : integer ;
-      g_wb_ob_ignore_ack                 : boolean ;
-      
-      g_mpm_mem_size                     : integer ;
-      g_mpm_page_size                    : integer ;
+      g_wb_ob_ignore_ack                 : boolean := true ;
+      g_mpm_mem_size                     : integer ; -- in 16bits words 
+      g_mpm_page_size                    : integer ; -- in 16bits words 
       g_mpm_ratio                        : integer ;
       g_mpm_fifo_size                    : integer ;
-      g_mpm_fetch_next_pg_in_advance     : boolean
-      );
+      g_mpm_fetch_next_pg_in_advance     : boolean ;
+      g_drop_outqueue_head_on_full       : boolean
+    );
    port (
       clk_i          : in std_logic;
       clk_mpm_core_i : in std_logic;
