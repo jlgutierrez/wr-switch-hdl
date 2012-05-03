@@ -223,6 +223,7 @@ module main_generic;
       //pkt.set_size(100);
       
       q.push_back(pkt);
+      //set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
 //      fork
 //        begin
           src[port].send(pkt);
@@ -235,7 +236,7 @@ module main_generic;
 	  //$display("rtu wait: %4d cycles",tmp_rtu_wait);
 	  
 	  
-          set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
+         set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
 //        end        
 //      join
       if(dbg) $display("Sent     @ port_%1d to mask=0x%x [with prio=%1d, drop=%1d ]!", port, mask, prio, drop);
@@ -428,7 +429,10 @@ module main_generic;
       EthPacketGenerator gen;
       int j;
       int n_ports = `c_num_ports;
-      int mask_opt=1;//1;     
+      //int mask_opt=0; // sent to "random" ports;     
+      int mask_opt=1;// send to the same port (one);     
+      //int mask_opt=2;// send to N+1 port (one);     
+      //int mask_opt=3;// send to port 0;     
       int n_packets =200; //200
       // initialization
       initPckSrcAndSink(src, sink, n_ports);
@@ -438,16 +442,23 @@ module main_generic;
       
       @(posedge rst_n);
       @(posedge clk);
-      wait_cycles(500);
+      wait_cycles(600);
       
 //      for(j=0;j<30;j++)
 //        send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 1 /*mask*/);    
 
       //for(j=0;j<`c_num_ports;j++) begin
       
-     // U_wrf_sink[0].permanent_stall_enable();
+      U_wrf_sink[0].permanent_stall_enable();
 
-      
+      U_wrf_sink[0].settings.gen_random_stalls = 0;
+      U_wrf_sink[1].settings.gen_random_stalls = 0;
+      U_wrf_sink[2].settings.gen_random_stalls = 0;
+      U_wrf_sink[3].settings.gen_random_stalls = 0;
+      U_wrf_sink[4].settings.gen_random_stalls = 0;
+      U_wrf_sink[5].settings.gen_random_stalls = 0; 
+      U_wrf_sink[6].settings.gen_random_stalls = 0; 
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
        fork 
           begin
@@ -460,15 +471,21 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
-              else
+              else if (mask_opt == 2)
                 mask = (1<<((p+1)%(`c_num_ports)));	      
-              mask = 1;
+              else if (mask_opt == 3)
+                mask = 1;
+              else
+		$display("wrong mask_opt");
+
               prio = (z%8);
-	      if(prio != 7) prio = 0;
+	      if     (prio == 7) prio = 7;
+	      else if(prio == 6) prio = 2;
+	      else               prio = 0;
               send_random_packet(src,txed, p, 0, prio, mask);  
             end
           end
-/*         
+      
           begin
             automatic int  p = 1;
             automatic bit [`c_num_ports:0] mask;
@@ -479,13 +496,20 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
-              else
+              else if (mask_opt == 2)
                 mask = (1<<((p+1)%(`c_num_ports)));	      
-	      prio = (z%8);
-              send_random_packet(src,txed, p, 0,7 , mask);  
+              else if (mask_opt == 3)
+                mask = 1;
+              else
+		$display("wrong mask_opt");
+              prio = (z%8);      
+	      if     (prio == 7) prio = 7;
+	      else if(prio == 6) prio = 2;
+	      else               prio = 0;
+              send_random_packet(src,txed, p, 0, prio , mask);  
             end
           end
-
+  
           begin
             automatic int  p = 2;
             automatic bit [`c_num_ports:0] mask;
@@ -495,8 +519,13 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
-              else
+              else if (mask_opt == 2)
                 mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
+              else
+		$display("wrong mask_opt");
+              mask = 4;
 	      prio = (z%8);
               send_random_packet(src,txed, p, 0,prio , mask);  
             end
@@ -511,8 +540,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
-              else
+              else if (mask_opt == 2)
                 mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
+              else
+		$display("wrong mask_opt");
 	      prio = (z%8);
               send_random_packet(src,txed, p, 0,prio , mask);  
             end
@@ -527,8 +560,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
-              else
+              else if (mask_opt == 2)
                 mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
+              else
+		$display("wrong mask_opt");
 	      prio = (z%8);
               send_random_packet(src,txed, p, 0,prio , mask);  
             end
@@ -542,12 +579,17 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
-              else
+              else if (mask_opt == 2)
                 mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
+              else
+		$display("wrong mask_opt");
 	      prio = (z%8);
               send_random_packet(src,txed, p, 0,prio , mask);  
             end
           end   
+          
           begin
             automatic int  p = 6;
             automatic bit [`c_num_ports:0] mask;
@@ -557,8 +599,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
-              else
+              else if (mask_opt == 2)
                 mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
+              else
+		$display("wrong mask_opt");
 	      prio = (z%8);
               send_random_packet(src,txed, p, 0,prio , mask);  
             end
@@ -572,8 +618,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end           
@@ -585,8 +635,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end 
@@ -598,8 +652,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end 
@@ -611,8 +669,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end           
@@ -624,8 +686,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end   
@@ -637,8 +703,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end   
@@ -650,8 +720,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end   
@@ -663,8 +737,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end   
@@ -676,8 +754,12 @@ module main_generic;
                 mask = mask^(1<<(z%(`c_num_ports)));
               else if (mask_opt == 1)
                 mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end  
