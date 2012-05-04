@@ -118,11 +118,11 @@ NET "clk_sel_o" LOC="AK17";
 #NET "gtx4_7_clk_n_i" IOSTANDARD="LVPECL_25";
 #NET "gtx4_7_clk_p_i" IOSTANDARD="LVPECL_25";
 
-#NET "gtx8_11_clk_n_i" LOC="V5";
-#NET "gtx8_11_clk_p_i" LOC="V6";
+NET "gtx8_11_clk_n_i" LOC="V5";
+NET "gtx8_11_clk_p_i" LOC="V6";
       
-#NET "gtx8_11_clk_n_i" IOSTANDARD="LVPECL_25";
-#NET "gtx8_11_clk_p_i" IOSTANDARD="LVPECL_25";
+NET "gtx8_11_clk_n_i" IOSTANDARD="LVPECL_25";
+NET "gtx8_11_clk_p_i" IOSTANDARD="LVPECL_25";
 
 NET "gtx12_15_clk_n_i" LOC="P5";
 NET "gtx12_15_clk_p_i" LOC="P6";
