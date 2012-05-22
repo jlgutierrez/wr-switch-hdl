@@ -741,7 +741,7 @@ begin  --  behavoural
               free_sent_pck_req      <= '1';
               free_sent_pck_addr <= pck_start_pgaddr;
 
-              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
+              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0') then
                 src_out_int.cyc  <= '1';
                 s_send_pck       <= S_DATA;
                 pck_start_pgaddr <= mpm_pg_addr;
@@ -754,7 +754,7 @@ begin  --  behavoural
             --===========================================================================================
           when S_RETRY =>
             --===========================================================================================        
-            if(s_prep_to_send = S_RETRY_READY) then
+            if(s_prep_to_send = S_RETRY_READY and src_i.stall = '0') then
               src_out_int.cyc  <= '1';
               s_send_pck       <= S_DATA;
               pck_start_pgaddr <= mpm_pg_addr;
@@ -766,7 +766,7 @@ begin  --  behavoural
               free_sent_pck_req      <= '1';
               free_sent_pck_addr <= pck_start_pgaddr;
 
-              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0') then
+              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0') then
                 src_out_int.cyc  <= '1';
                 s_send_pck       <= S_DATA;
                 pck_start_pgaddr <= mpm_pg_addr;
