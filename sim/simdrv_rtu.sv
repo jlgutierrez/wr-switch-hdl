@@ -33,10 +33,12 @@ typedef struct {
    bit drop;          
 } rtu_vlan_entry_t;
 
-`define RTU_HTAB_SIZE 2048
+`define RTU_HTAB_SIZE 512
+`define RTU_HTAB_BUCKET_SIZE 4
 
 class CRTUSimDriver;
   
+   const int bucket_size = 8;
    
    extern task set_bus(CBusAccessor _bus, int _base_addr);
    extern task add_hash_entry(rtu_filtering_entry_t ent);
@@ -48,7 +50,7 @@ class CRTUSimDriver;
 
    
    //   extern task run();
-   extern protected task htab_write(int hash, rtu_filtering_entry_t ent);
+   extern protected task htab_write(int hash, int bucket, rtu_filtering_entry_t ent);
    extern protected task mfifo_write(int addr, int size, bit[31:0] data[]);
 
   
@@ -85,19 +87,20 @@ class CRTUSimDriver;
    endtask // enable
    
    
-   protected rtu_filtering_entry_t htab[`RTU_HTAB_SIZE];
+   protected rtu_filtering_entry_t htab[`RTU_HTAB_SIZE][`RTU_HTAB_BUCKET_SIZE];
    
 endclass // CRTUSimDriver
 
 task CRTUSimDriver::set_bus(CBusAccessor _bus, int _base_addr);
-   int i;
+   int i, j;
    
    $display("CRTUSimDriver::created (base address 0x%x)", _base_addr);
 
    for(i=0;i<`RTU_HTAB_SIZE;i++)
-     htab[i].valid  = 1'b0;
+     for(j=0;j<`RTU_HTAB_BUCKET_SIZE;j++)
+       htab[i][j].valid  = 1'b0;
   
- bus 		    = _bus;
+   bus 		    = _bus;
    base_addr 	    = _base_addr;
 
    set_hash_poly('h1021);
@@ -141,7 +144,7 @@ endtask // CRTUSimDriver
 
      
 
-task CRTUSimDriver::htab_write(int hash, rtu_filtering_entry_t ent);
+task CRTUSimDriver::htab_write(int hash, int bucket, rtu_filtering_entry_t ent);
    bit[31:0] d[5];
 
    d[0] = (('hFF & ent.mac[0])                        << 24)  |
@@ -149,7 +152,7 @@ task CRTUSimDriver::htab_write(int hash, rtu_filtering_entry_t ent);
           (('hFF & ent.fid)                           <<  4)  | 
         (('h1  & ent.go_to_cam)                     <<  3)  | 
         (('h1  & ent.is_bpdu)                       <<  2)  | 
-        (('h1  & ent.end_of_bucket)                 <<  1)  | 
+//        (('h1  & ent.end_of_bucket)                 <<  1)  | 
         (('h1  & ent.valid )                             )  ;	      
 
     d[1] = 
@@ -176,21 +179,35 @@ task CRTUSimDriver::htab_write(int hash, rtu_filtering_entry_t ent);
 
    d[4]  = 0;
 
-   mfifo_write(hash * 8 * 4, 5, d);
+   mfifo_write(hash * 8 * 4 + bucket * 8, 5, d);
 
 endtask // CRTUSimDriver
 
 
 task CRTUSimDriver::add_hash_entry(rtu_filtering_entry_t ent);  
 
+   int bucket= 0 ,i;
+   
    bit[15:0] hash;
 
    hash  = mac_hash(ent.mac, ent.fid);
 
-   $display("MACHash: %x", hash);
-   
-   htab_write(hash, ent);
 
+   for(i=0;i<`RTU_HTAB_BUCKET_SIZE;i++)
+     if(htab[hash][bucket].valid)
+       bucket++;
+
+   if(bucket == `RTU_HTAB_BUCKET_SIZE)
+     begin
+        $error("No free buckets for hash %x", hash);
+     end
+   
+   
+   $display("MACHash: %x, bucket %d", hash, bucket);
+   
+   htab_write(hash, bucket, ent);
+   htab[hash][bucket] = ent;
+        
 endtask // CRTUSimDriver
 
 task CRTUSimDriver::set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en);
@@ -232,7 +249,7 @@ function bit[15:0] CRTUSimDriver::mac_hash(bit[7:0] mac[], bit[7:0] fid);
    hash  = crc16(hash, (mac[0] <<8) | mac[1]);
    hash  = crc16(hash, (mac[2] <<8) | mac[3]);
    hash  = crc16(hash, (mac[4] <<8) | mac[5]);
-   return hash & 'h1ff; 
+   return hash & (`RTU_HTAB_SIZE-1); 
 endfunction // mac_hash
 
 
@@ -241,7 +258,7 @@ task CRTUSimDriver::add_static_rule(bit[7:0] dmac[], bit[31:0] dpm);
 
    ent.mac 	      = dmac;
    ent.valid 	      = 1'b1;
-   ent.end_of_bucket  = 0;
+//   ent.end_of_bucket  = 1;
    ent.is_bpdu = 0;
    ent.fid = 0;
    ent.port_mask_dst = dpm;   
