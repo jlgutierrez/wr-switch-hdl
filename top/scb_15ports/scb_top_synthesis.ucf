@@ -1380,7 +1380,6 @@ INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DM
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/tag_o_18" TNM = DMTD_TAG_O;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/tag_o_19" TNM = DMTD_TAG_O;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/tag_o_20" TNM = DMTD_TAG_O;
-TIMESPEC TS_ignore5 = FROM "DMTD_TAG_INT" TO "DMTD_TAG_O" TIG;
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/04/25
 
 NET "gen_phys[0].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
@@ -1401,27 +1400,27 @@ NET "gen_phys[14].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
 NET "gen_phys[14].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
 
 
-TIMESPEC TS_ignore6 = FROM "fpga_clk_25mhz_p_i" TO "phy_rx_clk" TIG;
+TIMESPEC TS_ignore6 = FROM "fpga_clk_25mhz_p_i" TO "phy_rx_clk" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore7 = FROM "phy_rx_clk" TO "fpga_clk_25mhz_p_i" TIG;
+TIMESPEC TS_ignore7 = FROM "phy_rx_clk" TO "fpga_clk_25mhz_p_i" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore8 = FROM "fpga_clk_ref_p_i" TO "phy_rx_clk" TIG;
+TIMESPEC TS_ignore8 = FROM "fpga_clk_ref_p_i" TO "phy_rx_clk" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore9 = FROM "phy_rx_clk" TO "fpga_clk_ref_p_i" TIG;
+TIMESPEC TS_ignore9 = FROM "phy_rx_clk" TO "fpga_clk_ref_p_i" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore18 = FROM "fpga_clk_dmtd_p_i" TO "phy_rx_clk" TIG;
+TIMESPEC TS_ignore18 = FROM "fpga_clk_dmtd_p_i" TO "phy_rx_clk" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore19 = FROM "phy_rx_clk" TO "fpga_clk_dmtd_p_i" TIG;
+TIMESPEC TS_ignore19 = FROM "phy_rx_clk" TO "fpga_clk_dmtd_p_i" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore28 = FROM "fpga_clk_aux_p_i" TO "phy_rx_clk" TIG;
+TIMESPEC TS_ignore28 = FROM "fpga_clk_aux_p_i" TO "phy_rx_clk" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore29 = FROM "phy_rx_clk" TO "fpga_clk_aux_p_i" TIG;
+TIMESPEC TS_ignore29 = FROM "phy_rx_clk" TO "fpga_clk_aux_p_i" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore38 = FROM "fpga_clk_ref_p_i" TO "fpga_clk_dmtd_p_i" TIG;
+TIMESPEC TS_ignore38 = FROM "fpga_clk_ref_p_i" TO "fpga_clk_dmtd_p_i" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore39 = FROM "fpga_clk_dmtd_p_i" TO "fpga_clk_ref_p_i" TIG;
+TIMESPEC TS_ignore39 = FROM "fpga_clk_dmtd_p_i" TO "fpga_clk_ref_p_i" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore48 = FROM "fpga_clk_25mhz_p_i" TO "fpga_clk_dmtd_p_i" TIG;
+TIMESPEC TS_ignore48 = FROM "fpga_clk_25mhz_p_i" TO "fpga_clk_dmtd_p_i" 10ns DATAPATHONLY;
 
-TIMESPEC TS_ignore49 = FROM "fpga_clk_dmtd_p_i" TO "fpga_clk_25mhz_p_i" TIG;
+TIMESPEC TS_ignore49 = FROM "fpga_clk_dmtd_p_i" TO "fpga_clk_25mhz_p_i" 10ns DATAPATHONLY;
 
