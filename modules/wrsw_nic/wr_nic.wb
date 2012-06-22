@@ -367,6 +367,17 @@ RX_desc_template = {
 				 access_bus = READ_ONLY;
 				 access_dev = WRITE_ONLY;
       };
+
+      field {
+				 name = "RX Timestamp (possibly) incorrect";
+				 prefix = "TS_INCORRECT";
+				 align = 15;
+				 description = "1 - there is a risk that the timestamp in RX_D2 is invalid, because it was taken during counter adjustment,\
+				 0 - RX timestamp OK.";
+				 type = BIT;
+				 access_bus = READ_ONLY;
+				 access_dev = WRITE_ONLY;
+      };
    };
 
 	 
