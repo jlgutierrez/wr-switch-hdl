@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2010-04-08
+-- Last update: 2012-06-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -48,8 +48,8 @@ use ieee.numeric_std.all;
 entity swc_prio_encoder is
   
   generic (
-    g_num_inputs  : integer range 2 to 64 := 32;
-    g_output_bits : integer range 1 to 6  := 5);
+    g_num_inputs  : integer range 2 to 80 := 32;
+    g_output_bits : integer range 1 to 7  := 5);
   port (
     
     
@@ -91,83 +91,99 @@ end swc_prio_encoder;
 
 architecture syn of swc_prio_encoder is
 
-  signal w : std_logic_vector(63 downto 0);
-  signal q : std_logic_vector(5 downto 0);
+  signal w : std_logic_vector(79 downto 0);
+  signal q : std_logic_vector(6 downto 0);
   signal zero : std_logic;
 
 begin  -- syn
 
 
-  w(63 downto g_num_inputs) <= (others => '0');
+  w(79 downto g_num_inputs) <= (others => '0');
   w(g_num_inputs-1 downto 0) <= in_i;
 
   
   
-  q <= "000000" when w(0) = '1' else
-       "000001" when w(1) = '1' else
-       "000010" when w(2) = '1' else
-       "000011" when w(3) = '1' else
-       "000100" when w(4) = '1' else
-       "000101" when w(5) = '1' else
-       "000110" when w(6) = '1' else
-       "000111" when w(7) = '1' else
-       "001000" when w(8+0) = '1' else
-       "001001" when w(8+1) = '1' else
-       "001010" when w(8+2) = '1' else
-       "001011" when w(8+3) = '1' else
-       "001100" when w(8+4) = '1' else
-       "001101" when w(8+5) = '1' else
-       "001110" when w(8+6) = '1' else
-       "001111" when w(8+7) = '1' else
-       "010000" when w(16+0) = '1' else
-       "010001" when w(16+1) = '1' else
-       "010010" when w(16+2) = '1' else
-       "010011" when w(16+3) = '1' else
-       "010100" when w(16+4) = '1' else
-       "010101" when w(16+5) = '1' else
-       "010110" when w(16+6) = '1' else
-       "010111" when w(16+7) = '1' else
-       "011000" when w(24+0) = '1' else
-       "011001" when w(24+1) = '1' else
-       "011010" when w(24+2) = '1' else
-       "011011" when w(24+3) = '1' else
-       "011100" when w(24+4) = '1' else
-       "011101" when w(24+5) = '1' else
-       "011110" when w(24+6) = '1' else
-       "011111" when w(24+7) = '1' else
-       "100000" when w(32+0) = '1' else
-       "100001" when w(32+1) = '1' else
-       "100010" when w(32+2) = '1' else
-       "100011" when w(32+3) = '1' else
-       "100100" when w(32+4) = '1' else
-       "100101" when w(32+5) = '1' else
-       "100110" when w(32+6) = '1' else
-       "100111" when w(32+7) = '1' else
-       "101000" when w(32+8+0) = '1' else
-       "101001" when w(32+8+1) = '1' else
-       "101010" when w(32+8+2) = '1' else
-       "101011" when w(32+8+3) = '1' else
-       "101100" when w(32+8+4) = '1' else
-       "101101" when w(32+8+5) = '1' else
-       "101110" when w(32+8+6) = '1' else
-       "101111" when w(32+8+7) = '1' else
-       "110000" when w(32+16+0) = '1' else
-       "110001" when w(32+16+1) = '1' else
-       "110010" when w(32+16+2) = '1' else
-       "110011" when w(32+16+3) = '1' else
-       "110100" when w(32+16+4) = '1' else
-       "110101" when w(32+16+5) = '1' else
-       "110110" when w(32+16+6) = '1' else
-       "110111" when w(32+16+7) = '1' else
-       "111000" when w(32+24+0) = '1' else
-       "111001" when w(32+24+1) = '1' else
-       "111010" when w(32+24+2) = '1' else
-       "111011" when w(32+24+3) = '1' else
-       "111100" when w(32+24+4) = '1' else
-       "111101" when w(32+24+5) = '1' else
-       "111110" when w(32+24+6) = '1' else
-       "111111" when w(32+24+7) = '1' else
-       "000000";
+  q <= "0000000" when w(0) = '1' else
+       "0000001" when w(1) = '1' else
+       "0000010" when w(2) = '1' else
+       "0000011" when w(3) = '1' else
+       "0000100" when w(4) = '1' else
+       "0000101" when w(5) = '1' else
+       "0000110" when w(6) = '1' else
+       "0000111" when w(7) = '1' else
+       "0001000" when w(8+0) = '1' else
+       "0001001" when w(8+1) = '1' else
+       "0001010" when w(8+2) = '1' else
+       "0001011" when w(8+3) = '1' else
+       "0001100" when w(8+4) = '1' else
+       "0001101" when w(8+5) = '1' else
+       "0001110" when w(8+6) = '1' else
+       "0001111" when w(8+7) = '1' else
+       "0010000" when w(16+0) = '1' else
+       "0010001" when w(16+1) = '1' else
+       "0010010" when w(16+2) = '1' else
+       "0010011" when w(16+3) = '1' else
+       "0010100" when w(16+4) = '1' else
+       "0010101" when w(16+5) = '1' else
+       "0010110" when w(16+6) = '1' else
+       "0010111" when w(16+7) = '1' else
+       "0011000" when w(24+0) = '1' else
+       "0011001" when w(24+1) = '1' else
+       "0011010" when w(24+2) = '1' else
+       "0011011" when w(24+3) = '1' else
+       "0011100" when w(24+4) = '1' else
+       "0011101" when w(24+5) = '1' else
+       "0011110" when w(24+6) = '1' else
+       "0011111" when w(24+7) = '1' else
+       "0100000" when w(32+0) = '1' else
+       "0100001" when w(32+1) = '1' else
+       "0100010" when w(32+2) = '1' else
+       "0100011" when w(32+3) = '1' else
+       "0100100" when w(32+4) = '1' else
+       "0100101" when w(32+5) = '1' else
+       "0100110" when w(32+6) = '1' else
+       "0100111" when w(32+7) = '1' else
+       "0101000" when w(32+8+0) = '1' else
+       "0101001" when w(32+8+1) = '1' else
+       "0101010" when w(32+8+2) = '1' else
+       "0101011" when w(32+8+3) = '1' else
+       "0101100" when w(32+8+4) = '1' else
+       "0101101" when w(32+8+5) = '1' else
+       "0101110" when w(32+8+6) = '1' else
+       "0101111" when w(32+8+7) = '1' else
+       "0110000" when w(32+16+0) = '1' else
+       "0110001" when w(32+16+1) = '1' else
+       "0110010" when w(32+16+2) = '1' else
+       "0110011" when w(32+16+3) = '1' else
+       "0110100" when w(32+16+4) = '1' else
+       "0110101" when w(32+16+5) = '1' else
+       "0110110" when w(32+16+6) = '1' else
+       "0110111" when w(32+16+7) = '1' else
+       "0111000" when w(32+24+0) = '1' else
+       "0111001" when w(32+24+1) = '1' else
+       "0111010" when w(32+24+2) = '1' else
+       "0111011" when w(32+24+3) = '1' else
+       "0111100" when w(32+24+4) = '1' else
+       "0111101" when w(32+24+5) = '1' else
+       "0111110" when w(32+24+6) = '1' else
+       "0111111" when w(32+24+7) = '1' else
+       "1000000" when w(64+0) = '1' else
+       "1000001" when w(64+1) = '1' else
+       "1000010" when w(64+2) = '1' else
+       "1000011" when w(64+3) = '1' else
+       "1000100" when w(64+4) = '1' else
+       "1000101" when w(64+5) = '1' else
+       "1000110" when w(64+6) = '1' else
+       "1000111" when w(64+7) = '1' else
+       "1001000" when w(64+8) = '1' else
+       "1001001" when w(64+9) = '1' else
+       "1001010" when w(64+10) = '1' else
+       "1001011" when w(64+11) = '1' else
+       "1001100" when w(64+12) = '1' else
+       "1001101" when w(64+13) = '1' else
+       "1001110" when w(64+14) = '1' else
+       "1001111" when w(64+15) = '1' else
+       "0000000";
 
   out_o <= q(g_output_bits-1 downto 0);
   zero <= '1' when (in_i = std_logic_vector(to_unsigned(0, g_num_inputs))) else '0';
