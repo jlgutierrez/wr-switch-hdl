@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-03-18
+-- Last update: 2012-06-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -62,8 +62,8 @@ package swc_swcore_pkg is
 
   component swc_prio_encoder
     generic (
-      g_num_inputs  : integer range 2 to 64;
-      g_output_bits : integer range 1 to 6);
+      g_num_inputs  : integer range 2 to 80;
+      g_output_bits : integer range 1 to 7);
     port (
       in_i     : in  std_logic_vector(g_num_inputs-1 downto 0);
       out_o    : out std_logic_vector(g_output_bits-1 downto 0);

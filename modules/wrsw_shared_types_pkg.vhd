@@ -3,7 +3,7 @@ use ieee.STD_LOGIC_1164.all;
 
 package wrsw_shared_types_pkg is
 
-  constant c_RTU_MAX_PORTS : integer := 64;
+  constant c_RTU_MAX_PORTS : integer := 32;
 
   type t_rtu_request is record
     valid    : std_logic;
