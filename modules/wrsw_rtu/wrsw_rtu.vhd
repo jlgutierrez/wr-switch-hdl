@@ -6,7 +6,7 @@
 -- Authors    : Tomasz Wlostowski, Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-27
--- Last update: 2012-03-09
+-- Last update: 2012-06-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -117,15 +117,15 @@ use ieee.numeric_std.all;
 
 library work;
 use work.genram_pkg.all;
-use work.wrsw_rtu_private_pkg.all;
 use work.wishbone_pkg.all;
+use work.wrsw_shared_types_pkg.all;
+use work.rtu_private_pkg.all;
 use work.rtu_wbgen2_pkg.all;
-
-
-
+use work.pack_unpack_pkg.all;
 
 entity wrsw_rtu is
-
+  generic (
+    g_num_ports : integer);
   port(
 -- clock (62.5 MHz refclk/2)
     clk_sys_i   : in std_logic;
@@ -138,27 +138,27 @@ entity wrsw_rtu is
 -------------------------------------------------------------------------------
 
 -- 1 indicates that coresponding RTU port is idle and ready to accept requests
-    rtu_idle_o : out std_logic_vector(c_rtu_num_ports-1 downto 0);
+    rtu_idle_o : out std_logic_vector(g_num_ports-1 downto 0);
 
 -- request strobe, single HI pulse begins evaluation of the request. All
 -- request input lines have to be valid when rq_strobe_p_i is asserted.
-    rq_strobe_p_i : in std_logic_vector(c_rtu_num_ports-1 downto 0);
+    rq_strobe_p_i : in std_logic_vector(g_num_ports-1 downto 0);
 
 -- source and destination MAC addresses extracted from the packet header
-    rq_smac_i : in std_logic_vector(c_wrsw_mac_addr_width * c_rtu_num_ports - 1 downto 0);
-    rq_dmac_i : in std_logic_vector(c_wrsw_mac_addr_width * c_rtu_num_ports -1 downto 0);
+    rq_smac_i : in std_logic_vector(c_wrsw_mac_addr_width * g_num_ports - 1 downto 0);
+    rq_dmac_i : in std_logic_vector(c_wrsw_mac_addr_width * g_num_ports -1 downto 0);
 
 -- VLAN id (extracted from the header for TRUNK ports and assigned by the port
 -- for ACCESS ports)
-    rq_vid_i : in std_logic_vector(c_wrsw_vid_width * c_rtu_num_ports - 1 downto 0);
+    rq_vid_i : in std_logic_vector(c_wrsw_vid_width * g_num_ports - 1 downto 0);
 
 -- HI means that packet has valid assigned a valid VID (low - packet is untagged)
-    rq_has_vid_i : in std_logic_vector(c_rtu_num_ports -1 downto 0);
+    rq_has_vid_i : in std_logic_vector(g_num_ports -1 downto 0);
 
 -- packet priority (either extracted from the header or assigned per port).
-    rq_prio_i     : in std_logic_vector(c_wrsw_prio_width * c_rtu_num_ports -1 downto 0);
+    rq_prio_i     : in std_logic_vector(c_wrsw_prio_width * g_num_ports -1 downto 0);
 -- HI indicates that packet has assigned priority.
-    rq_has_prio_i : in std_logic_vector(c_rtu_num_ports -1 downto 0);
+    rq_has_prio_i : in std_logic_vector(g_num_ports -1 downto 0);
 
 -------------------------------------------------------------------------------
 -- N-port RTU output interface (to the packet buffer
@@ -166,305 +166,293 @@ entity wrsw_rtu is
 
 -- response strobe. Single HI pulse indicates that a valid response for port N
 -- request is available on rsp_dst_port_mask_o, rsp_drop_o and rsp_prio_o.
-    rsp_valid_o : out std_logic_vector (c_rtu_num_ports-1 downto 0);
+    rsp_valid_o : out std_logic_vector (g_num_ports-1 downto 0);
 
 -- destination port mask. HI bits indicate that packet should be routed to
 -- the corresponding port(s).
-    rsp_dst_port_mask_o : out std_logic_vector(c_wrsw_num_ports * c_rtu_num_ports - 1 downto 0);
+    rsp_dst_port_mask_o : out std_logic_vector(c_rtu_max_ports * g_num_ports - 1 downto 0);
 
 -- HI -> packet must be dropped
-    rsp_drop_o : out std_logic_vector(c_rtu_num_ports -1 downto 0);
+    rsp_drop_o : out std_logic_vector(g_num_ports -1 downto 0);
 
 -- Final packet priority (evaluated from port priority, tag priority, VLAN
 -- priority or source/destination priority).
-    rsp_prio_o         : out std_logic_vector (c_rtu_num_ports * c_wrsw_prio_width-1 downto 0);
+    rsp_prio_o         : out std_logic_vector (g_num_ports * c_wrsw_prio_width-1 downto 0);
 -- Acknowledge from endpoin that the data has been read    
-    rsp_ack_i          : in  std_logic_vector(c_rtu_num_ports -1 downto 0);
+    rsp_ack_i          : in  std_logic_vector(g_num_ports -1 downto 0);
 -- indication for the endpoint - says how busy is a port    
-    port_almost_full_o : out std_logic_vector(c_rtu_num_ports -1 downto 0);
-    port_full_o        : out std_logic_vector(c_rtu_num_ports -1 downto 0);
+    port_almost_full_o : out std_logic_vector(g_num_ports -1 downto 0);
+    port_full_o        : out std_logic_vector(g_num_ports -1 downto 0);
 
 
 -------------------------------------------------------------------------------
 -- Wishbone (synchronous to refclk2_i). See the wbgen2 file for register details
 -------------------------------------------------------------------------------
-    wb_addr_i : in  std_logic_vector(13 downto 0);
-    wb_data_i : in  std_logic_vector(31 downto 0);
-    wb_data_o : out std_logic_vector(31 downto 0);
-    wb_sel_i  : in  std_logic_vector(3 downto 0);
-    wb_cyc_i  : in  std_logic;
-    wb_stb_i  : in  std_logic;
-    wb_ack_o  : out std_logic;
-    wb_irq_o  : out std_logic;
-    wb_we_i   : in  std_logic
-
-
-
+    wb_adr_i   : in  std_logic_vector(13 downto 0);
+    wb_dat_i   : in  std_logic_vector(31 downto 0);
+    wb_dat_o   : out std_logic_vector(31 downto 0);
+    wb_sel_i   : in  std_logic_vector(3 downto 0);
+    wb_cyc_i   : in  std_logic;
+    wb_stb_i   : in  std_logic;
+    wb_ack_o   : out std_logic;
+    wb_irq_o   : out std_logic;
+    wb_we_i    : in  std_logic;
+    wb_stall_o : out std_logic
     );
 
 end wrsw_rtu;
 
 architecture behavioral of wrsw_rtu is
--------------------------------------------------------------------------------------------------------------------------
---| signals
--------------------------------------------------------------------------------------------------------------------------
-  --| REQUEST FIFO
-  -- input to request FIFO
-  signal s_req_fifo_input    : std_logic_vector(c_rtu_num_ports + c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 2 - 1 downto 0);
+
+  constant c_VLAN_TAB_ENTRY_WIDTH : integer := 46;
+  type t_rq_fifo_request_array is array (integer range <>) of std_logic_vector(c_PACKED_REQUEST_WIDTH-1 downto 0);
+
+  
   -- writes request FIFO
-  signal s_rq_fifo_write_all : std_logic_vector(c_rtu_num_ports - 1 downto 0);
-  signal s_rq_fifo_write_sng : std_logic;
-  -- request FIFO is full
-  signal s_rq_fifo_full      : std_logic;
-  -- data input to request FIFO
+  signal rq_fifo_write_all : std_logic_vector(g_num_ports - 1 downto 0);
+  signal rq_fifo_write_sng : std_logic;
 
-  type   t_rq_fifo_data_a is array (c_rtu_num_ports - 1 downto 0) of std_logic_vector(c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 2 - 1 downto 0);
-  signal s_rq_fifo_data_a : t_rq_fifo_data_a;
-  signal s_rq_fifo_data   : std_logic_vector(c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 2 - 1 downto 0);
+  signal rq_fifo_d_requests : t_rq_fifo_request_array(0 to g_num_ports-1);
+  signal rq_fifo_d_muxed    : std_logic_vector(g_num_ports+ c_PACKED_REQUEST_WIDTH -1 downto 0);
 
-  -- read request FIFO
-  signal s_rq_fifo_read  : std_logic;
-  -- request fifo empty
-  signal s_rq_fifo_empty : std_logic;
 
-  --| RESPONSE FIFO
-  signal s_rsp_fifo_full : std_logic;
+  signal rq_fifo_read, rq_fifo_full, rq_fifo_empty : std_logic;
+
+  -- RESPONSE FIFO
+
+  signal rsp_fifo_full : std_logic;
 
 
   --| RTU ENGINE
   -- request data read by RTU engine from rq_fifo
-  signal s_rq_rtu_match_data  : std_logic_vector(c_rtu_num_ports + c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 2 - 1 downto 0);
+  signal rq_rtu_match_data  : std_logic_vector(g_num_ports + c_PACKED_REQUEST_WIDTH - 1 downto 0);
   -- response data outputed from RTU to rsp_fifo
-  signal s_rsp_rtu_match_data : std_logic_vector(c_rtu_num_ports + c_wrsw_num_ports + c_wrsw_prio_width + 1 - 1 downto 0);
+  signal rsp_rtu_match_data : std_logic_vector(g_num_ports + c_PACKED_RESPONSE_WIDTH - 1 downto 0);
 
 
 
   --| HASH TABLE lookup engine 
 
-  signal s_htab_rr_sel_w : std_logic;
-  signal s_htab_rr_sel_r : std_logic;
-  signal s_htab_rr_req   : std_logic_vector(1 downto 0);
-  signal s_htab_rr_gnt   : std_logic_vector(1 downto 0);
+  signal htab_rr_sel_w : std_logic;
+  signal htab_rr_sel_r : std_logic;
+  signal htab_rr_req   : std_logic_vector(1 downto 0);
+  signal htab_rr_gnt   : std_logic_vector(1 downto 0);
 
 --HTAB interface
 
-  signal s_htab_start : std_logic;
-  signal s_htab_ack   : std_logic;
-  signal s_htab_hash  : std_logic_vector(c_wrsw_hash_width-1 downto 0);
-  signal s_htab_mac   : std_logic_vector(47 downto 0);
-  signal s_htab_fid   : std_logic_vector(7 downto 0);
-  signal s_htab_found : std_logic;
-  signal s_htab_drdy  : std_logic;
-  signal s_htab_valid : std_logic;
-  signal s_htab_entry : t_rtu_htab_entry;
+  signal htab_start : std_logic;
+  signal htab_ack   : std_logic;
+  signal htab_hash  : std_logic_vector(c_wrsw_hash_width-1 downto 0);
+  signal htab_mac   : std_logic_vector(47 downto 0);
+  signal htab_fid   : std_logic_vector(7 downto 0);
+  signal htab_found : std_logic;
+  signal htab_drdy  : std_logic;
+  signal htab_valid : std_logic;
+  signal htab_entry : t_rtu_htab_entry;
 
   signal mfifo_trigger : std_logic;
 
-  --|VLAN TAB
-  signal s_vlan_tab_addr : std_logic_vector(11 downto 0);
-  signal s_vlan_tab_data : std_logic_vector(31 downto 0);
-  signal s_vlan_tab_rd   : std_logic;
+  signal vlan_tab_rd_vid                    : std_logic_vector(c_wrsw_vid_width-1 downto 0);
+  signal vlan_tab_wr_data, vlan_tab_rd_data : std_logic_vector(c_VLAN_TAB_ENTRY_WIDTH-1 downto 0);
+  signal vlan_tab_rd_entry                  : t_rtu_vlan_tab_entry;
 
   -- | UFIFO for learning
-
   --|IRQ
-  signal s_irq_nempty : std_logic;
+  signal irq_nempty : std_logic;
 
   --|HCAM - Hash collision memory
-  signal s_aram_main_addr   : std_logic_vector(7 downto 0);
-  signal s_aram_main_data_i : std_logic_vector(31 downto 0);
-  signal s_aram_main_data_o : std_logic_vector(31 downto 0);
-  signal s_aram_main_rd     : std_logic;
-  signal s_aram_main_wr     : std_logic;
+  signal aram_main_addr   : std_logic_vector(7 downto 0);
+  signal aram_main_data_i : std_logic_vector(31 downto 0);
+  signal aram_main_data_o : std_logic_vector(31 downto 0);
+  signal aram_main_rd     : std_logic;
+  signal aram_main_wr     : std_logic;
 
-  signal s_pcr_learn_en  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
-  signal s_pcr_pass_all  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
-  signal s_pcr_pass_bpdu : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
-  signal s_pcr_fix_prio  : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
-  signal s_pcr_prio_val  : std_logic_vector(c_wrsw_num_ports_max * c_rtu_num_ports - 1 downto 0);
-  signal s_pcr_b_unrec   : std_logic_vector(c_wrsw_num_ports_max - 1 downto 0);
 
+  type   t_pcr_prio_val_array is array(integer range <>) of std_logic_vector(c_wrsw_prio_width-1 downto 0);
+  signal pcr_learn_en  : std_logic_vector(g_num_ports - 1 downto 0);
+  signal pcr_pass_all  : std_logic_vector(g_num_ports - 1 downto 0);
+  signal pcr_pass_bpdu : std_logic_vector(g_num_ports - 1 downto 0);
+  signal pcr_fix_prio  : std_logic_vector(g_num_ports - 1 downto 0);
+  signal pcr_prio_val  : t_pcr_prio_val_array(g_num_ports-1 downto 0);
+  signal pcr_b_unrec   : std_logic_vector(g_num_ports - 1 downto 0);
 
   --| RESPONSE FIFO
   -- response FIFO empty
-  signal s_rsp_fifo_empty          : std_logic;
+  signal rsp_fifo_empty          : std_logic;
   -- response FIFO read data
-  type   t_rsp_fifo_data_a is array(c_rtu_num_ports - 1 downto 0) of std_logic_vector(c_wrsw_num_ports + c_wrsw_prio_width + 1 - 1 downto 0);
-  signal s_rsp_fifo_data_a         : t_rsp_fifo_data_a;
-  signal s_rsp_fifo_data           : std_logic_vector(c_wrsw_num_ports + c_wrsw_prio_width + 1 - 1 downto 0);
-  -- output from the response fifo (this is split into s_rsp_fifo_data and s_rsp_fifo_sel)
-  signal s_rsp_fifo_output         : std_logic_vector(c_rtu_num_ports + c_wrsw_num_ports + c_wrsw_prio_width + 1 - 1 downto 0);
+  type   t_rsp_fifo_data_a is array(g_num_ports - 1 downto 0) of std_logic_vector(c_RTU_MAX_PORTS + c_wrsw_prio_width + 1 - 1 downto 0);
+  signal rsp_fifo_data_a         : t_rsp_fifo_data_a;
+  signal rsp_fifo_data           : std_logic_vector(c_RTU_MAX_PORTS + c_wrsw_prio_width + 1 - 1 downto 0);
+  -- output from the response fifo (this is split into rsp_fifo_data and rsp_fifo_sel)
+  signal rsp_fifo_output         : std_logic_vector(g_num_ports + c_RTU_MAX_PORTS + c_wrsw_prio_width + 1 - 1 downto 0);
   -- says which port should read the datase
-  signal s_rsp_fifo_sel            : std_logic_vector(c_rtu_num_ports - 1 downto 0);
+  signal rsp_fifo_sel            : std_logic_vector(g_num_ports - 1 downto 0);
   -- read response FIFO
-  signal s_rsp_fifo_read_all       : std_logic_vector(c_rtu_num_ports - 1 downto 0);
+  signal rsp_fifo_read_all       : std_logic_vector(g_num_ports - 1 downto 0);
   -- just for zero comparison
-  signal s_rsp_fifo_read_all_zeros : std_logic_vector(c_rtu_num_ports - 1 downto 0);
-  --signal s_rsp_fifo_read_sng : std_logic;
-  signal s_rsp_fifo_read_port      : std_logic;
-  signal s_rsp_fifo_read_fifo      : std_logic;
+  signal rsp_fifo_read_all_zeros : std_logic_vector(g_num_ports - 1 downto 0);
+  --signal rsp_fifo_read_sng : std_logic;
+  signal rsp_fifo_read_port      : std_logic;
+  signal rsp_fifo_read_fifo      : std_logic;
   -- driven by rtu_match
-  signal s_rsp_fifo_write          : std_logic;
+  signal rsp_fifo_write          : std_logic;
 
-  signal s_rq_rsp_cnt_dec : std_logic_vector(c_rtu_num_ports - 1 downto 0);
+  signal rq_rsp_cnt_dec : std_logic_vector(g_num_ports - 1 downto 0);
 
   --| ARBITER TO REQUEST FIFO  
   -- request signals from ports to REQ_FIFO_ARBITER
-  signal s_req_fifo_access : std_logic_vector(c_rtu_num_ports - 1 downto 0);
+  signal req_fifo_access : std_logic_vector(g_num_ports - 1 downto 0);
   -- access granted by REQ_FIFO_ARBITER to single port (if '1' access is granted
-  signal s_gnt_fifo_access : std_logic_vector(c_rtu_num_ports - 1 downto 0);
+  signal gnt_fifo_access : std_logic_vector(g_num_ports - 1 downto 0);
 
   -- hash polynomial
-  signal s_rtu_gcr_poly_input : std_logic_vector(15 downto 0);
-  signal s_rtu_gcr_poly_used  : std_logic_vector(15 downto 0);
-  signal s_rq_fifo_qvalid     : std_logic;
+  signal rtu_gcr_poly_input : std_logic_vector(15 downto 0);
+  signal rtu_gcr_poly_used  : std_logic_vector(15 downto 0);
+  signal rq_fifo_qvalid     : std_logic;
 
   signal regs_towb   : t_rtu_in_registers;
   signal regs_fromwb : t_rtu_out_registers;
 
   signal current_pcr : integer;
+
+  function f_slice (
+    x     : std_logic_vector;
+    index : integer;
+    len   : integer) return std_logic_vector is
+  begin
+    return x((index + 1) * len - 1 downto index * len);
+  end f_slice;
+
 begin
 
-  s_irq_nempty <= regs_fromwb.ufifo_wr_empty_o;
+  irq_nempty <= regs_fromwb.ufifo_wr_empty_o;
 
   ---------------------------------------------------------------------------------------------------------------------
   --| REQUEST ROUND ROBIN ARBITER - governs access to REQUEST FIFO
   ---------------------------------------------------------------------------------------------------------------------
-  req_fifo_arbiter : wrsw_rr_arbiter
+  U_req_fifo_arbiter : rtu_rr_arbiter
     generic map (
-      g_width => c_rtu_num_ports)
+      g_width => g_num_ports)
     port map(
       clk_i   => clk_sys_i,
       rst_n_i => rst_n_i,
-      req_i   => s_req_fifo_access,
-      gnt_o   => s_gnt_fifo_access
+      req_i   => req_fifo_access,
+      gnt_o   => gnt_fifo_access
       );
 
   ---------------------------------------------------------------------------------------------------------------------
-  --| PORTS - c_rtu_num_ports number of I/O ports, a port:
+  --| PORTS - g_num_ports number of I/O ports, a port:
   --| - inputs request to REQUEST FIFO
   --| - waits for the response,
   --| - reads response from RESPONSE FIFO
   ---------------------------------------------------------------------------------------------------------------------
-  ports : for i in 0 to (c_rtu_num_ports - 1) generate
-    wrsw_port : wrsw_rtu_port
+  ports : for i in 0 to (g_num_ports - 1) generate
+
+    U_PortX : rtu_port
       generic map (
+        g_num_ports  => g_num_ports,
         g_port_index => i)
       port map(
-        clk_i               => clk_sys_i,
-        rst_n_i             => rst_n_i,
-        rtu_gcr_g_ena_i     => regs_fromwb.gcr_g_ena_o,
-        rtu_idle_o          => rtu_idle_o(i),
-        rq_strobe_p_i       => rq_strobe_p_i(i),
-        rq_smac_i           => rq_smac_i((i+1)*c_wrsw_mac_addr_width - 1 downto i*c_wrsw_mac_addr_width),
-        rq_dmac_i           => rq_dmac_i((i+1)*c_wrsw_mac_addr_width - 1 downto i*c_wrsw_mac_addr_width),
-        rq_vid_i            => rq_vid_i ((i+1)*c_wrsw_vid_width -1 downto i*c_wrsw_vid_width),
-        rq_has_vid_i        => rq_has_vid_i(i),
-        rq_prio_i           => rq_prio_i ((i+1)*c_wrsw_prio_width - 1 downto i*c_wrsw_prio_width),
-        rq_has_prio_i       => rq_has_prio_i(i),
+        clk_i   => clk_sys_i,
+        rst_n_i => rst_n_i,
+
+        rtu_gcr_g_ena_i => regs_fromwb.gcr_g_ena_o,
+        rtu_idle_o      => rtu_idle_o(i),
+
+        rq_strobe_p_i => rq_strobe_p_i(i),
+        rq_smac_i     => rq_smac_i(c_wrsw_mac_addr_width * (i+1)- 1 downto c_wrsw_mac_addr_width*i),
+        rq_dmac_i     => rq_dmac_i(c_wrsw_mac_addr_width * (i+1)- 1 downto c_wrsw_mac_addr_width*i),
+        rq_vid_i      => rq_vid_i(c_wrsw_vid_width * (i+1)- 1 downto c_wrsw_vid_width*i),
+        rq_has_vid_i  => rq_has_vid_i(i),
+        rq_prio_i     => rq_prio_i(c_wrsw_prio_width * (i+1)- 1 downto c_wrsw_prio_width*i),
+        rq_has_prio_i => rq_has_prio_i(i),
+
         rsp_valid_o         => rsp_valid_o(i),
-        rsp_dst_port_mask_o => rsp_dst_port_mask_o((i+1)*c_wrsw_num_ports - 1 downto i*c_wrsw_num_ports),
+        rsp_dst_port_mask_o => rsp_dst_port_mask_o((i+1)*c_RTU_MAX_PORTS - 1 downto i*c_RTU_MAX_PORTS),
         rsp_drop_o          => rsp_drop_o(i),
         rsp_prio_o          => rsp_prio_o((i+1)*c_wrsw_prio_width - 1 downto i*c_wrsw_prio_width),
 
         -- this goes to the arbiter
-        rq_fifo_write_o => s_rq_fifo_write_all(i),
+        rq_fifo_write_o => rq_fifo_write_all(i),
+        rq_fifo_full_i  => rq_fifo_full,
+        rq_fifo_data_o  => rq_fifo_d_requests(i),
 
-        rq_fifo_full_i => s_rq_fifo_full,
-        rq_fifo_data_o => s_rq_fifo_data_a(i),
+        rsp_write_i      => rsp_fifo_write,
+        rsp_match_data_i => rsp_rtu_match_data,
+        rsp_ack_i        => rsp_ack_i(i),
 
-        rsp_write_i      => s_rsp_fifo_write,
-        rsp_match_data_i => s_rsp_rtu_match_data,
+        rr_request_wr_access_o => req_fifo_access(i),
+        rr_access_ena_i        => gnt_fifo_access(i),
 
-        rsp_ack_i              => rsp_ack_i(i),
-        rr_request_wr_access_o => s_req_fifo_access(i),
-        rr_access_ena_i        => s_gnt_fifo_access(i),
-        port_almost_full_o     => port_almost_full_o(i),
-        port_full_o            => port_full_o(i),
-        rq_rsp_cnt_dec_i       => s_rq_rsp_cnt_dec(i),  -- s_rq_rtu_match_data(i) -- and s_rq_fifo_read
-        rtu_pcr_pass_bpdu_i    => s_pcr_pass_bpdu(i),
-        rtu_pcr_pass_all_i     => s_pcr_pass_all(i),
-        rtu_pcr_fix_prio_i     => s_pcr_fix_prio(i),
-        rtu_pcr_prio_val_i     => s_pcr_prio_val((i+1)*c_wrsw_prio_width - 1 downto i*c_wrsw_prio_width)
+        port_almost_full_o  => port_almost_full_o(i),
+        port_full_o         => port_full_o(i),
+        rq_rsp_cnt_dec_i    => rq_rsp_cnt_dec(i),  -- rq_rtu_match_data(i) -- and rq_fifo_read
+        rtu_pcr_pass_bpdu_i => pcr_pass_bpdu(i),
+        rtu_pcr_pass_all_i  => pcr_pass_all(i),
+        rtu_pcr_fix_prio_i  => pcr_fix_prio(i),
+        rtu_pcr_prio_val_i  => pcr_prio_val(i)
         );
+
   end generate;  -- end ports
 
-  ---------------------------------------------------------------------------------------------------------------------
-  --| REQUEST FIFO BUS
-  --| data from all ports into one match module
-  --| 
-  ---------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------
+-- REQUEST FIFO BUS
+-- Data from all ports into one match module
+------------------------------------------------------------------------
 
-  --req_fifo_input_bus : for i in 0 to (c_rtu_num_ports - 1) generate
-  --  s_rq_fifo_data      <= s_rq_fifo_data_a(i)    when(s_gnt_fifo_access(i) = '1') else (others => 'Z');
-  --  -- write request from a port which has been granted access to the (match
-  --  s_rq_fifo_write_sng <= s_rq_fifo_write_all(i) when(s_gnt_fifo_access(i) = '1') else 'Z';
-  --end generate;
-  ---- when there is no access granted, write request goes to '0'
-  ---- TODO HERE
-
-  --s_rq_fifo_write_sng <= '0' when(s_gnt_fifo_access = s_rsp_fifo_read_all_zeros) else '1';
-
-
-  p_mux_fifo_req : process(s_rq_fifo_data_a, s_gnt_fifo_access, s_rq_fifo_write_all)
+  p_mux_fifo_req : process(rq_fifo_d_requests, gnt_fifo_access, rq_fifo_write_all)
     variable do_wr   : std_logic;
-    variable do_data : std_logic_vector(s_rq_fifo_data'left downto 0);
+    variable do_data : std_logic_vector(c_PACKED_REQUEST_WIDTH-1 downto 0);
   begin
 
     do_data := (others => 'X');
     do_wr   := '0';
 
-    if(s_gnt_fifo_access = s_rsp_fifo_read_all_zeros) then
+    if(gnt_fifo_access = rsp_fifo_read_all_zeros) then
       do_wr := '0';
     else
-      for i in 0 to c_rtu_num_ports-1 loop
-        if(s_gnt_fifo_access(i) = '1') then
-          do_wr := s_rq_fifo_write_all(i);
+      for i in 0 to g_num_ports-1 loop
+        if(gnt_fifo_access(i) = '1') then
+          do_wr := rq_fifo_write_all(i);
         end if;
       end loop;  -- i
     end if;
 
-    s_rq_fifo_write_sng <= do_wr;
+    rq_fifo_write_sng <= do_wr;
 
-    for i in 0 to c_rtu_num_ports-1 loop
-      if(s_gnt_fifo_access(i) = '1') then
-        do_data := s_rq_fifo_data_a(i);
+    for i in 0 to g_num_ports-1 loop
+      if(gnt_fifo_access(i) = '1') then
+        do_data := rq_fifo_d_requests(i);
       end if;
     end loop;  -- i
 
-    s_rq_fifo_data <= do_data;
-    
+    rq_fifo_d_muxed <= gnt_fifo_access & do_data;
   end process;
 
 
 
-------------------------
-  --| REQUEST FIFO: takes requests from ports and makes it available for RTU MATCH
-  ---------------------------------------------------------------------------------------------------------------------
-  s_req_fifo_input(c_rtu_num_ports - 1 downto 0)                                                                                                          <= s_gnt_fifo_access;  --s_rsp_fifo_sel; -- we treat it as PORT ID
-  s_req_fifo_input(c_rtu_num_ports + c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 2 - 1 downto c_rtu_num_ports) <= s_rq_fifo_data;
+  -----------------------------------------------------------------------------
+  -- REQUEST FIFO: takes requests from ports and makes it available for RTU MATCH
+  -----------------------------------------------------------------------------
 
-  req_fifo : generic_shiftreg_fifo
-    generic map (  -- |request port ID |    destination MAC    |     source MAC        |     VLAN ID      |      PRIORITY     | has_prio | has vid |
-      g_data_width => c_rtu_num_ports + c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 1 + 1,
+  U_ReqFifo : generic_shiftreg_fifo
+    generic map (
+      g_data_width => g_num_ports + c_PACKED_REQUEST_WIDTH,
       g_size       => 32
---      g_almost_full_threshold  => 27,
---      g_almost_empty_threshold => 0,
---      g_show_ahead             => true
       )
     port map
     (
       rst_n_i   => rst_n_i,
-      d_i       => s_req_fifo_input,
+      d_i       => rq_fifo_d_muxed,
       clk_i     => clk_sys_i,
-      rd_i      => s_rq_fifo_read,      --rtu_match
-      we_i      => s_rq_fifo_write_sng,
-      q_o       => s_rq_rtu_match_data,
-      q_valid_o => s_rq_fifo_qvalid,
-      full_o    => s_rq_fifo_full
+      rd_i      => rq_fifo_read,        --rtu_match
+      we_i      => rq_fifo_write_sng,
+      q_o       => rq_rtu_match_data,
+      q_valid_o => rq_fifo_qvalid,
+      full_o    => rq_fifo_full
       );
 
-  s_rq_fifo_empty <= not s_rq_fifo_qvalid;
+  rq_fifo_empty <= not rq_fifo_qvalid;
 
 
 
@@ -472,26 +460,28 @@ begin
   --| RTU MATCH: Routing Table Unit Engine
   --------------------------------------------------------------------------------------------
   -- to be added
-  U_Match : wrsw_rtu_match
+  U_Match : rtu_match
+    generic map (
+      g_num_ports => g_num_ports)
     port map(
 
       clk_i             => clk_sys_i,
       rst_n_i           => rst_n_i,
-      rq_fifo_read_o    => s_rq_fifo_read,
-      rq_fifo_empty_i   => s_rq_fifo_empty,
-      rq_fifo_input_i   => s_rq_rtu_match_data,
-      rsp_fifo_write_o  => s_rsp_fifo_write,
-      rsp_fifo_full_i   => s_rsp_fifo_full,
-      rsp_fifo_output_o => s_rsp_rtu_match_data,
+      rq_fifo_read_o    => rq_fifo_read,
+      rq_fifo_empty_i   => rq_fifo_empty,
+      rq_fifo_input_i   => rq_rtu_match_data,
+      rsp_fifo_write_o  => rsp_fifo_write,
+      rsp_fifo_full_i   => rsp_fifo_full,
+      rsp_fifo_output_o => rsp_rtu_match_data,
 
-      htab_start_o => s_htab_start,
-      htab_ack_o   => s_htab_ack,
-      htab_found_i => s_htab_found,
-      htab_hash_o  => s_htab_hash,
-      htab_mac_o   => s_htab_mac,
-      htab_fid_o   => s_htab_fid,
-      htab_drdy_i  => s_htab_drdy,
-      htab_entry_i => s_htab_entry,
+      htab_start_o => htab_start,
+      htab_ack_o   => htab_ack,
+      htab_found_i => htab_found,
+      htab_hash_o  => htab_hash,
+      htab_mac_o   => htab_mac,
+      htab_fid_o   => htab_fid,
+      htab_drdy_i  => htab_drdy,
+      htab_entry_i => htab_entry,
 
       rtu_ufifo_wr_req_o   => regs_towb.ufifo_wr_req_i,
       rtu_ufifo_wr_full_i  => regs_fromwb.ufifo_wr_full_o,
@@ -506,26 +496,25 @@ begin
       rtu_ufifo_has_vid_o  => regs_towb.ufifo_has_vid_i,
       rtu_ufifo_has_prio_o => regs_towb.ufifo_has_prio_i,
 
-      rtu_aram_main_addr_o => s_aram_main_addr,
-      rtu_aram_main_data_i => s_aram_main_data_i,
-      rtu_aram_main_rd_o   => s_aram_main_rd,
-      rtu_aram_main_data_o => s_aram_main_data_o,
-      rtu_aram_main_wr_o   => s_aram_main_wr,
+      rtu_aram_main_addr_o => aram_main_addr,
+      rtu_aram_main_data_i => aram_main_data_i,
+      rtu_aram_main_rd_o   => aram_main_rd,
+      rtu_aram_main_data_o => aram_main_data_o,
+      rtu_aram_main_wr_o   => aram_main_wr,
 
-      rtu_vlan_tab_addr_o => s_vlan_tab_addr,
-      rtu_vlan_tab_data_i => s_vlan_tab_data,
-      rtu_vlan_tab_rd_o   => s_vlan_tab_rd,
+      vlan_tab_addr_o  => vlan_tab_rd_vid,
+      vlan_tab_entry_i => vlan_tab_rd_entry,
 
       rtu_gcr_g_ena_i     => regs_fromwb.gcr_g_ena_o,
-      rtu_pcr_pass_all_i  => s_pcr_pass_all(c_rtu_num_ports - 1 downto 0),
-      rtu_pcr_learn_en_i  => s_pcr_learn_en(c_rtu_num_ports - 1 downto 0),
-      rtu_pcr_pass_bpdu_i => s_pcr_pass_bpdu(c_rtu_num_ports - 1 downto 0),
-      rtu_pcr_b_unrec_i   => s_pcr_b_unrec(c_rtu_num_ports - 1 downto 0),
-      rtu_crc_poly_i      => s_rtu_gcr_poly_used  --x"1021"-- x"0589" -- x"8005" --x"1021" --x"8005", --
+      rtu_pcr_pass_all_i  => pcr_pass_all(g_num_ports - 1 downto 0),
+      rtu_pcr_learn_en_i  => pcr_learn_en(g_num_ports - 1 downto 0),
+      rtu_pcr_pass_bpdu_i => pcr_pass_bpdu(g_num_ports - 1 downto 0),
+      rtu_pcr_b_unrec_i   => pcr_b_unrec(g_num_ports - 1 downto 0),
+      rtu_crc_poly_i      => rtu_gcr_poly_used  --x"1021"-- x"0589" -- x"8005" --x"1021" --x"8005", --
 --    rtu_rw_bank_i                                => s_vlan_bsel
       );
 
-  s_rtu_gcr_poly_used <= c_default_hash_poly when (regs_fromwb.gcr_poly_val_o = x"0000") else s_rtu_gcr_poly_input;
+  rtu_gcr_poly_used <= c_default_hash_poly when (regs_fromwb.gcr_poly_val_o = x"0000") else rtu_gcr_poly_input;
 
   mfifo_trigger <= regs_fromwb.gcr_mfifotrig_o and regs_fromwb.gcr_mfifotrig_load_o;
 
@@ -542,14 +531,14 @@ begin
       mfifo_trigger_i  => mfifo_trigger,
       mfifo_busy_o     => regs_towb.gcr_mfifotrig_i,
 
-      start_i => s_htab_start,
-      ack_i   => s_htab_ack,
-      found_o => s_htab_found,
-      hash_i  => s_htab_hash,
-      mac_i   => s_htab_mac,
-      fid_i   => s_htab_fid,
-      drdy_o  => s_htab_drdy,
-      entry_o => s_htab_entry
+      start_i => htab_start,
+      ack_i   => htab_ack,
+      found_o => htab_found,
+      hash_i  => htab_hash,
+      mac_i   => htab_mac,
+      fid_i   => htab_fid,
+      drdy_o  => htab_drdy,
+      entry_o => htab_entry
       );
 
 
@@ -558,17 +547,17 @@ begin
   U_WB_Slave : rtu_wishbone_slave
     port map(
       rst_n_i   => rst_n_i,
-      clk_sys_i  => clk_sys_i,
+      clk_sys_i => clk_sys_i,
 
-      wb_adr_i => wb_addr_i,
-      wb_dat_i => wb_data_i,
-      wb_dat_o => wb_data_o,
-      wb_cyc_i  => wb_cyc_i,
-      wb_sel_i  => wb_sel_i,
-      wb_stb_i  => wb_stb_i,
-      wb_we_i   => wb_we_i,
-      wb_ack_o  => wb_ack_o,
-      wb_int_o  => wb_irq_o,
+      wb_adr_i   => wb_adr_i(8 downto 0),
+      wb_dat_i   => wb_dat_i,
+      wb_dat_o   => wb_dat_o,
+      wb_cyc_i   => wb_cyc_i,
+      wb_sel_i   => wb_sel_i,
+      wb_stb_i   => wb_stb_i,
+      wb_we_i    => wb_we_i,
+      wb_ack_o   => wb_ack_o,
+      wb_int_o   => wb_irq_o,
       wb_stall_o => open,
 
       clk_match_i => clk_sys_i,
@@ -576,48 +565,76 @@ begin
       regs_o => regs_fromwb,
       regs_i => regs_towb,
 
-      irq_nempty_i => s_irq_nempty,     --'1',
+      irq_nempty_i => irq_nempty,       --'1',
 
-      rtu_aram_addr_i => s_aram_main_addr,
-      rtu_aram_data_o => s_aram_main_data_i,
-      rtu_aram_rd_i   => s_aram_main_rd,
-      rtu_aram_data_i => s_aram_main_data_o,
-      rtu_aram_wr_i   => s_aram_main_wr,
-
-      rtu_vlan_tab_addr_i => s_vlan_tab_addr,
-      rtu_vlan_tab_data_o => s_vlan_tab_data,
-      rtu_vlan_tab_rd_i   => s_vlan_tab_rd
+      rtu_aram_addr_i => aram_main_addr,
+      rtu_aram_data_o => aram_main_data_i,
+      rtu_aram_rd_i   => aram_main_rd,
+      rtu_aram_data_i => aram_main_data_o,
+      rtu_aram_wr_i   => aram_main_wr
       );  
 
   current_pcr             <= to_integer(unsigned(regs_fromwb.psr_port_sel_o));
-  regs_towb.psr_n_ports_i <= std_logic_vector(to_unsigned(c_rtu_num_ports, 8));
+  regs_towb.psr_n_ports_i <= std_logic_vector(to_unsigned(g_num_ports, 8));
 
   -- indirectly addressed PCR registers - this is to allow easy generic-based
   -- scaling of the number of ports
   p_pcr_registers : process(clk_sys_i)
   begin
     if rising_edge(clk_sys_i) then
-      regs_towb.pcr_learn_en_i  <= s_pcr_learn_en(current_pcr);
-      regs_towb.pcr_pass_all_i  <= s_pcr_pass_all(current_pcr);
-      regs_towb.pcr_pass_bpdu_i <= s_pcr_pass_bpdu(current_pcr);
-      regs_towb.pcr_fix_prio_i  <= s_pcr_fix_prio(current_pcr);
-      regs_towb.pcr_prio_val_i  <= s_pcr_prio_val(3*current_pcr + 3 - 1 downto 3*current_pcr);
-      regs_towb.pcr_b_unrec_i   <= s_pcr_b_unrec(current_pcr);
+      regs_towb.pcr_learn_en_i  <= pcr_learn_en(current_pcr);
+      regs_towb.pcr_pass_all_i  <= pcr_pass_all(current_pcr);
+      regs_towb.pcr_pass_bpdu_i <= pcr_pass_bpdu(current_pcr);
+      regs_towb.pcr_fix_prio_i  <= pcr_fix_prio(current_pcr);
+      regs_towb.pcr_prio_val_i  <= pcr_prio_val(current_pcr);
+      regs_towb.pcr_b_unrec_i   <= pcr_b_unrec(current_pcr);
 
       if(regs_fromwb.pcr_learn_en_load_o = '1') then
-        s_pcr_learn_en(current_pcr)                                <= regs_fromwb.pcr_learn_en_o;
-        s_pcr_pass_all(current_pcr)                                <= regs_fromwb.pcr_pass_all_o;
-        s_pcr_pass_bpdu(current_pcr)                               <= regs_fromwb.pcr_pass_bpdu_o;
-        s_pcr_fix_prio(current_pcr)                                <= regs_fromwb.pcr_fix_prio_o;
-        s_pcr_prio_val(3*current_pcr + 3 - 1 downto 3*current_pcr) <= regs_fromwb.pcr_prio_val_o;
-        s_pcr_b_unrec(current_pcr)                                 <= regs_fromwb.pcr_b_unrec_o;
+        pcr_learn_en(current_pcr)  <= regs_fromwb.pcr_learn_en_o;
+        pcr_pass_all(current_pcr)  <= regs_fromwb.pcr_pass_all_o;
+        pcr_pass_bpdu(current_pcr) <= regs_fromwb.pcr_pass_bpdu_o;
+        pcr_fix_prio(current_pcr)  <= regs_fromwb.pcr_fix_prio_o;
+        pcr_prio_val(current_pcr)  <= regs_fromwb.pcr_prio_val_o;
+        pcr_b_unrec(current_pcr)   <= regs_fromwb.pcr_b_unrec_o;
+
+
+
       end if;
     end if;
   end process;
-  
-  
 
 
+  U_VLAN_Table : generic_dpram
+    generic map (
+      g_data_width       => c_VLAN_TAB_ENTRY_WIDTH,
+      g_size             => 4096,
+      g_with_byte_enable => false,
+      g_dual_clock       => false)
+    port map (
+      rst_n_i => rst_n_i,
+      clka_i  => clk_sys_i,
+      clkb_i => '0',
+      bwea_i  => "111111",
+      wea_i   => regs_fromwb.vtr1_update_o,
+      aa_i    => regs_fromwb.vtr1_vid_o,
+      da_i    => vlan_tab_wr_data,
+      ab_i    => vlan_tab_rd_vid,
+      qb_o    => vlan_tab_rd_data);
+
+  vlan_tab_wr_data <= regs_fromwb.vtr2_port_mask_o
+                      & regs_fromwb.vtr1_fid_o
+                      & regs_fromwb.vtr1_drop_o
+                      & regs_fromwb.vtr1_prio_override_o
+                      & regs_fromwb.vtr1_prio_o
+                      & regs_fromwb.vtr1_has_prio_o;
+
+  f_unpack6(vlan_tab_rd_data,
+            vlan_tab_rd_entry.port_mask,
+            vlan_tab_rd_entry.fid,
+            vlan_tab_rd_entry.drop,
+            vlan_tab_rd_entry.prio_override,
+            vlan_tab_rd_entry.prio,
+            vlan_tab_rd_entry.has_prio);
 
 end architecture;  -- end of wrsw_rtu
 

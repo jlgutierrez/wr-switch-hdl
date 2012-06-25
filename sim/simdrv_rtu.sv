@@ -177,7 +177,10 @@ task CRTUSimDriver::htab_write(int hash, int bucket, rtu_filtering_entry_t ent);
         (('hFFFF & ent.port_mask_dst)               << 16)  | 
         (('hFFFF & ent.port_mask_src)                    )  ;
 
-   d[4]  = 0;
+   d[4] = 
+        (('hFFFF & (ent.port_mask_dst >> 16))               << 16)  | 
+        (('hFFFF & (ent.port_mask_src >> 16))                    )  ;
+
 
    mfifo_write(hash * 8 * 4 + bucket * 8, 5, d);
 
@@ -278,17 +281,20 @@ task CRTUSimDriver::add_static_rule(bit[7:0] dmac[], bit[31:0] dpm);
 endtask // CRTUSimDriver
 
 task CRTUSimDriver::add_vlan_entry(int vlan_id, rtu_vlan_entry_t ent);
- bit[31:0] val;
+   uint64_t vtr1, vtr2;
 
- val = (('h1    & ent.drop)                             << 31)  | 
-       (('h1    & ent.prio_override)                    << 30)  |
-       (('h7    & ent.prio)                             << 27)  |
-       (('h1    & ent.has_prio)                         << 26)  |
-       (('hFF   & ent.fid)                              << 16)  |
-       (('hFFFF & ent.port_mask)                             )  ;
+
+   vtr2 = ent.port_mask;
+   vtr1 = `RTU_VTR1_UPDATE 
+          | (ent.drop ? `RTU_VTR1_DROP : 0)
+          | (ent.prio_override ? `RTU_VTR1_PRIO_OVERRIDE : 0)
+          | (ent.has_prio ? `RTU_VTR1_HAS_PRIO : 0)
+          | ((ent.prio & 'h7) << `RTU_VTR1_PRIO_OFFSET)
+          | ((ent.fid & 'hff) << `RTU_VTR1_FID_OFFSET);
+   
+      bus.write(base_addr + `ADDR_RTU_VTR2, vtr2);
+      bus.write(base_addr + `ADDR_RTU_VTR1, vtr1);
  
-   bus.write(base_addr + `BASE_RTU_VLAN_TAB + (vlan_id * 4), val);
-   bus.write(base_addr + `BASE_RTU_VLAN_TAB + (vlan_id * 4), val);
    
 endtask // CRTUSimDriver
 

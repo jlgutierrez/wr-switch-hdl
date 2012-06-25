@@ -49,10 +49,10 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-use work.wrsw_rtu_private_pkg.all;
+use work.rtu_private_pkg.all;
 
 
-entity wrsw_rr_arbiter is
+entity rtu_rr_arbiter is
     generic (
         g_width          : natural :=4 );
     port (
@@ -62,7 +62,7 @@ entity wrsw_rr_arbiter is
         
     );
 end entity;
-architecture behavior of wrsw_rr_arbiter is
+architecture behavior of rtu_rr_arbiter is
 
     ----------------Internal Registers-----------------
     signal s_reqs      :std_logic_vector(g_width - 1 downto 0);

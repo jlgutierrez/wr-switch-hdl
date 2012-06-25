@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-12
--- Last update: 2010-05-12
+-- Last update: 2012-06-22
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ library work;
 use work.PCK_CRC16_D16.all;
 
 
-package wrsw_rtu_crc_pkg is
+package rtu_crc_pkg is
 
   function crc16_ccitt
     (mac_addr_i: std_logic_vector(47 downto 0);
@@ -72,10 +72,10 @@ package wrsw_rtu_crc_pkg is
     return std_logic_vector;
     
         
-end wrsw_rtu_crc_pkg;
+end rtu_crc_pkg;
 
 
-package body wrsw_rtu_crc_pkg is
+package body rtu_crc_pkg is
 
   function crc16_ccitt
     (mac_addr_i: std_logic_vector(47 downto 0);
@@ -178,4 +178,4 @@ package body wrsw_rtu_crc_pkg is
     return v_hash_o;
   end crc16_dect;
 
-end wrsw_rtu_crc_pkg;
+end rtu_crc_pkg;

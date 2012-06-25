@@ -2,11 +2,11 @@
 -- Title      : Routing Table Unit's Matching Component (RTU_MATCH)
 -- Project    : White Rabbit Switch
 -------------------------------------------------------------------------------
--- File       : wrsw_rtu_match.vhd
+-- File       : rtu_match.vhd
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-08
--- Last update: 2012-03-09
+-- Last update: 2012-06-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -49,12 +49,14 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library work;
-use work.wrsw_rtu_private_pkg.all;
 use work.genram_pkg.all;
+use work.pack_unpack_pkg.all;
+use work.wrsw_shared_types_pkg.all;
+use work.rtu_private_pkg.all;
 
-
-entity wrsw_rtu_match is
-  
+entity rtu_match is
+  generic (
+    g_num_ports : integer);
   port(
 
     -----------------------------------------------------------------
@@ -75,52 +77,34 @@ entity wrsw_rtu_match is
     -- request FIFO is empty - there is no work for us:(
     rq_fifo_empty_i : in std_logic;
 
-    -- input from request FIFO        
-    rq_fifo_input_i : in std_logic_vector(c_rtu_num_ports +  -- request port ID
-                                          c_wrsw_mac_addr_width +  -- destination MAC
-                                          c_wrsw_mac_addr_width +  -- source MAC
-                                          c_wrsw_vid_width +       -- VLAN ID
-                                          c_wrsw_prio_width +      -- PRIORITY 
-                                          1 +                -- has_prio    
-                                          1 - 1 downto 0);   -- has vid
+    -- input from request FIFO
+    rq_fifo_input_i : in std_logic_vector(g_num_ports + c_PACKED_REQUEST_WIDTH - 1 downto 0);
 
     -------------------------------------------------------------------------------
     -- output response
     -------------------------------------------------------------------------------
 
     -- write data to response FIFO
-    rsp_fifo_write_o : out std_logic;
-
-    -- response FIFO is full
+    rsp_fifo_write_o  : out std_logic;
     rsp_fifo_full_i   : in  std_logic;
-    -- ouput response (to response FIFO):    
-    rsp_fifo_output_o : out std_logic_vector(c_rtu_num_ports +  -- request port ID
-                                             c_wrsw_num_ports +  -- forward port mask  
-                                             c_wrsw_prio_width +  -- priority
-                                             1 - 1 downto 0);   -- drop
+    rsp_fifo_output_o : out std_logic_vector(g_num_ports + c_PACKED_RESPONSE_WIDTH - 1 downto 0);
+
 
     htab_start_o : out std_logic;
-    -- htab_idle_i: in std_logic;
     htab_ack_o   : out std_logic;
     htab_found_i : in  std_logic;
     htab_hash_o  : out std_logic_vector(c_wrsw_hash_width - 1 downto 0);
     htab_mac_o   : out std_logic_vector(c_wrsw_mac_addr_width -1 downto 0);
     htab_fid_o   : out std_logic_vector(c_wrsw_fid_width - 1 downto 0);
     htab_drdy_i  : in  std_logic;
---    htab_valid_i : in  std_logic;
-
-    htab_entry_i : in t_rtu_htab_entry;
+    htab_entry_i : in  t_rtu_htab_entry;
 
     -------------------------------------------------------------------------------
     -- Unrecongized FIFO (operated by WB)
     -------------------------------------------------------------------------------  
-    -- FIFO write request
-    rtu_ufifo_wr_req_o : out std_logic;
 
-    -- FIFO full flag
-    rtu_ufifo_wr_full_i : in std_logic;
-
-    -- FIFO empty flag
+    rtu_ufifo_wr_req_o   : out std_logic;
+    rtu_ufifo_wr_full_i  : in  std_logic;
     rtu_ufifo_wr_empty_i : in  std_logic;
     rtu_ufifo_dmac_lo_o  : out std_logic_vector(31 downto 0);
     rtu_ufifo_dmac_hi_o  : out std_logic_vector(15 downto 0);
@@ -128,7 +112,7 @@ entity wrsw_rtu_match is
     rtu_ufifo_smac_hi_o  : out std_logic_vector(15 downto 0);
     rtu_ufifo_vid_o      : out std_logic_vector(c_wrsw_vid_width - 1 downto 0);
     rtu_ufifo_prio_o     : out std_logic_vector(2 downto 0);
-    rtu_ufifo_pid_o      : out std_logic_vector(3 downto 0);
+    rtu_ufifo_pid_o      : out std_logic_vector(7 downto 0);
     rtu_ufifo_has_vid_o  : out std_logic;
     rtu_ufifo_has_prio_o : out std_logic;
 
@@ -156,9 +140,8 @@ entity wrsw_rtu_match is
     -- VLAN TABLE
     -------------------------------------------------------------------------------   
 
-    rtu_vlan_tab_addr_o : out std_logic_vector(c_wrsw_vid_width - 1 downto 0);
-    rtu_vlan_tab_data_i : in  std_logic_vector(31 downto 0);
-    rtu_vlan_tab_rd_o   : out std_logic;
+    vlan_tab_addr_o : out std_logic_vector(c_wrsw_vid_width - 1 downto 0);
+    vlan_tab_entry_i : in t_rtu_vlan_tab_entry;
 
     -------------------------------------------------------------------------------
     -- CTRL registers
@@ -171,23 +154,23 @@ entity wrsw_rtu_match is
     -- PASS_ALL [read/write]: Pass all packets
     -- 1: all packets are passed (depending on the rules in RT table).
     -- 0: all packets are dropped on this port. 
-    rtu_pcr_pass_all_i : in std_logic_vector(c_rtu_num_ports - 1 downto 0);
+    rtu_pcr_pass_all_i : in std_logic_vector(g_num_ports - 1 downto 0);
 
     -- LEARN_EN : Learning enable
     -- 1: enables learning process on this port. Unrecognized requests will be put into UFIFO
     -- 0: disables learning. Unrecognized requests will be either broadcast or dropped. 
-    rtu_pcr_learn_en_i : in std_logic_vector(c_rtu_num_ports - 1 downto 0);
+    rtu_pcr_learn_en_i : in std_logic_vector(g_num_ports - 1 downto 0);
 
     -- PASS_BPDU : Pass BPDUs
     -- 1: BPDU packets (with dst MAC 01:80:c2:00:00:00) are passed according to RT rules. This setting overrides PASS_ALL.
     -- 0: BPDU packets are dropped. 
-    rtu_pcr_pass_bpdu_i : in std_logic_vector(c_rtu_num_ports - 1 downto 0);
+    rtu_pcr_pass_bpdu_i : in std_logic_vector(g_num_ports - 1 downto 0);
 
     -- [TODO implemented] B_UNREC : Unrecognized request behaviour
     -- Sets the port behaviour for all unrecognized requests:
     -- 0: packet is dropped
     -- 1: packet is broadcast     
-    rtu_pcr_b_unrec_i : in std_logic_vector(c_rtu_num_ports - 1 downto 0);
+    rtu_pcr_b_unrec_i : in std_logic_vector(g_num_ports - 1 downto 0);
 
     -------------------------------------------------------------------------------
     -- HASH based on CRC
@@ -196,51 +179,21 @@ entity wrsw_rtu_match is
 
     );
 
-end wrsw_rtu_match;
+end rtu_match;
 
-architecture behavioral of wrsw_rtu_match is
+architecture behavioral of rtu_match is
 
--------------------------------------------------------------------------------------------------------------------------
---| Register bit aliases
--------------------------------------------------------------------------------------------------------------------------
-  -- identifies port number: rtu_port_id = (2^port_number)
-  -- so the port number equals the number of shift_left
-  alias a_rtu_port_id : std_logic_vector(c_rtu_num_ports - 1 downto 0) is rq_fifo_input_i(c_rtu_num_ports - 1 downto 0);
-  
-  alias a_rq_smac : std_logic_vector(c_wrsw_mac_addr_width - 1 downto 0) is rq_fifo_input_i(c_rtu_num_ports +
-                                                                                            c_wrsw_mac_addr_width - 1 downto c_rtu_num_ports);
-
-  alias a_rq_dmac : std_logic_vector(c_wrsw_mac_addr_width - 1 downto 0) is rq_fifo_input_i(c_rtu_num_ports +
-                                                                                            2*c_wrsw_mac_addr_width - 1 downto c_rtu_num_ports +
-                                                                                            c_wrsw_mac_addr_width);
-  alias a_rq_vid : std_logic_vector(c_wrsw_vid_width - 1 downto 0) is rq_fifo_input_i(c_rtu_num_ports +
-                                                                                      2*c_wrsw_mac_addr_width +
-                                                                                      c_wrsw_vid_width - 1 downto c_rtu_num_ports +
-                                                                                      2*c_wrsw_mac_addr_width);
-
-  alias a_rq_prio : std_logic_vector(c_wrsw_prio_width - 1 downto 0) is rq_fifo_input_i(c_rtu_num_ports +
-                                                                                        2*c_wrsw_mac_addr_width +
-                                                                                        c_wrsw_vid_width +
-                                                                                        c_wrsw_prio_width - 1 downto c_rtu_num_ports +
-                                                                                        2*c_wrsw_mac_addr_width +
-                                                                                        c_wrsw_vid_width);
-
-  alias a_rq_has_vid : std_logic is rq_fifo_input_i(c_rtu_num_ports +
-                                                    2*c_wrsw_mac_addr_width +
-                                                    c_wrsw_vid_width +
-                                                    c_wrsw_prio_width);
-
-  alias a_rq_has_prio : std_logic is rq_fifo_input_i(c_rtu_num_ports +
-                                                     2*c_wrsw_mac_addr_width +
-                                                     c_wrsw_vid_width +
-                                                     c_wrsw_prio_width + 1);  
+  signal a_rq_smac, a_rq_dmac        : std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
+  signal a_rq_vid                    : std_logic_vector(c_wrsw_vid_width-1 downto 0);
+  signal a_rq_has_vid, a_rq_has_prio : std_logic;
+  signal a_rq_prio                   : std_logic_vector(c_wrsw_prio_width-1 downto 0);
 
 -------------------------------------------------------------------------------------------------------------------------
 --| RTU FSM states
 -------------------------------------------------------------------------------------------------------------------------
-  type t_rtu_match_states is (s_idle, s_rd_vlan_table_0, s_rd_vlan_table_1, s_calculate_hash, s_search_src_htab,
-                              s_search_src_htab_rsp, s_learn_src, s_finished_src_or_dst, s_response);
-  signal s_rtu_mach_state : t_rtu_match_states;
+  type t_rtu_match_states is (IDLE, RD_VLAN_TABLE_0, RD_VLAN_TABLE1, CALCULATE_HASH, SEARCH_HTAB,
+                              LEARN_SRC, LOOKUP_DONE, OUTPUT_RESPONSE);
+  signal mstate : t_rtu_match_states;
 
 -------------------------------------------------------------------------------------------------------------------------
 --| signals
@@ -248,13 +201,8 @@ architecture behavioral of wrsw_rtu_match is
 -- ack for the htab_lookup module that the provided data has been read
   signal s_htab_rd_data_ack : std_logic;
 
--- addr derived from the hash, suplied to htab_lookup
-  signal s_htab_rd_addr : std_logic_vector(c_wrsw_hash_width - 1 downto 0);
-  signal s_htab_mac     : std_logic_vector(c_wrsw_mac_addr_width -1 downto 0);
-
 -- registers to store request data
-  signal s_port_id      : std_logic_vector(c_rtu_num_ports - 1 downto 0);
-  signal s_port_zero    : std_logic_vector(c_rtu_num_ports - 1 downto 0);
+  signal s_port_id      : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_rq_smac      : std_logic_vector(c_wrsw_mac_addr_width - 1 downto 0);
   signal s_rq_dmac      : std_logic_vector(c_wrsw_mac_addr_width - 1 downto 0);
   signal s_rq_vid       : std_logic_vector(c_wrsw_vid_width - 1 downto 0);
@@ -264,7 +212,7 @@ architecture behavioral of wrsw_rtu_match is
   signal s_rq_fifo_read : std_logic;
 
 -- registers to store response data
-  signal s_rsp_dst_port_mask : std_logic_vector(c_wrsw_num_ports-1 downto 0);
+  signal s_rsp_dst_port_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
   signal s_rsp_drop          : std_logic;
   signal s_rsp_prio          : std_logic_vector (c_wrsw_prio_width-1 downto 0);
 
@@ -290,7 +238,7 @@ architecture behavioral of wrsw_rtu_match is
   signal s_vlan_tab_data      : std_logic_vector(31 downto 0);
   signal s_vlan_tab_rd        : std_logic;
 --|VLAN data
-  signal s_vlan_port_mask     : std_logic_vector(c_wrsw_num_ports - 1 downto 0);
+  signal s_vlan_port_mask     : std_logic_vector(c_RTU_MAX_PORTS - 1 downto 0);
   signal s_vlan_fid           : std_logic_vector(c_wrsw_fid_width - 1 downto 0);
   signal s_vlan_prio          : std_logic_vector(c_wrsw_prio_width - 1 downto 0);
   signal s_vlan_has_prio      : std_logic;
@@ -298,7 +246,7 @@ architecture behavioral of wrsw_rtu_match is
 
 --|registers used to store data of SOURCE ENTRY 
   signal s_src_entry_bucket_cnt               : std_logic_vector(5 downto 0);
-  signal s_src_entry_port_mask_src            : std_logic_vector(c_wrsw_num_ports - 1 downto 0);
+  signal s_src_entry_port_mask_src            : std_logic_vector(c_RTU_MAX_PORTS - 1 downto 0);
   signal s_src_entry_drop_unmatched_src_ports : std_logic;
   signal s_src_entry_prio_src                 : std_logic_vector(c_wrsw_prio_width - 1 downto 0);
   signal s_src_entry_has_prio_src             : std_logic;
@@ -307,7 +255,7 @@ architecture behavioral of wrsw_rtu_match is
 
 --|registers used to store data of DESTINATION ENTRY 
   signal s_dst_entry_is_bpdu           : std_logic;
-  signal s_dst_entry_port_mask_dst     : std_logic_vector(c_wrsw_num_ports - 1 downto 0);
+  signal s_dst_entry_port_mask_dst     : std_logic_vector(c_RTU_MAX_PORTS - 1 downto 0);
   signal s_dst_entry_prio_dst          : std_logic_vector(c_wrsw_prio_width - 1 downto 0);
   signal s_dst_entry_has_prio_dst      : std_logic;
   signal s_dst_entry_prio_override_dst : std_logic;
@@ -316,7 +264,6 @@ architecture behavioral of wrsw_rtu_match is
   signal s_aram_main_addr           : std_logic_vector(c_wrsw_hash_width-3-1 downto 0);
   signal s_aram_main_data_o         : std_logic_vector(31 downto 0);
   signal s_aram_main_data_o_delayed : std_logic_vector(31 downto 0);
-  signal s_aram_main_rd             : std_logic;
   signal s_aram_main_wr             : std_logic;
 
 
@@ -364,21 +311,45 @@ architecture behavioral of wrsw_rtu_match is
 
   signal s_rtu_ufifo_wr_req : std_logic;
 
+  function f_onehot_decode (
+    x : std_logic_vector) return integer is
+  begin
+    for i in 0 to x'length-1 loop
+      if x(i) = '1' then
+        return i;
+      end if;
+    end loop;  -- i
+    return 0;
+  end f_onehot_decode;
+
+
+  function f_onehot_encode (x : integer; size : integer) return std_logic_vector is
+    variable rv : std_logic_vector(size-1 downto 0);
+  begin
+    rv    := (others => '0');
+    rv(x) := '1';
+    return rv;
+  end f_onehot_encode;
+
+
+
+  signal requesting_port : std_logic_vector(g_num_ports-1 downto 0);
+
+
 -------------------------------------------------------------------------------------------------------------------------
 --| Address outs and flag generation and 
 -------------------------------------------------------------------------------------------------------------------------
 begin
-  s_port_zero <= (others => '0');
   -----------------------------------------------------------------------------------------------------------------------
   --| Hash calculation
   -----------------------------------------------------------------------------------------------------------------------
 
   -- the sooner we have feed, the sooner the hash function (asynch) 
   -- will start calculating hash (which takes time)
-  s_hash_input_fid <= rtu_vlan_tab_data_i(16 + c_wrsw_fid_width - 1 downto 16);
+  s_hash_input_fid <= vlan_tab_entry_i.fid;
 
   --source hash calculate
-  rtu_match_hash_src : wrsw_rtu_crc
+  U_rtu_match_hash_src : rtu_crc
     port map(
       mac_addr_i => s_rq_smac,
       fid_i      => s_hash_input_fid,
@@ -386,7 +357,7 @@ begin
       hash_o     => s_hash_src
       );
   --destination hash calculate    
-  rtu_match_hash_dst : wrsw_rtu_crc
+  U_rtu_match_hash_dst : rtu_crc
     port map(
       mac_addr_i => s_rq_dmac,
       fid_i      => s_hash_input_fid,
@@ -397,61 +368,31 @@ begin
   -----------------------------------------------------------------------------------------------------------------------
   --| Shift Left calculation
   -----------------------------------------------------------------------------------------------------------------------
-  shift_left : for i in 0 to 31 generate
-    shifted_left(i) <= '1' when(i = to_integer(unsigned(s_to_shift_left))) else '0';
-  end generate;
-
-  -----------------------------------------------------------------------------------------------------------------------
-  --| Calculate port number = log2(port_id)
-  -----------------------------------------------------------------------------------------------------------------------
-
-  s_port_id_vector(c_rtu_num_ports - 1 downto 0) <= rq_fifo_input_i(c_rtu_num_ports - 1 downto 0);
-  s_port_id_vector(31 downto c_rtu_num_ports)    <= (others => '0');
-
-  with s_port_id_vector select
-    s_port_number_tmp <= x"00" when "00000000000000000000000000000000",  -- should not ther be 1? 
-    x"01"                      when "00000000000000000000000000000010",
-    x"02"                      when "00000000000000000000000000000100",
-    x"03"                      when "00000000000000000000000000001000",
-    x"04"                      when "00000000000000000000000000010000",
-    x"05"                      when "00000000000000000000000000100000",
-    x"06"                      when "00000000000000000000000001000000",
-    x"07"                      when "00000000000000000000000010000000",
-    x"08"                      when "00000000000000000000000100000000",
-    x"09"                      when "00000000000000000000001000000000",
-    x"0a"                      when "00000000000000000000010000000000",
-    x"0b"                      when "00000000000000000000100000000000",
-    x"0c"                      when "00000000000000000001000000000000",
-    x"0d"                      when "00000000000000000010000000000000",
-    x"0e"                      when "00000000000000000100000000000000",
-    x"0f"                      when "00000000000000001000000000000000",
-    x"10"                      when "00000000000000010000000000000000",
-    x"11"                      when "00000000000000100000000000000000",
-    x"12"                      when "00000000000001000000000000000000",
-    x"13"                      when "00000000000010000000000000000000",
-    x"14"                      when "00000000000100000000000000000000",
-    x"15"                      when "00000000001000000000000000000000",
-    x"16"                      when "00000000010000000000000000000000",
-    x"17"                      when "00000000100000000000000000000000",
-    x"18"                      when "00000001000000000000000000000000",
-    x"19"                      when "00000010000000000000000000000000",
-    x"1a"                      when "00000100000000000000000000000000",
-    x"1b"                      when "00001000000000000000000000000000",
-    x"1c"                      when "00010000000000000000000000000000",
-    x"1d"                      when "00100000000000000000000000000000",
-    x"1e"                      when "01000000000000000000000000000000",
-    x"1f"                      when "10000000000000000000000000000000",
-    x"00"                      when others;
+  --shift_left : for i in 0 to 31 generate
+  --  shifted_left(i) <= '1' when(i = to_integer(unsigned(s_to_shift_left))) else '0';
+  --end generate;
 
 
-  -------------------------------------------------------------------------------------------------------------------------
-  --| Begining of RTU MATCH FSM
-  --| (state transitions)       
-  -------------------------------------------------------------------------------------------------------------------------
+  -- unpack request and decode requesting port number (from 1-hot to binary)
+  f_unpack7(
+    rq_fifo_input_i,
+    requesting_port,
+    a_rq_has_vid,
+    a_rq_prio,
+    a_rq_has_prio,
+    a_rq_vid,
+    a_rq_dmac,
+    a_rq_smac
+    );
+
+  s_port_number_tmp <= std_logic_vector(to_unsigned(f_onehot_decode(requesting_port), 8));
+
+
+  --------------------------------------
+  -- Begining of RTU MATCH FSM
+  --------------------------------------
+
   rtu_match_state : process(clk_i)
-
-    --ML: variable v_test_data_correctness: std_logic_vector(31 downto 0);
-
   begin
     if rising_edge(clk_i) then
       
@@ -475,7 +416,7 @@ begin
         s_dst_entry_prio_override_dst <= '0';
 
 
-        s_aram_main_rd <= '0';
+        rtu_aram_main_rd_o <= '0';
         -- CAM
 
         s_src_dst_sel <= '0';
@@ -492,11 +433,11 @@ begin
 
       else
         -- FSM
-        case s_rtu_mach_state is
+        case mstate is
           ------------------------------------------------------------------------------------------------------------------
           --| IDLE: Check input FIFO, if it's not empty, go ahead and work !!! [SRC/DST]
           ------------------------------------------------------------------------------------------------------------------
-          when s_idle =>
+          when IDLE =>
 
 
             --| if the FIFO is not empty we have work to do !
@@ -519,9 +460,9 @@ begin
             s_dst_entry_has_prio_dst      <= '0';
             s_dst_entry_prio_override_dst <= '0';
 
-            s_aram_main_rd  <= '0';
-            s_aram_main_wr  <= '0';
-            s_to_shift_left <= (others => '0');
+            rtu_aram_main_rd_o <= '0';
+            s_aram_main_wr     <= '0';
+            s_to_shift_left    <= (others => '0');
             -- CAM            
 
             s_src_dst_sel <= '0';
@@ -551,12 +492,12 @@ begin
               -------------------------------------------              
               if ((rtu_gcr_g_ena_i = '1'))
                 and
-                (((a_rtu_port_id and rtu_pcr_pass_all_i) = a_rtu_port_id) or ((a_rtu_port_id and rtu_pcr_pass_bpdu_i) = a_rtu_port_id)) then
+                (((requesting_port and rtu_pcr_pass_all_i) = requesting_port) or ((requesting_port and rtu_pcr_pass_bpdu_i) = requesting_port)) then
 
-                s_rtu_mach_state <= s_rd_vlan_table_0;
+                mstate <= RD_VLAN_TABLE_0;
 
                 -- remember request [provided show ahead in request fifo is ON]
-                s_port_id    <= a_rtu_port_id;
+                s_port_id    <= requesting_port;
                 s_rq_smac    <= a_rq_smac;
                 s_rq_dmac    <= a_rq_dmac;
                 s_rq_vid     <= a_rq_vid;
@@ -580,20 +521,20 @@ begin
                 -- check the configuration data for a given port 
                 -- for which the match is performed
 
-                if((a_rtu_port_id and rtu_pcr_pass_all_i) = a_rtu_port_id) then
+                if((requesting_port and rtu_pcr_pass_all_i) = requesting_port) then
                   s_rtu_pcr_pass_all <= '1';
                 end if;
 
 
-                if((a_rtu_port_id and rtu_pcr_learn_en_i) = a_rtu_port_id) then
+                if((requesting_port and rtu_pcr_learn_en_i) = requesting_port) then
                   s_rtu_pcr_learn_en <= '1';
                 end if;
 
-                if((a_rtu_port_id and rtu_pcr_pass_bpdu_i) = a_rtu_port_id) then
+                if((requesting_port and rtu_pcr_pass_bpdu_i) = requesting_port) then
                   s_rtu_pcr_pass_bpdu <= '1';
                 end if;
 
-                if((a_rtu_port_id and rtu_pcr_b_unrec_i) = a_rtu_port_id) then
+                if((requesting_port and rtu_pcr_b_unrec_i) = requesting_port) then
                   s_rtu_pcr_b_unrec <= '1';
                 end if;
 
@@ -614,12 +555,12 @@ begin
               else
 
                 -- drop package, RTU or port disabled
-                s_port_id <= a_rtu_port_id;
+                s_port_id <= requesting_port;
 
                 s_rsp_drop          <= '1';
                 s_rsp_dst_port_mask <= (others => '0');
                 s_rsp_prio          <= (others => '0');
-                s_rtu_mach_state    <= s_response;
+                mstate              <= OUTPUT_RESPONSE;
                 
 
               end if;
@@ -628,30 +569,31 @@ begin
             ------------------------------------------------------------------------------------------------------------------
             --| READ VLAN TABLE: output addr [ONLY SRC]
             ------------------------------------------------------------------------------------------------------------------
-          when s_rd_vlan_table_0 =>
+          when RD_VLAN_TABLE_0 =>
 
-            s_rtu_mach_state <= s_rd_vlan_table_1;
-            s_vlan_tab_rd    <= '1';
+            mstate         <= RD_VLAN_TABLE1;
+            s_vlan_tab_rd  <= '1';
             -- stop reading request from rq_fifo
-            s_rq_fifo_read   <= '0';
+            s_rq_fifo_read <= '0';
             ------------------------------------------------------------------------------------------------------------------
             --| READ VLAN TABLE: read vlan data [ONLY SRC]
             ------------------------------------------------------------------------------------------------------------------
-          when s_rd_vlan_table_1 =>
+          when RD_VLAN_TABLE1 =>
 
 
             -- port mask (max 16 bits)
-            s_vlan_port_mask(c_wrsw_num_ports - 1 downto 0) <= rtu_vlan_tab_data_i(c_wrsw_num_ports - 1 downto 0);
+            s_vlan_port_mask(vlan_tab_entry_i.port_mask'length - 1 downto 0) <=
+              vlan_tab_entry_i.port_mask;
 
             -- fid can be max 10 bits,                 
-            s_vlan_fid(c_wrsw_fid_width - 1 downto 0) <= rtu_vlan_tab_data_i(16 + c_wrsw_fid_width - 1 downto 16);
-
+            htab_fid_o <= vlan_tab_entry_i.fid;
+            
             -- has priority
-            s_vlan_has_prio <= rtu_vlan_tab_data_i(26);
+            s_vlan_has_prio <= vlan_tab_entry_i.has_prio;
 
-            if (rtu_vlan_tab_data_i(26) = '1') then  -- equals:  if ( s_vlan_has_prio ) then
-              s_vlan_prio (c_wrsw_prio_width - 1 downto 0) <= rtu_vlan_tab_data_i(16 + 10 + 1 + c_wrsw_prio_width - 1 downto 16 + 10 + 1);
-              s_vlan_prio_override                         <= rtu_vlan_tab_data_i(16 + 10 + 1 + 3);
+            if (vlan_tab_entry_i.has_prio = '1') then  -- equals:  if ( s_vlan_has_prio ) then
+              s_vlan_prio (c_wrsw_prio_width - 1 downto 0) <= vlan_tab_entry_i.prio;
+              s_vlan_prio_override                         <= vlan_tab_entry_i.prio_override;
             else
               s_vlan_prio (c_wrsw_prio_width - 1 downto 0) <= (others => '0');
               s_vlan_prio_override                         <= '0';
@@ -660,28 +602,28 @@ begin
             -------------------------------------------       
             -- drop reqeust from VLAN config
             -------------------------------------------            
-            if(rtu_vlan_tab_data_i(31) = '1') then  -- if(s_vlan_drop = '1')
+            if(vlan_tab_entry_i.drop = '1') then  -- if(s_vlan_drop = '1')
 
               -- RETURN
-              s_rsp_drop       <= '1';
-              s_rtu_mach_state <= s_response;
-              s_vlan_tab_rd    <= '0';
+              s_rsp_drop    <= '1';
+              mstate        <= OUTPUT_RESPONSE;
+              s_vlan_tab_rd <= '0';
 
               -------------------------------------------       
               -- VLAN config allows to process data
               -------------------------------------------                  
             else
               
-              s_rtu_mach_state <= s_calculate_hash;
-              s_vlan_tab_rd    <= '1';
-              s_htab_mac       <= s_rq_smac;
+              mstate        <= CALCULATE_HASH;
+              s_vlan_tab_rd <= '1';
+              htab_mac_o    <= s_rq_smac;
               
             end if;
 
             ------------------------------------------------------------------------------------------------------------------
             --| CALCULATE HASH
             ------------------------------------------------------------------------------------------------------------------
-          when s_calculate_hash =>
+          when CALCULATE_HASH =>
 
             -- remember hash for destination MAC
             -- entry search
@@ -689,7 +631,7 @@ begin
 
             -- address to read for source search
             -- based on hash
-            s_htab_rd_addr <= s_hash_src;
+            htab_hash_o <= s_hash_src;
 
             -- just in case we find entry, read appropriate word from aging aram
             -- the addrss is based on hash
@@ -703,9 +645,9 @@ begin
             s_to_shift_left(1 downto 0) <= (others => '0');
 
             -- read aging aram  
-            s_aram_main_rd <= '1';
+            rtu_aram_main_rd_o <= '1';
 
-            s_rtu_mach_state <= s_search_src_htab;
+            mstate <= SEARCH_HTAB;
 
             -- keep reading VLAN (don't remember why:()
             s_vlan_tab_rd <= '1';
@@ -713,7 +655,7 @@ begin
             ------------------------------------------------------------------------------------------------------------------
             --| LOOK FOR THE ENTRY IN THE HASH TABLE (ZBT SRAM) [SRC/DST]
             ------------------------------------------------------------------------------------------------------------------
-          when s_search_src_htab =>
+          when SEARCH_HTAB =>
 
             -- as soon as possible supply the mising aging info to shift function
             -- so that we can update aging aram if needed
@@ -721,9 +663,7 @@ begin
 
             -- in the first clock of being in this state
             -- we can stop  reading aram
-            if (s_aram_main_rd = '1') then
-              s_aram_main_rd <= '0';
-            end if;
+            rtu_aram_main_rd_o <= '0';
 
             -------------------------------------------       
             -- htab_lookup finished the search, we can
@@ -744,7 +684,7 @@ begin
 
                 -- update aging aram (in any case that entry was found,
                 -- even if dropped later, we update aging aram
-                s_aram_main_data_o <= shifted_left or rtu_aram_main_data_i;
+                s_aram_main_data_o <= rtu_aram_main_data_i or std_logic_vector(to_unsigned(f_onehot_decode(s_to_shift_left), 32));
                 s_aram_main_wr     <= '1';
 
                 ----------------------------------------------------------------------------
@@ -762,7 +702,7 @@ begin
                     s_rsp_drop          <= '1';
                     s_rsp_dst_port_mask <= (others => '0');
                     s_rsp_prio          <= (others => '0');
-                    s_rtu_mach_state    <= s_response;
+                    mstate              <= OUTPUT_RESPONSE;
 
                     -------------------------------------------       
                     -- source MAC is not blocked, go ahead
@@ -770,7 +710,7 @@ begin
                   else
                     
                     
-                    s_rtu_mach_state <= s_finished_src_or_dst;
+                    mstate <= LOOKUP_DONE;
 
                     -- remember destination MAC entry data
                     s_src_entry_port_mask_src            <= htab_entry_i.port_mask_src;
@@ -803,7 +743,7 @@ begin
                     s_rsp_drop          <= '1';
                     s_rsp_dst_port_mask <= (others => '0');
                     s_rsp_prio          <= (others => '0');
-                    s_rtu_mach_state    <= s_response;
+                    mstate              <= OUTPUT_RESPONSE;
 
 
                     -------------------------------------------       
@@ -811,13 +751,11 @@ begin
                     -------------------------------------------                         
                   else
 
-                    s_rtu_mach_state <= s_finished_src_or_dst;
+                    mstate <= LOOKUP_DONE;
 
                     s_dst_entry_is_bpdu       <= htab_entry_i.is_bpdu;
                     s_dst_entry_port_mask_dst <= htab_entry_i.port_mask_dst;
                     s_dst_entry_has_prio_dst  <= htab_entry_i.has_prio_dst;
-
-
 
                     if(htab_entry_i.has_prio_dst = '1') then
                       s_dst_entry_prio_dst          <= htab_entry_i.prio_dst;
@@ -847,7 +785,7 @@ begin
 --                  s_src_entry_cam_addr <= htab_entry_i.cam_addr;
 
                   -- lookup in CAM
---                  s_rtu_mach_state <= s_search_src_cam;
+--                  mstate <= s_search_src_cam;
 
 
                   -------------------------------------------       
@@ -881,7 +819,7 @@ begin
                   -------------------------------------------
                   if((rtu_ufifo_wr_full_i = '0') and (s_rtu_pcr_learn_en = '1') and (s_rq_learned_reg = '0')) then
 
-                    s_rtu_mach_state   <= s_learn_src;
+                    mstate             <= LEARN_SRC;
                     s_rtu_ufifo_wr_req <= '1';
 
                     -------------------------------------------       
@@ -898,11 +836,11 @@ begin
                       s_rsp_drop          <= '1';
                       s_rsp_dst_port_mask <= (others => '0');
                       s_rsp_prio          <= (others => '0');
-                      s_rtu_mach_state    <= s_response;
+                      mstate              <= OUTPUT_RESPONSE;
                       
                     else
 
-                      s_rtu_mach_state <= s_finished_src_or_dst;
+                      mstate <= LOOKUP_DONE;
                       
                       
                     end if;  --if( s_rtu_pcr_b_unrec = '0' and s_src_dst_sel = '1') then  
@@ -918,7 +856,7 @@ begin
             ------------------------------------------------------------------------------------------------------------------
             --| LEARN: [SRC/DST]
             ------------------------------------------------------------------------------------------------------------------
-          when s_learn_src =>
+          when LEARN_SRC =>
 
             -- remembers that we've already
             -- learned this request
@@ -929,7 +867,7 @@ begin
 
             s_rtu_ufifo_wr_req <= '0';
 
-            s_rtu_mach_state <= s_finished_src_or_dst;
+            mstate <= LOOKUP_DONE;
 
 
             if(s_htab_rd_data_ack = '1') then
@@ -971,7 +909,7 @@ begin
                 s_rsp_drop          <= '1';
                 s_rsp_dst_port_mask <= (others => '0');
                 s_rsp_prio          <= (others => '0');
-                s_rtu_mach_state    <= s_response;
+                mstate              <= OUTPUT_RESPONSE;
 
               end if;
               
@@ -981,7 +919,7 @@ begin
             --| SOURCE or DESTINATION ENTRY SEARCH FINISHED : if source search finished, start again with destination search
             --                                                if destination search finished, output response and exit
             ------------------------------------------------------------------------------------------------------------------
-          when s_finished_src_or_dst =>
+          when LOOKUP_DONE =>
             
             
             
@@ -1001,7 +939,7 @@ begin
               --  check if the packet with given
               --  source MAC can come from this port.    
               -------------------------------------------        
-              if ((s_port_id and s_src_entry_port_mask_src(c_rtu_num_ports - 1 downto 0)) = s_port_zero(c_rtu_num_ports - 1 downto 0)) then
+              if unsigned(s_port_id and s_src_entry_port_mask_src(g_num_ports - 1 downto 0)) = 0 then
 
                 -------------------------------------------       
                 -- if the MAC address is locked to 
@@ -1010,8 +948,8 @@ begin
                 if (s_src_entry_drop_unmatched_src_ports = '1') then
 
                   -- RETURN
-                  s_rsp_drop       <= '1';
-                  s_rtu_mach_state <= s_response;
+                  s_rsp_drop <= '1';
+                  mstate     <= OUTPUT_RESPONSE;
 
                   -------------------------------------------       
                   -- MAC address is not locked to 
@@ -1050,28 +988,28 @@ begin
                   -------------------------------------------                    
                   if((rtu_ufifo_wr_full_i = '0') and (s_rtu_pcr_learn_en = '1') and (s_rq_learned_reg = '0')) then
                     
-                    s_rtu_mach_state   <= s_learn_src;
+                    mstate             <= LEARN_SRC;
                     s_rtu_ufifo_wr_req <= '1';
 
                     -------------------------------------------       
                     -- for some reasons we don't want to learn
                     -- things below are normally done
-                    -- in s_learn_src state
+                    -- in LEARN_SRC state
                     -------------------------------------------                        
                   else
 
                     -- change address to destination MAC search
-                    s_htab_rd_addr              <= s_hash_dst_reg;  --s_hash_dst;--s_hash_dst_reg;
+                    htab_hash_o                 <= s_hash_dst_reg;  --s_hash_dst;--s_hash_dst_reg;
                     -- MAC to look for
-                    s_htab_mac                  <= s_rq_dmac;
+                    htab_mac_o                  <= s_rq_dmac;
                     -- now, search for destination entry
-                    s_rtu_mach_state            <= s_search_src_htab;
+                    mstate                      <= SEARCH_HTAB;
                     -- now, go for destination search
                     s_src_dst_sel               <= '1';
                     s_aram_main_addr            <= s_hash_dst_reg(c_wrsw_hash_width -1 downto 3);
                     s_to_shift_left(4 downto 2) <= s_hash_dst_reg(2 downto 0);
                     s_to_shift_left(1 downto 0) <= (others => '0');  -- at the beginning the bucket number always  is 0x0                  
-                    s_aram_main_rd              <= '1';
+                    rtu_aram_main_rd_o          <= '1';
                     
                   end if;
                   
@@ -1084,17 +1022,17 @@ begin
               else
 
                 -- change address to destination MAC search
-                s_htab_rd_addr              <= s_hash_dst_reg;   --s_hash_dst;
+                htab_hash_o                 <= s_hash_dst_reg;   --s_hash_dst;
                 -- MAC to look for
-                s_htab_mac                  <= s_rq_dmac;
+                htab_mac_o                  <= s_rq_dmac;
                 -- now, search for destination entry
-                s_rtu_mach_state            <= s_search_src_htab;
+                mstate                      <= SEARCH_HTAB;
                 -- now, go for destination search
                 s_src_dst_sel               <= '1';
                 s_aram_main_addr            <= s_hash_dst_reg(c_wrsw_hash_width -1 downto 3);
                 s_to_shift_left(4 downto 2) <= s_hash_dst_reg(2 downto 0);
                 s_to_shift_left(1 downto 0) <= (others => '0');  -- at the beginning the bucket number always  is 0x0 
-                s_aram_main_rd              <= '1';
+                rtu_aram_main_rd_o          <= '1';
                 
               end if;
 
@@ -1170,7 +1108,7 @@ begin
               end if;  -- if( (s_rtu_pcr_pass_bpdu = '1') and (s_dst_entry_is_bpdu = '0')) then
 
               -- finished searching (both src and dst)
-              s_rtu_mach_state <= s_response;
+              mstate <= OUTPUT_RESPONSE;
               
             end if;
 
@@ -1179,7 +1117,7 @@ begin
             ------------------------------------------------------------------------------------------------------------------
             --| RESPONSE: Say the World that the response is ready and keep the information available to the outside World [SRC/CST]
             ------------------------------------------------------------------------------------------------------------------
-          when s_response =>
+          when OUTPUT_RESPONSE =>
 
             -- stop reading request from rq_fifo (if RTU/port disabled, 
             -- the FSM goes here from idle state)
@@ -1192,17 +1130,17 @@ begin
               
             end if;
 
-            s_rtu_mach_state <= s_idle;
-            s_vlan_tab_rd    <= '0';
-            s_aram_main_wr   <= '0';
+            mstate         <= IDLE;
+            s_vlan_tab_rd  <= '0';
+            s_aram_main_wr <= '0';
             ------------------------------------------------------------------------------------------------------------------
             --| UPS, SHOULD NOT COME HERE: In case it happens
             ------------------------------------------------------------------------------------------------------------------
           when others =>
             --|don't know what to do, go to the beginnig :)
-            s_rtu_mach_state <= s_idle;
-            s_vlan_tab_rd    <= '0';
-            s_aram_main_wr   <= '0';
+            mstate         <= IDLE;
+            s_vlan_tab_rd  <= '0';
+            s_aram_main_wr <= '0';
         end case;
 
       end if;
@@ -1210,22 +1148,13 @@ begin
   end process rtu_match_state;
 
 
+  vlan_tab_addr_o <= s_vlan_tab_addr;
 
+  htab_ack_o <= s_htab_rd_data_ack;
 
-  rtu_vlan_tab_addr_o <= s_vlan_tab_addr;
-  rtu_vlan_tab_rd_o   <= s_vlan_tab_rd;
-
-  htab_mac_o <= s_htab_mac;
-  htab_fid_o <= s_vlan_fid;
-
-  htab_hash_o <= s_htab_rd_addr;
-  htab_ack_o  <= s_htab_rd_data_ack;
-
-  rtu_aram_main_rd_o   <= s_aram_main_rd;
   rtu_aram_main_addr_o <= "00" & s_aram_main_addr;
   rtu_aram_main_data_o <= s_aram_main_data_o;
   rtu_aram_main_wr_o   <= s_aram_main_wr;
-
 
   rtu_ufifo_dmac_lo_o <= s_rq_dmac(31 downto 0);
   rtu_ufifo_dmac_hi_o <= s_rq_dmac(47 downto 32);
@@ -1234,10 +1163,8 @@ begin
   rtu_ufifo_vid_o     <= s_rq_vid(c_wrsw_vid_width -1 downto 0);
   rtu_ufifo_prio_o    <= s_rq_prio(2 downto 0);
 
-
   -- TODO:
-  rtu_ufifo_pid_o <= s_ufifo_pid(3 downto 0);
-
+  rtu_ufifo_pid_o <= s_ufifo_pid(7 downto 0);
 
   rtu_ufifo_has_vid_o  <= s_rq_has_vid;
   rtu_ufifo_has_prio_o <= s_rq_has_prio;
@@ -1245,22 +1172,13 @@ begin
   rq_fifo_read_o <= s_rq_fifo_read;
 
   -- requests to search modules
-  htab_start_o <= '1' when (s_rtu_mach_state = s_search_src_htab) else '0';
+  htab_start_o <= '1' when (mstate = SEARCH_HTAB) else '0';
 
-  rtu_ufifo_wr_req_o                              <= s_rtu_ufifo_wr_req;
-  rsp_fifo_write_o                                <= '1' when s_rtu_mach_state = s_response else '0';
+  rtu_ufifo_wr_req_o <= s_rtu_ufifo_wr_req;
+  rsp_fifo_write_o   <= '1' when mstate = OUTPUT_RESPONSE else '0';
   -- response strobe
-  rsp_fifo_output_o(c_rtu_num_ports - 1 downto 0) <= s_port_id;
 
-  rsp_fifo_output_o(c_rtu_num_ports +
-                    c_wrsw_num_ports - 1 downto c_rtu_num_ports) <= s_rsp_dst_port_mask;
+  rsp_fifo_output_o <= s_rsp_dst_port_mask & s_rsp_drop & s_rsp_prio & s_port_id;
 
-  rsp_fifo_output_o(c_rtu_num_ports +
-                    c_wrsw_num_ports +
-                    c_wrsw_prio_width - 1 downto c_rtu_num_ports +
-                    c_wrsw_num_ports) <= s_rsp_prio;
-  rsp_fifo_output_o(c_rtu_num_ports +
-                    c_wrsw_num_ports +
-                    c_wrsw_prio_width) <=  s_rsp_drop ;
+end architecture;
 
-end architecture;  --wrsw_rtu_match

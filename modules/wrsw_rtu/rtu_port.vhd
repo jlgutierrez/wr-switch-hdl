@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-08
--- Last update: 2012-01-26
+-- Last update: 2012-06-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -49,12 +49,14 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-use work.wrsw_rtu_private_pkg.all;
 use work.genram_pkg.all;
+use work.wrsw_shared_types_pkg.all;
+use work.pack_unpack_pkg.all;
+use work.rtu_private_pkg.all;
 
-
-entity wrsw_rtu_port is
+entity rtu_port is
   generic(
+    g_num_ports  : integer;
     g_port_index : integer);
   port(
 
@@ -103,7 +105,7 @@ entity wrsw_rtu_port is
 
     -- destination port mask. HI bits indicate that packet should be routed to
     -- the corresponding port(s).
-    rsp_dst_port_mask_o : out std_logic_vector(c_wrsw_num_ports - 1 downto 0);
+    rsp_dst_port_mask_o : out std_logic_vector(c_rtu_max_ports - 1 downto 0);
 
     -- HI -> packet must be dropped
     rsp_drop_o : out std_logic;
@@ -114,20 +116,21 @@ entity wrsw_rtu_port is
 
     -- acknowledge response reception
     rsp_ack_i : in std_logic;
+
     -------------------------------------------------------------------------------
     -- request FIFO interfacing
     -------------------------------------------------------------------------------
 
     rq_fifo_write_o : out std_logic;
     rq_fifo_full_i  : in  std_logic;
-    rq_fifo_data_o  : out std_logic_vector(c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 2 - 1 downto 0);
+    rq_fifo_data_o  : out std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
 
     -------------------------------------------------------------------------------
     -- response FIFO interfacing
     -------------------------------------------------------------------------------
 
     rsp_write_i      : in std_logic;
-    rsp_match_data_i : in std_logic_vector(c_wrsw_num_ports + c_wrsw_prio_width + 1 +c_rtu_num_ports - 1 downto 0);
+    rsp_match_data_i : in std_logic_vector(g_num_ports + c_PACKED_RESPONSE_WIDTH - 1 downto 0);
 
     -------------------------------------------------------------------------------
     -- interface RoundRobin arbiter
@@ -156,27 +159,22 @@ entity wrsw_rtu_port is
     rtu_pcr_prio_val_i  : in std_logic_vector(c_wrsw_prio_width - 1 downto 0)
     );
 
-end wrsw_rtu_port;
+end rtu_port;
 
-architecture behavioral of wrsw_rtu_port is
+architecture behavioral of rtu_port is
 
 --- RTU FSM state definitions
   type t_rtu_port_rq_states is (RQS_IDLE, RQS_REQ_WRITE, RQS_WRITE_FIFO);
   type t_rtu_port_rsp_states is (RSPS_IDLE, RSPS_RESPONSE, RSPS_WAIT_ACK);
 
-  constant c_rqfifo_width  : integer := c_wrsw_mac_addr_width + c_wrsw_mac_addr_width + c_wrsw_vid_width + c_wrsw_prio_width + 2;
-  constant c_rspfifo_width : integer := c_wrsw_num_ports + c_wrsw_prio_width + 1;
 
   constant c_port_full_threshold       : integer := 30;
   constant c_port_almostfull_threshold : integer := 20;
 
-
   signal rqf_state  : t_rtu_port_rq_states;
   signal rspf_state : t_rtu_port_rsp_states;
 
-  signal rq_fifo_data_int : std_logic_vector(c_rqfifo_width - 1 downto 0);
-  signal rq_data_int      : std_logic_vector(c_rqfifo_width - 1 downto 0);
-
+  signal rq_fifo_d_reg, rq_fifo_d : std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
 
   signal rq_fifo_write        : std_logic;
   signal rr_request_wr_access : std_logic;
@@ -187,66 +185,56 @@ architecture behavioral of wrsw_rtu_port is
   signal ififo_read  : std_logic;
   signal ififo_empty : std_logic;
 
-  signal ififo_out : std_logic_vector(c_rspfifo_width-1 downto 0);
-  signal ififo_in  : std_logic_vector(c_rspfifo_width-1 downto 0);
+  signal ififo_d, ififo_q : std_logic_vector(c_PACKED_RESPONSE_WIDTH-1 downto 0);
 
-  signal rsp_requesting_port : std_logic_vector(c_rtu_num_ports-1 downto 0);
-
-
+  signal rsp_requesting_port   : std_logic_vector(g_num_ports-1 downto 0);
+  signal rsp_dst_port_mask_int : std_logic_vector(c_rtu_max_ports-1 downto 0);
 
   signal count_inc, count_dec : std_logic;
   signal req_count            : unsigned(5 downto 0);
 
-------------------------------------------------------------------------------------------------------------------------- 
+  function f_pick (
+    condition : boolean;
+    w_true: std_logic_vector;
+    w_false: std_logic_vector) return std_logic_vector is
+
+  begin
+    if(condition) then
+      return w_true;
+      else
+        return w_false;
+      end if;
+  end function;
+  
 begin
 
 
   -- create request fifo input data
-  rq_data_int(c_wrsw_mac_addr_width - 1 downto 0)                       <= rq_smac_i;
-  rq_data_int(2*c_wrsw_mac_addr_width - 1 downto c_wrsw_mac_addr_width) <= rq_dmac_i;
-  rq_data_int(2*c_wrsw_mac_addr_width +
-              c_wrsw_vid_width - 1 downto 2*c_wrsw_mac_addr_width) <= rq_vid_i;
+  rq_fifo_d <=
+    rq_has_vid_i
+    & f_pick(rtu_pcr_fix_prio_i = '0', rq_prio_i, rtu_pcr_prio_val_i)
+    & (rtu_pcr_fix_prio_i or rq_has_prio_i)
+    & rq_vid_i
+    & rq_dmac_i
+    & rq_smac_i;
 
-  -- # FIX_PRIO [read/write]: Fix priority
-  -- 1: Port has fixed priority of value PRIO_VAL. It overrides the priority coming from the endpoint
-  -- 0: Use priority from the endpoint
-  
-  rq_data_int(2*c_wrsw_mac_addr_width +
-              c_wrsw_vid_width +
-              c_wrsw_prio_width + 1) <= '1' when (rtu_pcr_fix_prio_i = '1') else rq_has_prio_i;   
+  rq_fifo_data_o <= rq_fifo_d_reg;
 
-  -- # PRIO_VAL [read/write]: Priority value
-  -- Fixed priority value for the port. Used instead the endpoint-assigned priority when FIX_PRIO = 1  
-  
-  rq_data_int(2*c_wrsw_mac_addr_width +
-              c_wrsw_vid_width +
-              c_wrsw_prio_width - 1 downto 2*c_wrsw_mac_addr_width +
-              c_wrsw_vid_width) <= rtu_pcr_prio_val_i when (rtu_pcr_fix_prio_i = '1') else rq_prio_i;
-  rq_data_int(2*c_wrsw_mac_addr_width +
-              c_wrsw_vid_width +
-              c_wrsw_prio_width) <= rq_has_vid_i;
-
-
-  rq_fifo_data_o <= rq_fifo_data_int;
-
-
-
-
-  -------------------------------------------------------------------------------------------------------------------------
-  --| Begining of PORT REQUEST MATCH FSM
-  --| (state transitions)       
-  -------------------------------------------------------------------------------------------------------------------------
+  -------------------------------------------------------------------------------------
+  -- Begining of PORT REQUEST MATCH FSM
+  -- (state transitions)       
+  -------------------------------------------------------------------------------------
 
   port_rq_fsm_state : process (clk_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        ------------------------------------------------------------------------------------------------------------ 
-        --| RESET
-        ------------------------------------------------------------------------------------------------------------     
+        --------------- 
+        -- RESET
+        ---------------     
 
         -- request    
-        rq_fifo_data_int <= (others => '0');
+        rq_fifo_d_reg <= (others => '0');
 
         -- FSM state
         rqf_state <= RQS_IDLE;
@@ -259,18 +247,18 @@ begin
       else
         -- FSM
         case rqf_state is
-          ------------------------------------------------------------------------------------------------------------ 
-          --| IDLE: waiting for the request from a port
-          ------------------------------------------------------------------------------------------------------------ 
+          ---------------------------------------------------- 
+          -- IDLE: waiting for the request from a port
+          ---------------------------------------------------- 
           when RQS_IDLE =>
             
             rtu_idle <= '1';
             -- there is request
             if (rq_strobe_p_i = '1') then
               
-              rqf_state        <= RQS_REQ_WRITE;
+              rqf_state     <= RQS_REQ_WRITE;
               -- remember input data 
-              rq_fifo_data_int <= rq_data_int;
+              rq_fifo_d_reg <= rq_fifo_d;
 
 
               rr_request_wr_access <= '1';
@@ -279,9 +267,9 @@ begin
 
             end if;
 
-          ------------------------------------------------------------------------------------------------------------ 
-          --| REQUEST WRITE: request write access to request FIFO (RoundRobin arbiter)
-          ------------------------------------------------------------------------------------------------------------ 
+            ------------------------------------------------------------------------------ 
+            -- REQUEST WRITE: request write access to request FIFO (RoundRobin arbiter)
+            ------------------------------------------------------------------------------ 
           when RQS_REQ_WRITE =>
             
             if(rr_access_ena_i = '1' and rq_fifo_full_i = '0') then  -- access to FIFO granted by arbiter
@@ -294,9 +282,9 @@ begin
             end if;
 
 
-          ------------------------------------------------------------------------------------------------------------ 
-          --| WRITE FIFO: write request data to request FIFO
-          ------------------------------------------------------------------------------------------------------------             
+            ------------------------------------------------------ 
+            -- WRITE FIFO: write request data to request FIFO
+            ------------------------------------------------------             
           when RQS_WRITE_FIFO =>
             
             rqf_state <= RQS_IDLE;
@@ -306,21 +294,14 @@ begin
             rtu_idle             <= '1';
             count_inc            <= '0';
 
-          ------------------------------------------------------------------------------------------------------------ 
-          --| OTHER: 
-          ------------------------------------------------------------------------------------------------------------                       
-          when others => null;
-        ------------------------------------------------------------------------------------------------------------
         end case;
       end if;
     end if;
   end process port_rq_fsm_state;
 
-
   rq_fifo_write_o        <= rq_fifo_write;
   rr_request_wr_access_o <= rr_request_wr_access;
   rtu_idle_o             <= rtu_idle;
-
 
   -------------------------------------------------------------------------------------------------------------------------
   --| Begining of PORT RESPONSE MATCH FSM
@@ -328,42 +309,40 @@ begin
   ----------------------------------------------------------------------------------------------
 ---------------------------
 
-  rsp_requesting_port <= rsp_match_data_i(c_rtu_num_ports-1 downto 0);
+  rsp_requesting_port <= rsp_match_data_i(g_num_ports-1 downto 0);
 
   ififo_clear <= not rst_n_i;
-  ififo_write <= rsp_match_data_i(g_port_index) and rsp_write_i;
-  ififo_in    <= rsp_match_data_i(c_rspfifo_width + c_rtu_num_ports - 1 downto c_rtu_num_ports);
+  ififo_write <= rsp_requesting_port(g_port_index) and rsp_write_i;
+  ififo_d     <= rsp_match_data_i(c_PACKED_RESPONSE_WIDTH + g_num_ports - 1 downto g_num_ports);
 
+
+  -- fixme: consider shiftreg fifos
   U_RESPONSE_FIFO : generic_sync_fifo
     generic map (
-      g_data_width      => c_rspfifo_width,
-      g_size      => 32)
+      g_data_width => c_PACKED_RESPONSE_WIDTH,
+      g_size       => 32)
     port map (
-      clk_i    => clk_i,
-      rst_n_i  => rst_n_i,
-      we_i => ififo_write,
-      d_i      => ififo_in,
-      rd_i => ififo_read,
-      q_o      => ififo_out,
-      empty_o  => ififo_empty,
-      full_o   => open,
-      count_o  => open);
+      clk_i   => clk_i,
+      rst_n_i => rst_n_i,
+      we_i    => ififo_write,
+      d_i     => ififo_d,
+      rd_i    => ififo_read,
+      q_o     => ififo_q,
+      empty_o => ififo_empty,
+      full_o  => open,
+      count_o => open);
 
   ififo_read <= '1' when (rspf_state = RSPS_IDLE) and ififo_empty = '0' else '0';
 
+  f_unpack3(ififo_q, rsp_dst_port_mask_int, rsp_drop_o, rsp_prio_o);
 
-  -- interpret response fifo output data
-  p_gen_dpm: process(ififo_out)
-    variable tmp : std_logic_vector(c_wrsw_num_ports-1 downto 0);
+  p_mask_loopback : process(rsp_dst_port_mask_int)
+    variable tmp : std_logic_vector(c_rtu_max_ports-1 downto 0);
   begin
-    tmp := ififo_out(c_wrsw_num_ports - 1 downto 0);
-    tmp(g_port_index) := '0';
+    tmp                 := rsp_dst_port_mask_int;
+    tmp(g_port_index)   := '0';
     rsp_dst_port_mask_o <= tmp;
   end process;
-
-
-  rsp_prio_o          <= ififo_out(c_wrsw_num_ports + c_wrsw_prio_width - 1 downto c_wrsw_num_ports);
-  rsp_drop_o          <= ififo_out(c_wrsw_num_ports + c_wrsw_prio_width);
 
   p_response_output : process (clk_i)
   begin
@@ -371,21 +350,21 @@ begin
 
       if rst_n_i = '0' then
         rsp_valid_o <= '0';
-        rspf_state     <= RSPS_IDLE;
-        count_dec      <= '0';
+        rspf_state  <= RSPS_IDLE;
+        count_dec   <= '0';
       else
         case rspf_state is
           when RSPS_IDLE =>
             count_dec <= '0';
             if(ififo_empty = '0') then
               rsp_valid_o <= '1';
-              rspf_state     <= RSPS_WAIT_ACK;
+              rspf_state  <= RSPS_WAIT_ACK;
             end if;
           when RSPS_WAIT_ACK =>
             if(rsp_ack_i = '1') then
               rsp_valid_o <= '0';
-              count_dec  <= '1';
-              rspf_state <= RSPS_IDLE;
+              count_dec   <= '1';
+              rspf_state  <= RSPS_IDLE;
             end if;
           when others => null;
         end case;

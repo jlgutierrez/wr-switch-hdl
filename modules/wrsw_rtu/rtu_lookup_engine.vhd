@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-22
--- Last update: 2012-04-26
+-- Last update: 2012-06-22
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 
-use work.wrsw_rtu_private_pkg.all;
+use work.rtu_private_pkg.all;
 use work.genram_pkg.all;
 
 
@@ -179,7 +179,7 @@ begin
     end if;
   end process;
 
-  cur_entry              <= f_unmarshall_htab_entry(mem_out(0), mem_out(1), mem_out(2), mem_out(3));
+  cur_entry              <= f_unmarshall_htab_entry(mem_out(0), mem_out(1), mem_out(2), mem_out(3), mem_out(4));
   cur_entry.bucket_entry <= std_logic_vector(bucket_entry_d0);
 
   p_match : process(clk_match_i)

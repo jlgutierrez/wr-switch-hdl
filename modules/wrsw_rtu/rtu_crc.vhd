@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-12
--- Last update: 2012-01-25
+-- Last update: 2012-06-22
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -43,13 +43,13 @@ library ieee;
 use ieee.std_logic_1164.all;
 
 library work;
-use work.wrsw_rtu_crc_pkg.all;
-use work.wrsw_rtu_private_pkg.all;
+use work.rtu_crc_pkg.all;
+use work.rtu_private_pkg.all;
 
 
 
 
-entity wrsw_rtu_crc is
+entity rtu_crc is
     port (
         mac_addr_i        : in  std_logic_vector(c_wrsw_mac_addr_width - 1 downto 0);
         fid_i             : in  std_logic_vector(c_wrsw_fid_width      - 1 downto 0);
@@ -57,7 +57,8 @@ entity wrsw_rtu_crc is
         hash_o            : out std_logic_vector(c_wrsw_hash_width     - 1 downto 0)        
     );
 end entity;
-architecture behavior of wrsw_rtu_crc is
+
+architecture behavior of rtu_crc is
     signal s_crc16        : std_logic_vector(15 downto 0);
     signal s_fid          : std_logic_vector(15 downto 0);
 begin
