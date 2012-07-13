@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-08
--- Last update: 2012-06-25
+-- Last update: 2012-06-27
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -56,8 +56,9 @@ use work.rtu_private_pkg.all;
 
 entity rtu_port is
   generic(
-    g_num_ports  : integer;
-    g_port_index : integer);
+    g_num_ports        : integer;
+    g_port_index       : integer;
+    g_with_output_fifo : boolean := false);
   port(
 
     -- clock (62.5 MHz refclk/2)
@@ -165,7 +166,7 @@ architecture behavioral of rtu_port is
 
 --- RTU FSM state definitions
   type t_rtu_port_rq_states is (RQS_IDLE, RQS_REQ_WRITE, RQS_WRITE_FIFO);
-  type t_rtu_port_rsp_states is (RSPS_IDLE, RSPS_RESPONSE, RSPS_WAIT_ACK);
+  type t_rtu_port_rsp_states is (RSPS_IDLE, RSPS_WAIT_ACK);
 
 
   constant c_port_full_threshold       : integer := 30;
@@ -174,7 +175,7 @@ architecture behavioral of rtu_port is
   signal rqf_state  : t_rtu_port_rq_states;
   signal rspf_state : t_rtu_port_rsp_states;
 
-  signal rq_fifo_d_reg, rq_fifo_d : std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
+  signal rq_fifo_d : std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
 
   signal rq_fifo_write        : std_logic;
   signal rr_request_wr_access : std_logic;
@@ -187,23 +188,26 @@ architecture behavioral of rtu_port is
 
   signal ififo_d, ififo_q : std_logic_vector(c_PACKED_RESPONSE_WIDTH-1 downto 0);
 
-  signal rsp_requesting_port   : std_logic_vector(g_num_ports-1 downto 0);
-  signal rsp_dst_port_mask_int : std_logic_vector(c_rtu_max_ports-1 downto 0);
+  signal rsp_requesting_port                          : std_logic_vector(g_num_ports-1 downto 0);
+  signal rsp_dst_port_mask_int, rsp_dst_port_mask_raw : std_logic_vector(c_rtu_max_ports-1 downto 0);
+
+  signal rsp_drop_int : std_logic;
+  signal rsp_prio_int : std_logic_vector(c_wrsw_prio_width-1 downto 0);
 
   signal count_inc, count_dec : std_logic;
   signal req_count            : unsigned(5 downto 0);
 
   function f_pick (
     condition : boolean;
-    w_true: std_logic_vector;
-    w_false: std_logic_vector) return std_logic_vector is
+    w_true    : std_logic_vector;
+    w_false   : std_logic_vector) return std_logic_vector is
 
   begin
     if(condition) then
       return w_true;
-      else
-        return w_false;
-      end if;
+    else
+      return w_false;
+    end if;
   end function;
   
 begin
@@ -218,7 +222,7 @@ begin
     & rq_dmac_i
     & rq_smac_i;
 
-  rq_fifo_data_o <= rq_fifo_d_reg;
+  rq_fifo_data_o <= rq_fifo_d;          --_reg;
 
   -------------------------------------------------------------------------------------
   -- Begining of PORT REQUEST MATCH FSM
@@ -234,7 +238,7 @@ begin
         ---------------     
 
         -- request    
-        rq_fifo_d_reg <= (others => '0');
+--        rq_fifo_d_reg <= (others => '0');
 
         -- FSM state
         rqf_state <= RQS_IDLE;
@@ -256,9 +260,9 @@ begin
             -- there is request
             if (rq_strobe_p_i = '1') then
               
-              rqf_state     <= RQS_REQ_WRITE;
+              rqf_state <= RQS_REQ_WRITE;
               -- remember input data 
-              rq_fifo_d_reg <= rq_fifo_d;
+--              rq_fifo_d_reg <= rq_fifo_d;
 
 
               rr_request_wr_access <= '1';
@@ -303,109 +307,168 @@ begin
   rr_request_wr_access_o <= rr_request_wr_access;
   rtu_idle_o             <= rtu_idle;
 
-  -------------------------------------------------------------------------------------------------------------------------
+
+  gen_without_output_fifo : if(not g_with_output_fifo) generate
+
+    f_unpack4( rsp_match_data_i, rsp_dst_port_mask_raw, rsp_drop_int, rsp_prio_int, rsp_requesting_port);
+
+    p_mask_loopback : process(rsp_dst_port_mask_raw)
+      variable tmp : std_logic_vector(c_rtu_max_ports-1 downto 0);
+    begin
+      tmp                   := rsp_dst_port_mask_raw;
+      tmp(g_port_index)     := '0';
+      rsp_dst_port_mask_int <= tmp;
+    end process;
+
+
+    p_gen_response : process(clk_i)
+    begin
+      if rising_edge(clk_i) then
+        if rst_n_i = '0' then
+          rsp_valid_o <= '0';
+          rspf_state  <= RSPS_IDLE;
+           port_almost_full_o <= '0';
+          port_full_o <= '0';
+        else
+              if(rsp_ack_i = '1') then
+            port_full_o <= '0';
+          elsif(rq_fifo_write = '1') then
+            port_full_o <= '1';
+          end if;
+
+          case rspf_state is
+            when RSPS_IDLE =>
+              if(rsp_requesting_port(g_port_index) and rsp_write_i) = '1' then
+                rspf_state               <= RSPS_WAIT_ACK;
+                rsp_valid_o         <= '1';
+                rsp_prio_o          <= rsp_prio_int;
+                rsp_drop_o          <= rsp_drop_int;
+                rsp_dst_port_mask_o <= rsp_dst_port_mask_int;
+              end if;
+
+            when RSPS_WAIT_ACK =>
+              if(rsp_ack_i = '1') then
+                rsp_valid_o <= '0';
+                rspf_state       <= RSPS_IDLE;
+              end if;
+
+          end case;
+        end if;
+      end if;
+    end process;
+
+  end generate gen_without_output_fifo;
+
+-------------------------------------------------------------------------------------------------------------------------
   --| Begining of PORT RESPONSE MATCH FSM
   --| (state transitions)       
   ----------------------------------------------------------------------------------------------
 ---------------------------
 
-  rsp_requesting_port <= rsp_match_data_i(g_num_ports-1 downto 0);
+  gen_with_output_fifo : if(g_with_output_fifo) generate
+    
+    rsp_requesting_port <= rsp_match_data_i(g_num_ports-1 downto 0);
 
-  ififo_clear <= not rst_n_i;
-  ififo_write <= rsp_requesting_port(g_port_index) and rsp_write_i;
-  ififo_d     <= rsp_match_data_i(c_PACKED_RESPONSE_WIDTH + g_num_ports - 1 downto g_num_ports);
-
-
-  -- fixme: consider shiftreg fifos
-  U_RESPONSE_FIFO : generic_sync_fifo
-    generic map (
-      g_data_width => c_PACKED_RESPONSE_WIDTH,
-      g_size       => 32)
-    port map (
-      clk_i   => clk_i,
-      rst_n_i => rst_n_i,
-      we_i    => ififo_write,
-      d_i     => ififo_d,
-      rd_i    => ififo_read,
-      q_o     => ififo_q,
-      empty_o => ififo_empty,
-      full_o  => open,
-      count_o => open);
-
-  ififo_read <= '1' when (rspf_state = RSPS_IDLE) and ififo_empty = '0' else '0';
-
-  f_unpack3(ififo_q, rsp_dst_port_mask_int, rsp_drop_o, rsp_prio_o);
-
-  p_mask_loopback : process(rsp_dst_port_mask_int)
-    variable tmp : std_logic_vector(c_rtu_max_ports-1 downto 0);
-  begin
-    tmp                 := rsp_dst_port_mask_int;
-    tmp(g_port_index)   := '0';
-    rsp_dst_port_mask_o <= tmp;
-  end process;
-
-  p_response_output : process (clk_i)
-  begin
-    if rising_edge(clk_i) then
-
-      if rst_n_i = '0' then
-        rsp_valid_o <= '0';
-        rspf_state  <= RSPS_IDLE;
-        count_dec   <= '0';
-      else
-        case rspf_state is
-          when RSPS_IDLE =>
-            count_dec <= '0';
-            if(ififo_empty = '0') then
-              rsp_valid_o <= '1';
-              rspf_state  <= RSPS_WAIT_ACK;
-            end if;
-          when RSPS_WAIT_ACK =>
-            if(rsp_ack_i = '1') then
-              rsp_valid_o <= '0';
-              count_dec   <= '1';
-              rspf_state  <= RSPS_IDLE;
-            end if;
-          when others => null;
-        end case;
-      end if;
-    end if;
-  end process;
-
-  p_request_counter : process (clk_i)
-  begin
-    if rising_edge(clk_i) then
-      if(rst_n_i = '0') then
-        req_count          <= (others => '0');
-        port_almost_full_o <= '0';
-        port_full_o        <= '0';
-      else
+    ififo_clear <= not rst_n_i;
+    ififo_write <= rsp_requesting_port(g_port_index) and rsp_write_i;
+    ififo_d     <= rsp_match_data_i(c_PACKED_RESPONSE_WIDTH + g_num_ports - 1 downto g_num_ports);
 
 
-        -- almost full check  
-        if(unsigned(req_count) >= c_port_almostfull_threshold) then
-          port_almost_full_o <= '1';
+    -- fixme: consider shiftreg fifos
+    U_RESPONSE_FIFO : generic_sync_fifo
+      generic map (
+        g_data_width => c_PACKED_RESPONSE_WIDTH,
+        g_size       => 32)
+      port map (
+        clk_i   => clk_i,
+        rst_n_i => rst_n_i,
+        we_i    => ififo_write,
+        d_i     => ififo_d,
+        rd_i    => ififo_read,
+        q_o     => ififo_q,
+        empty_o => ififo_empty,
+        full_o  => open,
+        count_o => open);
+
+    ififo_read <= '1' when (rspf_state = RSPS_IDLE) and ififo_empty = '0' else '0';
+
+    p_mask_loopback : process(rsp_dst_port_mask_int)
+      variable tmp : std_logic_vector(c_rtu_max_ports-1 downto 0);
+    begin
+      tmp                 := rsp_dst_port_mask_int;
+      tmp(g_port_index)   := '0';
+      rsp_dst_port_mask_o <= tmp;
+    end process;
+
+
+    p_response_output : process (clk_i)
+    begin
+      if rising_edge(clk_i) then
+
+        if rst_n_i = '0' then
+          rsp_valid_o <= '0';
+          rspf_state  <= RSPS_IDLE;
+          count_dec   <= '0';
+
+         
+
         else
+
+      
+          case rspf_state is
+            when RSPS_IDLE =>
+              count_dec <= '0';
+              if(ififo_empty = '0') then
+                rsp_valid_o <= '1';
+                rspf_state  <= RSPS_WAIT_ACK;
+              end if;
+            when RSPS_WAIT_ACK =>
+              if(rsp_ack_i = '1') then
+                rsp_valid_o <= '0';
+                count_dec   <= '1';
+                rspf_state  <= RSPS_IDLE;
+              end if;
+            when others => null;
+          end case;
+        end if;
+      end if;
+    end process;
+
+
+    p_request_counter : process (clk_i)
+    begin
+      if rising_edge(clk_i) then
+        if(rst_n_i = '0') then
+          req_count          <= (others => '0');
           port_almost_full_o <= '0';
-        end if;
-
-        -- full check
-        if(unsigned(req_count) >= c_port_full_threshold) then
-          port_full_o <= '1';
+          port_full_o        <= '0';
         else
-          port_full_o <= '0';
-        end if;
 
-        if(count_inc = '1' and count_dec = '0') then
-          req_count <= req_count + 1;
-        elsif(count_inc = '0' and count_dec = '1') then
-          req_count <= req_count - 1;
+
+          -- almost full check  
+          if(unsigned(req_count) >= c_port_almostfull_threshold) then
+            port_almost_full_o <= '1';
+          else
+            port_almost_full_o <= '0';
+          end if;
+
+          -- full check
+          if(unsigned(req_count) >= c_port_full_threshold) then
+            port_full_o <= '1';
+          else
+            port_full_o <= '0';
+          end if;
+
+          if(count_inc = '1' and count_dec = '0') then
+            req_count <= req_count + 1;
+          elsif(count_inc = '0' and count_dec = '1') then
+            req_count <= req_count - 1;
+          end if;
         end if;
       end if;
-    end if;
-  end process p_request_counter;
-  
-
+    end process p_request_counter;
+    
+  end generate gen_with_output_fifo;
   
   
 end architecture;  --wrsw_rtu_port
