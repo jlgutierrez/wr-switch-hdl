@@ -78,14 +78,28 @@ architecture rtl of mpm_pipelined_mux is
 
   signal d_extended   : std_logic_vector(c_num_inputs_floor3 * g_width - 1 downto 0);
   signal sel_extended : std_logic_vector(c_num_inputs_floor3 - 1 downto 0) := (others => '0');
-  
+
+  function f_deXize(x : std_logic_vector) return std_logic_vector is
+    variable tmp : std_logic_vector(x'length-1 downto 0);
+  begin
+    for i in 0 to x'length-1 loop
+      if(x(i) = '0' or x(i) = '1') then
+        tmp(i) := x(i);
+      else
+        tmp(i) := '0';
+      end if;
+    end loop;  -- i
+
+    return tmp;
+    
+  end f_deXize;
   
 begin  -- rtl
 
-  d_extended (d_i'left downto 0) <= d_i;
+  d_extended (d_i'left downto 0)     <= d_i;
   sel_extended (sel_i'left downto 0) <= sel_i;
 
-  
+
   -- 1st stage, optimized for 5-input LUTs: mux each 3-input groups or 0
   -- if (sel == 11)
   gen_1st_stage : for i in 0 to c_first_stage_muxes-1 generate
@@ -124,7 +138,7 @@ begin  -- rtl
             row(i) := first_stage(i, j);
           end loop;  -- i
 
-          if(unsigned(row) = 0) then
+          if(unsigned(f_deXize(row)) = 0) then
             q_o(j) <= '0';
           else
             q_o(j) <= '1';
