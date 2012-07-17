@@ -58,7 +58,7 @@ entity mpm_async_grow_fifo is
     -- wide/narrow data width ratio
     g_ratio          : integer := 6;
     -- number of wide words in FIFO
-    g_size           : integer := 8;
+    g_size           : integer := 4;
     -- sideband channel (side_i/side_o) width
     g_sideband_width : integer := 16);
 
@@ -203,16 +203,11 @@ begin  -- rtl
 
   -- Output register on q_o. Memory cells are combinatorial, the register is
   -- here to improve the timing.
-  p_output_reg : process(clk_rd_i, rst_n_a_i)
+  p_output_reg : process(clk_rd_i)
   begin
-    if (rst_n_a_i = '0') then
-      q_o    <= (others => '0');
-      side_o <= (others => '0');
-    elsif rising_edge(clk_rd_i) then
-      if(rd_i = '1') then
+  	if rising_edge(clk_rd_i) then
         q_o    <= q_int;
         side_o <= side_comb;
-      end if;
     end if;
   end process;
 
