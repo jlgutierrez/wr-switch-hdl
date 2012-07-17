@@ -48,8 +48,8 @@ use work.genram_pkg.all;
 entity mpm_fifo_mem_cell is
   
   generic (
-    g_width : integer;
-    g_size  : integer);
+    g_width : integer := 128;
+    g_size  : integer := 8);
 
   port (
     -- write port clock
@@ -68,6 +68,9 @@ architecture rtl of mpm_fifo_mem_cell is
   type t_mem_array is array(0 to g_size-1) of std_logic_vector(g_width-1 downto 0);
 
   signal mem : t_mem_array;
+
+  attribute ram_style        : string;
+  attribute ram_style of mem : signal is "distributed";
 begin  -- rtl
 
   rd_o <= mem(to_integer(unsigned(ra_i)));
