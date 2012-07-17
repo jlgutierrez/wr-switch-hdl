@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-03-16
+-- Last update: 2012-07-10
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -41,7 +41,6 @@
 -- 2012-02-16  4.0      mlipinsk adapted to the new (async) MPM
 -------------------------------------------------------------------------------
 -- TODO:
--- 1) mpm_dsel_i - needs to be made it generic
 -- 2) mpm_abort_o - implement
 -------------------------------------------------------------------------------
 
@@ -96,7 +95,6 @@ entity xswc_output_block is
     mpm_d_i            : in  std_logic_vector (g_mpm_data_width -1 downto 0);
     mpm_dvalid_i       : in  std_logic;
     mpm_dlast_i        : in  std_logic;
-    mpm_dsel_i         : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
     mpm_dreq_o         : out std_logic;
     mpm_abort_o        : out std_logic;
     mpm_pg_addr_o      : out std_logic_vector (g_mpm_page_addr_width -1 downto 0);
@@ -230,7 +228,6 @@ architecture behavoural of xswc_output_block is
   signal src_cyc_int   : std_logic;
   signal src_stb_int   : std_logic;
   signal src_we_int    : std_logic;
-  signal src_sel_int   : std_logic_vector(1 downto 0);
   signal out_dat_err   : std_logic;
   -- source in
   signal src_ack_int   : std_logic;
@@ -246,9 +243,9 @@ architecture behavoural of xswc_output_block is
   signal mpm_pg_addr  : std_logic_vector (g_mpm_page_addr_width -1 downto 0);
   signal mpm_pg_valid : std_logic;
 
-  signal mpm2wb_dat_int : std_logic_vector (g_wb_data_width -1 downto 0);
-  signal mpm2wb_sel_int : std_logic_vector (g_wb_sel_width -1 downto 0);
-  signal mpm2wb_adr_int : std_logic_vector (g_wb_addr_width -1 downto 0);
+  signal mpm2wb_dat_int, mpm2wb_dat_int_pre : std_logic_vector (g_wb_data_width -1 downto 0);
+  signal mpm2wb_sel_int                     : std_logic_vector (g_wb_sel_width -1 downto 0);
+  signal mpm2wb_adr_int, mpm2wb_adr_int_pre : std_logic_vector (g_wb_addr_width -1 downto 0);
 
   signal src_out_int : t_wrf_source_out;
   signal tmp_sel     : std_logic_vector(g_wb_sel_width - 1 downto 0);
@@ -424,7 +421,7 @@ begin  --  behavoural
 --       onehot_o => drop_array,
 --       out_o    => drop_index);
 
-  PRIO_QUEUE: swc_rd_wr_ram
+  PRIO_QUEUE : swc_rd_wr_ram
     generic map (
       g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
       g_size       => (g_prio_num * g_output_block_per_prio_fifo_size))
@@ -435,8 +432,8 @@ begin  --  behavoural
       wd_i  => wr_data_reg,
       ra_i  => rd_addr,
       rd_o  => rd_data);
-  
-  
+
+
   --PRIO_QUEUE : generic_dpram
   --  generic map (
   --    g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
@@ -861,9 +858,23 @@ begin  --  behavoural
                  (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else  -- the status indicates error       
                  '0';
 
-  mpm2wb_adr_int <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
-  mpm2wb_sel_int <= '1' & mpm_dsel_i;   -- TODO: something generic
-  mpm2wb_dat_int <= mpm_d_i(g_wb_data_width -1 downto 0);
+  mpm2wb_adr_int_pre <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
+  mpm2wb_dat_int_pre <= mpm_d_i(g_wb_data_width -1 downto 0);
+
+  p_decode_sel : process(mpm2wb_dat_int_pre, mpm2wb_adr_int_pre)
+  begin
+    if(mpm2wb_adr_int_pre = c_WRF_USER) then
+      mpm2wb_dat_int(15 downto 8) <= mpm2wb_dat_int_pre(15 downto 8);
+      mpm2wb_dat_int(7 downto 0)  <= (others => 'X');
+      mpm2wb_adr_int              <= mpm2wb_dat_int_pre(7 downto 6);
+      mpm2wb_sel_int              <= mpm2wb_dat_int_pre(5 downto 4);
+    else
+      mpm2wb_dat_int <= mpm2wb_dat_int_pre;
+      mpm2wb_adr_int <= mpm2wb_adr_int_pre;
+      mpm2wb_sel_int <= (others => '1');
+    end if;
+  end process;
+
 
   -- source out
   src_o              <= src_out_int;

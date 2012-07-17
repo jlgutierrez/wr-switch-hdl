@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-28
--- Last update: 2012-03-16
+-- Last update: 2012-07-10
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -226,7 +226,7 @@ entity xswc_input_block is
 
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
-    tap_out_o: out std_logic_vector(49 + 62 downto 0)
+    tap_out_o : out std_logic_vector(49 + 62 downto 0)
 
     );
 end xswc_input_block;
@@ -242,19 +242,19 @@ architecture syn of xswc_input_block is
   
 
   type t_page_alloc is(S_IDLE,          -- waiting for some work :)
-                         S_PCKSTART_SET_USECNT,  -- setting usecnt to a page which was allocated 
-                                  -- in advance to be used for the first page of 
-                                  -- the pck
-                                  -- (only in case of the initially allocated usecnt
-                                  -- is different than required)
-                         S_PCKSTART_PAGE_REQ,  -- allocating in advnace first page of the pck
-                         S_PCKINTER_PAGE_REQ);  -- allocating in advance page to be used by 
-                                  -- all but first page of the pck (inter-packet)
+                       S_PCKSTART_SET_USECNT,  -- setting usecnt to a page which was allocated 
+                       -- in advance to be used for the first page of 
+                       -- the pck
+                       -- (only in case of the initially allocated usecnt
+                       -- is different than required)
+                       S_PCKSTART_PAGE_REQ,  -- allocating in advnace first page of the pck
+                       S_PCKINTER_PAGE_REQ);  -- allocating in advance page to be used by 
+  -- all but first page of the pck (inter-packet)
   type t_transfer_pck is(S_IDLE,  -- wait for some work :), it is used only after reset
                          S_READY,  -- being in S_READY state means that we are in sync with rcv_pck
                          S_WAIT_RTU_VALID,  -- Started receiving pck, wait for RTU decision
                          S_WAIT_SOF,  -- received RTU decision but new pck has not been started
-                                      -- still receiving the old one, or non
+                         -- still receiving the old one, or non
                          S_SET_USECNT,  -- set usecnt of the first page
                          S_WAIT_WITH_TRANSFER,  -- waits for ll_write to clear the first page
                          S_TOO_LONG_TRANSFER,
@@ -262,38 +262,38 @@ architecture syn of xswc_input_block is
 
                          S_TRANSFERED,  -- transfer has been done, waiting for the end of pck (EOF                         
                          S_DROP  -- after receiving RTU decision to drop the pck,
-                                 -- it still needs to be received
+                         -- it still needs to be received
                          ); 
 
   type t_rcv_pck is(S_IDLE,             -- wait for some work :)
-                         S_READY,  -- Can accept new pck (i.e. the previous pck has been transfered
-                         S_PAUSE,  -- need to pause reception (internal reason, e.g.: next page not allocated) 
-                                   -- still receiving the old one, or non
-                         S_RCV_DATA,    -- accepting pck
-                         S_DROP,        -- if 
-                         S_WAIT_FORCE_FREE,  -- waits for the access to the force freeing process (it
-                                   -- only happens when the previous request has not been handled
-                                   -- (in theory, hardly possible, so it will happen for sure ;=))
-                         S_INPUT_STUCK  -- it might happen that the SWcore gets stack, in such case we need 
-                                   -- to decide what to do (drop/stall/etc), it is recognzied and done
-                                   -- here
-                         );
+                    S_READY,  -- Can accept new pck (i.e. the previous pck has been transfered
+                    S_PAUSE,  -- need to pause reception (internal reason, e.g.: next page not allocated) 
+                    -- still receiving the old one, or non
+                    S_RCV_DATA,         -- accepting pck
+                    S_DROP,             -- if 
+                    S_WAIT_FORCE_FREE,  -- waits for the access to the force freeing process (it
+                    -- only happens when the previous request has not been handled
+                    -- (in theory, hardly possible, so it will happen for sure ;=))
+                    S_INPUT_STUCK  -- it might happen that the SWcore gets stack, in such case we need 
+                    -- to decide what to do (drop/stall/etc), it is recognzied and done
+                    -- here
+                    );
 
   type t_ll_write is(S_IDLE,            -- wait for some work :)
-                          S_READY_FOR_PGR_AND_DLAST,  -- can write both: 
-                              --  (1) request of inter-pck page (mpm_pg_req_i)
-                              --  (2) request of last page write (dlast)                                                       
-                          S_READY_FOR_DLAST_ONLY,  -- can write only last page (dlast) since the
-                              -- inter-pck page has not been allocated yet
-                          S_WRITE,  -- write Linked List (either double write (with 
-                              -- clearing the next page to be used) or just
-                              -- one page (if next page not allocated yet)
-                          S_EOF_ON_WR,  -- request for writting the last page (dlast) 
-                              -- received while writting to Linked List
-                          S_SOF_ON_WR  -- reception of new PCK received while writting
-                          );  -- this might require some work (if the next
-                              -- first page is not cleard) but it also might
-                              -- require no work 
+                     S_READY_FOR_PGR_AND_DLAST,  -- can write both: 
+                     --  (1) request of inter-pck page (mpm_pg_req_i)
+                     --  (2) request of last page write (dlast)                                                       
+                     S_READY_FOR_DLAST_ONLY,  -- can write only last page (dlast) since the
+                     -- inter-pck page has not been allocated yet
+                     S_WRITE,  -- write Linked List (either double write (with 
+                     -- clearing the next page to be used) or just
+                     -- one page (if next page not allocated yet)
+                     S_EOF_ON_WR,  -- request for writting the last page (dlast) 
+                     -- received while writting to Linked List
+                     S_SOF_ON_WR  -- reception of new PCK received while writting
+                     );        -- this might require some work (if the next
+  -- first page is not cleard) but it also might
+  -- require no work 
   -- state machines
   signal s_page_alloc   : t_page_alloc;  -- page allocation and usecnt setting
   signal s_transfer_pck : t_transfer_pck;  -- reception of RTU decision, its transfer to outputs
@@ -379,12 +379,10 @@ architecture syn of xswc_input_block is
   -- useable for writting to MPM and Linked List
   signal in_pck_dvalid       : std_logic;
   signal in_pck_dat          : std_logic_vector(g_mpm_data_width - 1 downto 0);
-  signal in_pck_sel          : std_logic_vector(g_partial_select_width - 1 downto 0);
   signal in_pck_sof          : std_logic;  -- start of frame
   signal in_pck_eof          : std_logic;  -- end of frame
   signal in_pck_err          : std_logic;  -- error
   signal in_pck_eod          : std_logic;  -- end of data
-  signal in_pck_is_dat       : std_logic;  -- 
   signal in_pck_eof_normal   : std_logic;
   signal in_pck_eof_on_pause : std_logic;
   signal in_pck_sof_allowed  : std_logic;
@@ -392,8 +390,6 @@ architecture syn of xswc_input_block is
   -- first stage register (delayed single cycle)
   signal in_pck_dvalid_d0    : std_logic;
   signal in_pck_dat_d0       : std_logic_vector(g_mpm_data_width - 1 downto 0);
-  signal in_pck_sel_d0       : std_logic_vector(g_partial_select_width - 1 downto 0);
-  signal in_pck_is_dat_d0    : std_logic;
 
   -- used to produce delayed in_pck_sof -- basically, this is illegal by pWB standard, but 
   -- if it happens, we loose, pck, why not to take care of this?
@@ -411,7 +407,6 @@ architecture syn of xswc_input_block is
 
   -- counters to be written in Linked List
   signal page_word_cnt : unsigned(c_page_size_width - 1 downto 0);
-  signal oob_word_cnt  : unsigned(c_max_oob_size_width - 1 downto 0);
 
   -- tracking transfer time, it transfer takes too long (should be max of 2*port_number)
   -- it means that SWcore is stuck and proper action must be taken 
@@ -431,10 +426,10 @@ architecture syn of xswc_input_block is
     next_page       : std_logic_vector(g_page_addr_width - 1 downto 0);
     next_page_valid : std_logic;
     addr            : std_logic_vector(g_page_addr_width - 1 downto 0);
-    dsel            : std_logic_vector(g_partial_select_width - 1 downto 0);
+--    dsel            : std_logic_vector(g_partial_select_width - 1 downto 0);
     size            : std_logic_vector(c_page_size_width - 1 downto 0);
-    oob_size        : std_logic_vector(c_max_oob_size_width - 1 downto 0);
-    oob_dsel        : std_logic_vector(g_partial_select_width - 1 downto 0);
+--    oob_size        : std_logic_vector(c_max_oob_size_width - 1 downto 0);
+--    oob_dsel        : std_logic_vector(g_partial_select_width - 1 downto 0);
     first_page_clr  : std_logic;
   end record;
 
@@ -481,9 +476,6 @@ architecture syn of xswc_input_block is
   -- Signals written by rcv_pck FSM and used by ll_write FSM, sync by rtu_rsp_ack
   signal rp_ll_entry_addr     : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal rp_ll_entry_size     : std_logic_vector(c_page_size_width - 1 downto 0);
-  signal rp_ll_entry_sel      : std_logic_vector(g_partial_select_width - 1 downto 0);
-  signal rp_ll_entry_oob_sel  : std_logic_vector(g_partial_select_width - 1 downto 0);
-  signal rp_ll_entry_oob_size : std_logic_vector(c_max_oob_size_width - 1 downto 0);
 
   -- indicates that tranfser_pck FSM is ready for sync with rcv_pck and ll_write FSMs
   signal tp_sync : std_logic;
@@ -534,62 +526,62 @@ architecture syn of xswc_input_block is
 
   function f_gen_mask(index : integer; length : integer)
     return std_logic_vector is
-  variable tmp : std_logic_vector(length-1 downto 0);
+    variable tmp : std_logic_vector(length-1 downto 0);
   begin
-    tmp := (others => '0');
+    tmp        := (others => '0');
     tmp(index) := '1';
     return tmp;
   end f_gen_mask;
-  
-  function f_slv_resize(x: std_logic_vector; len: natural) return std_logic_vector is
+
+  function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector is
     variable tmp : std_logic_vector(len-1 downto 0);
   begin
-    tmp := (others => '0');
+    tmp                      := (others => '0');
     tmp(x'length-1 downto 0) := x;
     return tmp;
   end f_slv_resize;
 
 
 
-  
-function f_enum2nat (enum_arg :t_page_alloc) return std_logic_vector is
-begin
-  for t in t_page_alloc loop
-    if(enum_arg = t) then
-      return std_logic_vector(to_unsigned(t_page_alloc'pos(t),4));
-    end if;
-  end loop;  -- i
-  return "0000";
-end function f_enum2nat;
-function f_enum2nat (enum_arg :t_rcv_pck) return std_logic_vector is
-begin
-  for t in t_rcv_pck loop
-    if(enum_arg = t) then
-      return std_logic_vector(to_unsigned(t_rcv_pck'pos(t),4));
-    end if;
-  end loop;  -- i
-  return "0000";
-end function f_enum2nat;
-function f_enum2nat (enum_arg :t_ll_write) return std_logic_vector is
-begin
-  for t in t_ll_write loop
-    if(enum_arg = t) then
-      return std_logic_vector(to_unsigned(t_ll_write'pos(t),4));
-    end if;
-  end loop;  -- i
-  return "0000";
-end function f_enum2nat;
-function f_enum2nat (enum_arg :t_transfer_pck) return std_logic_vector is
-begin
-  for t in t_transfer_pck loop
-    if(enum_arg = t) then
-      return std_logic_vector(to_unsigned(t_transfer_pck'pos(t),4));
-    end if;
-  end loop;  -- i
-  return "0000";
-end function f_enum2nat;
 
-constant c_force_usecnt             : boolean := TRUE;
+  function f_enum2nat (enum_arg : t_page_alloc) return std_logic_vector is
+  begin
+    for t in t_page_alloc loop
+      if(enum_arg = t) then
+        return std_logic_vector(to_unsigned(t_page_alloc'pos(t), 4));
+      end if;
+    end loop;  -- i
+    return "0000";
+  end function f_enum2nat;
+  function f_enum2nat (enum_arg : t_rcv_pck) return std_logic_vector is
+  begin
+    for t in t_rcv_pck loop
+      if(enum_arg = t) then
+        return std_logic_vector(to_unsigned(t_rcv_pck'pos(t), 4));
+      end if;
+    end loop;  -- i
+    return "0000";
+  end function f_enum2nat;
+  function f_enum2nat (enum_arg : t_ll_write) return std_logic_vector is
+  begin
+    for t in t_ll_write loop
+      if(enum_arg = t) then
+        return std_logic_vector(to_unsigned(t_ll_write'pos(t), 4));
+      end if;
+    end loop;  -- i
+    return "0000";
+  end function f_enum2nat;
+  function f_enum2nat (enum_arg : t_transfer_pck) return std_logic_vector is
+  begin
+    for t in t_transfer_pck loop
+      if(enum_arg = t) then
+        return std_logic_vector(to_unsigned(t_transfer_pck'pos(t), 4));
+      end if;
+    end loop;  -- i
+    return "0000";
+  end function f_enum2nat;
+
+  constant c_force_usecnt : boolean := true;
 
 begin  --arch
   
@@ -631,25 +623,17 @@ begin  --arch
 
   -- detecting error 
   in_pck_err <= '1' when in_pck_dvalid = '1' and
-                   (snk_adr_int = c_WRF_STATUS) and
-                   (f_unmarshall_wrf_status(snk_dat_int).error = '1') else
-                   '0';
+                (snk_adr_int = c_WRF_STATUS) and
+                (f_unmarshall_wrf_status(snk_dat_int).error = '1') else
+                '0';
 
   --detecting end of data in the received frame, the data shall be followed by 
   -- (1) nothing (end of frame) 
   -- (2) OOB
   -- (3) USER data
   -- so end of data is most often not equal to end of frame
-  in_pck_eod <= '1' when (in_pck_dvalid = '1' and
-                                     snk_adr_d0 = c_WRF_DATA and
-                                     (snk_adr_int = c_WRF_OOB or snk_adr_int = c_WRF_USER)) else
-                   '0';
-
-  -- converting pWB to an internal format (number of '1's in the sel) just to save few bits
-  in_pck_sel <= f_sel2partialSel(snk_sel_int, g_partial_select_width);
 
   -- indicaste that the current input is data or status, 
-  in_pck_is_dat <= '1' when (snk_adr_int = c_WRF_STATUS or snk_adr_int = c_WRF_DATA) else '0';
 
   -- to simplify stuff:
   finish_rcv_pck <= '1' when (in_pck_eof = '1' or in_pck_err = '1' or tp_drop = '1') else '0';
@@ -703,12 +687,9 @@ begin  --arch
         snk_stall_force_l <= '1';
         snk_sel_d0        <= (others => '0');
         page_word_cnt     <= (others => '0');
-        oob_word_cnt      <= (others => '0');
 
         in_pck_dvalid_d0    <= '0';
         in_pck_dat_d0       <= (others => '0');
-        in_pck_sel_d0       <= (others => '0');
-        in_pck_is_dat_d0    <= '0';
         in_pck_eof_on_pause <= '0';
 
 
@@ -726,10 +707,7 @@ begin  --arch
         new_pck_first_page   <= '0';
         -- used in other FSM 
         rp_ll_entry_addr     <= (others => '0');
-        rp_ll_entry_sel      <= (others => '0');
         rp_ll_entry_size     <= (others => '0');
-        rp_ll_entry_oob_sel  <= (others => '0');
-        rp_ll_entry_oob_size <= (others => '0');
         rp_drop_on_stuck     <= '0';
         rp_in_pck_err        <= '0';
         rp_accept_rtu        <= '1';
@@ -752,8 +730,6 @@ begin  --arch
             snk_stall_force_l <= '1';
             in_pck_dvalid_d0  <= '0';
             in_pck_dat_d0     <= (others => '0');
-            in_pck_sel_d0     <= (others => '0');
-            in_pck_is_dat_d0  <= '0';
 
             -- Sync with trasnfer_pck FSM and ll_write FSM: 
             if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then
@@ -766,9 +742,9 @@ begin  --arch
               -- received when we get the RTU decision, so we are waiting in IDLE.
               -- in such case, we will get tp_drop before getting tp_sync, but we will
               -- still have tp_drop when finally tp_sync is HIGH, so this is why the order of if's
-            elsif(tp_drop            = '1'   and  -- transfer_pck state indicates the drop decision
+            elsif(tp_drop = '1' and  -- transfer_pck state indicates the drop decision
                   mmu_force_free_req = '0') then  -- the pck is not being freed yet
-              
+
               mmu_force_free_addr <= current_pckstart_pageaddr;
 
               if(mmu_force_free_req = '1') then  -- it means that the previous request is still 
@@ -797,8 +773,6 @@ begin  --arch
             --===========================================================================================
             in_pck_dvalid_d0 <= '0';
             in_pck_dat_d0    <= (others => '0');
-            in_pck_sel_d0    <= (others => '0');
-            in_pck_is_dat_d0 <= '0';
 
             if (in_pck_sof = '1') then
               
@@ -813,12 +787,9 @@ begin  --arch
                 new_pck_first_page        <= '1';
 
                 page_word_cnt <= (others => '0');
-                oob_word_cnt  <= (others => '0');
                 if(in_pck_dvalid = '1') then
                   in_pck_dvalid_d0 <= in_pck_dvalid;
                   in_pck_dat_d0    <= in_pck_dat;
-                  in_pck_sel_d0    <= in_pck_sel;
-                  in_pck_is_dat_d0 <= in_pck_is_dat;
                 end if;
               end if;
             end if;
@@ -829,8 +800,6 @@ begin  --arch
             if(in_pck_dvalid = '1') then
               in_pck_dvalid_d0 <= in_pck_dvalid;
               in_pck_dat_d0    <= in_pck_dat;
-              in_pck_sel_d0    <= in_pck_sel;
-              in_pck_is_dat_d0 <= in_pck_is_dat;
             end if;
 
             --dlast_o needs to go along with dvalid HIGH, for eof we are sure dvalid is always OK
@@ -844,38 +813,16 @@ begin  --arch
             if((in_pck_dvalid = '1' and in_pck_dvalid_d0 = '1') or finish_rcv_pck = '1') then
               mpm_dvalid <= '1';
               mpm_data   <= in_pck_dat_d0;
-
-              -- here we recognize which SEL remember (this at the end of DATA or the one at the end of OOB/USER)
-              -- (1) there is something after DATA (e.g.: OOB) and it's not the end of reception,
-              --     so we remember sel in dat_sel
-              if (in_pck_is_dat_d0 = '1' and in_pck_is_dat = '0' and finish_rcv_pck = '0') then
-                rp_ll_entry_sel <= in_pck_sel_d0;
-
-                -- (2) there is data at the end (no OOB, etc)
-              elsif(in_pck_is_dat_d0 = '1' and in_pck_is_dat = '1' and finish_rcv_pck = '1') then
-                rp_ll_entry_sel <= in_pck_sel_d0;
-
-                -- (3) OOB or USER_DATA at the end
-              elsif(in_pck_is_dat = '0' and finish_rcv_pck = '1') then
-                rp_ll_entry_oob_sel <= in_pck_sel_d0;
-              end if;
             end if;
 
             -- here we count the size of page and oob
             if((in_pck_dvalid = '1' and in_pck_dvalid_d0 = '1') or finish_rcv_pck = '1') then
               if(mpm_pg_req_i = '1') then
                 page_word_cnt <= to_unsigned(1, c_page_size_width);
-                if(in_pck_is_dat_d0 = '0') then
-                  oob_word_cnt <= to_unsigned(1, c_max_oob_size_width);
-                end if;
               else
                 page_word_cnt <= page_word_cnt + 1;
-                if(in_pck_is_dat_d0 = '0') then
-                  oob_word_cnt <= oob_word_cnt + 1;
-                end if;
               end if;
             elsif(mpm_pg_req_i = '1') then
-              oob_word_cnt  <= (others => '0');
               page_word_cnt <= (others => '0');
             end if;
 
@@ -1053,7 +1000,6 @@ begin  --arch
 
   if(mpm_pg_req_i = '1' or mpm_dlast = '1') then
     rp_ll_entry_size     <= std_logic_vector(page_word_cnt);
-    rp_ll_entry_oob_size <= std_logic_vector(oob_word_cnt);
     rp_ll_entry_addr     <= mpm_pg_addr;
   end if;
 
@@ -1283,7 +1229,7 @@ begin
       -- remember input rtu decision
       if(rtu_rsp_valid_i = '1' and rtu_rsp_ack = '0' and rp_accept_rtu = '1') then
         -- make sure we're not forwarding packets to ourselves. 
-        current_mask   <= rtu_dst_port_mask_i; -- and (not f_gen_mask(g_port_index, current_mask'length));
+        current_mask   <= rtu_dst_port_mask_i;  -- and (not f_gen_mask(g_port_index, current_mask'length));
         current_prio   <= rtu_prio_i;
         current_drop   <= rtu_drop_i;
         current_usecnt <= rtu_dst_port_usecnt;
@@ -1430,7 +1376,7 @@ begin
           elsif(rtu_rsp_ack = '1' and in_pck_sof = '1') then
 
             -- don't need to set usecnt
-            if(current_usecnt = current_pckstart_usecnt and c_force_usecnt=FALSE) then
+            if(current_usecnt = current_pckstart_usecnt and c_force_usecnt = false) then
               -- if(current_usecnt = pckstart_usecnt_prev) then
 
               -- first page is cleared in the Linked List
@@ -1476,7 +1422,7 @@ begin
               s_transfer_pck <= S_DROP;
 
               -- don't need to set usecnt
-            elsif(current_usecnt = current_pckstart_usecnt and c_force_usecnt=FALSE) then
+            elsif(current_usecnt = current_pckstart_usecnt and c_force_usecnt = false) then
               -- elsif(current_usecnt = pckstart_usecnt_prev) then
 
               -- first page is cleared in the Linked List
@@ -1503,7 +1449,7 @@ begin
           if(in_pck_sof = '1') then
 
             -- don't need to set usecnt
-            if(current_usecnt = current_pckstart_usecnt and c_force_usecnt=FALSE) then
+            if(current_usecnt = current_pckstart_usecnt and c_force_usecnt = false) then
               -- if(current_usecnt = pckstart_usecnt_prev) then
 
               -- first page is cleared in the Linked List
@@ -1594,11 +1540,11 @@ begin
           if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then
             s_transfer_pck <= S_READY;
 
-          -- this is to prevent trashing of the drop process (it happened that force_free was
-          -- re-done many times by rcv_pck FSM when transfer_pck FSM stayed in DROP state waiting
-          -- for global sync
+            -- this is to prevent trashing of the drop process (it happened that force_free was
+            -- re-done many times by rcv_pck FSM when transfer_pck FSM stayed in DROP state waiting
+            -- for global sync
           elsif(mmu_force_free_req = '1' and mmu_force_free_done_i = '1') then
-            s_transfer_pck <= S_IDLE;  
+            s_transfer_pck <= S_IDLE;
           end if;
 
           --===========================================================================================
@@ -1635,23 +1581,17 @@ begin
       ll_entry.valid           <= '0';
       ll_entry.eof             <= '0';
       ll_entry.addr            <= (others => '0');
-      ll_entry.dsel            <= (others => '0');
       ll_entry.size            <= (others => '0');
       ll_entry.next_page       <= (others => '0');
       ll_entry.next_page_valid <= '0';
-      ll_entry.oob_size        <= (others => '0');
-      ll_entry.oob_dsel        <= (others => '0');
       ll_entry.first_page_clr  <= '0';
 
       ll_entry_tmp.valid           <= '0';
       ll_entry_tmp.eof             <= '0';
       ll_entry_tmp.addr            <= (others => '0');
-      ll_entry_tmp.dsel            <= (others => '0');
       ll_entry_tmp.size            <= (others => '0');
       ll_entry_tmp.next_page       <= (others => '0');
       ll_entry_tmp.next_page_valid <= '0';
-      ll_entry_tmp.oob_size        <= (others => '0');
-      ll_entry_tmp.oob_dsel        <= (others => '0');
       ll_entry_tmp.first_page_clr  <= '0';
 
       mpm_dlast_d0  <= '0';
@@ -1690,12 +1630,9 @@ begin
             else
               ll_entry.addr <= pckstart_pageaddr;
             end if;
-            ll_entry.dsel            <= (others => '0');
             ll_entry.size            <= (others => '0');
             ll_entry.next_page       <= (others => '0');
             ll_entry.next_page_valid <= '0';
-            ll_entry.oob_size        <= (others => '0');
-            ll_entry.oob_dsel        <= (others => '0');
             ll_entry.first_page_clr  <= '1';
             s_ll_write               <= S_WRITE;
           end if;
@@ -1708,27 +1645,21 @@ begin
             ll_entry.valid           <= '1';
             ll_entry.eof             <= '1';
             ll_entry.addr            <= rp_ll_entry_addr;
-            ll_entry.dsel            <= rp_ll_entry_sel;
             ll_entry.size            <= rp_ll_entry_size;
             -- next_page is not use because we use  addr,dsel,size
             ll_entry.next_page       <= (others => '0');
             ll_entry.next_page_valid <= '0';
             ll_entry.first_page_clr  <= '0';
-            ll_entry.oob_size        <= rp_ll_entry_oob_size;
-            ll_entry.oob_dsel        <= rp_ll_entry_oob_sel;
             s_ll_write               <= S_WRITE;
           elsif(mpm_pg_req_d0 = '1') then
             ll_wr_req                <= '1';
             ll_entry.valid           <= '1';
             ll_entry.eof             <= '0';
             ll_entry.addr            <= rp_ll_entry_addr;
-            ll_entry.dsel            <= (others => '0');
             ll_entry.size            <= (others => '0');
             -- in this state we need to have pckinter allocated   
             ll_entry.next_page       <= pckinter_pageaddr;
             ll_entry.next_page_valid <= '1';
-            ll_entry.oob_size        <= rp_ll_entry_oob_size;
-            ll_entry.oob_dsel        <= rp_ll_entry_oob_sel;
             ll_entry.first_page_clr  <= '0';
             s_ll_write               <= S_WRITE;
           end if;
@@ -1740,7 +1671,6 @@ begin
             ll_entry.valid <= '1';
             ll_entry.eof   <= '1';
             ll_entry.addr  <= rp_ll_entry_addr;
-            ll_entry.dsel  <= rp_ll_entry_sel;
             ll_entry.size  <= rp_ll_entry_size;
 
             -- we write size and stuff, next_page unused
@@ -1748,8 +1678,6 @@ begin
             ll_entry.next_page_valid <= '0';
             ll_entry.first_page_clr  <= '0';
 
-            ll_entry.oob_size <= rp_ll_entry_oob_size;
-            ll_entry.oob_dsel <= rp_ll_entry_oob_sel;
             s_ll_write        <= S_WRITE;
           elsif(mpm_pg_req_d0 = '1') then
             assert false
@@ -1768,11 +1696,7 @@ begin
               ll_entry.valid           <= '1';
               ll_entry.eof             <= '1';
               ll_entry.addr            <= rp_ll_entry_addr;
-              ll_entry.dsel            <= rp_ll_entry_sel;
               ll_entry.size            <= rp_ll_entry_size;
-              ll_entry.oob_size        <= rp_ll_entry_oob_size;
-              ll_entry.oob_dsel        <= rp_ll_entry_oob_sel;
-              -- we use the space of next_page for dsel/size ..        
               ll_entry.next_page       <= (others => '0');
               ll_entry.next_page_valid <= '0';
               ll_entry.first_page_clr  <= '0';
@@ -1785,12 +1709,9 @@ begin
               ll_entry.valid           <= '0';
               ll_entry.eof             <= '0';
               ll_entry.addr            <= (others => '0');
-              ll_entry.dsel            <= (others => '0');
               ll_entry.size            <= (others => '0');
               ll_entry.next_page       <= (others => '0');
               ll_entry.next_page_valid <= '0';
-              ll_entry.oob_size        <= (others => '0');
-              ll_entry.oob_dsel        <= (others => '0');
               ll_entry.first_page_clr  <= '0';
 
               -- what happens here:
@@ -1823,10 +1744,7 @@ begin
               ll_entry_tmp.valid    <= '1';
               ll_entry_tmp.eof      <= mpm_dlast_d0;
               ll_entry_tmp.addr     <= rp_ll_entry_addr;
-              ll_entry_tmp.dsel     <= rp_ll_entry_sel;
               ll_entry_tmp.size     <= rp_ll_entry_size;
-              ll_entry_tmp.oob_size <= rp_ll_entry_oob_size;
-              ll_entry_tmp.oob_dsel <= rp_ll_entry_oob_sel;
             end if;
           end if;  -- if(ll_wr_req = '1' and ll_wr_done_i = '1)
 
@@ -1852,12 +1770,9 @@ begin
             ll_entry.valid           <= '0';
             ll_entry.eof             <= '0';
             ll_entry.addr            <= (others => '0');
-            ll_entry.dsel            <= (others => '0');
             ll_entry.size            <= (others => '0');
             ll_entry.next_page       <= (others => '0');
             ll_entry.next_page_valid <= '0';
-            ll_entry.oob_size        <= (others => '0');
-            ll_entry.oob_dsel        <= (others => '0');
             ll_entry.first_page_clr  <= '0';
 
             if(ll_entry.first_page_clr = '1') then
@@ -1912,9 +1827,9 @@ lw_sync_second_stage <= '1' when (s_ll_write = S_READY_FOR_PGR_AND_DLAST and lw_
 lw_sync_2nd_stage_chk <= '1' when (page_word_cnt = to_unsigned(g_page_size - 3, c_page_size_width)) else '0';
 
 -- transfer_pck FSM sync (tp): needs to be true for rcv_pck to enter READY state
-tp_sync <= '1' when (s_transfer_pck = S_IDLE or               -- 
-                                  s_transfer_pck = S_DROP or  -- 
-                                  s_transfer_pck = S_TRANSFERED) else '0';
+tp_sync <= '1' when (s_transfer_pck = S_IDLE or  -- 
+                     s_transfer_pck = S_DROP or  -- 
+                     s_transfer_pck = S_TRANSFERED) else '0';
 
 -- rcv_pck FSM is sync-ed                                  
 rp_sync <= '1' when (s_rcv_pck = S_IDLE) else '0';
@@ -1924,12 +1839,12 @@ tp_stuck <= '1' when (s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
 
 -- transfer_pck FSM indicates that the frame should be dropped
 tp_drop <= '1' when ((s_transfer_pck = S_DROP) or
-                                  ((current_drop = '1' or current_mask = zeros) and rtu_rsp_ack = '1')) else '0';
+                     ((current_drop = '1' or current_mask = zeros) and rtu_rsp_ack = '1')) else '0';
 
 -- transfer_pck FSM indicates that transfer already started or is finished, 
 tp_transfer_valid <= '1' when (s_transfer_pck = S_TRANSFERED or
-                                  s_transfer_pck = S_TRANSFER or
-                                  s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
+                               s_transfer_pck = S_TRANSFER or
+                               s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
 
 -- rcv_pck FSM indicates that there is or was error on the received pck
 rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
@@ -1945,7 +1860,7 @@ snk_stall_int <= ((not mpm_dreq_i) or snk_stall_force_h) and snk_stall_force_l;
 snk_o.stall <= snk_stall_int;
 snk_o.err   <= '0';
 snk_o.ack   <= snk_ack_int;
-snk_o.rty   <= '0';--snk_rty_int;             --'0'; 
+snk_o.rty   <= '0';  --snk_rty_int;             --'0'; 
 --================================================================================================
 -- Output signals
 --================================================================================================
@@ -1974,27 +1889,40 @@ pta_prio_o         <= pta_prio;         --current_prio;
 pta_pck_size_o     <= (others => '0');  -- unused
 
 -- pWB
-snk_dat_int <= snk_i.dat;
-snk_adr_int <= snk_i.adr;
+--snk_dat_int <= snk_i.dat;
+--snk_adr_int <= snk_i.adr;
 snk_sel_int <= snk_i.sel;
 snk_cyc_int <= snk_i.cyc;
 snk_stb_int <= snk_i.stb;
 snk_we_int  <= snk_i.we;
+
+p_encode_byte_selects : process(snk_i)
+begin
+  if(unsigned(not snk_i.sel) /= 0) then
+    snk_adr_int               <= c_WRF_USER;
+    snk_dat_int(15 downto 8) <= snk_i.dat(15 downto 8);
+    snk_dat_int(7 downto 6) <= snk_i.adr;
+    snk_dat_int(5 downto 4) <= snk_i.sel;
+    snk_dat_int(3 downto 0) <= (others => 'X');
+  else
+    snk_adr_int <= snk_i.adr;
+    snk_dat_int <= snk_i.dat;
+  end if;
+end process;
+
+
 
 -- old
 --  ll_data_eof(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width) <= ll_entry.dsel;
 --  ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
 --  ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others =>'0');
 
-ll_data_eof(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width) <= ll_entry.oob_dsel;
 ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
 ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others => '0');
 
 ll_addr_o                                                                                                                  <= ll_entry.addr;
 ll_data_o(g_ll_data_width-0 -1)                                                                                            <= ll_entry.valid;
 ll_data_o(g_ll_data_width-1 -1)                                                                                            <= ll_entry.eof;
-ll_data_o(g_ll_data_width-2 -1 downto g_ll_data_width-2-g_partial_select_width)                                            <= ll_entry.dsel;
-ll_data_o(g_ll_data_width-2-g_partial_select_width-1 downto g_ll_data_width-2-g_partial_select_width-c_max_oob_size_width) <= ll_entry.oob_size;
 
 ll_data_o(g_page_addr_width-1 downto 0) <= ll_data_eof when (ll_entry.eof = '1') else ll_entry.next_page;
 ll_next_addr_o                          <= ll_entry.next_page;
@@ -2004,41 +1932,40 @@ ll_wr_req_o                             <= ll_wr_req;
 
 
 
-tap_out_o <= f_slv_resize(              -- 
- -- f_enum2nat(s_rcv_pck) &               --
-  (mmu_nomem_i) &
-  (mmu_page_alloc_done_i) &
-  (pckinter_page_alloc_req or pckstart_page_alloc_req) &
-  snk_stall_int &
-  in_pck_sof_allowed &
-  in_pck_sof_on_stall &
-  snk_stall_d0 &
-  snk_cyc_int &                         -- 94
-  in_pck_sof_delayed &                  -- 93
-  f_enum2nat(s_transfer_pck) &          -- 89
-  lw_sync_second_stage &                -- 88
-  in_pck_err &                          -- 87
-  in_pck_eof &                          -- 86
-  in_pck_sof &                          -- 85
-  f_enum2nat(s_ll_write) &              -- 81
-  f_enum2nat(s_page_alloc) &            -- 77
-  pckinter_pageaddr &                   -- 67
-  pckinter_page_in_advance &            -- 66
-  '1' &                                 -- 65
+--tap_out_o <= f_slv_resize(              -- 
+--  -- f_enum2nat(s_rcv_pck) &               --
+--  (mmu_nomem_i) &
+--  (mmu_page_alloc_done_i) &
+--  (pckinter_page_alloc_req or pckstart_page_alloc_req) &
+--  snk_stall_int &
+--  in_pck_sof_allowed &
+--  in_pck_sof_on_stall &
+--  snk_stall_d0 &
+--  snk_cyc_int &                         -- 94
+--  in_pck_sof_delayed &                  -- 93
+--  f_enum2nat(s_transfer_pck) &          -- 89
+--  lw_sync_second_stage &                -- 88
+--  in_pck_err &                          -- 87
+--  in_pck_eof &                          -- 86
+--  in_pck_sof &                          -- 85
+--  f_enum2nat(s_ll_write) &              -- 81
+--  f_enum2nat(s_page_alloc) &            -- 77
+--  pckinter_pageaddr &                   -- 67
+--  pckinter_page_in_advance &            -- 66
+--  '1' &                                 -- 65
 
-  ll_wr_req &                           -- 64
-  ll_wr_done_i &                        -- 63
-  ll_entry.addr &                       -- 54
-  ll_entry.valid &                      -- 53
-  ll_entry.eof &                        -- 52
-  ll_entry.dsel &                       -- 51
-  ll_entry.oob_size &                   -- 49
-  ll_entry.next_page &                  -- 39
-  ll_entry.next_page_valid &            -- 38
-  "0000000000" & --pta_pageaddr &                        -- 28
-  pta_transfer_pck &                    -- 27
-  "0000000000" & --mpm_pg_addr &                         -- 17
-  mpm_pg_req_i,                         -- 16
-  50 + 62);
+--  ll_wr_req &                           -- 64
+--  ll_wr_done_i &                        -- 63
+--  ll_entry.addr &                       -- 54
+--  ll_entry.valid &                      -- 53
+--  ll_entry.eof &                        -- 52
+--  ll_entry.oob_size &                   -- 49
+--  ll_entry.next_page &                  -- 39
+--  ll_entry.next_page_valid &            -- 38
+--  "0000000000" &  --pta_pageaddr &                        -- 28
+--  pta_transfer_pck &                    -- 27
+--  "0000000000" &  --mpm_pg_addr &                         -- 17
+--  mpm_pg_req_i,                         -- 16
+--  50 + 62);
 
 end syn;  -- arch

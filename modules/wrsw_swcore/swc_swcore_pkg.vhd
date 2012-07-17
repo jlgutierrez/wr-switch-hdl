@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-06-25
+-- Last update: 2012-07-10
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -397,7 +397,7 @@ package swc_swcore_pkg is
       mpm_d_i        : in  std_logic_vector (g_mpm_data_width -1 downto 0);
       mpm_dvalid_i   : in  std_logic;
       mpm_dlast_i    : in  std_logic;
-      mpm_dsel_i     : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
+--      mpm_dsel_i     : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
       mpm_dreq_o     : out std_logic;
       mpm_abort_o    : out std_logic;
       mpm_pg_addr_o  : out std_logic_vector (g_mpm_page_addr_width -1 downto 0);
