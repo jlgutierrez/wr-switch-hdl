@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-08
--- Last update: 2012-06-25
+-- Last update: 2012-07-17
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -307,7 +307,7 @@ architecture behavioral of rtu_match is
   signal s_rtu_pcr_learn_en  : std_logic;
   signal s_rtu_pcr_pass_bpdu : std_logic;
   signal s_rtu_pcr_b_unrec   : std_logic;
-
+  signal s_aram_bitsel_msb : std_logic_vector(2 downto 0);
 
   signal s_rtu_ufifo_wr_req : std_logic;
 
@@ -364,14 +364,6 @@ begin
       crc_poly_i => rtu_crc_poly_i,     --x"8408",
       hash_o     => s_hash_dst
       );
-
-  -----------------------------------------------------------------------------------------------------------------------
-  --| Shift Left calculation
-  -----------------------------------------------------------------------------------------------------------------------
-  --shift_left : for i in 0 to 31 generate
-  --  shifted_left(i) <= '1' when(i = to_integer(unsigned(s_to_shift_left))) else '0';
-  --end generate;
-
 
   -- unpack request and decode requesting port number (from 1-hot to binary)
   f_unpack7(
@@ -462,7 +454,6 @@ begin
 
             rtu_aram_main_rd_o <= '0';
             s_aram_main_wr     <= '0';
-            s_to_shift_left    <= (others => '0');
             -- CAM            
 
             s_src_dst_sel <= '0';
@@ -638,12 +629,8 @@ begin
             s_aram_main_addr <= s_hash_src(c_wrsw_hash_width -1 downto 3);
 
             -- the rest of hash goes to the "shift" function
-            s_to_shift_left(4 downto 2) <= s_hash_src(2 downto 0);
-
-            -- this part we don't know yet, it depends on 
-            -- the bucket in which we will find the entry
-            s_to_shift_left(1 downto 0) <= (others => '0');
-
+            s_aram_bitsel_msb <= s_hash_src(2 downto 0);
+ 
             -- read aging aram  
             rtu_aram_main_rd_o <= '1';
 
@@ -659,7 +646,6 @@ begin
 
             -- as soon as possible supply the mising aging info to shift function
             -- so that we can update aging aram if needed
-            s_to_shift_left(1 downto 0) <= htab_entry_i.bucket_entry;
 
             -- in the first clock of being in this state
             -- we can stop  reading aram
@@ -684,7 +670,7 @@ begin
 
                 -- update aging aram (in any case that entry was found,
                 -- even if dropped later, we update aging aram
-                s_aram_main_data_o <= rtu_aram_main_data_i or std_logic_vector(to_unsigned(f_onehot_decode(s_to_shift_left), 32));
+                s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
                 s_aram_main_wr     <= '1';
 
                 ----------------------------------------------------------------------------
@@ -1007,8 +993,7 @@ begin
                     -- now, go for destination search
                     s_src_dst_sel               <= '1';
                     s_aram_main_addr            <= s_hash_dst_reg(c_wrsw_hash_width -1 downto 3);
-                    s_to_shift_left(4 downto 2) <= s_hash_dst_reg(2 downto 0);
-                    s_to_shift_left(1 downto 0) <= (others => '0');  -- at the beginning the bucket number always  is 0x0                  
+                    s_aram_bitsel_msb <= s_hash_dst_reg(2 downto 0);
                     rtu_aram_main_rd_o          <= '1';
                     
                   end if;
@@ -1030,8 +1015,8 @@ begin
                 -- now, go for destination search
                 s_src_dst_sel               <= '1';
                 s_aram_main_addr            <= s_hash_dst_reg(c_wrsw_hash_width -1 downto 3);
-                s_to_shift_left(4 downto 2) <= s_hash_dst_reg(2 downto 0);
-                s_to_shift_left(1 downto 0) <= (others => '0');  -- at the beginning the bucket number always  is 0x0 
+
+                s_aram_bitsel_msb <= s_hash_dst_reg(2 downto 0);
                 rtu_aram_main_rd_o          <= '1';
                 
               end if;
