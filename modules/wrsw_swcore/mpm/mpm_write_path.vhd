@@ -51,12 +51,12 @@ use work.genram_pkg.all;                -- for f_log2_size
 entity mpm_write_path is
   
   generic (
-    g_data_width           : integer := 10;
-    g_ratio                : integer := 4;
-    g_page_size            : integer := 64;
+    g_data_width           : integer := 8;
+    g_ratio                : integer := 6;
+    g_page_size            : integer := 66;
     g_num_pages            : integer := 2048;
-    g_num_ports            : integer := 18;
-    g_fifo_size            : integer := 4;
+    g_num_ports            : integer := 19;
+    g_fifo_size            : integer := 8;
     g_page_addr_width      : integer := 11;
     g_partial_select_width : integer := 1
     );
@@ -142,6 +142,10 @@ architecture rtl of mpm_write_path is
   signal fbm_we_d    : std_logic_vector(2 downto 0);
 
   signal wr_mux_sel : std_logic_vector(g_num_ports-1 downto 0);
+
+
+
+
   
 begin  -- rtl
 
@@ -183,17 +187,27 @@ begin  -- rtl
     end process;
   end generate gen_input_arbiter_ios;
 
-      -- The actual round-robin arbiter.
-    p_input_arbiter : process(clk_core_i)
-    begin
-      if rising_edge(clk_core_i) then
-        if rst_n_core_i = '0' then
-          arb_grant <= (others => '0');
-        else
-          f_rr_arbitrate(arb_req, arb_grant, arb_grant);
-        end if;
-      end if;
-    end process;
+
+  U_RR_Arbiter: gc_rr_arbiter
+    generic map (
+      g_size => g_num_ports)
+    port map (
+      clk_i    => clk_core_i,
+      rst_n_i  => rst_n_core_i,
+      req_i    => arb_req,
+      grant_o  => arb_grant);
+  
+    --  -- The actual round-robin arbiter.
+    --p_input_arbiter : process(clk_core_i)
+    --begin
+    --  if rising_edge(clk_core_i) then
+    --    if rst_n_core_i = '0' then
+    --      arb_grant <= (others => '0');
+    --    else
+    --      f_rr_arbitrate(arb_req, arb_grant, arb_grant);
+    --    end if;
+    --  end if;
+    --end process;
 
 
 
