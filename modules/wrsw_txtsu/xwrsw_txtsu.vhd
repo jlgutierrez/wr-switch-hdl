@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-26
--- Last update: 2012-03-16
+-- Last update: 2012-07-12
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -81,16 +81,16 @@ architecture syn of xwrsw_tx_tsu is
   component wrsw_txtsu_wb
     port (
       rst_n_i               : in  std_logic;
-      wb_clk_i              : in  std_logic;
-      wb_addr_i             : in  std_logic_vector(2 downto 0);
-      wb_data_i             : in  std_logic_vector(31 downto 0);
-      wb_data_o             : out std_logic_vector(31 downto 0);
+      clk_sys_i              : in  std_logic;
+      wb_adr_i             : in  std_logic_vector(2 downto 0);
+      wb_dat_i             : in  std_logic_vector(31 downto 0);
+      wb_dat_o             : out std_logic_vector(31 downto 0);
       wb_cyc_i              : in  std_logic;
       wb_sel_i              : in  std_logic_vector(3 downto 0);
       wb_stb_i              : in  std_logic;
       wb_we_i               : in  std_logic;
       wb_ack_o              : out std_logic;
-      wb_irq_o              : out std_logic;
+      wb_int_o              : out std_logic;
       txtsu_tsf_wr_req_i    : in  std_logic;
       txtsu_tsf_wr_full_o   : out std_logic;
       txtsu_tsf_wr_empty_o  : out std_logic;
@@ -198,16 +198,16 @@ begin  -- syn
   U_WB_SLAVE : wrsw_txtsu_wb
     port map (
       rst_n_i               => rst_n_i,
-      wb_clk_i              => clk_sys_i,
-      wb_addr_i             => wb_in.adr(2 downto 0),
-      wb_data_i             => wb_in.dat,
-      wb_data_o             => wb_out.dat,
+      clk_sys_i              => clk_sys_i,
+      wb_adr_i             => wb_in.adr(2 downto 0),
+      wb_dat_i             => wb_in.dat,
+      wb_dat_o             => wb_out.dat,
       wb_cyc_i              => wb_in.cyc,
       wb_sel_i              => wb_in.sel,
       wb_stb_i              => wb_in.stb,
       wb_we_i               => wb_in.we,
       wb_ack_o              => wb_out.ack,
-      wb_irq_o              => wb_out.int,
+      wb_int_o              => wb_out.int,
       txtsu_tsf_wr_req_i    => txtsu_tsf_wr_req,
       txtsu_tsf_wr_full_o   => txtsu_tsf_wr_full,
       txtsu_tsf_wr_empty_o  => txtsu_tsf_wr_empty,
