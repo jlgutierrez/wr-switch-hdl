@@ -83,10 +83,20 @@ entity scb_top_bare is
     uart_rxd_i : in  std_logic;
 
     -------------------------------------------------------------------------------
-    -- Clock fanout control
+    -- Misc pins
     -------------------------------------------------------------------------------
+
+    -- GTX clock fanout enable
     clk_en_o  : out std_logic;
+
+    -- GTX clock fanout source select
     clk_sel_o : out std_logic;
+
+    -- DMTD clock divider selection (0 = 125 MHz, 1 = 62.5 MHz)
+    clk_dmtd_divsel_o: out std_logic;
+
+    -- UART source selection (FPGA/DBGU)
+    uart_sel_o: out std_logic;
 
     ---------------------------------------------------------------------------
     -- GTX ports
@@ -264,7 +274,7 @@ architecture rtl of scb_top_bare is
     if(g_num_ports < 12) then
       return 4;
     else
-      return 8;
+      return 6;
     end if;
   end f_swc_ratio;
 
@@ -289,6 +299,7 @@ architecture rtl of scb_top_bare is
       TRIG3   : in    std_logic_vector(31 downto 0));
   end component;
 
+  signal gpio_out : std_logic_vector(31 downto 0);
 
 begin
 
@@ -539,8 +550,13 @@ begin
     end generate gen_terminate_unused_eps;
 
 
-
-
+    gen_txtsu_debug: for i in 0 to c_NUM_PORTS-1 generate
+      TRIG0(i) <= txtsu_timestamps(i).stb;
+      trig1(i) <= txtsu_timestamps_ack(i);
+      trig2(0) <= vic_irqs(0);
+      trig2(1) <= vic_irqs(1);
+      trig2(2) <= vic_irqs(2);
+    end generate gen_txtsu_debug;
 
     U_Swcore : xswc_core
       generic map (
@@ -548,16 +564,16 @@ begin
         g_max_pck_size                    => 10 * 1024,
         g_max_oob_size                    => 3,
         g_num_ports                       => g_num_ports+1,
-        g_pck_pg_free_fifo_size           => ((65536/64)/2),
+        g_pck_pg_free_fifo_size           => 512,
         g_input_block_cannot_accept_data  => "drop_pck",
         g_output_block_per_prio_fifo_size => 64,
         g_wb_data_width                   => 16,
         g_wb_addr_width                   => 2,
         g_wb_sel_width                    => 2,
         g_wb_ob_ignore_ack                => false,
-        g_mpm_mem_size                    => 65536,
-        g_mpm_page_size                   => 64,
-        g_mpm_ratio                       => f_swc_ratio,  --2
+        g_mpm_mem_size                    => 67584,
+        g_mpm_page_size                   => 66,
+        g_mpm_ratio                       => 6, --f_swc_ratio,  --2
         g_mpm_fifo_size                   => 8,
         g_mpm_fetch_next_pg_in_advance    => false)
       port map (
@@ -575,13 +591,13 @@ begin
         );
 
     -- NIC sink
-    TRIG0 <= f_fabric_2_slv(endpoint_snk_in(1), endpoint_snk_out(1));
-    -- NIC source
-    TRIG1 <= f_fabric_2_slv(endpoint_src_out(1), endpoint_src_in(1));
-    -- NIC sink
-    TRIG2 <= f_fabric_2_slv(endpoint_snk_in(2), endpoint_snk_out(2));
-    -- NIC source
-    TRIG3 <= f_fabric_2_slv(endpoint_src_out(2), endpoint_src_in(2));
+    --TRIG0 <= f_fabric_2_slv(endpoint_snk_in(1), endpoint_snk_out(1));
+    ---- NIC source
+    --TRIG1 <= f_fabric_2_slv(endpoint_src_out(1), endpoint_src_in(1));
+    ---- NIC sink
+    --TRIG2 <= f_fabric_2_slv(endpoint_snk_in(2), endpoint_snk_out(2));
+    ---- NIC source
+    --TRIG3 <= f_fabric_2_slv(endpoint_src_out(2), endpoint_src_in(2));
     --TRIG3(31) <= rst_n_periph;
 
     --TRIG2 <= rtu_rsp(c_NUM_PORTS).port_mask(31 downto 0);
@@ -650,8 +666,13 @@ begin
       slave_i    => cnx_master_out(c_SLAVE_GPIO),
       slave_o    => cnx_master_in(c_SLAVE_GPIO),
       gpio_b     => dummy,
-      gpio_out_o => gpio_o,
+      gpio_out_o => gpio_out,
       gpio_in_i  => gpio_i);
+
+  uart_sel_o <= gpio_out(31);
+
+  
+  gpio_o <= gpio_out;
 
   U_MiniBackplane_I2C0 : xwb_i2c_master
     generic map (
@@ -702,6 +723,7 @@ begin
 
   clk_en_o  <= '0';
   clk_sel_o <= '0';
+  clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
   clk_sys_o <= clk_sys;
   
 end rtl;
