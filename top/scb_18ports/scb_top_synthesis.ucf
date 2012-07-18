@@ -272,6 +272,10 @@ NET "mbl_sda_b[0]" LOC="AG32";
 NET "mbl_scl_b[1]" LOC="AC25"; 
 NET "mbl_sda_b[1]" LOC="AG31"; 
 
+NET "clk_dmtd_divsel_o" LOC="AN15";
+NET "uart_sel_o" LOC="C12";
+
+
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/20
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/22
 NET "fpga_clk_25mhz_n_i" TNM_NET = fpga_clk_25mhz_n_i;
@@ -294,42 +298,26 @@ TIMESPEC TS_fpga_clk_aux_n_i = PERIOD "fpga_clk_aux_n_i" 5 ns HIGH 50%;
 NET "fpga_clk_aux_p_i" TNM_NET = fpga_clk_aux_p_i;
 TIMESPEC TS_fpga_clk_aux_p_i = PERIOD "fpga_clk_aux_p_i" 5 ns HIGH 50%;
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/03/19
-NET "gen_phys[0].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[0].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_0__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[0].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[1].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[1].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_1__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[1].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[2].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[2].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_2__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[2].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[3].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[3].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_3__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[3].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[4].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[4].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_4__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[4].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[5].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[5].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_5__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[5].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[6].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[6].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_6__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[6].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[7].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[7].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_7__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[7].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[8].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[8].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_8__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[8].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[9].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[9].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_9__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[9].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[10].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[10].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_10__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[10].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[11].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[11].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_11__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[11].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[12].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[12].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_12__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[12].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[13].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[13].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_13__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[13].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[14].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[14].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_14__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[14].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[15].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[14].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_14__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[14].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[16].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[14].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_14__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[14].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[17].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[14].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_14__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[14].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+
+NET "from_phys[0]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[1]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[2]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[3]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[4]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[5]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[6]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[7]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[8]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[9]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[10]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[11]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[12]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[13]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[14]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[15]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[16]_rx_clk" TNM="phy_rx_clocks";
+NET "from_phys[17]_rx_clk" TNM="phy_rx_clocks";
+
 
 NET "gtx0_3_clk_n_i" TNM_NET = gtx0_3_clk_n_i;
 TIMESPEC TS_gtx0_3_clk_n_i = PERIOD "gtx0_3_clk_n_i" 8 ns HIGH 50%;
@@ -652,43 +640,24 @@ INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DM
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/U_sync_tag_strobe/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/U_sync_tag_strobe/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_feedback_dmtds[0].DMTD_FB/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_feedback_dmtds[0].DMTD_FB/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[0].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[0].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[1].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[1].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[2].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[2].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[3].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[3].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[4].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[4].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[5].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[5].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[6].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[6].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[7].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[7].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[8].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[8].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[9].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[9].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[10].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[10].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[11].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[11].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[15].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[15].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[16].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[16].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[17].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[17].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 
 TIMESPEC TS_ignore1 = FROM Ignore_DMTD TIG;
 TIMESPEC TS_ignore2 = TO Ignore_DMTD TIG;
@@ -1473,47 +1442,39 @@ INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DM
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/tag_o_20" TNM = DMTD_TAG_O;
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/04/25
 
-NET "gen_phys[0].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[1].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[2].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[3].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[4].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[5].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[6].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[7].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[8].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[9].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[10].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[11].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[12].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[13].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[14].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[15].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[16].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
-NET "gen_phys[17].U_PHY/rx_rec_clk_bufin" TNM = phy_rx_clk;
+TIMESPEC TS_ignore8 = FROM "fpga_clk_ref_p_i" TO "phy_rx_clocks" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore9 = FROM "phy_rx_clocks" TO "fpga_clk_ref_p_i" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore18 = FROM "fpga_clk_dmtd_p_i" TO "phy_rx_clocks" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore19 = FROM "phy_rx_clocks" TO "fpga_clk_dmtd_p_i" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore28 = FROM "fpga_clk_aux_p_i" TO "phy_rx_clocks" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore29 = FROM "phy_rx_clocks" TO "fpga_clk_aux_p_i" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore38 = FROM "fpga_clk_ref_p_i" TO "fpga_clk_dmtd_p_i" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore39 = FROM "fpga_clk_dmtd_p_i" TO "fpga_clk_ref_p_i" 20ns DATAPATHONLY;
 
-
-TIMESPEC TS_ignore6 = FROM "fpga_clk_25mhz_p_i" TO "phy_rx_clk" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore7 = FROM "phy_rx_clk" TO "fpga_clk_25mhz_p_i" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore8 = FROM "fpga_clk_ref_p_i" TO "phy_rx_clk" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore9 = FROM "phy_rx_clk" TO "fpga_clk_ref_p_i" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore18 = FROM "fpga_clk_dmtd_p_i" TO "phy_rx_clk" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore19 = FROM "phy_rx_clk" TO "fpga_clk_dmtd_p_i" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore28 = FROM "fpga_clk_aux_p_i" TO "phy_rx_clk" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore29 = FROM "phy_rx_clk" TO "fpga_clk_aux_p_i" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore38 = FROM "fpga_clk_ref_p_i" TO "fpga_clk_dmtd_p_i" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore39 = FROM "fpga_clk_dmtd_p_i" TO "fpga_clk_ref_p_i" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore48 = FROM "fpga_clk_25mhz_p_i" TO "fpga_clk_dmtd_p_i" 10ns DATAPATHONLY;
-
-TIMESPEC TS_ignore49 = FROM "fpga_clk_dmtd_p_i" TO "fpga_clk_25mhz_p_i" 10ns DATAPATHONLY;
-
+TIMESPEC TS_ignore40 = FROM "clk_sys" TO "fpga_clk_dmtd_p_i" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore41 = FROM "fpga_clk_dmtd_p_i" TO "clk_sys" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore42 = FROM "fpga_clk_ref_p_i" TO "clk_sys" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore43 = FROM "clk_sys" TO "fpga_clk_ref_p_i" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore44 = FROM "clk_sys" TO "phy_rx_clocks" 20ns DATAPATHONLY;
+TIMESPEC TS_ignore45 = FROM "phy_rx_clocks" TO "clk_sys" 20ns DATAPATHONLY;
+#Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/07/16
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[17].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_feedback_dmtds[0].DMTD_FB/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[0].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[1].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[2].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[3].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[4].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[5].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[6].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[7].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[8].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[9].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[10].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[11].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[15].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[16].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+TIMESPEC TS_dmtd_input = FROM "DMTD_div_clks" TO "FFS" 0.5 ns DATAPATHONLY;
