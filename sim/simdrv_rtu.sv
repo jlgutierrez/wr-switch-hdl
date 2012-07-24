@@ -280,14 +280,21 @@ task CRTUSimDriver::add_hash_entry(rtu_filtering_entry_t ent);
 endtask // CRTUSimDriver
 
 task CRTUSimDriver::set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en);
-   uint64_t rv;
+   uint64_t rv, tmp;
    
    bus.read(base_addr + `ADDR_RTU_PSR, rv);
-   $display("PSel: %d supported ports\n", (rv>>8) & 'hff);
+   $display("PSel: %d supported ports, configuration for port %d:", (rv>>8) & 'hff, port);
    
-   
+
+   if(learn_en  == 1) begin tmp = tmp | `RTU_PCR_LEARN_EN;  $display("learn"); end;
+   if(pass_all  == 1) begin tmp = tmp | `RTU_PCR_PASS_ALL;  $display("pass all"); end;
+   if(pass_bpdu == 1) begin tmp = tmp | `RTU_PCR_PASS_BPDU; $display("pass bpdu"); end;
+ 
+   tmp = `RTU_PCR_B_UNREC | tmp; $display("broadcast unrecognized");
+ 
    bus.write(base_addr + `ADDR_RTU_PSR, port);
-   bus.write(base_addr + `ADDR_RTU_PCR, `RTU_PCR_B_UNREC | 3);
+   bus.write(base_addr + `ADDR_RTU_PCR, tmp);
+
 endtask // CRTUSimDriver
 
 function bit[15:0] CRTUSimDriver::crc16(bit[15:0] init_crc, bit[15:0] message);
