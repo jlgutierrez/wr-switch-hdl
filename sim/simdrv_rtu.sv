@@ -1,5 +1,15 @@
 
 `include "regs/rtu_regs.vh"
+`include "eth_packet.svh"
+`include "simdrv_defs.svh"
+
+typedef struct 
+  {
+     mac_addr_t src;
+     mac_addr_t dst;
+     int       pid;
+  } rtu_ufifo_entry_t;
+
 
 typedef struct
   {
@@ -46,6 +56,7 @@ class CRTUSimDriver;
 
    extern task add_static_rule(bit[7:0] dmac[], bit[31:0] dpm);
    extern task add_vlan_entry(int vlan_id, rtu_vlan_entry_t ent);
+   extern task poll_ufifo();
    
 
    
@@ -72,6 +83,22 @@ class CRTUSimDriver;
       bus.write(base_addr + `ADDR_RTU_GCR, ('h1021 << 8) | `RTU_GCR_G_ENA);
    endtask // enable
 
+   task read_aging_bitmap(ref bit bmap[]);
+      int i,j;
+      uint64_t rv;
+
+      bmap = new[`RTU_HTAB_SIZE * `RTU_HTAB_BUCKET_SIZE]; 
+
+      for(i=0;i<(`RTU_HTAB_SIZE * `RTU_HTAB_BUCKET_SIZE) / 32; i++)
+        begin
+           bus.read(base_addr + `BASE_RTU_ARAM + i*4, rv);
+           bus.write(base_addr + `BASE_RTU_ARAM + i*4, 0);
+           for(j=0;j<32;j++)
+             if(rv & (1<<j)) bmap[i*32+j] = 1;
+        end
+   endtask // read_aging_bitmap
+   
+   
    task set_bank(int bank);
       uint64_t rval;
       
@@ -111,7 +138,7 @@ task CRTUSimDriver::mfifo_write(int addr, int size, bit[31:0] data[]);
    uint64_t rval;
    int i;
 
-   $display("MFIFOWrite addr %x len %d", addr, size);
+//   $display("MFIFOWrite addr %x len %d", addr, size);
    
    
    bus.write(base_addr + `ADDR_RTU_MFIFO_R0, 1);
@@ -126,7 +153,7 @@ task CRTUSimDriver::mfifo_write(int addr, int size, bit[31:0] data[]);
 	   if(!(rval & `RTU_MFIFO_CSR_FULL)) break;
 	   
 	end
-	$display("MFIFOWrite: %d %x",i,data[i]);
+//	$display("MFIFOWrite: %d %x",i,data[i]);
 	
 	bus.write(base_addr + `ADDR_RTU_MFIFO_R0, 0);
 	bus.write(base_addr + `ADDR_RTU_MFIFO_R1, data[i]);
@@ -142,6 +169,45 @@ task CRTUSimDriver::mfifo_write(int addr, int size, bit[31:0] data[]);
 
 endtask // CRTUSimDriver
 
+
+task CRTUSimDriver::poll_ufifo();
+   uint64_t csr, r0, r1, r2, r3 ,r4;
+   rtu_ufifo_entry_t ent;
+   
+   bus.read(base_addr + `ADDR_RTU_UFIFO_CSR, csr);
+   
+   
+   if(csr & `RTU_UFIFO_CSR_EMPTY)
+     return;
+
+   bus.read(base_addr + `ADDR_RTU_UFIFO_R0, r0);
+   bus.read(base_addr + `ADDR_RTU_UFIFO_R1, r1);
+   bus.read(base_addr + `ADDR_RTU_UFIFO_R2, r2);
+   bus.read(base_addr + `ADDR_RTU_UFIFO_R3, r3);
+   bus.read(base_addr + `ADDR_RTU_UFIFO_R4, r4);
+
+   ent.pid = (r4 & `RTU_UFIFO_R4_PID)>> `RTU_UFIFO_R4_PID_OFFSET;
+ 
+    // destination mac
+    ent.dst[5]   = 'hFF &  r0;
+    ent.dst[4]   = 'hFF & (r0 >> 8);
+    ent.dst[3]   = 'hFF & (r0 >> 16);
+    ent.dst[2]   = 'hFF & (r0 >> 24);
+    ent.dst[1]   = 'hFF &  r1;
+    ent.dst[0]   = 'hFF & (r1 >> 8);
+    // source mac
+    ent.src[5]   = 'hFF &  r2;
+    ent.src[4]   = 'hFF & (r2 >> 8);
+    ent.src[3]   = 'hFF & (r2 >> 16);
+    ent.src[2]   = 'hFF & (r2 >> 24);
+    ent.src[1]   = 'hFF &  r3;
+    ent.src[0]   = 'hFF & (r3 >> 8);
+
+   $display("ureq: pid %d DST [%02x:%02x:%02x:%02x:%02x:%02x] SRC: [%02x:%02x:%02x:%02x:%02x:%02x", ent.pid,
+            ent.dst[0], ent.dst[1], ent.dst[2], ent.dst[3], ent.dst[4], ent.dst[5],
+            ent.src[0], ent.src[1], ent.src[2], ent.src[3], ent.src[4], ent.src[5]);
+   
+endtask
      
 
 task CRTUSimDriver::htab_write(int hash, int bucket, rtu_filtering_entry_t ent);
