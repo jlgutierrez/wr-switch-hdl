@@ -72,18 +72,21 @@ void _irq_entry()
 
 		switch(softpll.seq_state)
 		{
-            case SEQ_CLEAR_DACS:
-                SPLL->DAC_HPLL = 65535;
-                SPLL->DAC_MAIN = softpll.default_dac_main;
-                SPLL->OCER |= 1;
-                softpll.seq_state = SEQ_WAIT_CLEAR_DACS;
-                softpll.dac_timeout = timer_get_tics();
-                break;
+      case SEQ_CLEAR_DACS:
+         SPLL->DAC_HPLL = 65535;
+         SPLL->DAC_MAIN = softpll.default_dac_main;
+         SPLL->OCER |= 1;
+         softpll.seq_state = SEQ_WAIT_CLEAR_DACS;
+         softpll.dac_timeout = timer_get_tics();
+				 if(softpll.mode == SPLL_MODE_SLAVE) 
+				 		spll_resync_dmtd_counter(softpll.mpll.id_ref);
 
-            case SEQ_WAIT_CLEAR_DACS:
-                if(timer_get_tics() - softpll.dac_timeout > 10000)
-                    softpll.seq_state = (softpll.mode == SPLL_MODE_GRAND_MASTER ? SEQ_START_EXT : SEQ_START_HELPER);
-                break;
+         break;
+
+      case SEQ_WAIT_CLEAR_DACS:
+          if(timer_get_tics() - softpll.dac_timeout > 10000)
+              softpll.seq_state = (softpll.mode == SPLL_MODE_GRAND_MASTER ? SEQ_START_EXT : SEQ_START_HELPER);
+              break;
 
 			case SEQ_DISABLED:
 				break;
@@ -231,7 +234,7 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 	SPLL->ECCR = 0;
 	SPLL->RCGER = 0;
 	SPLL->DCCR = 0;
-	SPLL->DEGLITCH_THR = 1000;
+	SPLL->DEGLITCH_THR = 300;
 
 	PPSG->ESCR = 0;
 	PPSG->CR = PPSG_CR_CNT_EN | PPSG_CR_CNT_RST | PPSG_CR_PWIDTH_W(100);
@@ -276,6 +279,9 @@ void spll_init(int mode, int slave_ref_channel, int align_pps)
 			strcpy(mode_str, "Slave");
 
 			softpll.seq_state = SEQ_CLEAR_DACS;
+			spll_resync_dmtd_counter(slave_ref_channel);
+			while(!spll_check_dmtd_resync(slave_ref_channel));
+			
 			helper_init(&softpll.helper, slave_ref_channel);
 			mpll_init(&softpll.mpll, slave_ref_channel, n_chan_ref);
 

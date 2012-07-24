@@ -166,5 +166,22 @@ static void spll_enable_tagger(int channel, int enable)
 			SPLL->RCER &= ~ (1<<channel);
 	}
 
-//	TRACE("%s: ch %d, OCER 0x%x, RCER 0x%x\n", __FUNCTION__, channel, SPLL->OCER, SPLL->RCER);
+	TRACE("%s: ch %d, OCER 0x%x, RCER 0x%x\n", __FUNCTION__, channel, SPLL->OCER, SPLL->RCER);
+}
+
+static void spll_resync_dmtd_counter(int channel)
+{
+	if(channel >= n_chan_ref) /* Output channel? */
+			SPLL->CRR_OUT = 1<< (channel - n_chan_ref); 
+	else 
+			SPLL->CRR_IN = 1<< channel; 
+	
+}
+
+static int spll_check_dmtd_resync(int channel)
+{
+	if(channel >= n_chan_ref) /* Output channel? */
+			return (SPLL->CRR_OUT & (1<< (channel - n_chan_ref))) ? 1 : 0; 
+	else 
+			return (SPLL->CRR_IN & (1<< channel)) ? 1 :0; 
 }

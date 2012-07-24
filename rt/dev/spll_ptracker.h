@@ -34,6 +34,7 @@ static void ptracker_start(struct spll_ptracker_state *s)
 	s->sample_n=  0;
     s->preserve_sign = 0;
 
+	spll_resync_dmtd_counter(s->id_b);
   spll_enable_tagger(s->id_a, 1);
   spll_enable_tagger(s->id_b, 1);
 }

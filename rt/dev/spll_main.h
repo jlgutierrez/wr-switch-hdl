@@ -6,6 +6,7 @@
 #define MATCH_WAIT_OUT 2
 
 #undef WITH_SEQUENCING
+//#define WITH_SEQUENCING
 
 /* State of the Main PLL */
 struct spll_main_state {
@@ -15,7 +16,8 @@ struct spll_main_state {
  	spll_lock_det_t ld;
 
 	int adder_ref, adder_out, tag_ref, tag_out, tag_ref_d, tag_out_d;
-
+	int err_d0, err_d1;
+	
 	// tag sequencing stuff
 	uint32_t seq_ref, seq_out;
 	int match_state;
@@ -61,7 +63,7 @@ static void mpll_start(struct spll_main_state *s)
 	s->seq_ref = 0;
 	s->seq_out = 0;
 	s->match_state = MATCH_NEXT_TAG;
-
+	s->err_d0 = s->err_d1 = 0;
 	s->phase_shift_target = 0;
 	s->phase_shift_current = 0;
 	s->sample_n=  0;
@@ -153,6 +155,15 @@ static int mpll_update(struct spll_main_state *s, int tag, int source)
 
 #ifndef WITH_SEQUENCING
 
+
+/*		if(s->err_d0 - s->err_d1 > -(1<<HPLL_N)/2 && err - s->err_d0 < -(1<<HPLL_N)/2 )
+			err += (1<<HPLL_N);
+		if(s->err_d0 - s->err_d1 < (1<<HPLL_N)/2 && err - s->err_d0 > (1<<HPLL_N)/2 )
+			err -= (1<<HPLL_N);
+			
+		s->err_d1 = s->err_d0;
+		s->err_d0 = err;*/
+
         /* Hack: the PLL is locked, so the tags are close to each other. But when we start phase shifting, after reaching
          full clock period, one of the reference tags will flip before the other, causing a suddent 2**HPLL_N jump in the error.
          So, once the PLL is locked, we just mask out everything above 2**HPLL_N.
@@ -168,19 +179,19 @@ static int mpll_update(struct spll_main_state *s, int tag, int source)
 
 #endif
 
-        y = pi_update(&s->pi, err);
+    y = pi_update(&s->pi, err);
 		SPLL->DAC_MAIN = SPLL_DAC_MAIN_VALUE_W(y) | SPLL_DAC_MAIN_DAC_SEL_W(s->id_out);
 
 		spll_debug(DBG_MAIN | DBG_REF, s->tag_ref + s->adder_ref, 0);
 		spll_debug(DBG_MAIN | DBG_TAG, s->tag_out + s->adder_out, 0);
 		spll_debug(DBG_MAIN | DBG_ERR, err, 0);
-		spll_debug(DBG_MAIN | DBG_SAMPLE_ID, s->sample_n++, 0);
-		spll_debug(DBG_MAIN | DBG_Y, y, 1);
+		spll_debug(DBG_MAIN | DBG_SAMPLE_ID, s->sample_n++, 1);
+	//	spll_debug(DBG_MAIN | DBG_Y, y, 1);
 
 		s->tag_out = -1;
 		s->tag_ref = -1;
 
-        if(s->adder_ref > 2*MPLL_TAG_WRAPAROUND && s->adder_out > 2*MPLL_TAG_WRAPAROUND)
+    if(s->adder_ref > 2*MPLL_TAG_WRAPAROUND && s->adder_out > 2*MPLL_TAG_WRAPAROUND)
 		{
 			s->adder_ref -= MPLL_TAG_WRAPAROUND;
 			s->adder_out -= MPLL_TAG_WRAPAROUND;
