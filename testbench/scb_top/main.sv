@@ -3,6 +3,7 @@
 `include "tbi_utils.sv"
 `include "simdrv_wrsw_nic.svh"
 `include "simdrv_rtu.sv"
+`include "simdrv_txtsu.svh"
 `include "endpoint_regs.v"
 `include "endpoint_mdio.v"
 `include "if_wb_master.svh"
@@ -20,7 +21,7 @@ module main;
    reg clk_swc_mpm_core=0;
    reg rst_n=0;
    
-   parameter g_num_ports = 6;
+   parameter g_num_ports = 18;
    
    // prameters to create some gaps between pks (not work really well)
    parameter g_enable_pck_gaps = 0;  //1=TRUE, 0=FALSE
@@ -53,7 +54,7 @@ module main;
 //   always #8ns clk_ref <= ~clk_ref;
 
    initial begin
-      repeat(3) @(posedge clk_sys);
+      repeat(100) @(posedge clk_sys);
       rst_n <= 1;
    end
 /*
@@ -100,7 +101,7 @@ module main;
               pkt  = gen.gen();
               pkt.oob = TX_FID;
               
-              $display("Tx %d", i);
+              $display("[port %d] tx %d", srcPort, i);
               
               src.send(pkt);
               arr[i]  = pkt;
@@ -160,6 +161,7 @@ module main;
    port_t ports[$];
    CSimDrv_NIC nic;
    CRTUSimDriver rtu;
+   CSimDrv_TXTSU txtsu;
    
 
    task automatic init_ports(ref port_t p[$], ref CWishboneAccessor wb);
@@ -170,7 +172,7 @@ module main;
            port_t tmp;
            CSimDrv_WR_Endpoint ep;
            ep = new(wb, 'h30000 + i * 'h400);
-           ep.init();
+           ep.init(i);
            tmp.ep = ep;
            tmp.send = EthPacketSource'(DUT.to_port[i]);
            tmp.recv = EthPacketSink'(DUT.from_port[i]);
@@ -185,7 +187,6 @@ module main;
       
       nic = new(wb, 'h20000);
       $display("NICInit");
-      
       nic.init();
       $display("Done");
       
@@ -199,7 +200,7 @@ module main;
       
    endtask // init_nic
    
-     
+
    
    initial begin
       uint64_t msr;
@@ -217,14 +218,21 @@ module main;
       cpu_acc.set_mode(PIPELINED);
       cpu_acc.write('h10304, (1<<3));
 
+      
       init_ports(ports, cpu_acc);
       $display("InitNIC");
       
       init_nic(ports, cpu_acc);
+
+      $display("InitTXTS");
+
+      txtsu = new (cpu_acc, 'h51000);
+      txtsu.init();
+      
+      
       $display("Initialization done");
 
       rtu = new;
-
       rtu.set_bus(cpu_acc, 'h60000);
       for (int dd=0;dd<g_num_ports;dd++)
         begin
@@ -232,8 +240,9 @@ module main;
 
         end
 
-        rtu.add_static_rule('{5, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<2 ));
-        rtu.add_static_rule('{6, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<1 ));
+        rtu.add_static_rule('{17, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<17 ));
+        rtu.add_static_rule('{16, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<16 ));
+
      // rtu.set_hash_poly();
       
       def_vlan.port_mask      = 32'hffffffff;
@@ -247,30 +256,37 @@ module main;
       rtu.enable();
       ////////////// sending packest on all the ports (16) according to the portUnderTest mask.///////
       fork
+//`ifdef none
          begin
          if(portUnderTest[6]) 
             begin 
                for(int g=0;g<20;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[1].recv /* sink */,  6 /* srcPort */ , 1 /* dstPort */);
+                    $display("Try f_5:%d", g);
+                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[0].send /* src */, ports[16].recv /* sink */,  0 /* srcPort */ , 16 /* dstPort */);
                  end
             end   
          end // fork begin
-         `ifdef none
+//`endif //  `ifdef none
+         
+//         `ifdef none
          begin
          if(portUnderTest[5]) 
             begin 
                for(int g=0;g<20;g++)
                  begin
                     $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 20 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[5].send /* src */, ports[2] .recv /* sink */,  5 /* srcPort */ , 2  /* dstPort */);
+                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[1].send /* src */, ports[17] .recv /* sink */,  1 /* srcPort */ , 17  /* dstPort */);
                  end
             end   
          end
-         `endif
+//         `endif
          forever begin
             nic.update(DUT.U_Top.U_Wrapped_SCBCore.vic_irqs[0]);
+            @(posedge clk_sys);
+         end
+         forever begin
+            txtsu.update(DUT.U_Top.U_Wrapped_SCBCore.vic_irqs[1]);
             @(posedge clk_sys);
          end
       join_none

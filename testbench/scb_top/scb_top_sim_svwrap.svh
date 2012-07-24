@@ -204,7 +204,7 @@ module scb_top_sim_svwrap
 
               ep_acc = U_ep_wb.get_accessor();
               ep_drv = new (ep_acc, 0);
-              ep_drv.init();
+              ep_drv.init(0);
 
               from_port[i] = new (U_ep_snk.get_accessor());
               to_port[i] = new (U_ep_src.get_accessor());
