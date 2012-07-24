@@ -282,7 +282,7 @@ begin  -- rtl
       g_num_outputs          => 1,
       g_reverse_dmtds        => true,
       g_with_ext_clock_input => true,
-      g_divide_input_by_2    => true,
+      g_divide_input_by_2    => false,
       g_with_period_detector => false,
       g_with_undersampling   => false,
       g_with_debug_fifo      => true,
