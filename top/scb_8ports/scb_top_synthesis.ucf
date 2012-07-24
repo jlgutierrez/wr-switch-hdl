@@ -255,6 +255,8 @@ NET "led_act_o[5]" LOC="AA25";
 NET "led_act_o[6]" LOC="AB27";  
 NET "led_act_o[7]" LOC="AC27";  
 
+NET "clk_dmtd_divsel_o" LOC="AN15";
+NET "uart_sel_o" LOC="C12";
 
 
 NET "mbl_scl_b[0]" LOC="AF31"; 

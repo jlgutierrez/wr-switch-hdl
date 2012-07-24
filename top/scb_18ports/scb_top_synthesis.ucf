@@ -278,6 +278,9 @@ NET "uart_sel_o" LOC="C12";
 
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/20
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/22
+
+
+
 NET "fpga_clk_25mhz_n_i" TNM_NET = fpga_clk_25mhz_n_i;
 TIMESPEC TS_fpga_clk_25mhz_n_i = PERIOD "fpga_clk_25mhz_n_i" 40 ns HIGH 50%;
 NET "fpga_clk_25mhz_p_i" TNM_NET = fpga_clk_25mhz_p_i;
@@ -1458,23 +1461,24 @@ TIMESPEC TS_ignore43 = FROM "clk_sys" TO "fpga_clk_ref_p_i" 20ns DATAPATHONLY;
 TIMESPEC TS_ignore44 = FROM "clk_sys" TO "phy_rx_clocks" 20ns DATAPATHONLY;
 TIMESPEC TS_ignore45 = FROM "phy_rx_clocks" TO "clk_sys" 20ns DATAPATHONLY;
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/07/16
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[17].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_feedback_dmtds[0].DMTD_FB/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[0].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[1].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[2].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[3].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[4].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[5].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[6].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[7].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[8].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[9].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[10].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[11].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[15].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[16].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
-TIMESPEC TS_dmtd_input = FROM "DMTD_div_clks" TO "FFS" 0.5 ns DATAPATHONLY;
+
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[17].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_feedback_dmtds[0].DMTD_FB/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[0].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[1].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[2].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[3].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[4].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[5].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[6].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[7].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[8].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[9].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[10].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[11].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[15].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#NET "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[16].DMTD_REF/clk_in" TNM_NET = DMTD_div_clks;
+#TIMESPEC TS_dmtd_input = FROM "DMTD_div_clks" TO "FFS" 0.5 ns DATAPATHONLY;

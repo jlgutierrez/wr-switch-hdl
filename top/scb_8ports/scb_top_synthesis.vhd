@@ -99,6 +99,11 @@ entity scb_top_synthesis is
     clk_en_o  : out std_logic;
     clk_sel_o : out std_logic;
 
+    -- DMTD clock divider selection (0 = 125 MHz, 1 = 62.5 MHz)
+    clk_dmtd_divsel_o : out std_logic;
+
+    -- UART source selection (FPGA/DBGU)
+    uart_sel_o : out std_logic;
 
     ---------------------------------------------------------------------------
     -- GTX ports
@@ -249,6 +254,8 @@ architecture Behavioral of scb_top_synthesis is
       uart_rxd_i          : in  std_logic;
       clk_en_o            : out std_logic;
       clk_sel_o           : out std_logic;
+      uart_sel_o          : out std_logic;
+      clk_dmtd_divsel_o   : out std_logic;
       phys_o              : out t_phyif_output_array(g_num_ports-1 downto 0);
       phys_i              : in  t_phyif_input_array(g_num_ports-1 downto 0);
       led_link_o          : out std_logic_vector(g_num_ports-1 downto 0);
@@ -490,7 +497,7 @@ begin
 
   clk_gtx(1 downto 0) <= (others => clk_gtx16_19);
   clk_gtx(5 downto 2) <= (others => clk_gtx12_15);
-  clk_gtx(7 downto 6)   <= (others => clk_gtx8_11);
+  clk_gtx(7 downto 6) <= (others => clk_gtx8_11);
   --clk_gtx(11 downto 8)  <= (others => clk_gtx8_11);
   --clk_gtx(14 downto 12) <= (others => clk_gtx12_15);
   --clk_gtx(17 downto 16) <= (others => clk_gtx16_19);
@@ -572,6 +579,8 @@ begin
       uart_rxd_i          => uart_rxd_i,
       clk_en_o            => clk_en_o,
       clk_sel_o           => clk_sel_o,
+      uart_sel_o          => uart_sel_o,
+      clk_dmtd_divsel_o   => clk_dmtd_divsel_o,
       gpio_i              => x"00000000",
       phys_o              => to_phys(c_NUM_PORTS-1 downto 0),
       phys_i              => from_phys(c_NUM_PORTS-1 downto 0),

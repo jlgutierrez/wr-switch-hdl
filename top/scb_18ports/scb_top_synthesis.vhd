@@ -163,10 +163,14 @@ architecture Behavioral of scb_top_synthesis is
   -- Clocks
   -------------------------------------------------------------------------------
 
+
+
   signal clk_sys_startup                        : std_logic;
   signal clk_sys, clk_ref, clk_25mhz , clk_dmtd : std_logic;
   signal pllout_clk_fb                          : std_logic;
 
+  attribute maxskew: string;
+  attribute maxskew of clk_dmtd : signal is "0.5ns";
 
   -----------------------------------------------------------------------------
   -- Component declarations
