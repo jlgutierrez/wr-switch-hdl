@@ -250,12 +250,12 @@ package wrsw_top_pkg is
       led_act_o           : out std_logic_vector(g_num_ports-1 downto 0);
       gpio_o              : out std_logic_vector(31 downto 0);
       gpio_i              : in  std_logic_vector(31 downto 0);
-      i2c_mbl_scl_oen_o   : out std_logic_vector(1 downto 0);
-      i2c_mbl_scl_o       : out std_logic_vector(1 downto 0);
-      i2c_mbl_scl_i       : in  std_logic_vector(1 downto 0) := "11";
-      i2c_mbl_sda_oen_o   : out std_logic_vector(1 downto 0);
-      i2c_mbl_sda_o       : out std_logic_vector(1 downto 0);
-      i2c_mbl_sda_i       : in  std_logic_vector(1 downto 0) := "11");
+      i2c_scl_oen_o   : out std_logic_vector(2 downto 0);
+      i2c_scl_o       : out std_logic_vector(2 downto 0);
+      i2c_scl_i       : in  std_logic_vector(2 downto 0) := "111";
+      i2c_sda_oen_o   : out std_logic_vector(2 downto 0);
+      i2c_sda_o       : out std_logic_vector(2 downto 0);
+      i2c_sda_i       : in  std_logic_vector(2 downto 0) := "111");
   end component;
   component xswc_core is
     generic( 

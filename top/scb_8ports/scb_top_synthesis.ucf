@@ -13,6 +13,10 @@ NET "fpga_clk_aux_n_i"  LOC=B10;
 NET "fpga_clk_dmtd_p_i"  LOC=L23; 
 NET "fpga_clk_dmtd_n_i"  LOC=M22;
 
+NET "sensors_scl_b" LOC=G13;
+NET "sensors_sda_b" LOC=H14;
+
+
 #EBI BUS
 #NET "cpu_clk_i" LOC="";
 NET "cpu_cs_n_i" LOC="H34";
@@ -96,7 +100,7 @@ NET "pll_sck_o"  LOC="AE16";
 NET "pll_mosi_o"  LOC="AH19";  
 NET "pll_miso_i"  LOC="AJ19";  
 NET "pll_reset_n_o" LOC="AL16";
-NET "pll_status_i" LOC="AE18";
+NET "pll_status_i" LOC="K13";
 NET "pll_sync_n_o" LOC="AG18";
 
 NET "uart_txd_o" LOC="E11";
@@ -353,4 +357,4 @@ TIMESPEC TS_gtx16_19_clk_n_i = PERIOD "gtx16_19_clk_n_i" 8 ns HIGH 50%;
 NET "gtx16_19_clk_p_i" TNM_NET = gtx16_19_clk_p_i;
 TIMESPEC TS_gtx16_19_clk_p_i = PERIOD "gtx16_19_clk_p_i" 8 ns HIGH 50%;
 
-NET "pll_status_i" CLOCK_DEDICATED_ROUTE = FALSE; 
+#NET "pll_status_i" CLOCK_DEDICATED_ROUTE = FALSE; 

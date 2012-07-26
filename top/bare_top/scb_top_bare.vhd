@@ -112,21 +112,23 @@ entity scb_top_bare is
     gpio_i : in  std_logic_vector(31 downto 0);
 
     ---------------------------------------------------------------------------
-    -- Mini-backplane I/O
+    -- I2C I/Os
+    -- mapping: 0/1 -> MiniBackplane busses 0/1
+    --          2   -> Onboard temp sensors
     ---------------------------------------------------------------------------
 
-    i2c_mbl_scl_oen_o : out std_logic_vector(1 downto 0);
-    i2c_mbl_scl_o     : out std_logic_vector(1 downto 0);
-    i2c_mbl_scl_i     : in  std_logic_vector(1 downto 0) := "11";
-    i2c_mbl_sda_oen_o : out std_logic_vector(1 downto 0);
-    i2c_mbl_sda_o     : out std_logic_vector(1 downto 0);
-    i2c_mbl_sda_i     : in  std_logic_vector(1 downto 0) := "11"
+    i2c_scl_oen_o : out std_logic_vector(2 downto 0);
+    i2c_scl_o     : out std_logic_vector(2 downto 0);
+    i2c_scl_i     : in  std_logic_vector(2 downto 0) := "111";
+    i2c_sda_oen_o : out std_logic_vector(2 downto 0);
+    i2c_sda_o     : out std_logic_vector(2 downto 0);
+    i2c_sda_i     : in  std_logic_vector(2 downto 0) := "111"
     );
 end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 9;
+  constant c_NUM_WB_SLAVES : integer := 10;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
 
@@ -144,9 +146,11 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_GPIO         : integer := 6;
   constant c_SLAVE_MBL_I2C0     : integer := 7;
   constant c_SLAVE_MBL_I2C1     : integer := 8;
+  constant c_SLAVE_SENSOR_I2C     : integer := 9;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
+      x"00056000",                      -- Sensors-I2C
       x"00055000",                      -- MBL-I2C1
       x"00054000",                      -- MBL-I2C0
       x"00053000",                      -- GPIO
@@ -160,6 +164,7 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000f0000",
@@ -684,12 +689,12 @@ begin
       slave_i      => cnx_master_out(c_SLAVE_MBL_I2C0),
       slave_o      => cnx_master_in(c_SLAVE_MBL_I2C0),
       desc_o       => open,
-      scl_pad_i    => i2c_mbl_scl_i(0),
-      scl_pad_o    => i2c_mbl_scl_o(0),
-      scl_padoen_o => i2c_mbl_scl_oen_o(0),
-      sda_pad_i    => i2c_mbl_sda_i(0),
-      sda_pad_o    => i2c_mbl_sda_o(0),
-      sda_padoen_o => i2c_mbl_sda_oen_o(0));
+      scl_pad_i    => i2c_scl_i(0),
+      scl_pad_o    => i2c_scl_o(0),
+      scl_padoen_o => i2c_scl_oen_o(0),
+      sda_pad_i    => i2c_sda_i(0),
+      sda_pad_o    => i2c_sda_o(0),
+      sda_padoen_o => i2c_sda_oen_o(0));
 
   U_MiniBackplane_I2C1 : xwb_i2c_master
     generic map (
@@ -701,12 +706,29 @@ begin
       slave_i      => cnx_master_out(c_SLAVE_MBL_I2C1),
       slave_o      => cnx_master_in(c_SLAVE_MBL_I2C1),
       desc_o       => open,
-      scl_pad_i    => i2c_mbl_scl_i(1),
-      scl_pad_o    => i2c_mbl_scl_o(1),
-      scl_padoen_o => i2c_mbl_scl_oen_o(1),
-      sda_pad_i    => i2c_mbl_sda_i(1),
-      sda_pad_o    => i2c_mbl_sda_o(1),
-      sda_padoen_o => i2c_mbl_sda_oen_o(1));
+      scl_pad_i    => i2c_scl_i(1),
+      scl_pad_o    => i2c_scl_o(1),
+      scl_padoen_o => i2c_scl_oen_o(1),
+      sda_pad_i    => i2c_sda_i(1),
+      sda_pad_o    => i2c_sda_o(1),
+      sda_padoen_o => i2c_sda_oen_o(1));
+
+  U_Sensors_I2C : xwb_i2c_master
+    generic map (
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE)
+    port map (
+      clk_sys_i    => clk_sys,
+      rst_n_i      => rst_n_periph,
+      slave_i      => cnx_master_out(c_SLAVE_SENSOR_I2C),
+      slave_o      => cnx_master_in(c_SLAVE_SENSOR_I2C),
+      desc_o       => open,
+      scl_pad_i    => i2c_scl_i(2),
+      scl_pad_o    => i2c_scl_o(2),
+      scl_padoen_o => i2c_scl_oen_o(2),
+      sda_pad_i    => i2c_sda_i(2),
+      sda_pad_o    => i2c_sda_o(2),
+      sda_padoen_o => i2c_sda_oen_o(2));
 
   -----------------------------------------------------------------------------
   -- Interrupt assignment
