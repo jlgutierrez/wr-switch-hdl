@@ -7,3 +7,8 @@ work
 modelsim.ini
 transcript
 *.vstf
+fifo_generator_v6_1
+*.zip
+*.xdl
+build_wb.sh
+doc/
