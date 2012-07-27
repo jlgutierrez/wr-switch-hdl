@@ -1,0 +1,6 @@
+[submodule "ip_cores/general-cores"]
+	path = ip_cores/general-cores
+	url = git://ohwr.org/hdl-core-lib/general-cores.git
+[submodule "ip_cores/wr-cores"]
+	path = ip_cores/wr-cores
+	url = git://ohwr.org/hdl-core-lib/wr-cores.git
