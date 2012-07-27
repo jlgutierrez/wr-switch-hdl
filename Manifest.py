@@ -6,5 +6,5 @@ modules = { "local" : [
 				"modules/wrsw_rtu",
 				"platform/virtex6/chipscope",
 				"platform/xilinx"],
- 					"git" : [ "git://ohwr.org/hdl-core-lib/wr-cores.git::wishbonized" ]
+				"git" : [ "git://ohwr.org/hdl-core-lib/wr-cores.git" ]
 };
