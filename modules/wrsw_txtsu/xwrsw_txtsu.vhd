@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-26
--- Last update: 2012-07-12
+-- Last update: 2012-07-31
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -38,6 +38,7 @@ use ieee.numeric_std.all;
 library work;
 
 use work.wishbone_pkg.all;
+use work.endpoint_pkg.all;
 use work.wrsw_txtsu_pkg.all;
 
 entity xwrsw_tx_tsu is

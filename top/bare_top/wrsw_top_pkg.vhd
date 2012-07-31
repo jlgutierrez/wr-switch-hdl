@@ -5,6 +5,7 @@ use work.wr_fabric_pkg.all;
 use work.wishbone_pkg.all;
 use work.wrsw_txtsu_pkg.all;
 use work.wrsw_shared_types_pkg.all;
+use work.endpoint_pkg.all;
 
 package wrsw_top_pkg is
 
