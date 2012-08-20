@@ -236,7 +236,7 @@ module main;
       rtu.set_bus(cpu_acc, 'h60000);
       for (int dd=0;dd<g_num_ports;dd++)
         begin
-        rtu.set_port_config(dd, 1, 1, 1);
+        rtu.set_port_config(dd, 1, 0, 1);
 
         end
 
