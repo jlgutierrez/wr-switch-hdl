@@ -1,0 +1,578 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+
+peripheral {
+	 name = "Topology Resolution Unit (TRU)";
+   prefix = "tru";
+
+	 hdl_entity="tru_wishbone_slave";
+	 
+-- Port Configuration Register
+	 reg {
+			name = "TRU Global Control Register";
+			description = "Control register containing global (port-independent) settings of the TRU.";
+			prefix = "GCR";
+
+			field {
+				 name = "TRU Global Enable";
+				 description = "Global TRU enable bit. Overrides all port settings.\
+				  0: RTU is disabled. All packets are dropped.\
+				  1: RTU is enabled.";
+				 type = BIT;
+				 prefix = "G_ENA";
+				 access_dev = READ_ONLY;
+				 access_bus = READ_WRITE;
+			};
+
+			field {
+				  name = "Swap TRU TAB bank";
+				  description = "write 1: swaps the active bank of the VLAN TAB (writing to TRU TAB affects\
+				  inactive bank, only swapping the banks causes the written data to be activated\
+				  write 0: no effect";
+				  prefix = "TRU_BANK";
+				  type = MONOSTABLE;
+			};
+
+			field {
+				 name = "Rx Frame Reset";
+				 description = "Resets information about filtered frames received on\
+				 a port";
+ 				 type = SLV;
+				 prefix = "RX_FRAME_RESET";
+				 size = 24 ;
+				 align= 8;
+				 access_dev = READ_ONLY;
+				 access_bus = READ_WRITE;
+			};
+	 };
+
+   reg {
+      name = "TRU Global Status Register 0";
+      description = "Provides status of TRU actions";
+      prefix = "GSR0";
+
+
+      field {
+         name = "Active Bank";
+         prefix = "STAT_BANK";
+         description = "Indicates active bank in the TRU TAB";
+         type = BIT;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+      };
+
+
+      field {
+         name = "Stable Ports UP";
+         prefix = "STAT_STB_UP";
+         description = "Indicates stable ports which are up (0=down, 1=up)";
+         size = 24;
+         type = SLV;
+         align= 8;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+      };
+
+   };
+   reg {
+      name = "TRU Global Status Register 1";
+      description = "Provides status of TRU actions";
+      prefix = "GSR1";
+
+
+
+      field {
+         name = "Ports UP";
+         prefix = "STAT_UP";
+         description = "Indicates ports which are up (0=down, 1=up)";
+         size = 32;
+         type = SLV;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+      };
+
+   };
+
+  reg {
+      name = "Pattern Control Register";
+      description = "Defines matching pattern mode/configuration for quick port reconfiguration";
+      prefix = "MCR";
+
+      field {
+         name = "Replace Pattern Mode";
+         prefix = "PATTERN_MODE_REP";
+         description = "Selected Pattern Mode for port config replacement";
+         size = 4;
+         align= 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "Addition Pattern Mode";
+         prefix = "PATTERN_MODE_ADD";
+         description = "Selected Pattern Mode for port config addition";
+         size = 4;
+         align= 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+
+   reg {
+      name = "Link Aggregation Control Register";
+      description = "Register controlling Link Aggregation specific config";
+      prefix = "LACR";
+
+      field {
+         name = "Aggregation Group Number";
+         description = "Provides number of Link Aggregation groups handled by the switch/network";
+         prefix = "AGG_GR_NUM";
+         
+         type = SLV;
+         size = 4;
+         align= 8;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+      
+      field {
+         name = "Broadcast Distribution Function ID";
+         description = "ID of Aggregation Distribution Function for broadcast traffic";
+
+         prefix = "AGG_DF_BR_ID";
+         type = SLV;
+         size = 4;
+         align= 8;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+
+      field {
+         name = "Unicast Distribution Function ID";
+         description = "ID of Aggregation Distribution Function for unicast traffic";
+
+         prefix = "AGG_DF_UN_ID";
+         type = SLV;
+         size = 4;
+         align= 8;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+  };
+   reg {
+      name = "Link Aggregation Group ID Mask Table";
+      description = "Table which Translation between bit number from the endpoint  mask and Aggregation Group";
+      prefix = "LAGT";
+
+      field {
+         name = "Aggregation Group ID Mask Bit Number for group 0";
+         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+
+         prefix = "LAGT_GR_ID_MASK_0";
+         type = SLV;
+         size = 4;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+
+      field {
+         name = "Aggregation Group ID Mask Bit Number for group 1";
+         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+
+         prefix = "LAGT_GR_ID_MASK_1";
+         type = SLV;
+         size = 4;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+
+      field {
+         name = "Aggregation Group ID Mask Bit Number for group 2";
+         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+
+         prefix = "LAGT_GR_ID_MASK_2";
+         type = SLV;
+         size = 4;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+
+      field {
+         name = "Aggregation Group ID Mask Bit Number for group 3";
+         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+
+         prefix = "LAGT_GR_ID_MASK_3";
+         type = SLV;
+         size = 4;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+
+      field {
+         name = "Aggregation Group ID Mask Bit Number for group 4";
+         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+
+         prefix = "LAGT_GR_ID_MASK_4";
+         type = SLV;
+         size = 4;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+
+      field {
+         name = "Aggregation Group ID Mask Bit Number for group 5";
+         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+
+         prefix = "LAGT_GR_ID_MASK_5";
+         type = SLV;
+         size = 4;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+
+      field {
+         name = "Aggregation Group ID Mask Bit Number for group 6";
+         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+
+         prefix = "LAGT_GR_ID_MASK_6";
+         type = SLV;
+         size = 4;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+
+      field {
+         name = "Aggregation Group ID Mask Bit Number for group 7";
+         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+
+         prefix = "LAGT_GR_ID_MASK_7";
+         type = SLV;
+         size = 4;
+         access_dev = READ_ONLY;
+         access_bus = READ_WRITE;
+      };
+   };
+
+   reg {
+      name = "Transition Control General Register";
+      description = "Defines transition mode/configuration for slow port reconfiguration - decides\
+      when two swap banks such that HP packets are not lost.";
+      prefix = "TCGR";
+
+      field {
+         name = "Transition Enabled";
+         prefix = "TRANS_ENA";
+         description = "Enables/disables transition";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "Transition Clear";
+         prefix = "TRANS_clear";
+         description = "Writing 1 clears >Transition Finished< bit so that new transition can be \
+         performed. No new transition will be started until  >Transition Finished< is cleared";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "Transition Mode";
+         prefix = "TRANS_MODE";
+         description = "Selected Transitin Mode for port re-config ";
+         size = 3;
+         align = 4;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "Rx Detected Frame ID";
+         prefix = "TRANS_RX_ID";
+         description = "Base transition on detection of the frame which is parsed into provided CLASS ID";
+         size = 3;
+         align = 4;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+
+      field {
+         name = "Priority";
+         prefix = "TRANS_PRIO";
+         description = "Indicates at which traffic priority the transition attempts not to loose \
+         frames";
+         size = 3;
+         align = 4;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "Port Time Difference";
+         prefix = "TRANS_TIME_DIFF";
+         description = "Difference of time between the packet delay going through port A and B\
+         (time_B - time_A). Used with a pause mechanism";
+         size = 16;
+         align = 16;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+   };
+   reg {
+      name = "Transition Control Port Register";
+      description = "Defines transition mode/configuration for slow port reconfiguration - decides\
+      when two swap banks such that HP packets are not lost.";
+      prefix = "TCPR";
+
+      field {
+         name = "Port A ID";
+         prefix = "TRANS_PORT_A_ID";
+         description = "Configuration of port A (PORT ID)";
+         size = 6;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "Port A Valid";
+         prefix = "TRANS_PORT_A_VALID";
+         description = "Configuration of port A (valid bit)";
+         type = BIT;
+         align=8;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "Port B ID";
+         prefix = "TRANS_PORT_B_ID";
+         description = "Configuration of port B (PORT ID)";
+         size = 6;
+         align=8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "Port B Valid";
+         prefix = "TRANS_PORT_B_VALID";
+         description = "Configuration of port B (valid bit)";
+         type = BIT;
+         align=8;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+   };
+
+   reg {
+      name = "Transition Status Register";
+      description = "Provides information about the state of transition (if any).";
+      prefix = "TSR";
+
+      field {
+         name = "Transition Active";
+         prefix = "TRANS_STAT_ACTIVE";
+         description = "Indicates that transition is active";
+         type = BIT;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+      };
+
+      field {
+         name = "Transition Finished";
+         prefix = "TRANS_STAT_FINISHED";
+         description = "Indicates that transition has been finished";
+         type = BIT;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+      };
+   };
+
+
+   reg {
+      name = "Real Time Reconfiguration Control Register";
+      description = "Controls Real Time Handler.";
+      prefix = "RTRCR";
+
+      field {
+         name = "RTR Enabled";
+         prefix = "RTR_ENA";
+         description = "Enables Real Time Reconfiguration Handler";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "RTR Reset";
+         prefix = "RTR_RESET";
+         description = "Resets Real Time Reconfiguration Handler";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "RTR Handler Mode";
+         prefix = "RTR_MODE";
+         description = "Selected Real Time Reconfig Handler Mode";
+         size = 4;
+         align= 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "RTR Rx Frame ID";
+         prefix = "RTR_RX";
+         description = " ID (bit number of the rxFrameMask) of the signal from the endpoint which \
+         is programmed to indicate reception of Quick Forward Request BPDUe";
+         size = 4;
+         align= 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "RTR Tx Frame ID";
+         prefix = "RTR_TX";
+         description = " ID (bit number of the txFrameMask) of the HW-sent frame by endpoint\
+         (Quick Forward Request BPDUe)";
+         size = 4;
+         align= 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+
+   reg {
+      name = "TRU Table Register 0";
+      prefix = "TTR0";
+      
+      field {
+         prefix = "FID";
+         name = "Filtering Database ID";
+         description = "Assigns the VID to a particular filtering database";
+         size = 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         prefix = "SUB_FID";
+         name = "ID withing Filtering Database Entry";
+         description = "Identifies entry within FID entry";
+         size = 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         prefix = "UPDATE";
+         name = "Force TRU table sub-entry update";
+         description = "write 1: flush TTR register to inactive bank of TRU table entry at address \
+         in FID+SUB_FID";
+         type = MONOSTABLE;
+      };
+      field {
+         name = "Entry Valid";
+         prefix = "MASK_VALID";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "Pattern Mode";
+         prefix = "PATRN_MODE";
+         type = SLV;
+         size = 4;
+         align = 8;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+   reg {
+      name = "TRU Table Register 1";
+      prefix = "TTR1";
+      
+      field {
+         name = "Ingress Mask";
+         prefix = "PORTS_INGRESS";
+         type = SLV;
+         size = 32;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+   };
+   reg {
+      name = "TRU Table Register 2";
+      prefix = "TTR2";
+
+      field {
+         name = "Egress Mask";
+         prefix = "PORTS_EGRESS";
+         type = SLV;
+         size = 32;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+   reg {
+      name = "TRU Table Register 3";
+      prefix = "TTR3";
+
+      field {
+         name = "Egress Mask";
+         prefix = "PORTS_MASK";
+         type = SLV;
+         size = 32;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+   reg {
+      name = "TRU Table Register 4";
+      prefix = "TTR4";
+
+      field {
+         name = "Pattern Match";
+         prefix = "PATRN_MATCH";
+         type = SLV;
+         size = 32;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+   reg {
+      name = "TRU Table Register 5";
+      prefix = "TTR5";
+
+      field {
+         name = "Patern Mask";
+         prefix = "PATRN_MASK";
+         type = SLV;
+         size = 32;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+};
+
+
+
