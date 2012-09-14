@@ -74,29 +74,46 @@ entity tru_reconfig_rt_port_handler is
     read_data_i        : in t_tru_tab_entry(g_tru_subentry_num - 1 downto 0);
     resp_masks_i       : in t_resp_masks;    
     config_i           : in  t_tru_config;
+    tru_tab_bank_swap_i: in  std_logic;
     txFrameMask_o      : out std_logic_vector(g_num_ports-1 downto 0)
     );
 end tru_reconfig_rt_port_handler;
 
 architecture rtl of tru_reconfig_rt_port_handler is
 
-signal s_globIngMask      : std_logic_vector(g_num_ports-1 downto 0);
-signal s_globIngMask_d0   : std_logic_vector(g_num_ports-1 downto 0);
-signal s_globIngMask_or   : std_logic_vector(g_num_ports-1 downto 0);
-signal s_txFrameMask      : std_logic_vector(g_num_ports-1 downto 0);
-
+  signal s_globIngMask      : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_globIngMask_d0   : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_globIngMask_or   : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_txFrameMask      : std_logic_vector(g_num_ports-1 downto 0);
 begin --rtl
 
-s_globIngMask <= ((read_data_i(0).ports_ingress(g_num_ports-1 downto 0) xor 
-                   resp_masks_i.ingress(g_num_ports-1 downto 0))        and
-                  (resp_masks_i.ingress(g_num_ports-1 downto 0)))   and
-                  (not s_globIngMask_d0);
-s_globIngMask_or <= s_globIngMask or s_globIngMask_d0;
+  -------------------------------------------------------------------------------------------------
+  -- The below code is used to send HW-generated "quick forwrad" frames to request the neighbour
+  -- port to open (for ingress) port connected to the port which has just been made "active" on 
+  -- "our switch" (the one the code is run). 
+  -- This is used in the case if we've just enabled for ingress "backup" port and we want
+  -- that the neighbour-switch did the same on the same link very quickly.
+  ------------------------------------------------------------------------------------------------- 
+  -- Here we assume that the first subentry in the TRU TAB (for a given FID) is the default
+  -- entry (read_data_i(0).ports_ingress). Therefore, any ingress decision (resp_masks_i.ingress)
+  -- which is different then the first (number 0) TRU subentry means that there has been some 
+  -- change (most probably port was opened as a backup for a port which went down). 
+  -- Then we check this changes against the changes in of portIngres mask which we
+  -- have already remembered/detected and stored in the past: s_globIngMask_d0. 
+  -- Finally, what we get are (if any) new changes to the port ingress mask. 
+  s_globIngMask <= ((read_data_i(0).ports_ingress(g_num_ports-1 downto 0) xor 
+                     resp_masks_i.ingress(g_num_ports-1 downto 0))        and
+                    (resp_masks_i.ingress(g_num_ports-1 downto 0)))       and
+                    (not s_globIngMask_d0);
+  
+  -- to make the code less messy
+  s_globIngMask_or <= s_globIngMask or s_globIngMask_d0;
 
+  -- send HW-generated frame
+  txFrameMask_o    <= s_txFrameMask;
 
-txFrameMask_o    <= s_txFrameMask;
-
-  FSM: process(clk_i, rst_n_i)
+  -- process which generate requests to send HW-generated frames (rx)
+  RX: process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0' or config_i.rtrcr_rtr_ena='0') then
@@ -106,20 +123,25 @@ txFrameMask_o    <= s_txFrameMask;
          
       else
         
-        case config_i.rtrcr_rtr_mode is
+        case config_i.rtrcr_rtr_mode is  -- many configs possible, only single available at the moment
         --------------------------------------------------------------------------------------------
         when std_logic_vector(to_unsigned(0,4))=> -- default
         --------------------------------------------------------------------------------------------
            s_globIngMask_d0 <= (others => '0');
            s_txFrameMask    <= (others=> '0');    
         --------------------------------------------------------------------------------------------
-        when std_logic_vector(to_unsigned(1,4))=>
+        when std_logic_vector(to_unsigned(1,4))=> -- eRSTP
         --------------------------------------------------------------------------------------------
            
            s_txFrameMask      <= (others=> '0'); 
            
-           if(config_i.rtrcr_rtr_reset = '1') then
+           -- if we swap the bank of the memory (new configuration) or reset the RT module, 
+           -- then we need to clear the remembered chagnes. 
+           if(config_i.rtrcr_rtr_reset = '1' or tru_tab_bank_swap_i = '1') then
               s_globIngMask_d0 <= (others => '0');
+           
+           -- Generate signal to send HW-generated frames based on the remembered info and
+           -- newly generated mask
            elsif(read_valid_i = '1') then
               s_globIngMask_d0 <= s_globIngMask_or;
               s_txFrameMask    <= s_globIngMask_d0 xor s_globIngMask_or;

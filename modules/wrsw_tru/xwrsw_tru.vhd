@@ -77,12 +77,11 @@ use work.wishbone_pkg.all;         -- wishbone_{interface_mode,address_granulari
 
 entity xwrsw_tru is
   generic(     
-     g_num_ports          : integer := 6;
-     g_tru_subentry_num   : integer := 8;
+     g_num_ports          : integer := 6;  
+     g_tru_subentry_num   : integer := 8; 
      g_pattern_width      : integer := 4;
      g_patternID_width    : integer := 4;
      g_stableUP_treshold  : integer := 100;
---      g_tru_addr_width     : integer := 8;
      g_pclass_number      : integer := 8;
      g_mt_trans_max_fr_cnt: integer := 1000;
      g_prio_width         : integer := 3;
@@ -120,7 +119,7 @@ entity xwrsw_tru is
 end xwrsw_tru;
 
 architecture rtl of xwrsw_tru is
- 
+  
   constant c_tru_subentry_width : integer :=  (1+5*g_num_ports+g_pattern_mode_width);
   constant c_tru_entry_width    : integer :=  c_tru_subentry_width*g_tru_subentry_num;
   constant c_tru_addr_width     : integer :=  integer(CEIL(LOG2(real(g_tru_entry_num))));
@@ -129,7 +128,6 @@ architecture rtl of xwrsw_tru is
                                 std_logic_vector(c_tru_subentry_width-1 downto 0); 
   type t_wr_sub_entry_array     is array(g_tru_subentry_num - 1 downto 0) of 
                                 std_logic_vector(c_tru_subentry_width-1 downto 0);
-
 
   signal s_endpoint_array     : t_tru_endpoint_array(g_num_ports-1 downto 0);
   signal s_endpoints          : t_tru_endpoints;
@@ -154,6 +152,7 @@ architecture rtl of xwrsw_tru is
   signal s_regs_fromwb        : t_tru_out_registers;
   signal wb_in                : t_wishbone_slave_in;
   signal wb_out               : t_wishbone_slave_out;
+  signal s_bank_swap          : std_logic;
 begin --rtl
    
   U_T_PORT: tru_port
@@ -173,6 +172,7 @@ begin --rtl
      tru_tab_entry_i    => s_tru_tab_entry,
      endpoints_i        => s_endpoints,
      config_i           => s_config,
+     tru_tab_bank_swap_i=> s_bank_swap,
      txFrameMask_o      => s_tx_rt_reconf_FRM
     );
 
@@ -300,13 +300,15 @@ begin --rtl
     regs_o             => s_regs_fromwb
   );
 
+ s_bank_swap <= s_regs_fromwb.gcr_tru_bank_o or s_bank_swap_on_trans ;
+
  CTRL_BANK: process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
         s_tru_tab_bank<= '0';
       else
-        if(s_regs_fromwb.gcr_tru_bank_o = '1' or s_bank_swap_on_trans = '1') then
+        if(s_bank_swap = '1') then
           s_tru_tab_bank<= not s_tru_tab_bank;
         end if;
       end if;
@@ -362,5 +364,5 @@ begin --rtl
                                             s_regs_fromwb.ttr0_mask_valid_o                            ;
  -- TODO:
   swc_o                <= (others =>'0');
- 
+
 end rtl;

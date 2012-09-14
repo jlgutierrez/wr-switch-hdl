@@ -91,9 +91,14 @@ architecture rtl of tru_sub_vlan_pattern is
 signal rxFrameNumber : integer range 0 to endpoints_i.rxFrameMaskReg'length-1;
 
 begin --rtl
-   
+    
+    
     rxFrameNumber <= to_integer(unsigned(config_i.rtrcr_rtr_rx));
+    -----------------------------------------------------------------------------------------------
+    -- Generate different patterns depending on the input configuration
+    -----------------------------------------------------------------------------------------------
     -- TODO: case and choose functions according to the config
+    -----------------------------------------------------------------------------------------------
     pattern_o <= (others=>'0')                                  -- default 
                  when (patternID_i = std_logic_vector(to_unsigned(0,patternID_i'length))) else
                  not (endpoints_i.status(g_pattern_width-1 downto 0)) -- eRSTP

@@ -177,9 +177,6 @@ begin
     s_tru_req     <= f_unpack_tru_request (tru_req_i,  g_num_ports);
     tru_resp_o    <= f_pack_tru_response  (s_tru_resp, g_num_ports);
     s_rtu         <= f_unpack_rtu         (rtu_i,      g_num_ports);
- -- 
--- 
--- 
 
     G1: for i in 0 to g_tru_subentry_num-1 generate
        s_tru_tab_subentry_arr(i) <= tru_tab_entry_i((i+1)*g_tru_subentry_width-1 downto 

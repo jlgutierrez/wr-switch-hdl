@@ -70,18 +70,20 @@ entity tru_endpoint is
     clk_i              : in  std_logic;
     rst_n_i            : in  std_logic;
     
-    port_if_i          : in  t_ep2tru;
-    port_if_ctrl_o     : out std_logic;
+    port_if_i          : in  t_ep2tru;  -- info from Endpoints
+    port_if_ctrl_o     : out std_logic; -- turn off/on port (info to Endpoints)
     
     
     ------------------------------- I/F with tru_endpoint ----------------------------------
-    rtu_pass_all_i     : in  std_logic;
+    rtu_pass_all_i     : in  std_logic; -- configuration from RTU
     
     ------------------------------- I/F with tru_endpoint ----------------------------------
-    endpoint_o         : out  t_tru_endpoint;
-    
+    endpoint_o         : out  t_tru_endpoint; -- this information is used by other submodules
+                                              -- of TRU (as info about port, it is interpreted
+                                              -- info about port)
     -------------------------------global config/variable ----------------------------------
-    reset_rxFlag_i     : in  std_logic
+    reset_rxFlag_i     : in  std_logic        -- from config, reset remembered flag about rx-ed
+                                              -- frame (s_rxFrameMaskReg)
     );
 end tru_endpoint;
 
@@ -93,16 +95,25 @@ architecture rtl of tru_endpoint is
  
   signal s_zeros             : std_logic_vector(31 downto 0);
   signal s_port_status_d0    : std_logic;
-  signal s_port_down         : std_logic;
-  signal s_stableUp_cnt      : unsigned(7 downto 0);  
-  signal s_tru_port_state    : t_tru_port_state;
-  signal s_rxFrameMaskReg    : std_logic_vector(g_pclass_number-1 downto 0);
+  signal s_port_down         : std_logic;             -- detects edge of the port status signal 
+                                                      -- in order to detect the event of "link down"
+  signal s_stableUp_cnt      : unsigned(7 downto 0);  -- count the number of cycles while which
+                                                      -- a link is up -> to establish whether the
+                                                      -- state is stable
+  signal s_tru_port_state    : t_tru_port_state;      -- FSM
+  signal s_rxFrameMaskReg    : std_logic_vector(g_pclass_number-1 downto 0);-- to remember rx-ed Frame
   signal s_rxFrameMask       : std_logic_vector(g_pclass_number-1 downto 0);
   
 begin --rtl
    
   s_zeros <= (others => '0');
-  
+  -- -----------------------------------------------------------------------------------------------
+  -- 
+  -- tihs FSM controls the information about Endpoint/port as seen by other TRU modules. 
+  -- In other words the direct info from Endpoints is "interpreted" and only after this
+  -- "interpretation" it is used in TRU
+  -- 
+  -- -----------------------------------------------------------------------------------------------
   FSM: process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then
@@ -115,30 +126,40 @@ begin --rtl
       else
         
          case s_tru_port_state is
-           
             --====================================================================================
-             when S_DISABLED =>
+             when S_DISABLED => -- port disabled by configuration (that of RTU)
             --====================================================================================
                
+               -- port can become being seen by TRU modules as "up/working" only while it is
+               -- disabled from traffic forwarding. It is to make sure that everything is 
+               -- under control and no "unwanted" forwarding does not take place
                if(rtu_pass_all_i = '0' and port_if_i.status = '1') then
-                 s_tru_port_state           <= S_WORKING;
+                 s_tru_port_state           <= S_WORKING; 
                end if;
-               endpoint_o.status          <= port_if_i.status;
-               port_if_ctrl_o             <= '1';
-               
+               endpoint_o.status          <= port_if_i.status; -- when port is disabled we 
+                                                               -- forward the real state of the port
+               port_if_ctrl_o             <= '1';              -- we always try to re-vive the port
+                                                               -- by turning it ON, it is for 
+                                                               -- the case when we are in this state
+                                                               -- because link-broke and was disabled
             --====================================================================================
             when S_WORKING =>
             --====================================================================================
                
+               -- we detect that port went down
                if(s_port_down = '1') then
-                 endpoint_o.status        <= '0';
-                 port_if_ctrl_o           <= '0';
+                 endpoint_o.status        <= '0';  -- informing other TRU modules that port is down
+                 port_if_ctrl_o           <= '0';  -- killing the port to make sure it is down
                  s_tru_port_state         <= S_BROKEN_LINK;
                end if;
                
             --====================================================================================
             when S_BROKEN_LINK =>
             --====================================================================================
+                -- once the port is detected to go down, it is tried to be re-vived only once 
+                -- the port is disabled by configuration (so we try re-vive port which will 
+                -- not forward anything). If the port is turned on (re-vived) by configuration, 
+                -- it is still seen by TRU as down.
                 if(rtu_pass_all_i = '0' ) then
                    s_tru_port_state       <= S_DISABLED;
                    port_if_ctrl_o         <= '1';
@@ -165,7 +186,9 @@ begin --rtl
       else
         
          s_port_status_d0                <= port_if_i.status;
-        
+
+         -- accommodating information about HW-detected frames (probably in Endpoint)
+         -- we store info about detected frames in the *Reg  
          if(s_tru_port_state = S_WORKING and reset_rxFlag_i = '0' and port_if_i.rx_pck = '1') then         
             s_rxFrameMaskReg             <= s_rxFrameMaskReg or port_if_i.rx_pck_class;
             s_rxFrameMask                <= port_if_i.rx_pck_class;
@@ -180,6 +203,8 @@ begin --rtl
     end if;
   end process;    
 
+  -- this is to assess whether  a link is stabily UP. This info can be read by SW daemon
+  -- and used in deciding whether start using a port which is disabled (and maybe was down)
   stableUP: process(clk_i, rst_n_i)
   begin
     if rising_edge(clk_i) then

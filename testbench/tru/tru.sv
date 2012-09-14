@@ -493,34 +493,13 @@ module main;
       t_rtu.priorities[portA] = prio;
       t_rtu.priorities[portB] = prio;
       
-      t_ep2tru[portA].rx_pck_class[rx_frame_id] = 1;      
-      t_ep2tru[portA].rx_pck = 1;   
-      wait_cycles(1);
-      t_ep2tru[portA].rx_pck_class[rx_frame_id] = 0;      
-      t_ep2tru[portA].rx_pck = 0;   
-      wait_cycles(10);
-      t_rtu.request_valid[portA] = 1;
-      wait_cycles(1);
-      t_rtu.request_valid[portA]=0;
-
-      wait_cycles(10);
-      t_rtu.request_valid[portA]=1;
-      wait_cycles(1);
-      t_rtu.request_valid[portA]=0;
-
-      wait_cycles(10);
-      t_rtu.request_valid[portA]=1;
-      wait_cycles(1);
-      t_rtu.request_valid[portA]=0;
-
-      wait_cycles(timeDiff);         
       t_ep2tru[portB].rx_pck_class[rx_frame_id] = 1;      
       t_ep2tru[portB].rx_pck = 1;   
       wait_cycles(1);
       t_ep2tru[portB].rx_pck_class[rx_frame_id] = 0;      
       t_ep2tru[portB].rx_pck = 0;   
-
-      t_rtu.request_valid[portB]=1;
+      wait_cycles(10);
+      t_rtu.request_valid[portB] = 1;
       wait_cycles(1);
       t_rtu.request_valid[portB]=0;
 
@@ -533,11 +512,32 @@ module main;
       t_rtu.request_valid[portB]=1;
       wait_cycles(1);
       t_rtu.request_valid[portB]=0;
+
+      wait_cycles(timeDiff);         
+      t_ep2tru[portA].rx_pck_class[rx_frame_id] = 1;      
+      t_ep2tru[portA].rx_pck = 1;   
+      wait_cycles(1);
+      t_ep2tru[portA].rx_pck_class[rx_frame_id] = 0;      
+      t_ep2tru[portA].rx_pck = 0;   
+
+      t_rtu.request_valid[portA]=1;
+      wait_cycles(1);
+      t_rtu.request_valid[portA]=0;
+
+      wait_cycles(10);
+      t_rtu.request_valid[portA]=1;
+      wait_cycles(1);
+      t_rtu.request_valid[portA]=0;
+
+      wait_cycles(10);
+      t_rtu.request_valid[portA]=1;
+      wait_cycles(1);
+      t_rtu.request_valid[portA]=0;
 
       wait_cycles(10);         
-      t_rtu.request_valid[portB]=1;
+      t_rtu.request_valid[portA]=1;
       wait_cycles(1);
-      t_rtu.request_valid[portB]=0;
+      t_rtu.request_valid[portA]=0;
 
       wait_cycles(10);         
 

@@ -47,12 +47,6 @@ use ieee.math_real.CEIL;
 use ieee.math_real.log2;
 
 library work;
--- use work.wrsw_shared_types_pkg.all; -- need this for:
---                                     -- * t_tru_request
-
--- use work.rtu_private_pkg.all;       -- we need it for RTU's datatypes (records):
---                                     -- * t_rtu_vlan_tab_entry
-
 use work.gencores_pkg.all;          -- for f_rr_arbitrate
 use work.wrsw_tru_pkg.all;
 
@@ -69,20 +63,21 @@ entity tru_port is
     rst_n_i            : in  std_logic;
     
     ------------------------------- I/F with RTU ----------------------------------
-    tru_req_i          : in  t_tru_request;
-    tru_resp_o         : out t_tru_response;   
+    tru_req_i          : in  t_tru_request;   -- request from RTU
+    tru_resp_o         : out t_tru_response;  -- response to RTU
 
     ------------------------------- I/F with TRU TAB ----------------------------------
-    -- request 
     tru_tab_addr_o     : out std_logic_vector(g_tru_addr_width-1 downto 0);
     tru_tab_entry_i    : in  t_tru_tab_entry(g_tru_subentry_num - 1 downto 0);
     
     ------------------------------- I/F with tru_endpoint ----------------------------------
-    endpoints_i        : in  t_tru_endpoints;
-    
+    endpoints_i        : in  t_tru_endpoints;  -- interpreted (by tru_endpoint module)
+                                               -- info from endpoints/ports
     ----------------------------------------------------------------------------------
-    config_i           : in  t_tru_config;
-    txFrameMask_o      : out std_logic_vector(g_num_ports - 1 downto 0)
+    config_i           : in  t_tru_config;     -- WB-accesable configration
+    tru_tab_bank_swap_i: in  std_logic;
+    txFrameMask_o      : out std_logic_vector(g_num_ports - 1 downto 0) -- info to (e.g. Endpoint
+                                                            -- or other module to HW-generate frame)
     );
 end tru_port;
 
@@ -106,8 +101,6 @@ architecture rtl of tru_port is
   signal s_status_mask       : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_ingress_mask      : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_egress_mask       : std_logic_vector(g_num_ports - 1 downto 0);
-  
-
 
 begin --rtl
    
@@ -115,9 +108,9 @@ begin --rtl
   s_portID_vec   <= std_logic_vector(to_unsigned(f_one_hot_to_binary(tru_req_i.reqMask),s_portID_vec'length )) ;
   s_zeros        <= (others => '0');
   s_status_mask  <= endpoints_i.status(g_num_ports-1 downto 0);
-  s_ingress_mask <= s_resp_masks.ingress(g_num_ports-1 downto 0);
-  s_egress_mask  <= s_resp_masks.egress(g_num_ports-1 downto 0);
+
    
+  -- generating pattern to be used for replacement match
   REPLACE_PATTERN: tru_sub_vlan_pattern
   generic map(     
      g_num_ports       => g_num_ports,
@@ -135,6 +128,7 @@ begin --rtl
     pattern_o          => s_patternRep
     );
 
+  -- generating pattern to be used in addition matches
   ADD_PATTERN: tru_sub_vlan_pattern
   generic map(     
      g_num_ports       => g_num_ports,
@@ -152,6 +146,8 @@ begin --rtl
     pattern_o          => s_patternAdd
     );
   
+  --  tracking changes of port configuration due to i.e. link down events (change of port status)
+  --  and reacting appropriately (e.g.: sending HW-generated frames)
   RT_RECONFIG: tru_reconfig_rt_port_handler
   generic map(
      g_num_ports       => g_num_ports,
@@ -164,6 +160,7 @@ begin --rtl
     read_data_i        => tru_tab_entry_i,
     resp_masks_i       => s_resp_masks,
     config_i           => config_i,
+    tru_tab_bank_swap_i=> tru_tab_bank_swap_i,
     txFrameMask_o      => txFrameMask_o
     );
   
@@ -183,27 +180,40 @@ begin --rtl
          s_drop               <= '0';
          
       else
-        
-         -- First stage
+         -- First stage (remembering/registering input signals)
          s_patternRep_d0         <= s_patternRep;
          s_patternAdd_d0         <= s_patternAdd;
          s_self_mask             <= tru_req_i.reqMask(g_num_ports-1 downto 0);
          s_valid_d0              <= tru_req_i.valid;
          s_reqMask_d0            <= tru_req_i.reqMask(g_num_ports-1 downto 0);
+               
+         -- Second stage (producing output response)
          s_reqMask_d1            <= s_reqMask_d0;
          s_valid_d1              <= s_valid_d0;
-               
-         -- Second stage (output)
+    
+         -- provide output mask if TRU is enabled, one clock after receiving request
          if(config_i.gcr_g_ena = '1' and s_valid_d0 = '1') then
+            -- output mask for forwarding takes into account:
+            -- * status of ports (don't forward to ports which are down)
+            -- * output from the TRU_TAB+patterns interpretation
+            -- * reception port (don't forward to myself)
             s_port_mask          <= s_status_mask and s_egress_mask and (not s_self_mask);
-            if((s_ingress_mask and s_self_mask) = s_zeros) then
+            
+            -- if ingress on the reception is allowed, and the reception port  is not meant
+            -- to be down, don't drop
+            if((s_ingress_mask and s_status_mask and s_self_mask) = s_zeros) then
               s_drop             <= '1';
             else
               s_drop             <= '0';
             end if;
+          
+         -- if there is no new request in the pipe, zero response
          elsif(config_i.gcr_g_ena = '1' and s_valid_d0 = '0') then
             s_port_mask          <= (others =>'0');
             s_drop               <= '0';
+         
+         -- if TRU is disabled, pass all messages to all ports and don't drop
+         -- (this will be ANDed with decision from RTU, of course)
          else
             s_port_mask          <= (others =>'1');
             s_drop               <= '0';
@@ -212,10 +222,17 @@ begin --rtl
     end if;
   end process;  
   
+  -- generating final mask to be used for forwarding based on:
+  -- * generated patterns (replacement and addition)
+  -- * entry read from the TRU TAB from the address equal to the provided (in req) FID
   s_resp_masks   <= f_gen_mask_with_patterns(tru_tab_entry_i, 
                                              s_patternRep_d0, 
                                              s_patternAdd_d0,
                                              g_tru_subentry_num);
+  -- just to make the code a bit less messy
+  s_ingress_mask <= s_resp_masks.ingress(g_num_ports-1 downto 0);
+  s_egress_mask  <= s_resp_masks.egress(g_num_ports-1 downto 0);
+
   -- outputs
   tru_tab_addr_o(g_tru_addr_width-1 downto 0)  <= tru_req_i.fid(g_tru_addr_width-1 downto 0);
   tru_resp_o.port_mask(g_num_ports-1 downto 0) <= s_port_mask;

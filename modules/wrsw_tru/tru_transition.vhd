@@ -106,6 +106,8 @@ begin --rtl
   tru_tab_bank_o     <= s_tru_tab_bank(index);
   statTransFinished_o<= s_statTransFinished(index);
   ep_o               <= s_ep_array(index);
+  
+  -- a big and nasty MUX between different modules
    
   G_RST_N: for i in 0 to c_trans_mode_num_max-1 generate
      s_rst_n(i)         <= rst_n_i when (i = index) else '0';

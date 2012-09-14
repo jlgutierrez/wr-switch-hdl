@@ -10,7 +10,8 @@
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
--- Description:
+-- Description: Package with records, function, constants and components
+-- declarations for TRU module
 --
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- 
@@ -294,6 +295,7 @@ package wrsw_tru_pkg is
     read_data_i        : in t_tru_tab_entry(g_tru_subentry_num - 1 downto 0);
     resp_masks_i       : in  t_resp_masks;    
     config_i           : in  t_tru_config;
+    tru_tab_bank_swap_i: in  std_logic;
     txFrameMask_o      : out std_logic_vector(g_num_ports-1 downto 0)
     );
   end component;  
@@ -315,6 +317,7 @@ package wrsw_tru_pkg is
     tru_tab_entry_i    : in  t_tru_tab_entry(g_tru_subentry_num - 1 downto 0);
     endpoints_i        : in  t_tru_endpoints;
     config_i           : in  t_tru_config;
+    tru_tab_bank_swap_i: in  std_logic;
     txFrameMask_o      : out std_logic_vector(g_num_ports - 1 downto 0)
     );
   end component;
