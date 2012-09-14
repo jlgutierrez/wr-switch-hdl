@@ -117,7 +117,7 @@ module main;
      .g_num_ports              (`c_num_ports),
      .g_tru_subentry_num       (`c_tru_subentry_num),
      .g_tru_subentry_width     (`c_tru_subentry_width),
-     .g_tru_addr_width         (`c_tru_addr_width),
+//      .g_tru_addr_width         (`c_tru_addr_width),
      .g_pattern_mode_width     (`c_pattern_mode_width),
      .g_patternID_width        (`c_patternID_width),
      .g_stableUP_treshold      (`c_stableUP_treshold),

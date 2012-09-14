@@ -346,7 +346,7 @@ package wrsw_tru_pkg is
      g_pattern_width      : integer;
      g_patternID_width    : integer;
      g_stableUP_treshold  : integer;
-     g_tru_addr_width     : integer;
+--      g_tru_addr_width     : integer;
      g_pclass_number      : integer;
      g_mt_trans_max_fr_cnt: integer;
      g_prio_width         : integer;

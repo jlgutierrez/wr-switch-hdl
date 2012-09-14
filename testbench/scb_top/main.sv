@@ -3,6 +3,7 @@
 `include "tbi_utils.sv"
 `include "simdrv_wrsw_nic.svh"
 `include "simdrv_rtu.sv"
+`include "simdrv_wr_tru.svh"
 `include "simdrv_txtsu.svh"
 `include "endpoint_regs.v"
 `include "endpoint_mdio.v"
@@ -11,8 +12,9 @@
 `include "wb_packet_source.svh"
 `include "wb_packet_sink.svh"
 
-
 `include "scb_top_sim_svwrap.svh"
+
+
 
 module main;
 
@@ -161,7 +163,9 @@ module main;
    port_t ports[$];
    CSimDrv_NIC nic;
    CRTUSimDriver rtu;
+   CSimDrv_WR_TRU    tru;
    CSimDrv_TXTSU txtsu;
+   
    
 
    task automatic init_ports(ref port_t p[$], ref CWishboneAccessor wb);
@@ -200,7 +204,56 @@ module main;
       
    endtask // init_nic
    
+   task automatic init_tru(input CSimDrv_WR_TRU tru_drv);
 
+      tru_drv.pattern_config(1 /*replacement*/ ,2 /*addition*/);
+      tru_drv.rt_reconf_config(4 /*tx_frame_id*/, 4/*rx_frame_id*/, 1 /*mode*/);
+      tru_drv.rt_reconf_enable();
+        
+      /*
+       * transition
+       **/
+      tru_drv.transition_config(0 /*mode */,     4 /*rx_id*/, 0 /*prio*/, 20 /*time_diff*/, 
+                                3 /*port_a_id*/, 4 /*port_b_id*/);
+
+      /*
+       * | port  | ingress | egress |
+       * |--------------------------|
+       * |   0   |   1     |   1    |   
+       * |   1   |   0     |   1    |   
+       * |   2   |   1     |   1    |   
+       * |   3   |   1     |   1    |   
+       * |   4   |   1     |   1    |   
+       * |   5   |   0     |   1    |   
+       * |--------------------------|
+       * 
+       *      5 -> 1 -> 0 
+       *    ----------------
+       *  port 1 is backup for 0
+       *  port 5 is backup ofr 1
+       * 
+       **/
+
+      tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,   0 /* subentry_addr*/,
+                             'h00 /*pattern_mask*/, 'h00 /* pattern_match*/, 'h0 /* pattern_mode */,
+                             'hFF /*ports_mask  */, 'h3F /* ports_egress */,'h1D /* ports_ingress   */);
+
+      tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                             'h03 /*pattern_mask*/, 'h01 /* pattern_match*/,'h0  /* pattern_mode */,
+                             'hFF /*ports_mask  */, 'h3E /* ports_egress */,'h1E /* ports_ingress   */);
+ 
+      tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
+                             'h03 /*pattern_mask*/, 'h03 /* pattern_match*/,'h0  /* pattern_mode */,
+                             'hFF /*ports_mask  */, 'h3C /* ports_egress */,'h3C /* ports_ingress   */);
+
+      tru_drv.write_tru_tab(  0   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
+                             'h00 /*pattern_mask*/, 'h00 /* pattern_match*/,'h20 /* pattern_mode */,
+                             'h00 /*ports_mask  */, 'h40 /* ports_egress */,'h01 /* ports_ingress   */);
+ 
+      tru_drv.tru_swap_bank();  
+      tru_drv.tru_enable();
+      $display("TRU configured and enabled");
+   endtask; //init_tru
    
    initial begin
       uint64_t msr;
@@ -254,6 +307,10 @@ module main;
       rtu.add_vlan_entry(0, def_vlan);
 
       rtu.enable();
+      ///TRU
+      tru = new(cpu_acc, 'h57000);      
+      init_tru(tru);
+      
       ////////////// sending packest on all the ports (16) according to the portUnderTest mask.///////
       fork
 //`ifdef none

@@ -64,7 +64,7 @@ entity wrsw_tru_wb is
      g_pattern_mode_width  : integer := 4;
      g_patternID_width     : integer := 4;
      g_stableUP_treshold   : integer := 100;
-     g_tru_addr_width      : integer := 8;
+--      g_tru_addr_width      : integer := 8;
      g_pclass_number       : integer := 8;
      g_tru2ep_record_width : integer := 35; -- 3+8+16+8     = (3+`c_pclass_number+`c_pause_delay_width+`c_swc_max_queue_number)
      g_ep2tru_record_width : integer := 11; -- 3+8          = (3+`c_pclass_number)
@@ -133,7 +133,7 @@ begin
      g_patternID_width     => g_patternID_width,
      g_pattern_width       => g_num_ports,
      g_stableUP_treshold   => g_stableUP_treshold,
-     g_tru_addr_width      => g_tru_addr_width,
+--      g_tru_addr_width      => g_tru_addr_width,
      g_pclass_number       => g_pclass_number,
      g_mt_trans_max_fr_cnt => g_mt_trans_max_fr_cnt,
      g_prio_width          => g_prio_width,

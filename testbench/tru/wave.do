@@ -3,7 +3,7 @@ quietly WaveActivateNextPane {} 0
 add wave -noupdate /main/clk
 add wave -noupdate /main/nasty_one_bit
 add wave -noupdate /main/rst_n
-add wave -noupdate -expand -subitemconfig {{/main/t_ep2tru[0]} -expand} /main/t_ep2tru
+add wave -noupdate /main/t_ep2tru
 add wave -noupdate /main/t_req
 add wave -noupdate /main/t_resp
 add wave -noupdate /main/t_rtu
@@ -15,10 +15,6 @@ add wave -noupdate /main/tru_rtu
 add wave -noupdate /main/tru_swc2tru
 add wave -noupdate /main/tru_tru2ep
 add wave -noupdate -divider xTRU
-add wave -noupdate /main/DUT/X_TRU/clk_i
-add wave -noupdate /main/DUT/X_TRU/ep_i
-add wave -noupdate /main/DUT/X_TRU/ep_o
-add wave -noupdate /main/DUT/X_TRU/g_mt_trans_max_fr_cnt
 add wave -noupdate /main/DUT/X_TRU/g_num_ports
 add wave -noupdate /main/DUT/X_TRU/g_pattern_mode_width
 add wave -noupdate /main/DUT/X_TRU/g_pattern_width
@@ -29,16 +25,16 @@ add wave -noupdate /main/DUT/X_TRU/g_stableUP_treshold
 add wave -noupdate /main/DUT/X_TRU/g_tru_addr_width
 add wave -noupdate /main/DUT/X_TRU/g_tru_entry_num
 add wave -noupdate /main/DUT/X_TRU/g_tru_subentry_num
-add wave -noupdate -expand /main/DUT/X_TRU/req_i
-add wave -noupdate -expand /main/DUT/X_TRU/resp_o
+add wave -noupdate /main/DUT/X_TRU/req_i
+add wave -noupdate /main/DUT/X_TRU/resp_o
 add wave -noupdate /main/DUT/X_TRU/rst_n_i
-add wave -noupdate -expand /main/DUT/X_TRU/rtu_i
+add wave -noupdate /main/DUT/X_TRU/rtu_i
 add wave -noupdate /main/DUT/X_TRU/s_bank_swap_on_trans
 add wave -noupdate /main/DUT/X_TRU/s_config
 add wave -noupdate /main/DUT/X_TRU/s_endpoint_array
 add wave -noupdate /main/DUT/X_TRU/s_endpoints
 add wave -noupdate /main/DUT/X_TRU/s_regs_fromwb
-add wave -noupdate -expand /main/DUT/X_TRU/s_regs_towb
+add wave -noupdate /main/DUT/X_TRU/s_regs_towb
 add wave -noupdate /main/DUT/X_TRU/s_trans_ep_ctr
 add wave -noupdate /main/DUT/X_TRU/s_trans_rxFrameMask
 add wave -noupdate /main/DUT/X_TRU/s_transitionActive
@@ -55,18 +51,52 @@ add wave -noupdate /main/DUT/X_TRU/s_tru_wr_data
 add wave -noupdate /main/DUT/X_TRU/s_tru_wr_ena
 add wave -noupdate /main/DUT/X_TRU/s_tx_rt_reconf_FRM
 add wave -noupdate /main/DUT/X_TRU/swc_o
-add wave -noupdate /main/DUT/X_TRU/wb_ack_o
-add wave -noupdate /main/DUT/X_TRU/wb_addr_i
-add wave -noupdate /main/DUT/X_TRU/wb_cyc_i
-add wave -noupdate /main/DUT/X_TRU/wb_data_i
-add wave -noupdate /main/DUT/X_TRU/wb_data_o
-add wave -noupdate /main/DUT/X_TRU/wb_sel_i
-add wave -noupdate /main/DUT/X_TRU/wb_stb_i
-add wave -noupdate /main/DUT/X_TRU/wb_we_i
+add wave -noupdate /main/DUT/X_TRU/wb_i
+add wave -noupdate /main/DUT/X_TRU/wb_in
+add wave -noupdate /main/DUT/X_TRU/wb_o
+add wave -noupdate /main/DUT/X_TRU/wb_out
+add wave -noupdate -divider WB_Adapter
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/clk_sys_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/fsm_state
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/g_master_use_struct
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/g_slave_granularity
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/g_slave_mode
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/g_slave_use_struct
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_ack_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_adr_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_cyc_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_dat_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_dat_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_err_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_int_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_rty_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_sel_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_stall_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_stb_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/ma_we_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/master_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/master_in
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/master_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/master_out
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/rst_n_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_ack_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_adr_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_cyc_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_dat_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_dat_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_err_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_int_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_rty_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_sel_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_stall_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_stb_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/sl_we_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/slave_i
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/slave_in
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/slave_o
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/slave_out
+add wave -noupdate /main/DUT/X_TRU/U_WB_ADAPTER/stored_we
 add wave -noupdate -divider Port
-add wave -noupdate /main/DUT/X_TRU/U_T_PORT/clk_i
-add wave -noupdate /main/DUT/X_TRU/U_T_PORT/config_i
-add wave -noupdate /main/DUT/X_TRU/U_T_PORT/endpoints_i
 add wave -noupdate /main/DUT/X_TRU/U_T_PORT/g_num_ports
 add wave -noupdate /main/DUT/X_TRU/U_T_PORT/g_pattern_width
 add wave -noupdate /main/DUT/X_TRU/U_T_PORT/g_patternID_width
@@ -96,11 +126,10 @@ add wave -noupdate /main/DUT/X_TRU/U_T_PORT/tru_tab_addr_o
 add wave -noupdate /main/DUT/X_TRU/U_T_PORT/tru_tab_entry_i
 add wave -noupdate /main/DUT/X_TRU/U_T_PORT/txFrameMask_o
 add wave -noupdate -divider Endpoint_0
-add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/clk_i
-add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/endpoint_o
 add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/g_num_ports
 add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/g_pattern_width
 add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/g_patternID_width
+add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/g_pclass_number
 add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/g_stableUP_treshold
 add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/g_tru_subentry_num
 add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/port_if_ctrl_o
@@ -116,16 +145,11 @@ add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/s_stableUp_cnt
 add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/s_tru_port_state
 add wave -noupdate /main/DUT/X_TRU/G_ENDP(0)/U_T_ENDPOINT/s_zeros
 add wave -noupdate -divider Transition
-add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/clk_i
-add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/config_i
-add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/endpoints_i
-add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/ep_o
-add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/g_mt_trans_max_fr_cnt
 add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/g_num_ports
 add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/g_prio_width
 add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/rst_n_i
 add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/rtu_i
-add wave -noupdate -expand /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/rxFrameMask_i
+add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/rxFrameMask_i
 add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/s_ep_ctr_A
 add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/s_ep_ctr_B
 add wave -noupdate /main/DUT/X_TRU/U_TRANSITION/TRANS_MARKER_TRIG/s_ep_zero
@@ -161,4 +185,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ns
 update
-WaveRestoreZoom {12057224390 fs} {13143231700 fs}
+WaveRestoreZoom {0 fs} {105 us}

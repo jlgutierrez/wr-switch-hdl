@@ -82,7 +82,7 @@ entity xwrsw_tru is
      g_pattern_width      : integer := 4;
      g_patternID_width    : integer := 4;
      g_stableUP_treshold  : integer := 100;
-     g_tru_addr_width     : integer := 8;
+--      g_tru_addr_width     : integer := 8;
      g_pclass_number      : integer := 8;
      g_mt_trans_max_fr_cnt: integer := 1000;
      g_prio_width         : integer := 3;

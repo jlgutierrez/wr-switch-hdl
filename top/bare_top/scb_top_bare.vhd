@@ -12,7 +12,7 @@ use work.endpoint_pkg.all;
 use work.wrsw_txtsu_pkg.all;
 use work.wrsw_top_pkg.all;
 use work.wrsw_shared_types_pkg.all;
-
+use work.wrsw_tru_pkg.all;
 
 library UNISIM;
 use UNISIM.vcomponents.all;
@@ -41,7 +41,6 @@ entity scb_top_bare is
 
     -- Muxed system clock
     clk_sys_o : out std_logic;
-
 
     -------------------------------------------------------------------------------
     -- Master wishbone bus (from the CPU bridge)
@@ -128,7 +127,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 10;
+  constant c_NUM_WB_SLAVES : integer := 11;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
 
@@ -146,10 +145,12 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_GPIO         : integer := 6;
   constant c_SLAVE_MBL_I2C0     : integer := 7;
   constant c_SLAVE_MBL_I2C1     : integer := 8;
-  constant c_SLAVE_SENSOR_I2C     : integer := 9;
+  constant c_SLAVE_SENSOR_I2C   : integer := 9;
+  constant c_SLAVE_TRU          : integer := 10;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
+      x"00057000",                      -- TRU
       x"00056000",                      -- Sensors-I2C
       x"00055000",                      -- MBL-I2C1
       x"00054000",                      -- MBL-I2C0
@@ -164,6 +165,7 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000ff000",
@@ -305,6 +307,16 @@ architecture rtl of scb_top_bare is
   end component;
 
   signal gpio_out : std_logic_vector(31 downto 0);
+
+  -----------------------------------------------------------------------------
+  -- TRU stuff
+  -----------------------------------------------------------------------------
+  signal tru_req    : t_tru_request;
+  signal tru_resp   : t_tru_response;    
+  signal rtu2tru    : t_rtu2tru;
+  signal ep2tru     : t_ep2tru_array(g_num_ports-1 downto 0);
+  signal tru2ep     : t_tru2ep_array(g_num_ports-1 downto 0);
+  signal swc2tru    : std_logic_vector(g_num_ports-1 downto 0); -- for pausing
 
 begin
 
@@ -609,9 +621,6 @@ begin
     --TRIG3(0) <= rtu_rsp(c_NUM_PORTS).valid;
     --TRIG3(1) <= rtu_rsp_ack(c_NUM_PORTS);
 
-
-
-
     U_RTU : xwrsw_rtu
       generic map (
         g_prio_num                        => 8,
@@ -629,6 +638,33 @@ begin
         rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
         wb_i       => cnx_master_out(c_SLAVE_RTU),
         wb_o       => cnx_master_in(c_SLAVE_RTU));
+
+    U_TRU: xwrsw_tru
+      generic map(     
+        g_num_ports           => g_num_ports,
+        g_tru_subentry_num    => 8,
+        g_patternID_width     => 4,
+        g_pattern_width       => g_num_ports,
+        g_stableUP_treshold   => 100,
+        g_pclass_number       => 8,
+        g_mt_trans_max_fr_cnt => 1000,
+        g_prio_width          => 3,
+        g_pattern_mode_width  => 4,
+        g_tru_entry_num       => 256,
+        g_interface_mode      => PIPELINED,
+        g_address_granularity => BYTE 
+       )
+      port map(
+        clk_i               => clk_sys,
+        rst_n_i             => rst_n_periph,
+        req_i               => tru_req,
+        resp_o              => tru_resp,
+        rtu_i               => rtu2tru, 
+        ep_i                => ep2tru,
+        ep_o                => tru2ep,
+        swc_o               => swc2tru,
+        wb_i                => cnx_master_out(c_SLAVE_TRU),
+        wb_o                => cnx_master_in(c_SLAVE_TRU));
 
   end generate gen_network_stuff;
 
