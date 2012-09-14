@@ -321,6 +321,7 @@ package wrsw_tru_pkg is
   component tru_endpoint is
   generic(     
      g_num_ports        : integer; 
+     g_pclass_number    : integer;
      g_tru_subentry_num : integer;
      g_patternID_width  : integer;
      g_pattern_width    : integer;

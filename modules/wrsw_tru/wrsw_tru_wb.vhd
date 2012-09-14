@@ -57,22 +57,22 @@ use work.wrsw_tru_pkg.all;
 
 entity wrsw_tru_wb is
   generic(     
-     g_num_ports           : integer;
-     g_tru_subentry_num    : integer;
-     g_tru_subentry_width  : integer;
-     g_pattern_mode_width  : integer;
-     g_patternID_width     : integer;
-     g_stableUP_treshold   : integer;
-     g_tru_addr_width      : integer;
-     g_pclass_number       : integer;
-     g_tru2ep_record_width : integer;
-     g_ep2tru_record_width : integer;
-     g_rtu2tru_record_width: integer;
-     g_tru_req_record_width: integer;
-     g_tru_resp_record_width:integer;
-     g_mt_trans_max_fr_cnt : integer;
-     g_prio_width          : integer;
-     g_tru_entry_num       : integer      
+     g_num_ports           : integer := 8;
+     g_tru_subentry_num    : integer := 8;
+     g_tru_subentry_width  : integer := 45; -- 1+5*8+4      = (1+5*`c_num_ports+`c_pattern_mode_width)
+     g_pattern_mode_width  : integer := 4;
+     g_patternID_width     : integer := 4;
+     g_stableUP_treshold   : integer := 100;
+     g_tru_addr_width      : integer := 8;
+     g_pclass_number       : integer := 8;
+     g_tru2ep_record_width : integer := 35; -- 3+8+16+8     = (3+`c_pclass_number+`c_pause_delay_width+`c_swc_max_queue_number)
+     g_ep2tru_record_width : integer := 11; -- 3+8          = (3+`c_pclass_number)
+     g_rtu2tru_record_width: integer := 48; -- 3*8+8*3      = (3*`c_num_ports+`c_num_ports*`c_prio_width)
+     g_tru_req_record_width: integer := 115;-- 1+2*48+8+2+8 = (1+2*`c_mac_addr_width+`c_fid_width+2+`c_num_ports)
+     g_tru_resp_record_width:integer := 18; -- 1+8+1+8      = (1+`c_num_ports+1+`c_num_ports) 
+     g_mt_trans_max_fr_cnt : integer := 1000;
+     g_prio_width          : integer := 3;
+     g_tru_entry_num       : integer := 256      
     );
   port (
     clk_i                   : in  std_logic;
@@ -104,6 +104,9 @@ entity wrsw_tru_wb is
 end wrsw_tru_wb;
 
 architecture rtl of wrsw_tru_wb is
+
+    constant c_tru_subentry_width : integer := (1+5*g_num_ports+g_pattern_mode_width);
+
     type t_tru_tab_subentry_array is array(integer range <>) of 
                                      std_logic_vector(g_tru_subentry_width-1 downto 0); 
     type t_ep_array is array(integer range <>) of std_logic_vector(g_ep2tru_record_width-1 downto 0); 

@@ -76,17 +76,17 @@ use work.tru_wbgen2_pkg.all;       -- for wbgen-erated records
 
 entity xwrsw_tru is
   generic(     
-     g_num_ports          : integer;
-     g_tru_subentry_num   : integer;
-     g_pattern_width      : integer;
-     g_patternID_width    : integer;
-     g_stableUP_treshold  : integer;
-     g_tru_addr_width     : integer;
-     g_pclass_number      : integer;
-     g_mt_trans_max_fr_cnt: integer;
-     g_prio_width         : integer;
-     g_pattern_mode_width : integer;
-     g_tru_entry_num      : integer      
+     g_num_ports          : integer := 6;
+     g_tru_subentry_num   : integer := 8;
+     g_pattern_width      : integer := 4;
+     g_patternID_width    : integer := 4;
+     g_stableUP_treshold  : integer := 100;
+     g_tru_addr_width     : integer := 8;
+     g_pclass_number      : integer := 8;
+     g_mt_trans_max_fr_cnt: integer := 1000;
+     g_prio_width         : integer := 3;
+     g_pattern_mode_width : integer := 4;
+     g_tru_entry_num      : integer := 256     
      );
   port (
     clk_i          : in std_logic;
@@ -180,6 +180,7 @@ begin --rtl
      U_T_ENDPOINT: tru_endpoint
      generic map(     
         g_num_ports        => g_num_ports,
+        g_pclass_number    => g_pclass_number,
         g_tru_subentry_num => g_tru_subentry_num,
         g_patternID_width  => g_patternID_width,
         g_pattern_width    => g_pattern_width,

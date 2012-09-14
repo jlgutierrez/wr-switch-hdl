@@ -60,6 +60,7 @@ use work.wrsw_tru_pkg.all;
 entity tru_endpoint is
   generic(     
      g_num_ports        : integer; 
+     g_pclass_number    : integer;
      g_tru_subentry_num : integer;
      g_patternID_width  : integer;
      g_pattern_width    : integer;
@@ -95,8 +96,8 @@ architecture rtl of tru_endpoint is
   signal s_port_down         : std_logic;
   signal s_stableUp_cnt      : unsigned(7 downto 0);  
   signal s_tru_port_state    : t_tru_port_state;
-  signal s_rxFrameMaskReg    : std_logic_vector(g_num_ports-1 downto 0);
-  signal s_rxFrameMask       : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_rxFrameMaskReg    : std_logic_vector(g_pclass_number-1 downto 0);
+  signal s_rxFrameMask       : std_logic_vector(g_pclass_number-1 downto 0);
   
 begin --rtl
    
@@ -201,8 +202,8 @@ begin --rtl
     end if;
   end process;  
 
-  endpoint_o.rxFrameMask        <= port_if_i.rx_pck_class when (port_if_i.rx_pck='1') else (others => '0');--s_rxFrameMask;
-  endpoint_o.rxFrameMaskReg     <= s_rxFrameMaskReg;
+  endpoint_o.rxFrameMask(g_pclass_number-1 downto 0)        <= port_if_i.rx_pck_class(g_pclass_number-1 downto 0) when (port_if_i.rx_pck='1') else (others => '0');--s_rxFrameMask;
+  endpoint_o.rxFrameMaskReg(g_pclass_number-1 downto 0)     <= s_rxFrameMaskReg(g_pclass_number-1 downto 0);
   
   -- detect link down event (edge of input status signal while the control info says port should
   -- be UP);

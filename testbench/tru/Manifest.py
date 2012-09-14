@@ -1,11 +1,14 @@
 target = "xilinx" #  "altera" # 
 action = "simulation"
   
-vlog_opt = "+incdir+../../sim +incdir+../../sim/wr-hdl"
+
 
 files = [ 
          "tru.sv"                
         ]
+        
+vlog_opt = "+incdir+../../sim +incdir+../../sim/wr-hdl"
+        
 modules = {"local": 
                 [
                  "../../modules/wrsw_tru",

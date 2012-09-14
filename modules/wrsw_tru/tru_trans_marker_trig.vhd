@@ -169,8 +169,8 @@ begin --rtl
               s_tru_trans_state            <= S_WAIT_PB_MARKER;
               s_ep_ctr_A.pauseSend         <= '1';
               s_ep_ctr_A.pauseTime         <= config_i.tcr_trans_port_a_pause;
-              s_ep_ctr_A.outQueueBlockMask <= s_port_A_mask;
-              s_ep_ctr_B.outQueueBlockMask <= s_port_B_mask;
+              s_ep_ctr_A.outQueueBlockMask(g_num_ports-1 downto 0) <= s_port_A_mask;
+              s_ep_ctr_B.outQueueBlockMask(g_num_ports-1 downto 0) <= s_port_B_mask;
             end if;
           --====================================================================================
           when S_WAIT_PB_MARKER =>

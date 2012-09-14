@@ -229,8 +229,6 @@ architecture behavioral of wrsw_rtu is
   -- response data outputed from RTU to rsp_fifo
   signal rsp_rtu_match_data : std_logic_vector(g_num_ports + c_PACKED_RESPONSE_WIDTH - 1 downto 0);
 
-
-
   --| HASH TABLE lookup engine 
 
   signal htab_rr_sel_w : std_logic;
