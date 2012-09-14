@@ -95,6 +95,10 @@ architecture rtl of tru_trans_marker_trig is
   signal s_port_B_mask       : std_logic_vector(g_num_ports-1 downto 0);
   signal s_port_A_prio       : std_logic_vector(g_prio_width-1 downto 0);
   signal s_port_B_prio       : std_logic_vector(g_prio_width-1 downto 0);
+
+  signal s_port_A_prio_mask  : std_logic_vector(2**g_prio_width-1 downto 0);
+  signal s_port_B_prio_mask  : std_logic_vector(2**g_prio_width-1 downto 0);
+
   signal s_port_A_rtu_srobe  : std_logic;
   signal s_port_B_rtu_srobe  : std_logic;
   signal s_ep_ctr_A          : t_trans2ep;
@@ -106,7 +110,12 @@ begin --rtl
    s_start_transition  <= config_i.tcr_trans_ena          and 
                           config_i.tcr_trans_port_a_valid and 
                           config_i.tcr_trans_port_b_valid;
-                         
+
+   G_PRIO_MASK: for i in 0 to 2**g_prio_width-1 generate
+      s_port_A_prio_mask(i) <= '1' when(i = to_integer(unsigned(s_port_A_prio))) else '0';
+      s_port_B_prio_mask(i) <= '1' when(i = to_integer(unsigned(s_port_B_prio))) else '0';
+   end generate G_PRIO_MASK;
+   
    G_MASK: for i in 0 to g_num_ports-1 generate
       s_port_A_mask(i) <= '1' when (i = to_integer(unsigned(config_i.tcr_trans_port_a_id)) and config_i.tcr_trans_port_a_valid ='1') else '0';
       s_port_B_mask(i) <= '1' when (i = to_integer(unsigned(config_i.tcr_trans_port_b_id)) and config_i.tcr_trans_port_a_valid ='1') else '0';
@@ -169,8 +178,8 @@ begin --rtl
               s_tru_trans_state            <= S_WAIT_PB_MARKER;
               s_ep_ctr_A.pauseSend         <= '1';
               s_ep_ctr_A.pauseTime         <= config_i.tcr_trans_port_a_pause;
-              s_ep_ctr_A.outQueueBlockMask(g_num_ports-1 downto 0) <= s_port_A_mask;
-              s_ep_ctr_B.outQueueBlockMask(g_num_ports-1 downto 0) <= s_port_B_mask;
+              s_ep_ctr_A.outQueueBlockMask <= s_port_A_prio_mask;
+              s_ep_ctr_B.outQueueBlockMask <= s_port_B_prio_mask;
             end if;
           --====================================================================================
           when S_WAIT_PB_MARKER =>
