@@ -58,6 +58,7 @@ use work.rtu_private_pkg.all;       -- we need it for RTU's datatypes (records):
                                     -- * c_RTU_MAX_PORTS
                                     -- * c_wrsw_fid_width
 use work.tru_wbgen2_pkg.all;       -- for wbgen-erated records
+use work.wishbone_pkg.all;         -- wishbone_{interface_mode,address_granularity}
 package wrsw_tru_pkg is
 
  -- constant c_RTU_MAX_PORTS           : integer                           := 24;
@@ -350,7 +351,9 @@ package wrsw_tru_pkg is
      g_mt_trans_max_fr_cnt: integer;
      g_prio_width         : integer;
      g_pattern_mode_width : integer;
-     g_tru_entry_num      : integer    
+     g_tru_entry_num      : integer;
+     g_interface_mode     : t_wishbone_interface_mode      := PIPELINED;
+     g_address_granularity: t_wishbone_address_granularity := BYTE    
      );
   port (
     clk_i          : in std_logic;
@@ -361,14 +364,8 @@ package wrsw_tru_pkg is
     ep_i               : in  t_ep2tru_array(g_num_ports-1 downto 0);
     ep_o               : out t_tru2ep_array(g_num_ports-1 downto 0);
     swc_o              : out std_logic_vector(g_num_ports-1 downto 0); -- for pausing
-    wb_addr_i          : in     std_logic_vector(3 downto 0);
-    wb_data_i          : in     std_logic_vector(31 downto 0);
-    wb_data_o          : out    std_logic_vector(31 downto 0);
-    wb_cyc_i           : in     std_logic;
-    wb_sel_i           : in     std_logic_vector(3 downto 0);
-    wb_stb_i           : in     std_logic;
-    wb_we_i            : in     std_logic;
-    wb_ack_o           : out    std_logic
+    wb_i : in  t_wishbone_slave_in;
+    wb_o : out t_wishbone_slave_out  
     );
   end component;
 

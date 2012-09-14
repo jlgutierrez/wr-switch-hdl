@@ -110,7 +110,7 @@ module main;
 
    wire[`c_num_ports-1:0]                                                  tru_swc2tru;
 
-   IWishboneMaster U_tru_wb (clk, rst_n) ;
+   IWishboneMaster #(32, 32) U_tru_wb (clk, rst_n) ;
 
    wrsw_tru_wb
    #(     
@@ -140,7 +140,7 @@ module main;
      .ep_o                     (tru_tru2ep),
      .swc_o                    (tru_swc2tru),
    
-     .wb_addr_i                (U_tru_wb.master.adr[3:0]),
+     .wb_addr_i                (U_tru_wb.master.adr[5:0]),
      .wb_data_i                (U_tru_wb.master.dat_o),
      .wb_data_o                (U_tru_wb.master.dat_i),
      .wb_cyc_i                 (U_tru_wb.master.cyc),
@@ -149,6 +149,12 @@ module main;
      .wb_we_i                  (U_tru_wb.master.we),
      .wb_ack_o                 (U_tru_wb.master.ack)
     );
+
+   initial 
+     begin
+//         U_tru_wb.settings.cyc_on_stall = 1;
+          U_tru_wb.settings.addr_gran = BYTE;
+     end
 
   assign tru_req               = t_req;
   assign t_resp                = tru_resp;
@@ -829,8 +835,8 @@ module main;
      CSimDrv_WR_TRU    tru_drv;
      
      /******************************* INIT STUFF **********************************/
-     
      tru_acc = U_tru_wb.get_accessor();
+     tru_acc.set_mode(PIPELINED);
      tru_drv = new(tru_acc, 0);
      
      init_stuff(tru_drv);

@@ -73,6 +73,7 @@ library work;
 use work.wrsw_tru_pkg.all;
 use work.genram_pkg.all;
 use work.tru_wbgen2_pkg.all;       -- for wbgen-erated records
+use work.wishbone_pkg.all;         -- wishbone_{interface_mode,address_granularity}
 
 entity xwrsw_tru is
   generic(     
@@ -86,7 +87,9 @@ entity xwrsw_tru is
      g_mt_trans_max_fr_cnt: integer := 1000;
      g_prio_width         : integer := 3;
      g_pattern_mode_width : integer := 4;
-     g_tru_entry_num      : integer := 256     
+     g_tru_entry_num      : integer := 256;
+     g_interface_mode     : t_wishbone_interface_mode      := PIPELINED;
+     g_address_granularity: t_wishbone_address_granularity := BYTE
      );
   port (
     clk_i          : in std_logic;
@@ -110,14 +113,9 @@ entity xwrsw_tru is
     swc_o              : out std_logic_vector(g_num_ports-1 downto 0); -- for pausing
 
     ---------------------------- WB I/F -----------------------------------------
-    wb_addr_i          : in     std_logic_vector(3 downto 0);
-    wb_data_i          : in     std_logic_vector(31 downto 0);
-    wb_data_o          : out    std_logic_vector(31 downto 0);
-    wb_cyc_i           : in     std_logic;
-    wb_sel_i           : in     std_logic_vector(3 downto 0);
-    wb_stb_i           : in     std_logic;
-    wb_we_i            : in     std_logic;
-    wb_ack_o           : out    std_logic        
+    wb_i : in  t_wishbone_slave_in;
+    wb_o : out t_wishbone_slave_out    
+          
     );
 end xwrsw_tru;
 
@@ -154,6 +152,8 @@ architecture rtl of xwrsw_tru is
   signal s_bank_swap_on_trans : std_logic;
   signal s_regs_towb          : t_tru_in_registers;
   signal s_regs_fromwb        : t_tru_out_registers;
+  signal wb_in                : t_wishbone_slave_in;
+  signal wb_out               : t_wishbone_slave_out;
 begin --rtl
    
   U_T_PORT: tru_port
@@ -268,18 +268,34 @@ begin --rtl
        s_tru_wr_ena(i)        <= s_regs_fromwb.ttr0_update_o when (i = s_tru_tab_wr_index) else '0';
   end generate G1;
 
+  U_WB_ADAPTER : wb_slave_adapter
+    generic map (
+      g_master_use_struct  => true,
+      g_master_mode        => CLASSIC,
+      g_master_granularity => WORD,
+      g_slave_use_struct   => true,
+      g_slave_mode         => g_interface_mode,
+      g_slave_granularity  => g_address_granularity)
+    port map (
+      clk_sys_i => clk_i,
+      rst_n_i   => rst_n_i,
+      slave_i   => wb_i,
+      slave_o   => wb_o,
+      master_i  => wb_out,
+      master_o  => wb_in);
+
   U_WISHBONE_IF: tru_wishbone_slave
   port map(
     rst_n_i            => rst_n_i,
     wb_clk_i           => clk_i,
-    wb_addr_i          => wb_addr_i,
-    wb_data_i          => wb_data_i,
-    wb_data_o          => wb_data_o,
-    wb_cyc_i           => wb_cyc_i,
-    wb_sel_i           => wb_sel_i,
-    wb_stb_i           => wb_stb_i,
-    wb_we_i            => wb_we_i,
-    wb_ack_o           => wb_ack_o,
+    wb_addr_i          => wb_in.adr(3 downto 0),
+    wb_data_i          => wb_in.dat,
+    wb_data_o          => wb_out.dat,
+    wb_cyc_i           => wb_in.cyc,
+    wb_sel_i           => wb_in.sel,
+    wb_stb_i           => wb_in.stb,
+    wb_we_i            => wb_in.we,
+    wb_ack_o           => wb_out.ack,
     regs_i             => s_regs_towb,
     regs_o             => s_regs_fromwb
   );

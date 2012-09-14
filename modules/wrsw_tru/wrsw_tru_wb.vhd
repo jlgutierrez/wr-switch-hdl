@@ -54,6 +54,7 @@ use work.rtu_private_pkg.all;       -- we need it for RTU's datatypes (records):
 
 use work.gencores_pkg.all;          -- for f_rr_arbitrate
 use work.wrsw_tru_pkg.all;
+use work.wishbone_pkg.all;         -- wishbone_{interface_mode,address_granularity}
 
 entity wrsw_tru_wb is
   generic(     
@@ -92,7 +93,7 @@ entity wrsw_tru_wb is
     
     swc_o                   : out std_logic_vector(g_num_ports-1 downto 0); -- for pausing
     
-    wb_addr_i          : in     std_logic_vector(3 downto 0);
+    wb_addr_i          : in     std_logic_vector(5 downto 0);
     wb_data_i          : in     std_logic_vector(31 downto 0);
     wb_data_o          : out    std_logic_vector(31 downto 0);
     wb_cyc_i           : in     std_logic;
@@ -120,21 +121,26 @@ architecture rtl of wrsw_tru_wb is
     signal s_ep_in                 : t_ep2tru_array(g_num_ports-1 downto 0);
     signal s_ep_out                : t_tru2ep_array(g_num_ports-1 downto 0);
     signal s_ep_arr                : t_ep_array(g_num_ports-1 downto 0);
+    
+    signal wb_in                   : t_wishbone_slave_in;
+    signal wb_out                  : t_wishbone_slave_out;
 begin
 
   X_TRU: xwrsw_tru
   generic map(     
-     g_num_ports        => g_num_ports,
-     g_tru_subentry_num => g_tru_subentry_num,
-     g_patternID_width  => g_patternID_width,
-     g_pattern_width    => g_num_ports,
-     g_stableUP_treshold=> g_stableUP_treshold,
-     g_tru_addr_width   => g_tru_addr_width,
-     g_pclass_number    => g_pclass_number,
-     g_mt_trans_max_fr_cnt=> g_mt_trans_max_fr_cnt,
-     g_prio_width       => g_prio_width,
-     g_pattern_mode_width => g_pattern_mode_width,
-     g_tru_entry_num    => g_tru_entry_num     
+     g_num_ports           => g_num_ports,
+     g_tru_subentry_num    => g_tru_subentry_num,
+     g_patternID_width     => g_patternID_width,
+     g_pattern_width       => g_num_ports,
+     g_stableUP_treshold   => g_stableUP_treshold,
+     g_tru_addr_width      => g_tru_addr_width,
+     g_pclass_number       => g_pclass_number,
+     g_mt_trans_max_fr_cnt => g_mt_trans_max_fr_cnt,
+     g_prio_width          => g_prio_width,
+     g_pattern_mode_width  => g_pattern_mode_width,
+     g_tru_entry_num       => g_tru_entry_num,
+     g_interface_mode      => PIPELINED, --CLASSIC, -- PIPELINED,
+     g_address_granularity => BYTE --WORD      --BYTE     
     )
   port map(
     clk_i               => clk_i,
@@ -146,15 +152,8 @@ begin
     ep_o                => s_ep_out,
     swc_o               => swc_o,
     
-    wb_addr_i          => wb_addr_i,
-    wb_data_i          => wb_data_i,
-    wb_data_o          => wb_data_o,
-    wb_cyc_i           => wb_cyc_i,
-    wb_sel_i           => wb_sel_i,
-    wb_stb_i           => wb_stb_i,
-    wb_we_i            => wb_we_i,
-    wb_ack_o           => wb_ack_o
-
+    wb_i                => wb_in,
+    wb_o                => wb_out
     );
 
     s_tru_req     <= f_unpack_tru_request (tru_req_i,  g_num_ports);
@@ -166,5 +165,15 @@ begin
        s_ep_in(i)                     <= f_unpack_ep2tru(s_ep_arr(i));
        ep_o((i+1)*g_tru2ep_record_width-1 downto i*g_tru2ep_record_width) <= f_pack_tru2ep(s_ep_out(i));
     end generate G3;
+
+    wb_in.adr(5 downto 0) <= wb_addr_i;
+    wb_in.dat             <= wb_data_i;
+    wb_in.cyc             <= wb_cyc_i;
+    wb_in.sel             <= wb_sel_i;
+    wb_in.stb             <= wb_stb_i;
+    wb_in.we              <= wb_we_i;
+    
+    wb_ack_o              <= wb_out.ack;
+    wb_data_o             <= wb_out.dat;
 
 end rtl;
