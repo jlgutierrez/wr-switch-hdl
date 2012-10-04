@@ -69,22 +69,22 @@ package wrsw_tru_pkg is
  constant c_wrsw_max_queue_number      : integer :=8;
  constant c_tru_pattern_mode_width     : integer :=4;
   -------------------------- main input/output data ----------------------------------------
-  type t_tru_request is record
-    valid            : std_logic;
-    smac             : std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
-    dmac             : std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
-    fid              : std_logic_vector(c_wrsw_fid_width-1 downto 0);
-    isHP             : std_logic;                     -- high priority packet flag
-    isBR             : std_logic;                     -- broadcast packet flag
-    reqMask          : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); -- mask indicating requesting port
-  end record;
-   
-  type t_tru_response is record
-    valid            : std_logic;
-    port_mask        : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1's at forward ports
-    drop             : std_logic;
-    respMask         : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1 at requesting port
-  end record;
+--   type t_tru_request is record
+--     valid            : std_logic;
+--     smac             : std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
+--     dmac             : std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
+--     fid              : std_logic_vector(c_wrsw_fid_width-1 downto 0);
+--     isHP             : std_logic;                     -- high priority packet flag
+--     isBR             : std_logic;                     -- broadcast packet flag
+--     reqMask          : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); -- mask indicating requesting port
+--   end record;
+--    
+--   type t_tru_response is record
+--     valid            : std_logic;
+--     port_mask        : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1's at forward ports
+--     drop             : std_logic;
+--     respMask         : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1 at requesting port
+--   end record;
 
   --------------------------- tru <-> endpoint I/F ------------------------------------------
   type t_tru2ep is record

@@ -70,6 +70,7 @@ use ieee.math_real.CEIL;
 use ieee.math_real.log2;
 
 library work;
+use work.wrsw_shared_types_pkg.all;
 use work.wrsw_tru_pkg.all;
 use work.genram_pkg.all;
 use work.tru_wbgen2_pkg.all;       -- for wbgen-erated records

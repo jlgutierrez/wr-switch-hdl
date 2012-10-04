@@ -67,6 +67,9 @@ entity xwrsw_rtu is
     rsp_o     : out t_rtu_response_array(g_num_ports-1 downto 0);
     rsp_ack_i : in  std_logic_vector(g_num_ports-1 downto 0);
 
+    tru_req_o   : out  t_tru_request;
+    tru_resp_i  : in   t_tru_response;  
+
     wb_i : in  t_wishbone_slave_in;
     wb_o : out t_wishbone_slave_out
     );
@@ -238,5 +241,15 @@ begin  -- wrapper
       wb_ack_o            => wb_out.ack,
       wb_irq_o            => wb_out.int,
       wb_we_i             => wb_in.we);
+
+-- dummy TRU signals assigment
+  
+    tru_req_o.valid      <= req_i(0).valid;
+    tru_req_o.smac       <= req_i(0).smac;
+    tru_req_o.dmac       <= req_i(0).dmac;
+    tru_req_o.fid        <= req_i(0).vid(c_wrsw_fid_width-1 downto 0);
+    tru_req_o.isHP       <= req_i(0).has_prio when (tru_resp_i.drop = '0') else '1';
+    tru_req_o.isBR       <= req_i(0).has_vid;
+    tru_req_o.reqMask    <= req_i(0).smac(c_RTU_MAX_PORTS-1 downto 0) when (tru_resp_i.valid='1') else (others=>'0');
 
 end wrapper;

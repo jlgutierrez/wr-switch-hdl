@@ -257,6 +257,10 @@ package wrsw_components_pkg is
       req_full_o : out std_logic_vector(g_num_ports-1 downto 0);
       rsp_o      : out t_rtu_response_array(g_num_ports-1 downto 0);
       rsp_ack_i  : in  std_logic_vector(g_num_ports-1 downto 0);
+      -------- new stuff for TRU --------
+      tru_req_o  : in  t_tru_request;
+      ru_resp_i  : out t_tru_response;  
+      -----------------------------------
       wb_i       : in  t_wishbone_slave_in;
       wb_o       : out t_wishbone_slave_out);
   end component;

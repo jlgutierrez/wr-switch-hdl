@@ -540,8 +540,6 @@ begin
           rtu_rq_has_vid_o   => rtu_req(i).has_vid,
           rtu_rq_has_prio_o  => rtu_req(i).has_prio,
 
-
-
           src_o      => endpoint_src_out(i),
           src_i      => endpoint_src_in(i),
           snk_o      => endpoint_snk_out(i),
@@ -636,6 +634,10 @@ begin
         req_full_o => rtu_full(g_num_ports-1 downto 0),
         rsp_o      => rtu_rsp(g_num_ports-1 downto 0),
         rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
+        ------ new TRU stuff ----------
+        tru_req_o  => tru_req,
+        tru_resp_i  => tru_resp,
+        -------------------------------
         wb_i       => cnx_master_out(c_SLAVE_RTU),
         wb_o       => cnx_master_in(c_SLAVE_RTU));
 
