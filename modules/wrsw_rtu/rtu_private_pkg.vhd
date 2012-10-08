@@ -140,6 +140,25 @@ package rtu_private_pkg is
       rsp_ack_i           : in  std_logic_vector(g_num_ports -1 downto 0);
       port_almost_full_o  : out std_logic_vector(g_num_ports -1 downto 0);
       port_full_o         : out std_logic_vector(g_num_ports -1 downto 0);
+-------------------------------------------------------------------------------
+-- TRU stuff
+-------------------------------------------------------------------------------
+    tru_req_valid_o         : out std_logic;
+    tru_req_smac_o          : out std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
+    tru_req_dmac_o          : out std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
+    tru_req_fid_o           : out std_logic_vector(c_wrsw_fid_width    -1 downto 0);
+    tru_req_isHP_o          : out std_logic;                     -- high priority packet flag
+    tru_req_isBR_o          : out std_logic;                     -- broadcast packet flag
+    tru_req_reqMask_o       : out std_logic_vector(g_num_ports-1  downto 0); -- mask indicating requesting port
+    tru_resp_valid_i        : in  std_logic;
+    tru_resp_port_mask_i    : in  std_logic_vector(g_num_ports-1 downto 0); -- mask with 1's at forward ports
+    tru_resp_drop_i         : in  std_logic;
+    tru_resp_respMask_i     : in  std_logic_vector(g_num_ports-1 downto 0); -- mask with 1 at requesting port
+    tru_if_pass_all_o         : out std_logic_vector(g_num_ports-1  downto 0); 
+    tru_if_forward_bpdu_only_o: out std_logic_vector(g_num_ports-1  downto 0); 
+    tru_if_request_valid_o    : out std_logic_vector(g_num_ports-1  downto 0); 
+    tru_if_priorities_o       : out std_logic_vector(g_num_ports*c_wrsw_prio_width-1 downto 0);
+----------------------------------------------------------------------------------
       wb_addr_i           : in  std_logic_vector(13 downto 0);
       wb_data_i           : in  std_logic_vector(31 downto 0);
       wb_data_o           : out std_logic_vector(31 downto 0);

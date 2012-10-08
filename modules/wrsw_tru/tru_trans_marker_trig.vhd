@@ -83,7 +83,7 @@ use ieee.math_real.CEIL;
 use ieee.math_real.log2;
 
 library work;
-
+use work.wrsw_shared_types_pkg.all;
 use work.gencores_pkg.all;          -- for f_rr_arbitrate
 use work.wrsw_tru_pkg.all;
 
@@ -158,8 +158,13 @@ begin --rtl
    end generate G_MASK;
   
   -- to make the code less messy
-  s_port_A_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_a_id)));
-  s_port_B_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_b_id)));
+--   s_port_A_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_a_id)));
+--   s_port_B_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_b_id)));
+
+--   s_port_A_prio       <= rtu_i.priorities;
+--   s_port_B_prio       <= rtu_i.priorities;
+
+
   s_port_A_rtu_srobe  <= '1' when ((s_port_A_mask and rtu_i.request_valid(g_num_ports-1 downto 0)) = s_port_A_mask and 
                                     s_port_A_prio = config_i.tcr_trans_prio) else '0';
   s_port_B_rtu_srobe  <= '1' when ((s_port_B_mask and rtu_i.request_valid(g_num_ports-1 downto 0)) = s_port_B_mask and

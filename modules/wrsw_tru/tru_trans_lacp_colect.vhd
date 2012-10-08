@@ -51,6 +51,7 @@ use ieee.math_real.CEIL;
 use ieee.math_real.log2;
 
 library work;
+use work.wrsw_shared_types_pkg.all;
 use work.gencores_pkg.all;          -- for f_rr_arbitrate
 use work.wrsw_tru_pkg.all;
 

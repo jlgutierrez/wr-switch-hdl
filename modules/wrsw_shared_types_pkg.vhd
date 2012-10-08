@@ -42,4 +42,32 @@ package wrsw_shared_types_pkg is
     respMask         : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1 at requesting port
   end record;
 
+  type t_tru2ep is record
+    ctrlWr                : std_logic;
+    --frmae generation
+    tx_pck                : std_logic;                    -- in Endpoint this is to be implemented
+    tx_pck_class          : std_logic_vector(7 downto 0); -- in Endpoint this is to be implemented
+    -- pause generation
+    pauseSend             : std_logic;
+    pauseTime             : std_logic_vector(15 downto 0);
+    outQueueBlockMask     : std_logic_vector(7 downto 0);
+  end record;
+  
+  type t_ep2tru is record
+    status           : std_logic;
+    ctrlRd           : std_logic;
+    -- frame detectin
+    rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
+    rx_pck_class     : std_logic_vector(7 downto 0); -- in Endpoint this is :pfilter_pclass_i    
+  end record;
+
+--   type t_rtu_prio_array is array(integer range <>) of std_logic_vector(7 downto 0);  
+  type t_rtu2tru is record -- single port
+    pass_all         : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
+    forward_bpdu_only: std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
+    request_valid    : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
+    priorities       : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
+--     priorities       : t_rtu_prio_array(c_RTU_MAX_PORTS-1  downto 0);
+  end record;
+
 end wrsw_shared_types_pkg;

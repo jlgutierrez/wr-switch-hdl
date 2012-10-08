@@ -87,17 +87,17 @@ package wrsw_tru_pkg is
 --   end record;
 
   --------------------------- tru <-> endpoint I/F ------------------------------------------
-  type t_tru2ep is record
-    ctrlWr                : std_logic;
-    --frmae generation
-    tx_pck                : std_logic;                    -- in Endpoint this is to be implemented
-    tx_pck_class          : std_logic_vector(c_wrsw_pclass_number-1 downto 0); -- in Endpoint this is to be implemented
-    -- pause generation
-    pauseSend             : std_logic;
-    pauseTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
-    outQueueBlockMask     : std_logic_vector(c_wrsw_max_queue_number-1 downto 0);
-  end record;
-  
+--   type t_tru2ep is record
+--     ctrlWr                : std_logic;
+--     --frmae generation
+--     tx_pck                : std_logic;                    -- in Endpoint this is to be implemented
+--     tx_pck_class          : std_logic_vector(c_wrsw_pclass_number-1 downto 0); -- in Endpoint this is to be implemented
+--     -- pause generation
+--     pauseSend             : std_logic;
+--     pauseTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
+--     outQueueBlockMask     : std_logic_vector(c_wrsw_max_queue_number-1 downto 0);
+--   end record;
+--   
   type t_trans2ep is record
     pauseSend             : std_logic;
     pauseTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
@@ -105,23 +105,23 @@ package wrsw_tru_pkg is
   end record;
   
 
-  type t_ep2tru is record
-    status           : std_logic;
-    ctrlRd           : std_logic;
-    -- frame detectin
-    rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
-    rx_pck_class     : std_logic_vector(c_wrsw_pclass_number-1 downto 0); -- in Endpoint this is :pfilter_pclass_i    
-  end record;
+--   type t_ep2tru is record
+--     status           : std_logic;
+--     ctrlRd           : std_logic;
+--     -- frame detectin
+--     rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
+--     rx_pck_class     : std_logic_vector(c_wrsw_pclass_number-1 downto 0); -- in Endpoint this is :pfilter_pclass_i    
+--   end record;
 
-  type t_rtu_prio_array is array(c_RTU_MAX_PORTS-1  downto 0) of std_logic_vector(c_wrsw_prio_width-1  downto 0);   
-
-  --------------------------- tru <-> rtu I/F ------------------------------------------
-  type t_rtu2tru is record -- single port
-    pass_all         : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
-    forward_bpdu_only: std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
-    request_valid    : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
-    priorities       : t_rtu_prio_array;
-  end record;
+--   type t_rtu_prio_array is array(c_RTU_MAX_PORTS-1  downto 0) of std_logic_vector(c_wrsw_prio_width-1  downto 0);   
+-- 
+--   --------------------------- tru <-> rtu I/F ------------------------------------------
+--   type t_rtu2tru is record -- single port
+--     pass_all         : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
+--     forward_bpdu_only: std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
+--     request_valid    : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
+--     priorities       : t_rtu_prio_array;
+--   end record;
 
  
   type t_tru_tab_subentry is record
@@ -755,9 +755,9 @@ package body wrsw_tru_pkg is
     entry.pass_all(port_number-1 downto 0)           := input_data(1*port_number-1 downto 0*port_number);
     entry.forward_bpdu_only(port_number-1 downto 0)  := input_data(2*port_number-1 downto 1*port_number);
     entry.request_valid(port_number-1 downto 0)      := input_data(3*port_number-1 downto 2*port_number);
-    for i in 0 to port_number-1 loop
-      entry.priorities(i) := input_data(3*port_number+(i+1)*c_wrsw_prio_width-1 downto 3*port_number+i*c_wrsw_prio_width);
-    end loop;
+--     for i in 0 to port_number-1 loop
+--       entry.priorities(i) := input_data(3*port_number+(i+1)*c_wrsw_prio_width-1 downto 3*port_number+i*c_wrsw_prio_width);
+--     end loop;
     entry.pass_all(c_RTU_MAX_PORTS-1 downto port_number)           := (others =>'0');
     entry.forward_bpdu_only(c_RTU_MAX_PORTS-1 downto port_number)  := (others =>'0');
     entry.request_valid(c_RTU_MAX_PORTS-1 downto port_number)      := (others =>'0');

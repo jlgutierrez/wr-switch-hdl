@@ -485,7 +485,8 @@ begin
 
 
     gen_endpoints_and_phys : for i in 0 to c_NUM_PORTS-1 generate
-      U_Endpoint_X : xwr_endpoint
+--       U_Endpoint_X : xwr_endpoint
+      U_Endpoint_X : xwr_endpoint_with_truIF      
         generic map (
           g_interface_mode      => PIPELINED,
           g_address_granularity => BYTE,
@@ -546,6 +547,8 @@ begin
           snk_i      => endpoint_snk_in(i),
           wb_i       => cnx_endpoint_out(i),
           wb_o       => cnx_endpoint_in(i),
+          tru_i      => tru2ep(i),
+          tru_o      => ep2tru(i),
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
 
@@ -637,6 +640,7 @@ begin
         ------ new TRU stuff ----------
         tru_req_o  => tru_req,
         tru_resp_i  => tru_resp,
+--         rtu2tru_o  => open,
         -------------------------------
         wb_i       => cnx_master_out(c_SLAVE_RTU),
         wb_o       => cnx_master_in(c_SLAVE_RTU));

@@ -57,6 +57,7 @@ library work;
 -- use work.rtu_private_pkg.all;       -- we need it for RTU's datatypes (records):
 --                                     -- * t_rtu_vlan_tab_entry
 
+use work.wrsw_shared_types_pkg.all;
 use work.gencores_pkg.all;          -- for f_rr_arbitrate
 use work.wrsw_tru_pkg.all;
 

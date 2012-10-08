@@ -260,7 +260,8 @@ package wrsw_components_pkg is
       -------- new stuff for TRU --------
       tru_req_o  : in  t_tru_request;
       ru_resp_i  : out t_tru_response;  
-      -----------------------------------
+      rtu2tru_o  : out t_rtu2tru;
+     -----------------------------------
       wb_i       : in  t_wishbone_slave_in;
       wb_o       : out t_wishbone_slave_out);
   end component;
