@@ -312,6 +312,7 @@ package wrsw_top_pkg is
       rsp_ack_i  : in  std_logic_vector(g_num_ports-1 downto 0);
       tru_req_o  : out  t_tru_request;
       tru_resp_i : in   t_tru_response;      
+      rtu2tru_o  : out  t_rtu2tru;
       wb_i       : in  t_wishbone_slave_in;
       wb_o       : out t_wishbone_slave_out);
   end component;

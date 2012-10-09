@@ -639,8 +639,8 @@ begin
         rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
         ------ new TRU stuff ----------
         tru_req_o  => tru_req,
-        tru_resp_i  => tru_resp,
---         rtu2tru_o  => open,
+        tru_resp_i => tru_resp,
+        rtu2tru_o  => rtu2tru,
         -------------------------------
         wb_i       => cnx_master_out(c_SLAVE_RTU),
         wb_o       => cnx_master_in(c_SLAVE_RTU));
