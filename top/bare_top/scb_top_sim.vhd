@@ -137,7 +137,8 @@ begin  -- rtl
     generic map (
       g_num_ports  => g_num_ports,
       g_simulation => true,
-      g_without_network => false)
+      g_without_network => false,
+      g_with_TRU        => true)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_startup_i,

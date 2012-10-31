@@ -21,7 +21,8 @@ entity scb_top_bare is
   generic(
     g_num_ports       : integer := 6;
     g_simulation      : boolean := false;
-    g_without_network : boolean := false
+    g_without_network : boolean := false;
+    g_with_TRU        : boolean := false
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -247,7 +248,7 @@ architecture rtl of scb_top_bare is
   signal txtsu_timestamps_ack : std_logic_vector(c_NUM_PORTS-1 downto 0);
   signal txtsu_timestamps     : t_txtsu_timestamp_array(c_NUM_PORTS-1 downto 0);
   signal dummy                : std_logic_vector(31 downto 0);
-
+  signal tru_enabled          : std_logic;
   -----------------------------------------------------------------------------
   -- Component declarations
   -----------------------------------------------------------------------------
@@ -622,7 +623,8 @@ begin
     --TRIG3(0) <= rtu_rsp(c_NUM_PORTS).valid;
     --TRIG3(1) <= rtu_rsp_ack(c_NUM_PORTS);
 
-    U_RTU : xwrsw_rtu
+   U_RTU : xwrsw_rtu_new
+--   U_RTU : xwrsw_rtu
       generic map (
         g_prio_num                        => 8,
         g_interface_mode                  => PIPELINED,
@@ -632,7 +634,7 @@ begin
         g_handle_only_single_req_per_port => true)
       port map (
         clk_sys_i  => clk_sys,
-        rst_n_i    => rst_n_periph,
+        rst_n_i    => rst_n_sys,--rst_n_periph,
         req_i      => rtu_req(g_num_ports-1 downto 0),
         req_full_o => rtu_full(g_num_ports-1 downto 0),
         rsp_o      => rtu_rsp(g_num_ports-1 downto 0),
@@ -641,36 +643,46 @@ begin
         tru_req_o  => tru_req,
         tru_resp_i => tru_resp,
         rtu2tru_o  => rtu2tru,
+        tru_enabled_i => tru_enabled,
         -------------------------------
         wb_i       => cnx_master_out(c_SLAVE_RTU),
         wb_o       => cnx_master_in(c_SLAVE_RTU));
 
-    U_TRU: xwrsw_tru
-      generic map(     
-        g_num_ports           => g_num_ports,
-        g_tru_subentry_num    => 8,
-        g_patternID_width     => 4,
-        g_pattern_width       => g_num_ports,
-        g_stableUP_treshold   => 100,
-        g_pclass_number       => 8,
-        g_mt_trans_max_fr_cnt => 1000,
-        g_prio_width          => 3,
-        g_pattern_mode_width  => 4,
-        g_tru_entry_num       => 256,
-        g_interface_mode      => PIPELINED,
-        g_address_granularity => BYTE 
-       )
-      port map(
-        clk_i               => clk_sys,
-        rst_n_i             => rst_n_periph,
-        req_i               => tru_req,
-        resp_o              => tru_resp,
-        rtu_i               => rtu2tru, 
-        ep_i                => ep2tru,
-        ep_o                => tru2ep,
-        swc_o               => swc2tru,
-        wb_i                => cnx_master_out(c_SLAVE_TRU),
-        wb_o                => cnx_master_in(c_SLAVE_TRU));
+    gen_TRU : if(g_with_TRU = true) generate
+      U_TRU: xwrsw_tru
+        generic map(     
+          g_num_ports           => g_num_ports,
+          g_tru_subentry_num    => 8,
+          g_patternID_width     => 4,
+          g_pattern_width       => g_num_ports,
+          g_stableUP_treshold   => 100,
+          g_pclass_number       => 8,
+          g_mt_trans_max_fr_cnt => 1000,
+          g_prio_width          => 3,
+          g_pattern_mode_width  => 4,
+          g_tru_entry_num       => 256,
+          g_interface_mode      => PIPELINED,
+          g_address_granularity => BYTE 
+         )
+        port map(
+          clk_i               => clk_sys,
+          rst_n_i             => rst_n_periph,
+          req_i               => tru_req,
+          resp_o              => tru_resp,
+          rtu_i               => rtu2tru, 
+          ep_i                => ep2tru,
+          ep_o                => tru2ep,
+          swc_o               => swc2tru,
+          enabled_o           => tru_enabled,
+          wb_i                => cnx_master_out(c_SLAVE_TRU),
+          wb_o                => cnx_master_in(c_SLAVE_TRU));
+    end generate gen_TRU;    
+
+    gen_no_TRU : if(g_with_TRU = false) generate
+      swc2tru                        <= (others =>'0');  
+      tru_enabled                    <= '0';
+      cnx_master_in(c_SLAVE_TRU).ack <= '1';
+    end generate gen_no_TRU; 
 
   end generate gen_network_stuff;
 
