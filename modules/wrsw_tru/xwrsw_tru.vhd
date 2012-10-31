@@ -112,6 +112,8 @@ entity xwrsw_tru is
     -- multi-port access (bit per port)
     swc_o              : out std_logic_vector(g_num_ports-1 downto 0); -- for pausing
 
+    -- info to other moduels that TRU is enabled
+    enabled_o          : out std_logic;
     ---------------------------- WB I/F -----------------------------------------
     wb_i : in  t_wishbone_slave_in;
     wb_o : out t_wishbone_slave_out    
@@ -365,5 +367,5 @@ begin --rtl
                                             s_regs_fromwb.ttr0_mask_valid_o                            ;
  -- TODO:
   swc_o                <= (others =>'0');
-
+  enabled_o            <= s_regs_fromwb.gcr_g_ena_o  ;
 end rtl;

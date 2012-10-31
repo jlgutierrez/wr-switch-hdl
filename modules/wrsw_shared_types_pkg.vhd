@@ -20,6 +20,7 @@ package wrsw_shared_types_pkg is
     port_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
     prio      : std_logic_vector(2 downto 0);
     drop      : std_logic;
+    hp        : std_logic;
   end record;
 
   type t_rtu_request_array is array(integer range <>) of t_rtu_request;
@@ -42,6 +43,9 @@ package wrsw_shared_types_pkg is
     respMask         : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1 at requesting port
   end record;
 
+  type t_tru_request_array is array(integer range <>) of t_tru_request;
+  type t_tru_response_array is array(integer range <>) of t_tru_response;
+
   type t_tru2ep is record
     ctrlWr                : std_logic;
     --frmae generation
@@ -60,6 +64,9 @@ package wrsw_shared_types_pkg is
     rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
     rx_pck_class     : std_logic_vector(7 downto 0); -- in Endpoint this is :pfilter_pclass_i    
   end record;
+
+  type t_tru2ep_array       is array(integer range <>) of t_tru2ep;
+  type t_ep2tru_array       is array(integer range <>) of t_ep2tru;
 
 --   type t_rtu_prio_array is array(integer range <>) of std_logic_vector(7 downto 0);  
   type t_rtu2tru is record -- single port

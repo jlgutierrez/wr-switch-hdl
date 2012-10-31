@@ -70,6 +70,7 @@ entity xwrsw_rtu is
     tru_req_o   : out  t_tru_request;
     tru_resp_i  : in   t_tru_response;  
     rtu2tru_o   : out  t_rtu2tru;
+    tru_enabled_i: in std_logic;
 
     wb_i : in  t_wishbone_slave_in;
     wb_o : out t_wishbone_slave_out

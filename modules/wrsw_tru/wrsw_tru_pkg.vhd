@@ -197,8 +197,8 @@ package wrsw_tru_pkg is
     truTabBank            : std_logic;
   end record;
   --------------------------------- arrays ----------------------------------------------
-  type t_tru2ep_array       is array(integer range <>) of t_tru2ep;
-  type t_ep2tru_array       is array(integer range <>) of t_ep2tru;
+--   type t_tru2ep_array       is array(integer range <>) of t_tru2ep;
+--   type t_ep2tru_array       is array(integer range <>) of t_ep2tru;
   type t_trans2tru_array    is array(integer range <>) of t_trans2ep;
   
   type t_tru_tab_entry      is array(integer range <>) of t_tru_tab_subentry;
@@ -367,6 +367,7 @@ package wrsw_tru_pkg is
     ep_i               : in  t_ep2tru_array(g_num_ports-1 downto 0);
     ep_o               : out t_tru2ep_array(g_num_ports-1 downto 0);
     swc_o              : out std_logic_vector(g_num_ports-1 downto 0); -- for pausing
+    enabled_o          : out std_logic;
     wb_i : in  t_wishbone_slave_in;
     wb_o : out t_wishbone_slave_out  
     );

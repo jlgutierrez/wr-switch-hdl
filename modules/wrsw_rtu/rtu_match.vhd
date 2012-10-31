@@ -215,7 +215,7 @@ architecture behavioral of rtu_match is
   signal s_rsp_dst_port_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
   signal s_rsp_drop          : std_logic;
   signal s_rsp_prio          : std_logic_vector (c_wrsw_prio_width-1 downto 0);
-
+  signal s_rsp_bpdu          : std_logic; -- ML (oct 2012)
 --|manage input fifo
 --ML: signal s_rd_input_req_fifo  : std_logic;
 --ML: signal s_input_fifo_full    : std_logic;
@@ -392,6 +392,7 @@ begin
         --do reset
         s_rsp_dst_port_mask <= (others => '0');
         s_rsp_drop          <= '0';
+        s_rsp_bpdu          <= '0';
         s_rsp_prio          <= (others => '0');
         s_htab_rd_data_ack  <= '0';
 
@@ -436,6 +437,7 @@ begin
             
             s_rsp_dst_port_mask <= (others => '0');
             s_rsp_drop          <= '0';
+            s_rsp_bpdu          <= '0';
             s_rsp_prio          <= (others => '0');
             s_htab_rd_data_ack  <= '0';
 
@@ -549,6 +551,7 @@ begin
                 s_port_id <= requesting_port;
 
                 s_rsp_drop          <= '1';
+                s_rsp_bpdu          <= '0';
                 s_rsp_dst_port_mask <= (others => '0');
                 s_rsp_prio          <= (others => '0');
                 mstate              <= OUTPUT_RESPONSE;
@@ -597,6 +600,7 @@ begin
 
               -- RETURN
               s_rsp_drop    <= '1';
+              s_rsp_bpdu    <= '0';
               mstate        <= OUTPUT_RESPONSE;
               s_vlan_tab_rd <= '0';
 
@@ -670,7 +674,9 @@ begin
 
                 -- update aging aram (in any case that entry was found,
                 -- even if dropped later, we update aging aram
-                s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
+                s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(std_logic_vector'(s_aram_bitsel_msb & htab_entry_i.bucket_entry))), 32);
+                -- strange hack do to t_mac_array of std_logic_vector declaration
+                -- solution taken from :http://www.velocityreviews.com/forums/t639905-ambiguous-type-in-infix-expression.html
                 s_aram_main_wr     <= '1';
 
                 ----------------------------------------------------------------------------
@@ -686,6 +692,7 @@ begin
 
                     -- RETURN
                     s_rsp_drop          <= '1';
+                    s_rsp_bpdu          <= '0';
                     s_rsp_dst_port_mask <= (others => '0');
                     s_rsp_prio          <= (others => '0');
                     mstate              <= OUTPUT_RESPONSE;
@@ -727,6 +734,7 @@ begin
 
                     -- RETURN
                     s_rsp_drop          <= '1';
+                    s_rsp_bpdu          <= '0';
                     s_rsp_dst_port_mask <= (others => '0');
                     s_rsp_prio          <= (others => '0');
                     mstate              <= OUTPUT_RESPONSE;
@@ -820,6 +828,7 @@ begin
                       -- so we drop
                       
                       s_rsp_drop          <= '1';
+                      s_rsp_bpdu          <= '0';
                       s_rsp_dst_port_mask <= (others => '0');
                       s_rsp_prio          <= (others => '0');
                       mstate              <= OUTPUT_RESPONSE;
@@ -893,6 +902,7 @@ begin
                 -- so we drop
                 
                 s_rsp_drop          <= '1';
+                s_rsp_bpdu          <= '0';
                 s_rsp_dst_port_mask <= (others => '0');
                 s_rsp_prio          <= (others => '0');
                 mstate              <= OUTPUT_RESPONSE;
@@ -935,6 +945,7 @@ begin
 
                   -- RETURN
                   s_rsp_drop <= '1';
+                  s_rsp_bpdu <= '0';
                   mstate     <= OUTPUT_RESPONSE;
 
                   -------------------------------------------       
@@ -1037,6 +1048,7 @@ begin
 
                 -- RETURN
                 s_rsp_drop          <= '1';
+                s_rsp_bpdu          <= '0';
                 s_rsp_dst_port_mask <= (others => '0');
                 s_rsp_prio          <= (others => '0');
 
@@ -1058,7 +1070,7 @@ begin
 
                 --evaluate the final priority of the packet
                 s_rsp_drop <= '0';
-
+                s_rsp_bpdu <= s_dst_entry_is_bpdu; --- ML (oct2012 - new, to be verified)
                 -------------------------------------------       
                 -- set response PRIORITY
                 ------------------------------------------- 
@@ -1163,7 +1175,7 @@ begin
   rsp_fifo_write_o   <= '1' when mstate = OUTPUT_RESPONSE else '0';
   -- response strobe
 
-  rsp_fifo_output_o <= s_rsp_dst_port_mask & s_rsp_drop & s_rsp_prio & s_port_id;
+ rsp_fifo_output_o <= s_rsp_bpdu & s_rsp_dst_port_mask & s_rsp_drop & s_rsp_prio & s_port_id;
 
 end architecture;
 

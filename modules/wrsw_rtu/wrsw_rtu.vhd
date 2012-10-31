@@ -121,7 +121,10 @@ use work.wishbone_pkg.all;
 use work.wrsw_shared_types_pkg.all;
 use work.rtu_private_pkg.all;
 use work.rtu_wbgen2_pkg.all;
+-- use work.rtu_wbgen2_pkg_old.all;
 use work.pack_unpack_pkg.all;
+
+
 
 entity wrsw_rtu is
   generic (
@@ -563,7 +566,7 @@ begin
 
   --| WISHBONE I/F: interface with CPU and RAM/CAM
 
-  U_WB_Slave : rtu_wishbone_slave
+  U_WB_Slave : rtu_wishbone_slave_old
     port map(
       rst_n_i   => rst_n_i,
       clk_sys_i => clk_sys_i,

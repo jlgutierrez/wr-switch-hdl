@@ -47,6 +47,7 @@ library work;
 use work.wishbone_pkg.all;              -- for test part (to be moved)
 use work.wrsw_shared_types_pkg.all;
 use work.rtu_wbgen2_pkg.all;
+-- use work.rtu_wbgen2_pkg_old.all;
 
 package rtu_private_pkg is
 
@@ -77,8 +78,9 @@ package rtu_private_pkg is
     + 1; -- has_priority
 
   constant c_PACKED_RESPONSE_WIDTH  : integer :=
-    c_rtu_max_ports                    -- DPM size
+    c_rtu_max_ports                     -- DPM size
     + 1                                 -- drop bit
+    + 1                                 -- bpdu bit
     + c_wrsw_prio_width;                -- priority
   
   
@@ -117,6 +119,55 @@ package rtu_private_pkg is
     fid           : std_logic_vector(7 downto 0);
     port_mask     : std_logic_vector(c_rtu_max_ports-1 downto 0);
   end record;
+
+  constant c_ff_single_macs_number :	 integer := 4;
+  constant c_ff_range_macs_number :	 integer := 1; -- not implemented
+  
+------------------ new stuff ------------------------
+  constant bpd_range_lower  : std_logic_vector := x"0180C2000000";
+  constant bpd_range_upper  : std_logic_vector := x"0180C200000F";
+
+  type t_mac_array is array(integer range <>) of std_logic_vector(47 downto 0);
+  type t_rtu_special_traffic_config is record
+    single_macs        : t_mac_array(c_ff_single_macs_number-1 downto 0);
+    single_macs_valid  : std_logic_vector(c_ff_single_macs_number-1 downto 0);
+    hp_prio            : std_logic_vector(7 downto 0);
+    macs_range_up      : std_logic_vector(47 downto 0);
+    macs_range_down    : std_logic_vector(47 downto 0);
+    macs_range_valid   : std_logic;
+    bpd_forward_mask   : std_logic_vector(c_rtu_max_ports-1 downto 0);
+    mirror_port_src_tx : std_logic_vector(c_rtu_max_ports-1 downto 0);
+    mirror_port_src_rx : std_logic_vector(c_rtu_max_ports-1 downto 0);
+    mirror_port_dst    : std_logic_vector(c_rtu_max_ports-1 downto 0);
+--     mirrored_port_src : std_logic_vector(c_rtu_max_ports-1 downto 0);
+--     mirrored_port_dst : std_logic_vector(c_rtu_max_ports-1 downto 0);
+    dop_on_fmatch_full: std_logic;
+  end record;
+  type t_match_response is record
+    valid     : std_logic;
+    port_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
+    prio      : std_logic_vector(2 downto 0);
+    drop      : std_logic;
+    bpdu      : std_logic;
+  end record;
+
+  function f_mac_in_range(in_mac, in_mac_lower, in_mac_upper   : std_logic_vector(47 downto 0)
+                                                     ) return std_logic;
+  function f_fast_match_mac_lookup(match_config : t_rtu_special_traffic_config;
+                                     in_mac       : std_logic_vector(47 downto 0)
+                                     ) return std_logic; 
+  function f_pick (condition : boolean; w_true : std_logic_vector; w_false : std_logic_vector)
+                  return std_logic_vector;
+  function f_fast_match_response(vlan_entry  : t_rtu_vlan_tab_entry;
+                                 rq_prio     : std_logic_vector;
+                                 rq_has_prio : std_logic;
+                                 pcr_pass_all: std_logic_vector;
+                                 port_mask_width : integer) 
+                                 return t_match_response;
+  function f_set_bit(data     : std_logic_vector;
+                     bit_val  : std_logic;
+                     bit_num  : integer          ) return std_logic_vector;
+------------------------------------------------------
 
   component wrsw_rtu
     generic(
@@ -210,6 +261,43 @@ package rtu_private_pkg is
       rtu_pcr_prio_val_i     : in  std_logic_vector(c_wrsw_prio_width - 1 downto 0));
   end component;
   
+  component rtu_port_new
+    generic(
+      g_num_ports        : integer;
+      g_port_mask_bits   : integer; -- usually: g_num_ports + 1 for CPU
+      g_port_index             : integer
+      );
+    port(
+      clk_i                     : in std_logic;
+      rst_n_i                   : in std_logic;
+      rtu_idle_o                : out std_logic;
+      rtu_rq_i                  : in  t_rtu_request;
+      rtu_rq_aboard_i           : in  std_logic;
+      rtu_rsp_o                 : out t_rtu_response;
+      rtu_rsp_ack_i             : in std_logic;
+      rq_fifo_wr_access_o       : out std_logic;
+      rq_fifo_wr_data_o         : out std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
+      rq_fifo_wr_done_i         : in  std_logic;
+      rq_fifo_full_i            : in  std_logic;
+      match_data_i              : in std_logic_vector(g_num_ports + c_PACKED_RESPONSE_WIDTH - 1 downto 0);
+      match_data_valid_i        : in std_logic;
+      vtab_rd_addr_o            : out std_logic_vector(c_wrsw_vid_width-1 downto 0);
+      vtab_rd_req_o             : out std_logic;
+      vtab_rd_entry_i           : in  t_rtu_vlan_tab_entry;
+      vtab_rd_valid_i           : in  std_logic;
+      port_almost_full_o        : out std_logic;
+      port_full_o               : out std_logic;
+      tru_req_o                 : out  t_tru_request;
+      tru_rsp_i                 : in   t_tru_response;  
+      tru_enabled_i             : in   std_logic;
+      rtu_str_config_i          : in t_rtu_special_traffic_config;
+      rtu_gcr_g_ena_i           : in std_logic;  
+      rtu_pcr_pass_bpdu_i       : in std_logic_vector(c_rtu_max_ports -1 downto 0);
+      rtu_pcr_pass_all_i        : in std_logic_vector(c_rtu_max_ports -1 downto 0);
+      rtu_pcr_fix_prio_i        : in std_logic;
+      rtu_pcr_prio_val_i        : in std_logic_vector(c_wrsw_prio_width - 1 downto 0)
+    );
+  end component;
 ----------------------------------------------------------------------------------------
 --| Round Robin Arbiter
 ----------------------------------------------------------------------------------------
@@ -310,7 +398,33 @@ package rtu_private_pkg is
       rtu_crc_poly_i       : in  std_logic_vector(c_wrsw_crc_width - 1 downto 0));
   end component;
 
+
   component rtu_wishbone_slave
+    port (
+      rst_n_i         : in  std_logic;
+      clk_sys_i       : in  std_logic;
+      wb_adr_i        : in  std_logic_vector(8 downto 0);
+      wb_dat_i        : in  std_logic_vector(31 downto 0);
+      wb_dat_o        : out std_logic_vector(31 downto 0);
+      wb_cyc_i        : in  std_logic;
+      wb_sel_i        : in  std_logic_vector(3 downto 0);
+      wb_stb_i        : in  std_logic;
+      wb_we_i         : in  std_logic;
+      wb_ack_o        : out std_logic;
+      wb_stall_o      : out std_logic;
+      wb_int_o        : out std_logic;
+      clk_match_i     : in  std_logic;
+      irq_nempty_i    : in  std_logic;
+      rtu_aram_addr_i : in  std_logic_vector(7 downto 0);
+      rtu_aram_data_o : out std_logic_vector(31 downto 0);
+      rtu_aram_rd_i   : in  std_logic;
+      rtu_aram_data_i : in  std_logic_vector(31 downto 0);
+      rtu_aram_wr_i   : in  std_logic;
+      regs_i          : in  t_rtu_in_registers;
+      regs_o          : out t_rtu_out_registers);
+  end component;
+
+  component rtu_wishbone_slave_old
     port (
       rst_n_i         : in  std_logic;
       clk_sys_i       : in  std_logic;
@@ -377,6 +491,175 @@ package body rtu_private_pkg is
     return t;
   end function f_unmarshall_htab_entry;
 
+------------------ new stuff ------------------------
+
+   function f_mac_in_range(in_mac, in_mac_lower, in_mac_upper   : std_logic_vector(47 downto 0)
+                                                     ) return std_logic is
+     variable ret : std_logic;
+   begin
+     
+     ret := '0';
+     if((in_mac <= in_mac_upper) and (in_mac >= in_mac_lower)) then
+       ret :='1';
+     end if;
+
+     return ret;
+   end function f_mac_in_range;
+
+   function f_fast_match_mac_lookup(match_config : t_rtu_special_traffic_config;
+                                     in_mac       : std_logic_vector(47 downto 0)
+                                     ) return std_logic is
+     variable ret : std_logic;
+   begin
+     
+     ret := '0';
+     
+     -- Braodcast
+     if(in_mac = x"FFFFFFFFFFFF") then
+       ret := '1';
+     end if;
+     
+     -- pre-configured destination MAC
+     for i in 0 to c_ff_single_macs_number-1 loop
+       if(match_config.single_macs_valid(i) = '1' and in_mac = match_config.single_macs(i)) then
+         ret := '1';
+       end if;
+     end loop;
+     
+     -- pre-configured range of destination addresses
+     if(match_config.macs_range_valid = '1') then
+       if((in_mac <= match_config.macs_range_up) and (in_mac >= match_config.macs_range_down)) then
+         ret :='1';
+       end if;
+     end if;
+
+     return ret;
+   end function f_fast_match_mac_lookup;
+
+
+  function f_pick (
+    condition : boolean;
+    w_true    : std_logic_vector;
+    w_false   : std_logic_vector) return std_logic_vector is
+
+  begin
+    if(condition) then
+      return w_true;
+    else
+      return w_false;
+    end if;
+  end function f_pick;
+
+  function f_fast_match_response(vlan_entry      : t_rtu_vlan_tab_entry;
+                                 rq_prio         : std_logic_vector;
+                                 rq_has_prio     : std_logic;
+                                 pcr_pass_all    : std_logic_vector;
+                                 port_mask_width : integer) 
+                                 return t_match_response is
+    variable rsp : t_match_response;
+  begin
+    ------- mask -----------
+    rsp.port_mask := (others =>'0');
+    rsp.port_mask(port_mask_width-1 downto 0) := vlan_entry.port_mask(port_mask_width-1 downto 0) and pcr_pass_all(port_mask_width-1 downto 0);
+    
+    ------- prio ----------
+    if(vlan_entry.has_prio = '1') then -- regardless of vlan_entry.prio_override value
+      rsp.prio    := vlan_entry.prio;
+    elsif(rq_has_prio = '1') then
+      rsp.prio    := rq_prio;
+    else
+      rsp.prio    := (others =>'0');      
+    end if;
+    
+    ------ drop ----------
+    rsp.drop   := vlan_entry.drop;
+    ------ bpud -----------
+    rsp.bpdu   := '0';
+    rsp.valid  := '0';
+    
+    return rsp;
+    
+  end function f_fast_match_response;
+
+  function f_set_bit(data     : std_logic_vector;
+                     bit_val  : std_logic;
+                     bit_num  : integer          ) return std_logic_vector is
+    variable ret : std_logic_vector(data'length-1 downto 0);
+  begin
+    ret          := data;
+    ret(bit_num) := bit_val;
+    return ret;
+  end function f_set_bit;
+
+--   function doPortMask(
+--               s_fast_match                                         : std_logic: -- info what kind of input we have
+--               s_rtu_pcr_pass_bpdu, s_rtu_pcr_pass_all              : std_logic; -- general config
+--               s_dst_entry_is_bpdu                                  : std_logic; -- info from full match
+--               s_vlan_prio_override, s_vlan_has_prio, s_rq_has_prio : std_logic; -- validity of different priorities
+--               s_rq_prio, s_vlan_prio                               : std_logic_vector; -- different priorities
+--               s_vlan_port_mask, s_full_match_mask, s_tru_mask      : std_logic_vector; -- different masks
+--               s_vlan_drop, s_tru_drop                              : std_logic;
+--               ) return t_rtu_response is
+--     variable s_rsp_drop          : t_rtu_response;
+-- 
+--    begin 
+--    
+--            rsp.valid             := '1';
+--            rsp.port_mask         := (others=>'0');
+--            rsp.prio              := (others=>'0');
+--            rsp.drop              :='0';
+-- 
+--            if(s_fast_match = '1')  then -------------- we need to do some additional work (normally done in match)
+--               
+--               if(s_rtu_pcr_pass_all = '0') then -- we assume here that the PBDU is forwarded to FULL Match
+--                 rsp.port_mask        := (others => '0');
+--                 rsp.prio             := (others => '0');
+--                 rsp.drop             := '1';
+--                 rsp.valid            := '1';
+-- 
+--               else
+-- 
+--                 rsp.port_mask       := s_vlan_port_mask;
+-- 
+--                 if (s_vlan_prio_override = '1' and s_vlan_has_prio = '1') then
+--                   -- take vlan priority
+--                   rsp.prio := s_vlan_prio;
+--                 else
+--                   if (s_vlan_has_prio = '1') then
+--                     -- take vlan priority
+--                     rsp.prio := s_vlan_prio;
+--                   elsif (s_port_has_prio = '1') then
+--                     -- take port priority
+--                     rsp.prio := s_port_prio;
+--                   else
+--                     -- nothning matching
+--                     rsp.prio := (others => '0');
+--                   end if;  -- if (s_vlan_has_prio = '1') then
+--                 end if;  -- (s_vlan_prio_override = '1' and s_vlan_has_prio = '1') 
+--               end if;  -- (s_rtu_pcr_pass_all = '0') 
+--               
+--               rsp.port_mask := rsp.port_mask and s_tru_mask;
+--               rsp.drop      := s_tru_drop or s_vlan_drop;
+--               ---
+--               ---                    POSSIBLE BUG 
+--               --- what about if the source port is not in the VLAN ??
+--               ---
+--               
+--            end if; --   if(s_fast_match = '1') 
+--            
+--            -- we had normal match and it was BPDU pck, so it should be sent to all
+--            -- ports, regardless of TRU decision
+--            if(s_dst_entry_is_bpdu = '1' and s_fast_match = '0') then
+--              rsp.port_mask := s_full_match_mask;
+--            elsif(s_dst_entry_is_bpdu = '0' and s_fast_match = '0') then
+--              rsp.port_mask := s_full_match_mask and s_tru_mask;
+--            else
+--              rsp.port_mask := rsp.port_mask and s_tru_mask
+--            end if;
+-- 
+-- 
+--   
+--   end doPortMask;
 
 
 end rtu_private_pkg;

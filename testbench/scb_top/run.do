@@ -4,6 +4,7 @@ vsim -L secureip -L unisim -t 10fs work.main -voptargs="+acc" +nowarn8684 +nowar
 set StdArithNoWarnings 1
 set NumericStdNoWarnings 1
 do wave.do
+#do wave-master.do
 #do wave-allports.do
 radix -hexadecimal
 run 4000us
