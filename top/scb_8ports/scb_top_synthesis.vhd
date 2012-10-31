@@ -228,7 +228,8 @@ architecture Behavioral of scb_top_synthesis is
     generic (
       g_num_ports       : integer;
       g_simulation      : boolean;
-      g_without_network : boolean);
+      g_without_network : boolean;
+      g_with_TRU        : boolean);
     port (
       sys_rst_n_i         : in  std_logic;
       clk_startup_i       : in  std_logic;
@@ -549,7 +550,8 @@ begin
     generic map (
       g_num_ports       => c_NUM_PORTS,
       g_simulation      => g_simulation,
-      g_without_network => false)
+      g_without_network => false,
+      g_with_TRU        => true)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_sys_startup,
