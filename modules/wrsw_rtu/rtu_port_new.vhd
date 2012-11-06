@@ -39,21 +39,24 @@
 --
 -------------------------------------------------------------------------------
 --TODO:
---1) configure whether to drop or fast forward on full_match fifo_full (rq_fifo_full_i)
---2) add handling the "impossible" situation when the full_match is read and the
---   fast_match is not ready (port_state=S_FAST_MATCH)
+--1) change drop/flood - drop by default
+--2) might need to change RR of full match (change to strobe)
+--3) fill in aboard from extrnal (SWcore) source
 -------------------------------------------------------------------------------
 -- Revisions  :
 -- Date        Version  Author          Description
 -- 2010-05-08  1.0      lipinskimm      Created
--- 2010-05-29  1.1      lipinskimm     modified FSM, added rtu_gcr_g_ena_i
+-- 2010-05-29  1.1      lipinskimm      modified FSM, added rtu_gcr_g_ena_i
 -- 2010-12-05  1.2      twlostow        added independent output FIFOs
 -- 2012-05-20  1.3      mlipinsk        making this stuff deterministic !!!
+-- 2012-11-06  1.4      mlipinsk        literally, re-writing: adding i/f with fast_match, mirroring...
 -------------------------------------------------------------------------------
 
 
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.math_real.CEIL;
+use ieee.math_real.log2;
 use ieee.numeric_std.all;
 
 use work.rtu_private_pkg.all;
@@ -65,6 +68,7 @@ entity rtu_port_new is
   generic(
     g_num_ports        : integer;
     g_port_mask_bits   : integer; -- usually: g_num_ports + 1 for CPU
+    g_match_req_fifo_size : integer;
     g_port_index       : integer
     );
   port(
@@ -85,43 +89,32 @@ entity rtu_port_new is
     rtu_rsp_ack_i            : in std_logic;
 
     -------------------------------------------------------------------------------
-    -- request FIFO interfacing
+    -- Full Match I/F
     -------------------------------------------------------------------------------
-
-    rq_fifo_wr_access_o      : out std_logic;
-    rq_fifo_wr_data_o        : out std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
-    rq_fifo_wr_done_i        : in  std_logic;
-    rq_fifo_full_i           : in  std_logic;
-    -------------------------------------------------------------------------------
-    -- response FIFO interfacing
-    -------------------------------------------------------------------------------
-    
-    match_data_i             : in std_logic_vector(g_num_ports + c_PACKED_RESPONSE_WIDTH - 1 downto 0);
-    match_data_valid_i       : in std_logic;
+    -- request
+    full_match_wr_req_o      : out std_logic;  -- shall be high till done (supressed by done)
+    full_match_wr_data_o     : out std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
+    full_match_wr_done_i     : in  std_logic;
+    full_match_wr_full_i     : in  std_logic;
+    -- response
+    full_match_rd_data_i     : in std_logic_vector(g_num_ports + c_PACKED_RESPONSE_WIDTH - 1 downto 0);
+    full_match_rd_valid_i    : in std_logic;
 
     -------------------------------------------------------------------------------
-    -- VLAN read
+    -- Fast Match
     -------------------------------------------------------------------------------
-    -- request access
-    vtab_rd_addr_o            : out std_logic_vector(c_wrsw_vid_width-1 downto 0);
-    vtab_rd_req_o             : out std_logic;
-    vtab_rd_entry_i           : in  t_rtu_vlan_tab_entry;
-    vtab_rd_valid_i           : in  std_logic;
+    -- request
+    fast_match_wr_req_o      : out std_logic;   -- shall be a strobe
+    fast_match_wr_data_o     : out t_rtu_request;
+    -- response
+    fast_match_rd_valid_i    : in std_logic;
+    fast_match_rd_data_i     : in t_match_response;
     -------------------------------------------------------------------------------
     -- REQUEST COUNTER 
     -------------------------------------------------------------------------------
-
     port_almost_full_o        : out std_logic;
     port_full_o               : out std_logic;
 
-    -------------------------------------------------------------------------------
-    -- REQUEST COUNTER 
-    -------------------------------------------------------------------------------
-
-    tru_req_o                 : out  t_tru_request;
-    tru_rsp_i                 : in   t_tru_response;  
-    tru_enabled_i             : in   std_logic;
-    
     -------------------------------------------------------------------------------
     -- control register
     ------------------------------------------------------------------------------- 
@@ -138,398 +131,277 @@ end rtu_port_new;
 
 architecture behavioral of rtu_port_new is
 
---- RTU FSM state definitions
-  type t_fast_match_state   is (S_IDLE, 
-                                S_VLAN_ACCESS_REQ,
-                                S_VLAN_RSP_TRU_ACCESS, 
-                                S_TRU_PROCESSING, 
-                                S_FAST_MATCH_READY);
-
   type t_rtu_port_rq_states is (S_IDLE, 
-                                S_FULL_MATCH, 
-                                S_WAIT_FULL_MATCH,
                                 S_FAST_MATCH, 
-                                S_BPDU_MATCH, 
+                                S_FULL_MATCH,                                 
                                 S_FINAL_MASK,
                                 S_RESPONSE);
 
-  signal fast_match_state            : t_fast_match_state;
-  signal port_state                  : t_rtu_port_rq_states;
-  
-  -- port control:
   signal port_pcr_pass_bpdu          : std_logic;
   signal port_pcr_pass_all           : std_logic;
-  
-  -- full match input modified by port config (if necessary)
   signal rq_fifo_d                   : std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
-  signal rq_fifo_d1                  : std_logic_vector(c_PACKED_REQUEST_WIDTH - 1 downto 0);
-  signal rq_prio                     : std_logic_vector(2 downto 0); 
-  signal rq_has_prio                 : std_logic;
-  signal rq_prio_mask                : std_logic_vector(7 downto 0);
-  signal rq_fifo_wr_access           : std_logic;            -- control input fifo
-  signal rq_fifo_wr_access_int       : std_logic; -- this is just to know when we have request, 
-                                                  -- to mask unwanted match_engine responses 
-                                                  -- (they should not happen, but they do due 
-                                                  -- to bugs...)
-  signal rq_rsp_cnt                  : unsigned(2 downto 0); -- count rq/rsp
-
-  --- fast match stuff
-  signal vtab_rd_req                 : std_logic; -- request access to VLAN tabl
-  signal vtab_rd_entry_d             : t_rtu_vlan_tab_entry; -- VLAN tab response
-  signal rsp_fast_match              : t_match_response;     -- fast match response
-  signal rsp_full_match              : t_match_response;     -- full match response
-  signal tru_rsp                     : t_tru_response;       -- response from tru
-  signal tru_rsp_valid               : std_logic;
-  -------------  final response
-  signal rsp_raw                     : t_match_response;     -- intermedaite stage to final response
-  signal rsp                         : t_rtu_response;       -- final response -- output to SWcore
-
-  --- controlling the process
-  signal special_address             : std_logic; -- address which is considered for fast match
-  signal nofw_traffic                : std_logic; -- no-forward traffic
-  signal hp_traffic                  : std_logic; -- indicates that the processed frame
-                                                  -- is recognzied as High Priority    : std_logic;
-  signal hp_traffic_d                : std_logic;
-  signal ptp_traffic                 : std_logic;
-  signal br_traffic                  : std_logic; -- indicates that the frame is braodcast
-  signal port_enabled                : std_logic; -- port enabled
-  signal port_nofw_enabled           : std_logic; -- port enabled for no-forward traffic :
-                                                  -- fully enabled or enabled only for BPDU
-  signal start_no_match              : std_logic; -- port disabled on request from SWcore
-  signal start_nofw_match            : std_logic; -- we perform a quick match for no-forward-traffic
-                                                  -- the NIC's port is indicated by config
-  signal start_fast_match            : std_logic; -- frame quilifies for fast match
-  signal start_full_match            : std_logic; -- frame qualifies for full match
-  signal wait_full_match             : std_logic;
---   signal mirrored_port               : std_logic; -- traffic on this port is mirrored onto 
-                                                  -- another port (indicated by config mask)
-
+  signal src_port_mask               : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper   
+  signal fast_and_full_mask          : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper   
   signal mirror_port_dst             : std_logic;
   signal mirror_port_src_rx          : std_logic;
   signal mirror_port_src_tx          : std_logic;
-
-  signal start_full_match_delayed    : std_logic;
-  signal src_port_mask               : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
+  signal match_required              : std_logic;
+  signal port_nofw_only              : std_logic;
+  signal full_match_in               : t_match_response;
+  signal fast_match                  : t_match_response;
+  signal full_match                  : t_match_response;  
+  signal fast_match_wr_req           : std_logic;
+  signal full_match_wr_req           : std_logic;
+  signal none_match_wr_req           : std_logic;
+  signal full_match_valid            : std_logic;
+  signal fast_match_rd_valid         : std_logic;
+  signal rq_prio                     : std_logic_vector(2 downto 0); 
+  signal rq_has_prio                 : std_logic;
+  signal rtu_req_d                   : t_rtu_request;
+  signal full_match_wr_req_d         : std_logic;
+  signal fast_match_wr_req_d         : std_logic;
+  signal delayed_full_match_wr_req   : std_logic;
+  signal rq_rsp_cnt                  : unsigned(integer(CEIL(LOG2(real(g_match_req_fifo_size ))))-1 downto 0);
+  signal rsp                         : t_rtu_response;
+  signal rtu_idle                    : std_logic;
   signal forwarding_mask             : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
   signal forwarding_and_mirror_mask  : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
   signal drop                        : std_logic;
-  
-  signal full_match_in               : t_match_response;
+  signal prio                        : std_logic_vector(2 downto 0); 
+  signal hp                          : std_logic;
+  signal port_state                  : t_rtu_port_rq_states;
   signal full_match_rsp_port         : std_logic_vector(g_num_ports-1 downto 0);
   signal full_match_rsp_prio         : std_logic_vector(c_wrsw_prio_width-1 downto 0);
-  
-  signal rtu_idle                    : std_logic;
-  
-  signal tru_req                     : t_tru_request;
+  signal full_match_req_in_progress  : std_logic;
+  signal full_match_aboard           : std_logic;
+  signal full_match_aboard_d         : std_logic;
+  signal aboard_possible      : std_logic;
   -- VHDL -- lovn' it
   signal zeros                       : std_logic_vector(47 downto 0);
+  
+  constant c_match_zero: t_match_response := (
+    valid     => '0',
+    port_mask => (others =>'0'),
+    prio      => (others =>'0'),
+    drop      => '0',
+    nf        => '0',
+    ff        => '0',
+    hp        => '0');
+
+  constant c_rtu_rsp_zero : t_rtu_response := (
+    valid     => '0',
+    port_mask => (others =>'0'),
+    prio      => (others =>'0'),
+    drop      => '0',
+    hp        => '0');
+
+  constant c_rtu_rsp_drop : t_rtu_response := (
+    valid     => '1',
+    port_mask => (others =>'0'),
+    prio      => (others =>'0'),
+    drop      => '1',
+    hp        => '0');
+
+
 begin
 
   zeros              <= (others => '0');
 
+  
   port_pcr_pass_bpdu <= rtu_pcr_pass_bpdu_i(g_port_index);
   port_pcr_pass_all  <= rtu_pcr_pass_all_i(g_port_index);
 
-  rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '0', rtu_rq_i.prio, rtu_pcr_prio_val_i);
-  rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_rq_i.has_prio);
-  rq_prio_mask       <= f_set_bit(zeros(7 downto 0),'1',to_integer(unsigned(rq_prio)));   
-  -- create request fifo input data
-  rq_fifo_d        <=	
-    rtu_rq_i.has_vid	
-    & rq_prio       -- modified by per-port config
-    & rq_has_prio   -- modified by per-port config
-    & rtu_rq_i.vid
-    & rtu_rq_i.dmac
-    & rtu_rq_i.smac;
+  -- create request fifo input data (registered data)
+  rq_fifo_d        <=
+    rtu_req_d.has_vid  &
+    rtu_req_d.prio     &  -- modified by per-port config
+    rtu_req_d.has_prio &  -- modified by per-port config
+    rtu_req_d.vid      &
+    rtu_req_d.dmac     &
+    rtu_req_d.smac;
 
-  rq_fifo_wr_data_o   <= rq_fifo_d1;          --_reg;
-
-  special_address  <=  f_fast_match_mac_lookup(rtu_str_config_i, rtu_rq_i.dmac);
-
-  -- indicates that he frame's destination address is within the range of addresses
-  -- which shall never be forwarded by the switch but it is also send on the ports
-  -- which are not forwarding. 
-  -- Here, we are msotly interested in BPDUs
-  ptp_traffic      <= '1' when (rtu_rq_i.dmac = x"011b19000000") else '0';
-
-  -- 
-  nofw_traffic     <= f_mac_in_range(rtu_rq_i.dmac,bpd_range_lower,bpd_range_upper) or ptp_traffic; 
-
-  -- indicates that the frame being handled is High Priority (broadcast/mutlicast + 
-  -- proper priority/priorities  
-  hp_traffic       <= '1' when (special_address='1' and rq_has_prio = '1' and 
-                                (rtu_str_config_i.hp_prio and rq_prio_mask) /= zeros(7 downto 0) ) else
-                      '1' when (special_address='1' and rtu_rq_i.has_prio = '0' and 
-                                rtu_str_config_i.hp_prio = x"00") else
-                      '0';
-  br_traffic       <= '1' when (rtu_rq_i.dmac = x"FFFFFFFFFFFF") else '0';
-  port_enabled     <= '0' when (rtu_gcr_g_ena_i     = '0' or 
-                                port_pcr_pass_all   = '0' or 
-                                mirror_port_dst     = '1')  else
-                      '1';
-
-  port_nofw_enabled<= '0' when (rtu_gcr_g_ena_i    ='0' or mirror_port_dst     = '1') else
-                      '1' when (port_pcr_pass_bpdu ='0' or port_pcr_pass_all   = '0') else
-                      '1';
-
-  -- the port is disabled for normal traffic (excluding link-based == never-forwarded, bpdu)
-  start_no_match   <= (not port_enabled) and rtu_rq_i.valid;
-
-  -- the incoming frame matches the never-forwarded-frames characterstics and we have 
-  -- special configuraiton for such frames (NIC port indicated)
-  -- the frame is BPDU (in general no-forward-frames) and quick_bpdu_forwarding is defined 
-  -- (mask in config), otherwise use "full match" - this is partly for backward compatibility 
-  -- but also for being able
-  -- to do some more magic
-  start_nofw_match <= '1' when (port_nofw_enabled   ='1' and nofw_traffic = '1' and 
-                                rtu_str_config_i.bpd_forward_mask /= zeros(c_rtu_max_ports-1 downto 0)) else
-                      '0';
-  -- the incoming frame match the fast_match characteristics
-  --start_fast_match <= port_enabled and (not vtab_rd_req) and rtu_rq_i.valid and (not start_nofw_match);
-  start_fast_match <= port_enabled and rtu_idle and rtu_rq_i.valid and (not start_nofw_match);
-  
-  -- the incoming frame qualifies for full match
-  start_full_match <= '1' when (start_fast_match      = '1' and      -- fast match but match "free"
-                                special_address       = '1' and 
-                                rq_fifo_wr_access_int = '0' and
-                                rq_fifo_full_i        = '0' and
-                                rq_rsp_cnt            =  0)     else
-                      '1' when (start_fast_match      = '1' and      -- not a fast match
-                                special_address       = '0' and
-                                rq_fifo_full_i        = '0')    else
-                      '0';
-  
-  wait_full_match  <= '1' when (start_fast_match      = '1' and      -- need full match but 
-                                special_address       = '0' and      -- reqFiFo full
-                                rq_fifo_full_i        = '1')    else
-                      '0';
   -- turn port number into bit vector
-  src_port_mask    <= f_set_bit(zeros(c_rtu_max_ports-1 downto 0),'1',g_port_index);
+  src_port_mask       <= f_set_bit(zeros(c_rtu_max_ports-1 downto 0),'1',g_port_index);
 
   -- check whether this port is a port which mirrors other port(s). In such case any incoming
   -- traffic is not allowed and forwarded is only mirror traffic     
-  mirror_port_dst     <= '1' when ((src_port_mask and rtu_str_config_i.mirror_port_dst) /= 
+  mirror_port_dst     <= '0' when (rtu_str_config_i.mr_ena = '0') else  -- disabled
+                         '1' when ((src_port_mask and rtu_str_config_i.mirror_port_dst) /= 
                                       zeros(c_rtu_max_ports-1 downto 0)) else
                          '0';
+
   -- ingress traffic to this port (rx) is forwarded to mirror port if such port exists 
-  mirror_port_src_rx  <= '1' when ((src_port_mask and rtu_str_config_i.mirror_port_src_rx) /=
+  mirror_port_src_rx  <= '0' when (rtu_str_config_i.mr_ena = '0') else  -- disabled
+                         '1' when ((src_port_mask and rtu_str_config_i.mirror_port_src_rx) /=
                                      zeros(c_rtu_max_ports-1 downto 0)  ) else
                          '0';
+
   -- traffic from this port is forwarded (tx) to the port being mirrord , so we forward it
   -- also to mirror port (mirror_port_dst)
-  mirror_port_src_tx  <= '1' when ((forwarding_mask and rtu_str_config_i.mirror_port_src_tx) /=
+  mirror_port_src_tx  <= '0' when (rtu_str_config_i.mr_ena = '0') else  -- disabled
+                         '1' when ((forwarding_mask and rtu_str_config_i.mirror_port_src_tx) /=
                                      zeros(c_rtu_max_ports-1 downto 0)  ) else
                          '0';
-
-
   
-  --
---   mirrored_port       <= '1' when ((src_port_mask and rtu_str_config_i.mirrored_port_src) /=
---                                      zeros(c_rtu_max_ports-1 downto 0) and 
---                                   (src_port_mask and rtu_str_config_i.mirrored_port_dst) = 
---                                       zeros(c_rtu_max_ports-1 downto 0) ) else
---                       '0';
-  
-  f_unpack5(match_data_i, 
-           full_match_in.bpdu,
+  -- port enabled for all traffic (forward-able and link-limited)
+  match_required      <= '0' when (rtu_gcr_g_ena_i     = '0' or     -- drop ingress traffic if RTU disabled
+                                   mirror_port_dst     = '1')  else -- drop ingress traffic if this is mirror port
+                         '1';
+
+  -- port enabled only for link-limited traffic
+--   port_nofw_only      <= '1' when (rtu_gcr_g_ena_i    = '1' and 
+--                                    port_pcr_pass_all  = '0' and
+--                                    port_pcr_pass_bpdu = '1' and 
+--                                    mirror_port_dst    = '0')    else
+--                          '0' ;
+
+  -- unpack data from match engine into nice record
+  f_unpack5(full_match_rd_data_i, 
+           full_match_in.nf,
            full_match_in.port_mask, 
            full_match_in.drop,  
            full_match_rsp_prio,
            full_match_rsp_port);
+
+  -- some bit optimization :)
   full_match_in.prio(c_wrsw_prio_width-1 downto 0)  <= full_match_rsp_prio;
-  full_match_in.valid                               <= match_data_valid_i and full_match_rsp_port(g_port_index);
   
+  -- valid Match Engine response for this port
+  full_match_in.valid                               <= full_match_rd_valid_i and 
+                                                       full_match_rsp_port(g_port_index);
+  full_match_in.ff   <= '0';  -- full mutch does not provide this info (reserved for fast match)
+  full_match_in.hp   <= '0';  -- full mutch does not provide this info (reserved for fast match)
   
-  vtab_rd_addr_o     <= rtu_rq_i.vid when (rtu_rq_i.has_vid = '1' and start_fast_match = '1') else
-                        (others =>'0'); 
-  vtab_rd_req        <= start_fast_match and rtu_idle;
+  -- requrest fast match (almost always)
+  fast_match_wr_req <= match_required and rtu_rq_i.valid;
   
-  rtu_idle_o         <= rtu_idle;-- and not rq_fifo_full_i;
+  -- request full match (only if:
+  full_match_wr_req <= '1' when (fast_match_wr_req    = '1' and        -- fast match is required and
+                                 full_match_wr_full_i = '0' and        -- full mtach is not stuck
+                                 rq_rsp_cnt           =  0)       else -- we don't process already full mach for this port
+                       '1' when (full_match_wr_req_d  = '1')      else -- registered request
+                       '1' when (delayed_full_match_wr_req = '1') else -- full match was busy at the beginning, we requrestd when it freed (later the usual)
+                       '0';
+
+  -- the request is on disabled RTU /mirrored port so we don't bother with any match (full/fast)
+  none_match_wr_req  <= (not match_required) and rtu_rq_i.valid;
   
-  tru_rsp_valid      <= tru_rsp_i.valid and tru_rsp_i.respMask(g_port_index);
+  full_match_valid   <= '1' when (full_match_in.valid   = '1' and -- full mach resp valid
+                                  rq_rsp_cnt            =  1  and 
+                                  full_match_req_in_progress = '1') else-- it is the right resp
+                        '0';
+  
+  -- filter out responses for other ports
+  fast_match_rd_valid<= fast_match_rd_valid_i and fast_match_rd_data_i.valid;
+
+  -- aboard signal (internal/external) shall take effect only in FULL_MATCH state, in other states:
+  -- * IDLE/FINAL_MASK/RESPONSE - useless, we have nothing to aboard (in FINAL_MASK it can be 
+  --                              disallowed when waiting for SWcore to ack response)
+  -- * FAST_MATCH/FINAL_MASK (waiting for SWcore ack) - impossible
+  aboard_possible  <= '1' when (port_state = S_FULL_MATCH) else '0';
+  
+  -- request to aboard full match
+  full_match_aboard       <= (not full_match_valid) and    -- suppress when we have replay from full match
+                            ((aboard_possible and fast_match_wr_req) or -- new request when full match busy
+                             (rtu_rq_aboard_i)); -- other externa, e.g. from swcore
   --------------------------------------------------------------------------------------------
-  -- FSM: making FAST MATCH - reading VLAN and making forwarding decision based on this only
-  -- + reading TRU, 
+  -- register input request to make it available for both matches (full/fast)
+  --------------------------------------------------------------------------------------------
+  -- this gets registered for furthe processing (full/fast match)
+  rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '0', rtu_req_d.prio, rtu_pcr_prio_val_i);
+  rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_req_d.has_prio);
+  p_register_req: process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        rtu_req_d.valid     <= '0';
+        rtu_req_d.smac      <= (others =>'0');
+        rtu_req_d.dmac      <= (others =>'0');
+        rtu_req_d.vid       <= (others =>'0');
+        rtu_req_d.has_vid   <= '0';
+        rtu_req_d.prio      <= (others =>'0');
+        rtu_req_d.has_prio  <= '0';
+      else    
+        if(fast_match_wr_req = '1') then
+          rtu_req_d.valid     <= rtu_rq_i.valid;
+          rtu_req_d.smac      <= rtu_rq_i.smac;
+          rtu_req_d.dmac      <= rtu_rq_i.dmac;
+          rtu_req_d.vid       <= rtu_rq_i.vid;
+          rtu_req_d.has_vid   <= rtu_rq_i.has_vid;
+          rtu_req_d.prio      <= rq_prio;
+          rtu_req_d.has_prio  <= rq_has_prio;
+        end if;
+      end if;
+    end if;
+  end process p_register_req;
+  
+  --------------------------------------------------------------------------------------------
+  -- The request to Fast Match is done directly from input rtu_req, her we just track
+  -- current request (register req signal till response available)
   --------------------------------------------------------------------------------------------
   p_ctr_fast_match: process(clk_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
---         vtab_rd_addr_o            <= (others =>'0');
---         vtab_rd_req               <= '0';
-        rsp_fast_match.valid      <= '0';                 
-        rsp_fast_match.port_mask  <= (others =>'0');
-        rsp_fast_match.prio       <= (others =>'0');
-        rsp_fast_match.drop       <= '0';
-        rsp_fast_match.bpdu       <= '0';
-        tru_req.valid           <= '0';
-        tru_req.smac            <= (others=>'0');
-        tru_req.dmac            <= (others=>'0');
-        tru_req.fid             <= (others=>'0');
-        tru_req.isHP            <= '0';
-        tru_req.isBR            <= '0';
-        tru_req.reqMask         <= (others=>'0');
-        
-        tru_rsp.valid           <= '0';
-        tru_rsp.port_mask       <= (others=>'0');
-        tru_rsp.drop            <= '0';
-        tru_rsp.respMask        <= (others=>'0');
-        
+          fast_match_wr_req_d <= '0';
+          fast_match                <= c_match_zero;
       else    
-       case fast_match_state is
+        if(fast_match_wr_req = '1') then
+          fast_match_wr_req_d <= '1';
+        elsif(fast_match_wr_req_d = '1' and fast_match_rd_valid = '1') then
+          fast_match_wr_req_d <= '0';
+          fast_match          <= fast_match_rd_data_i;
+        end if;
         
-          ------------------------------------------------------------------------------------
-          --| IDLE: 
-          ------------------------------------------------------------------------------------
-          when S_IDLE =>
-
-             rsp_fast_match.valid      <= '0';                 
-             rsp_fast_match.port_mask  <= (others =>'0');
-             rsp_fast_match.prio       <= (others =>'0');
-             rsp_fast_match.drop       <= '0';
-             rsp_fast_match.bpdu       <= '0';
-
-             if(start_nofw_match = '1') then
-
-               rsp_fast_match.valid      <= '1';                 
-               rsp_fast_match.port_mask  <= rtu_str_config_i.bpd_forward_mask;      
-               rsp_fast_match.prio       <= (others =>'0');
-               rsp_fast_match.drop       <= '0';
-               rsp_fast_match.bpdu       <= '1';
-               fast_match_state          <= S_FAST_MATCH_READY;
-             
-             elsif(start_fast_match = '1') then
-               -- remember TRU stuff
-               tru_req.valid      <= '0';             -- to be set later
-               tru_req.smac       <= rtu_rq_i.smac;
-               tru_req.dmac       <= rtu_rq_i.dmac;
-               tru_req.fid        <= (others => '0'); -- to be set later
-               tru_req.isHP       <= hp_traffic;
-               tru_req.isBR       <= br_traffic;
-               tru_req.reqMask    <= src_port_mask;
-             
---                if(rtu_rq_i.has_vid = '1') then
---                  vtab_rd_addr_o     <= rtu_rq_i.vid;
---                else
---                  vtab_rd_addr_o     <= (others =>'0');
---                end if;
---                vtab_rd_req          <= '1';
-               fast_match_state     <= S_VLAN_ACCESS_REQ;
-             end if;
-
-          ------------------------------------------------------------------------------------
-          --| S_VLAN_ACCESS_REQ:
-          ------------------------------------------------------------------------------------
-          when S_VLAN_ACCESS_REQ =>
---             vtab_rd_req          <= '0';
-            
-            if(vtab_rd_valid_i = '1') then
-              fast_match_state     <= S_VLAN_RSP_TRU_ACCESS;
-               if(tru_enabled_i = '1') then  
-                 tru_req.valid      <= '1';
-               end if;
-            end if;
-
-          ------------------------------------------------------------------------------------
-          --| S_VLAN_ACCESS:
-          ------------------------------------------------------------------------------------
-          when S_VLAN_RSP_TRU_ACCESS =>
-            rsp_fast_match        <= f_fast_match_response(vtab_rd_entry_i,
-                                                            rq_prio,rq_has_prio,
-                                                            rtu_pcr_pass_all_i,
-                                                            g_port_mask_bits);
-            tru_req.valid          <= '0';
-            if(tru_enabled_i = '1') then         
---               tru_req.fid        <= vtab_rd_entry_i.fid;
---               tru_req.valid      <= '1';    
-              fast_match_state     <= S_TRU_PROCESSING;
-            else
-              rsp_fast_match.valid <= '1';   
-              fast_match_state     <= S_FAST_MATCH_READY;
-            end if;
-
-          ------------------------------------------------------------------------------------
-          --| S_TRU_ACCESS: 
-          ------------------------------------------------------------------------------------
-          when S_TRU_PROCESSING =>
-            if(tru_rsp_valid = '1') then
-              tru_rsp               <= tru_rsp_i;
-              fast_match_state      <= S_FAST_MATCH_READY;
-              rsp_fast_match.valid  <= '1'; 
-            end if;
-             
-          ------------------------------------------------------------------------------------
-          --| IDLE: waiting for the request from a port
-          ------------------------------------------------------------------------------------
-          when S_FAST_MATCH_READY =>
-            if(rtu_rsp_ack_i = '1') then
-              fast_match_state     <= S_IDLE;  
-            end if;
-          ------------------------------------------------------------------------------------
-          --| OTHER: 
-          ------------------------------------------------------------------------------------
-          when others => null;
---             vtab_rd_addr_o            <= (others =>'0');
---             vtab_rd_req               <= '0';
-            rsp_fast_match.valid      <= '0';                 
-            rsp_fast_match.port_mask  <= (others =>'0');
-            rsp_fast_match.prio       <= (others =>'0');
-            rsp_fast_match.drop       <= '0';
-            rsp_fast_match.bpdu       <= '0';
-            tru_req.valid           <= '0';
-            tru_req.smac            <= (others=>'0');
-            tru_req.dmac            <= (others=>'0');
-            tru_req.fid             <= (others=>'0');
-            tru_req.isHP            <= '0';
-            tru_req.isBR            <= '0';
-            tru_req.reqMask         <= (others=>'0');       
-            fast_match_state          <= S_IDLE;  
-        --------------------------------------------------------------------------------------
-        end case;
+        
+        
       end if;
     end if;
   end process p_ctr_fast_match;
 
---   tru_req_o <= tru_req;
-  tru_req_o.valid      <= tru_req.valid;
-  tru_req_o.smac       <= tru_req.smac;
-  tru_req_o.dmac       <= tru_req.dmac;
-  tru_req_o.fid        <= vtab_rd_entry_i.fid; -- directly from VLAN TABLE
-  tru_req_o.isHP       <= tru_req.isHP;
-  tru_req_o.isBR       <= tru_req.isBR;
-  tru_req_o.reqMask    <= tru_req.reqMask;  
   --------------------------------------------------------------------------------------------
-  -- making requests to match engine and waiting for responses (FULL MATCH)
+  -- Controlling full match, more tricky ...
+  -- * we need  to have wr_req_o high till request is accepted (wr_done)
+  -- * tracking (registering) aboard signal
+  -- * tracking if the current full match is processed (or some old one)
+  -- * registering valid full_match response
   --------------------------------------------------------------------------------------------
   p_ctr_full_match: process(clk_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        rq_fifo_wr_access      <='0';
-        rq_fifo_wr_access_int  <='0'; -- this is just to know when we have request, to mask
-                                      -- unwanted match_engine responses (they should not 
-                                      -- happen, but they do due to bugs...)
+        full_match_wr_req_d    <= '0';
+        full_match_req_in_progress <= '0';
+        full_match             <= c_match_zero;
+        full_match_aboard_d    <= '0';
       else    
-        rq_fifo_wr_access    <='0';  
+        if(full_match_aboard = '1') then
+          full_match_aboard_d    <= '1';
+        elsif(rsp.valid = '1' and rtu_rsp_ack_i ='1') then
+          full_match_aboard_d    <= '0';
+        end if;
         
-        if(start_full_match = '1' or wait_full_match ='1') then
-          rq_fifo_d1             <= rq_fifo_d; -- that sucks !!
-          if(start_full_match = '1') then
-            rq_fifo_wr_access      <='1';  
-            rq_fifo_wr_access_int  <='1';          
-          end if;
-        elsif(start_full_match_delayed = '1') then 
-          rq_fifo_wr_access      <='1';  
-          rq_fifo_wr_access_int  <='1';                  
-        elsif(full_match_in.valid = '1' and rq_fifo_wr_access_int  ='1') then
-          rq_fifo_wr_access_int  <='0';
-          --------
+        -- request access to fifo
+        if(full_match_wr_req ='1' and full_match_wr_req_d = '0') then
+          full_match_wr_req_d  <= '1';   
+        elsif(full_match_wr_req_d = '1' and full_match_wr_done_i = '1') then 
+          full_match_wr_req_d  <= '0';  
+        end if;
+
+        -- register response
+        if(full_match_wr_req ='1' and full_match_wr_req_d = '0') then
+          full_match_req_in_progress <= '1';
+          full_match                 <= c_match_zero;
+        elsif(full_match_valid = '1' ) then 
+          full_match_req_in_progress <= '0';
+          full_match                 <= full_match_in;
+        elsif(port_state = S_FINAL_MASK) then 
+          full_match_req_in_progress <= '0';
         end if;
       end if;
     end if;
   end process p_ctr_full_match;
 
---   rq_fifo_wr_access <= start_full_match and rtu_idle;
   --------------------------------------------------------------------------------------------
   -- counting scheduled match requets and responses, this is for the case
   -- that we got aboard from SWcore, so that we don't take bad resonse from the match engine
@@ -540,9 +412,9 @@ begin
       if(rst_n_i = '0') then
         rq_rsp_cnt <= (others => '0');
       else    
-        if(start_full_match = '1' and rq_fifo_wr_access ='0' and rq_fifo_wr_access_int  ='0') then
+        if(full_match_wr_req = '1' and full_match_wr_req_d ='0' and full_match_in.valid = '0') then
           rq_rsp_cnt <= rq_rsp_cnt + 1;
-        elsif(full_match_in.valid = '1' and rq_fifo_wr_access_int  ='1') then
+        elsif(full_match_in.valid = '1' ) then
           rq_rsp_cnt <= rq_rsp_cnt - 1;
         end if;
       end if;
@@ -553,7 +425,6 @@ begin
   --| 
   --| (state transitions)       
   -------------------------------------------------------------------------------------------------------------------------
-
   port_fsm_state : process (clk_i)
   begin
     if rising_edge(clk_i) then
@@ -561,96 +432,24 @@ begin
         ------------------------------------------------------------------------------------------------------------ 
         --| RESET
         ------------------------------------------------------------------------------------------------------------     
-
-        -- FSM state
         port_state                <= S_IDLE;
-        rtu_idle                <= '1';    -- indecate idle state of the port
-        rsp_raw.valid             <= '0';
-        rsp_raw.port_mask         <= (others=>'0');
-        rsp_raw.prio              <= (others=>'0');
-        rsp_raw.drop              <='0';
-        rsp_raw.bpdu              <='0';
-        rsp.valid                 <= '0';
-        rsp.port_mask             <= (others =>'0');
-        rsp.prio                  <= (others =>'0');
-        rsp.drop                  <= '0';
-        rsp.hp                    <= '0';
-        hp_traffic_d              <= '0';
-        start_full_match_delayed  <= '0';
+        rsp                       <= c_rtu_rsp_zero;
+--         fast_match                <= c_match_zero;
+        delayed_full_match_wr_req <= '0';
+        ------------------------------------------------------------------------------------------------------------     
       else
         -- FSM
-        case port_state is
-        
+        case port_state is        
           ------------------------------------------------------------------------------------------------------------ 
           --| IDLE: waiting for the request from a port
           ------------------------------------------------------------------------------------------------------------ 
           when S_IDLE =>
             
-            rtu_idle              <= '1';
-            
-            -- It is possible that the port accepts the incoming frame:
-            -- * it is enabled and the forwarding decision is needed
-            -- * it is disabled but the frame is BPDU
-            if(start_fast_match = '1' or start_full_match = '1' or 
-               start_nofw_match = '1' or wait_full_match  = '1') then
-              
-              if(start_nofw_match = '1') then
-                port_state    <= S_BPDU_MATCH;
-              elsif(special_address = '1') then
-                port_state    <= S_FAST_MATCH;
-              elsif(wait_full_match  = '1') then
-                port_state    <= S_WAIT_FULL_MATCH;
-              else
-                port_state    <= S_FULL_MATCH;
-              end if;
-              rtu_idle            <= '0';
-              hp_traffic_d        <= hp_traffic;
-              
-            -- The port is not accepting incoming frame:
-            -- * the RTU is disabled entirely
-            -- * the port is disabled and the incoming frame is not BPUD
-            -- * the port is set to mirror other port, it transmit-only
-            elsif(start_no_match = '1') then
-              rsp.valid           <= '1';
-              rsp.prio            <= (others=>'0');
-              rsp.hp              <= '0';
-              rsp.port_mask       <= (others=>'0');
-              rsp.drop            <='1';   
+            if(fast_match_wr_req = '1') then
+              port_state          <= S_FAST_MATCH;
+            elsif(none_match_wr_req = '1') then
+              rsp                 <= c_rtu_rsp_drop;
               port_state          <= S_RESPONSE;
-              rtu_idle            <= '0';
-            end if;
-
-          ------------------------------------------------------------------------------------------------------------ 
-          --| in this case, the match_req FIFO is full, so we need to wait for it to be emptied.
-          --| We don't simply indicate that the RTU is busy (idle='0') because that would make
-          --| the things undeterministic. If we accept the request even if FIFO is full, the
-          --| SWcore can aboard the request if waiting takes too long in order to avoid
-          --| blocking incoming HP (to be low latency) frames
-          ------------------------------------------------------------------------------------------------------------ 
-          when S_WAIT_FULL_MATCH =>
-            
-            if(rtu_rq_aboard_i = '1') then
-              port_state               <= S_FAST_MATCH; 
-            elsif(rq_fifo_full_i = '0') then
-              start_full_match_delayed <='0';
-              port_state               <= S_FULL_MATCH;
-            end if;
- 
-          ------------------------------------------------------------------------------------------------------------ 
-          --| 
-          ------------------------------------------------------------------------------------------------------------          
-          when S_FULL_MATCH =>
-            
---             if(rq_fifo_wr_access = '1' and rq_fifo_wr_done_i = '1' and full_match_in.valid = '1') then
-            if(full_match_in.valid = '1' and rsp_fast_match.valid = '1') then -- TODO_2
-              rsp_raw             <= full_match_in;
-              port_state          <= S_FINAL_MASK; 
-            elsif(rtu_rq_aboard_i = '1' and rsp_fast_match.valid = '1') then
-              rsp_raw             <= rsp_fast_match; 
-              port_state          <= S_FINAL_MASK;
-            elsif(rtu_rq_aboard_i = '1' and rsp_fast_match.valid = '0') then
-               -- this should not happen -> handle exeption
-               port_state         <= S_FAST_MATCH;               
             end if;
 
           ------------------------------------------------------------------------------------------------------------ 
@@ -658,91 +457,170 @@ begin
           ------------------------------------------------------------------------------------------------------------             
           when S_FAST_MATCH =>
             
-            if(rsp_fast_match.valid = '1') then
-              rsp_raw               <= rsp_fast_match; 
-              port_state            <= S_FINAL_MASK;              
-            elsif(rtu_rq_aboard_i = '1' and rsp_fast_match.valid = '0') then
-               -- this should not happen -> handle exeption
+            if(fast_match_rd_valid = '1' and fast_match_wr_req_d = '1') then
+              -- response the current fast_match request, registered
+             -- fast_match            <= fast_match_rd_data_i;
+              if(fast_match_rd_data_i.nf = '1'   or     -- non-forward (link-limited) e.g.: BPDU
+                 fast_match_rd_data_i.ff = '1'   or     -- fast forward recongized
+                 full_match_aboard       = '1')  then   -- aboard because next frame received
+                -- if we recognizd special traffic or aboard request , we don't need full match
+                port_state          <= S_FINAL_MASK;
+              else
+                -- go for full match (can be abanoned any time)
+                port_state          <= S_FULL_MATCH;
+                if(full_match_req_in_progress = '0' and full_match_wr_full_i = '0' and rq_rsp_cnt =  0) then 
+                  -- if full_match was not requested at the very beginning (directly from input requests)
+                  -- it means that at that time old full_request was handled, check whether we can do 
+                  -- full request now, if yes, go for it
+                  delayed_full_match_wr_req <= '1';
+                end if;
+              end if;
+            elsif(rtu_rq_aboard_i = '1' and fast_match.valid = '0') then
+               -- TODO: this should not happen -> handle exeption              
             end if;
 
           ------------------------------------------------------------------------------------------------------------ 
-          --| 
-          ------------------------------------------------------------------------------------------------------------             
-          when S_BPDU_MATCH =>
-            
-            if(rsp_fast_match.valid = '1') then
-              rsp_raw               <= rsp_fast_match; 
-              port_state            <= S_FINAL_MASK;     
-            end if;           
-              
+          --| Full match :
+          --| * if not requested yet, wait for it to be possible to request
+          --| * wait for answer from Full match engine
+          --| * be ready to aboard at any moment
+          ------------------------------------------------------------------------------------------------------------          
+          when S_FULL_MATCH =>
+          
+            if(full_match_aboard = '0'  and full_match_req_in_progress = '0' and full_match_wr_full_i = '0' and rq_rsp_cnt =  0) then 
+              -- request full match access
+              delayed_full_match_wr_req <= '1';
+            else
+              delayed_full_match_wr_req <= '0';
+            end if;            
+
+            if(full_match_valid = '1') then -- 
+              -- full match done (input data registered in separate process)
+              port_state          <= S_FINAL_MASK; 
+            elsif(full_match_aboard = '1' and fast_match.valid = '1') then
+              -- aboard waiting for full match
+              port_state          <= S_FINAL_MASK;
+            elsif(full_match_aboard = '1' and fast_match.valid = '0') then
+               -- TODO: this should not happen -> handle exeption
+               port_state         <= S_FAST_MATCH;               
+            end if;
+             
           ------------------------------------------------------------------------------------------------------------ 
-          --| 
+          --| prepare final mask based on :
+          --| * fast 
+          --| * (if available) full match
+          --| * (some config settings
           ------------------------------------------------------------------------------------------------------------             
           when S_FINAL_MASK =>
-
-            rsp.valid             <= '1';
-            rsp.prio              <= rsp_raw.prio;
-            rsp.hp                <= hp_traffic_d;   
             
-            if(mirror_port_src_rx = '1' or mirror_port_src_tx = '1') then
-              if(drop = '1') then
-                rsp.port_mask     <= f_set_bit(rtu_str_config_i.mirror_port_dst,'0',g_port_index) ;
+            if(rsp.valid   = '0') then
+              rsp.valid             <= '1';
+              rsp.prio              <= prio;
+              rsp.hp                <= hp;   
+              
+              if(mirror_port_src_rx = '1' or mirror_port_src_tx = '1') then
+                -- if mirroring is enabled, and this port is source of mirror traffic, we don't drop
+                -- the traffic, 
+                if(drop = '1') then
+                  -- forward only to the mirror (dst) port
+                  -- (eliminate self-forward)
+                  rsp.port_mask     <= f_set_bit(rtu_str_config_i.mirror_port_dst,'0',g_port_index) ;
+                else
+                  -- forward to "normal forwarding ports" + mirror (dst) port
+                  -- (eliminate self-forward)
+                  rsp.port_mask     <= f_set_bit(forwarding_and_mirror_mask,'0',g_port_index); 
+                end if;
+                rsp.drop          <= '0';
               else
-                rsp.port_mask     <= f_set_bit(forwarding_and_mirror_mask,'0',g_port_index) ;
+                -- normal forwarding
+                -- (eliminate self-forward)
+                rsp.port_mask       <= f_set_bit(forwarding_mask,'0',g_port_index) ; 
+                rsp.drop            <= drop;            
               end if;
-              rsp.drop          <= '0';
-            else
-              rsp.port_mask       <= f_set_bit(forwarding_mask,'0',g_port_index) ;              
-              rsp.drop            <= drop;            
-            end if;
             
---             if(tru_enabled_i = '0' or rsp_raw.bpdu = '1') then
---               -- don't appply TRU decision if TRU is disabled or if it's BPDU frame
---               rsp.port_mask     <= forwarding_mask;
---               rsp.drop          <= rsp_raw.drop;
---             else
---               rsp.port_mask     <= forwarding_mask and tru_rsp.port_mask;
---               rsp.drop          <= rsp_raw.drop or tru_rsp.drop;
---             end if;
-            port_state          <= S_RESPONSE;
-
+              port_state          <= S_RESPONSE;
+             end if;
           ------------------------------------------------------------------------------------------------------------ 
-          --| 
+          --| in this state the answer is made available on the output (rtu_rsp_o). it is available until
+          --| the reception is acked by SWcore. However, new request from Endpoint can be handled in this time.
+          --| So, S_RESPONSE state is single-cyccle onliy
           ------------------------------------------------------------------------------------------------------------             
           when S_RESPONSE =>
-            if(rtu_rsp_ack_i = '1') then            
-              rsp.valid         <= '0';
-              rsp.port_mask     <= (others =>'0');
-              rsp.prio          <= (others =>'0');
-              rsp.drop          <= '0';
-              rsp.hp            <= '0';
-              rtu_idle          <= '1';
-              port_state        <= S_IDLE;
+              
+            if(full_match_aboard_d = '1' and match_required ='1') then
+              -- if we are in this state because we received abanddon request  and match is 
+              -- required (RTU enabled/no mirroring), we go straight to FAST_MATCH
+              port_state      <= S_FAST_MATCH;
+            elsif(full_match_aboard_d = '1' and match_required ='0') then
+              -- aboard, but no match required, so drop
+              rsp             <= c_rtu_rsp_drop;
+              port_state      <= S_RESPONSE;
+            else
+              -- go and wait for new requests
+              port_state      <= S_IDLE;
             end if;
-
           ------------------------------------------------------------------------------------------------------------ 
           --| OTHER: 
           ------------------------------------------------------------------------------------------------------------                       
           when others => null;
         ------------------------------------------------------------------------------------------------------------
         end case;
+          if(rtu_rsp_ack_i = '1' and rsp.valid ='1') then            
+            rsp.valid         <= '0';
+            rsp.port_mask     <= (others =>'0');
+            rsp.prio          <= (others =>'0');
+            rsp.drop          <= '0';
+            rsp.hp            <= '0';
+          end if;        
+        
       end if;
     end if;
   end process port_fsm_state;
 
-  -- don't appply TRU decision if TRU is disabled or if it's BPDU frame
-  forwarding_mask     <= rsp_raw.port_mask when (tru_enabled_i = '0' or rsp_raw.bpdu = '1') else
-                         rsp_raw.port_mask and tru_rsp.port_mask;
-  drop                <= rsp_raw.drop      when (tru_enabled_i = '0' or rsp_raw.bpdu = '1') else
-                         rsp_raw.drop or tru_rsp.drop;
-  
+  fast_and_full_mask  <= (fast_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) or full_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports)) &
+                         (fast_match.port_mask(g_num_ports-1 downto 0)              and full_match.port_mask(g_num_ports-1 downto  0));
+  -- forming final mask: 
+  --                  1) full match available, full match says that we have non-forward traffic<
+  --                     to such traffic we don't apply fast_match (TRU and stuff)
+  forwarding_mask     <= full_match.port_mask when (full_match.valid = '1' and full_match.nf ='1') else
+  --                  2) full match available and it's normal traffic, so we apply both asks
+                         fast_and_full_mask when (full_match.valid = '1') else
+  --                  3) we received aboard request and the setting indicates to drop ingressf rame in such case
+                         c_rtu_rsp_drop.port_mask  when (full_match_aboard_d = '1' and rtu_str_config_i.dop_on_fmatch_full = '0' ) else
+  --                  4) fast match decision only 
+                         fast_match.port_mask;
+
+  -- forming final drop:
+  --                  1) drop from one of two matches, don't drop if we have non-forward traffic
+  drop                <= (full_match.drop or fast_match.drop) and (not full_match.nf) when (full_match.valid    = '1') else
+  --                  2) when aboarding and set to drop, 
+                         '1'           when (full_match_aboard_d = '1' and rtu_str_config_i.dop_on_fmatch_full = '0' ) else
+  --                  3) if only fast match available, is it
+                         fast_match.drop;
+  -- forming final prio:
+  --                  1) when full match available, use it
+  prio                <= full_match.prio when (full_match.valid = '1') else
+  --                  2) if aboard and set to drop, set it to zero
+                         c_rtu_rsp_drop.prio when (full_match_aboard_d = '1' and rtu_str_config_i.dop_on_fmatch_full = '0' ) else
+                         fast_match.prio;
+  -- forming final hp: decided by fast match, only 
+  hp                  <= fast_match.hp;
+
+  -- adding mirror port (dst) port to the mask
   forwarding_and_mirror_mask <= forwarding_mask or rtu_str_config_i.mirror_port_dst;
+
+  -- decideing whe RTU can accept new request (if RTU port is not idle, and Endpoint has new 
+  -- requests, it ignores incoming frame)
+  rtu_idle <= '0' when (port_state = S_FAST_MATCH) else
+              '0' when (port_state = S_FINAL_MASK and rsp.valid = '1') else 
+              '0' when (port_state = S_FULL_MATCH and full_match_aboard_d = '1') else
+              '1';
    
---   forwarding_mask     <= f_set_bit(rsp_raw.port_mask,'0',g_port_index) when (mirrored_port = '0') else
---                          f_set_bit(rsp_raw.port_mask,'0',g_port_index) or rtu_str_config_i.mirrored_port_dst;
-   
-  rtu_rsp_o               <= rsp;
-  
-  rq_fifo_wr_access_o<= rq_fifo_wr_access;
-  vtab_rd_req_o      <= vtab_rd_req;
+  rtu_idle_o          <= rtu_idle;
+  rtu_rsp_o           <= rsp;
+  full_match_wr_req_o <= full_match_wr_req and not full_match_wr_done_i;
+  full_match_wr_data_o<= rq_fifo_d;
+  fast_match_wr_req_o <= fast_match_wr_req;
+  fast_match_wr_data_o<= rtu_req_d;   
+
 end architecture;  --wrsw_rtu_port

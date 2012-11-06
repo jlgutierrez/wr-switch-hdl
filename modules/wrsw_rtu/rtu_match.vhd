@@ -17,7 +17,7 @@
 --
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Maciej Lipinski / CERN
+-- Copyright (c) 2010z Maciej Lipinski / CERN
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

@@ -26,15 +26,17 @@ module main;
    parameter g_num_ports = 18;
    
    // prameters to create some gaps between pks (not work really well)
-   parameter g_enable_pck_gaps = 0;  //1=TRUE, 0=FALSE
+   parameter g_enable_pck_gaps = 1;  //1=TRUE, 0=FALSE
    parameter g_min_pck_gap = 100; // cycles
    parameter g_max_pck_gap = 500; // cycles
    
    // defining which ports send pcks -> forwarding is one-to-one 
    // (port_1 to port_14, port_2 to port_13, etc)
-   
-   reg [18:0] portUnderTest = 18'b100000000000000011;
-   
+ //     reg [18:0] portUnderTest = 18'b111000000000000111; // unicast
+ //     reg [18:0] portUnderTest = 18'b000000000000001000; // broadcast
+ //   reg [18:0] portUnderTest = 18'b100000000000000101;
+    reg [18:0] portUnderTest = 18'b111111111111111111;
+   integer repeat_number = 10;
    integer tries_number = 3;
 /* -----\/----- EXCLUDED -----\/-----
    tbi_clock_rst_gen
@@ -89,7 +91,11 @@ module main;
       if(opt==0)
         tmpl.dst       = '{dstPort, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       else if(opt==1)
-        tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};
+        tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
+      else if(opt==2)
+        tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00};
+
+
       tmpl.has_smac  = 1;
       tmpl.is_q      = is_q;
       tmpl.vid       = 100;
@@ -121,7 +127,7 @@ module main;
          for(int j=0;j<n_tries;j++)
            begin
            sink.recv(pkt2);
-	      $display("rx %d", j);
+	      $display("rx %d at port %d", j,dstPort);
               //pkt2.dump();
            if(unvid)
              arr[j].is_q  = 0;
@@ -299,29 +305,56 @@ module main;
         //
         rtu.set_port_config(g_num_ports, 1, 0, 0); // for NIC
         
-        rtu.add_static_rule('{17, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<17 ));
-        rtu.add_static_rule('{16, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<16 ));
-        rtu.add_static_rule('{ 0, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<0  ));
+        if(portUnderTest[0])  rtu.add_static_rule('{17, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<17));
+        if(portUnderTest[1])  rtu.add_static_rule('{16, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<16));
+        if(portUnderTest[2])  rtu.add_static_rule('{15, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<15));
+        if(portUnderTest[3])  rtu.add_static_rule('{14, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<14));
+        if(portUnderTest[4])  rtu.add_static_rule('{13, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<13));
+        if(portUnderTest[5])  rtu.add_static_rule('{12, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<12));
+        if(portUnderTest[6])  rtu.add_static_rule('{11, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<11));
+        if(portUnderTest[7])  rtu.add_static_rule('{10, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<10));
+        if(portUnderTest[8])  rtu.add_static_rule('{ 9, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<9 ));
+        if(portUnderTest[9])  rtu.add_static_rule('{ 8, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<8 ));
+        if(portUnderTest[10]) rtu.add_static_rule('{ 7, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<7 ));
+        if(portUnderTest[11]) rtu.add_static_rule('{ 6, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<6 ));
+        if(portUnderTest[12]) rtu.add_static_rule('{ 5, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<5 ));
+        if(portUnderTest[13]) rtu.add_static_rule('{ 4, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<4 ));
+        if(portUnderTest[14]) rtu.add_static_rule('{ 3, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<3 ));
+        if(portUnderTest[15]) rtu.add_static_rule('{ 2, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<2 ));
+        if(portUnderTest[16]) rtu.add_static_rule('{ 1, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<1 ));
+        if(portUnderTest[17]) rtu.add_static_rule('{ 0, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<0  ));
 
      // rtu.set_hash_poly();
       
-      def_vlan.port_mask      = 32'hffffffff;
+      def_vlan.port_mask      = 32'hffff412f;
       def_vlan.fid            = 0;
       def_vlan.drop           = 0;
+      def_vlan.prio           = 0;
       def_vlan.has_prio       = 0;
       def_vlan.prio_override  = 0;
 
       rtu.add_vlan_entry(0, def_vlan);
 
+      def_vlan.port_mask      = 32'hfffff0Ff;
+      def_vlan.fid            = 0;
+      def_vlan.drop           = 0;
+      def_vlan.prio           = 7;
+      def_vlan.has_prio       = 1;
+      def_vlan.prio_override  = 0;
+
+      rtu.add_vlan_entry(100, def_vlan);
+
       ///////////////////////////   RTU extension settings:  ////////////////////////////////
       
-      rtu.rx_add_ff_mac_single(0/*ID*/,1/*valid*/,'h1234567890AB/*MAC*/);
+      rtu.rx_add_ff_mac_single(0/*ID*/,1/*valid*/,'h1150cafebabe /*MAC*/);
       rtu.rx_add_ff_mac_single(1/*ID*/,1/*valid*/,'h111111111111/*MAC*/);
-      rtu.rx_add_ff_mac_range (0/*ID*/,1/*valid*/,'h000000000010/*MAC_lower*/,'h000000000020/*MAC_upper*/);
+      rtu.rx_add_ff_mac_range (0/*ID*/,1/*valid*/,'h0050cafebabe/*MAC_lower*/,'h0850cafebabe/*MAC_upper*/);
       rtu.rx_set_port_mirror  ('h00000001 /*mirror_src_mask*/,'h00000002 /*mirror_dst_mask*/,1/*rx*/,1/*tx*/);
-      rtu.rx_set_hp_prio_mask ('b10000000 /*hp prio mask*/); //HP traffic set to 7th priority
+      rtu.rx_set_hp_prio_mask ('b10000001 /*hp prio mask*/); //HP traffic set to 7th priority
       rtu.rx_set_cpu_port     ((1<<g_num_ports)/*mask: virtual port of CPU*/);
-      rtu.rx_forward_on_fmatch_full();
+//       rtu.rx_forward_on_fmatch_full();
+      rtu.rx_drop_on_fmatch_full();
+      rtu.rx_feature_ctrl(0 /*mr*/, 0 /*mac_ptp*/, 0/*mac_ll*/, 0/*mac_single*/, 0/*mac_range*/, 1/*mac_br*/);
       ////////////////////////////////////////////////////////////////////////////////////////
 
       rtu.enable();
@@ -337,8 +370,8 @@ module main;
             begin 
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_5:%d", g);
-                    tx_test(seed /* seed */, 10 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[0].send /* src */, ports[17].recv /* sink */,  0 /* srcPort */ , 17 /* dstPort */);
+                    $display("Try port_0:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[0].send /* src */, ports[17].recv /* sink */,  0 /* srcPort */ , 17 /* dstPort */, 0 /*option*/);
                  end
             end   
          end // fork begin
@@ -351,8 +384,8 @@ module main;
 //                wait_cycles(5);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[1].send /* src */, ports[16] .recv /* sink */,  1 /* srcPort */ , 16  /* dstPort */);
+                    $display("Try port_1:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[1].send /* src */, ports[16] .recv /* sink */,  1 /* srcPort */ , 16  /* dstPort */);
                  end
             end   
          end
@@ -366,8 +399,8 @@ module main;
 //                wait_cycles(5);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[2].send /* src */, ports[15] .recv /* sink */,  2 /* srcPort */ , 15  /* dstPort */, 1 /*option*/);
+                    $display("Try port_2:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[2].send /* src */, ports[15] .recv /* sink */,  2 /* srcPort */ , 15  /* dstPort */, 0 /*option*/);
                  end
             end   
          end
@@ -378,11 +411,11 @@ module main;
          begin
          if(portUnderTest[3]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[3].send /* src */, ports[14] .recv /* sink */,  3 /* srcPort */ , 14  /* dstPort */);
+                    $display("Try port_3:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[3].send /* src */, ports[14] .recv /* sink */,  3 /* srcPort */ , 14  /* dstPort */,1 /*option*/);
                  end
             end   
          end
@@ -392,11 +425,11 @@ module main;
          begin
          if(portUnderTest[4]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[4].send /* src */, ports[13] .recv /* sink */,  4 /* srcPort */ , 13  /* dstPort */);
+                    $display("Try port_4:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[4].send /* src */, ports[13] .recv /* sink */,  4 /* srcPort */ , 13  /* dstPort */);
                  end
             end   
          end
@@ -407,11 +440,11 @@ module main;
          begin
          if(portUnderTest[5]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[5].send /* src */, ports[12] .recv /* sink */,  5 /* srcPort */ , 12  /* dstPort */);
+                    $display("Try port_5:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[5].send /* src */, ports[12] .recv /* sink */,  5 /* srcPort */ , 12  /* dstPort */);
                  end
             end   
          end
@@ -422,11 +455,11 @@ module main;
          begin
          if(portUnderTest[6]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[11] .recv /* sink */,  6 /* srcPort */ , 11  /* dstPort */);
+                    $display("Try port_6:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[6].send /* src */, ports[11] .recv /* sink */,  6 /* srcPort */ , 11  /* dstPort */);
                  end
             end   
          end
@@ -437,11 +470,11 @@ module main;
          begin
          if(portUnderTest[7]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[7].send /* src */, ports[10] .recv /* sink */,  7 /* srcPort */ , 10  /* dstPort */);
+                    $display("Try port_7:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[7].send /* src */, ports[10] .recv /* sink */,  7 /* srcPort */ , 10  /* dstPort */);
                  end
             end   
          end
@@ -452,11 +485,11 @@ module main;
          begin
          if(portUnderTest[8]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[8].send /* src */, ports[9] .recv /* sink */,  8 /* srcPort */ , 9  /* dstPort */);
+                    $display("Try port_8:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[8].send /* src */, ports[9] .recv /* sink */,  8 /* srcPort */ , 9  /* dstPort */);
                  end
             end   
          end
@@ -467,11 +500,11 @@ module main;
          begin
          if(portUnderTest[9]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[9].send /* src */, ports[8] .recv /* sink */, 9 /* srcPort */ , 8  /* dstPort */);
+                    $display("Try port_9:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[9].send /* src */, ports[8] .recv /* sink */, 9 /* srcPort */ , 8  /* dstPort */);
                  end
             end   
          end
@@ -481,11 +514,11 @@ module main;
          begin
          if(portUnderTest[10]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[10].send /* src */, ports[7] .recv /* sink */, 10 /* srcPort */ , 7  /* dstPort */);
+                    $display("Try port_10:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[10].send /* src */, ports[7] .recv /* sink */, 10 /* srcPort */ , 7  /* dstPort */);
                  end
             end   
          end
@@ -494,11 +527,11 @@ module main;
          begin
          if(portUnderTest[11]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[11].send /* src */, ports[6] .recv /* sink */,  11 /* srcPort */ , 6  /* dstPort */);
+                    $display("Try port_11:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[11].send /* src */, ports[6] .recv /* sink */,  11 /* srcPort */ , 6  /* dstPort */);
                  end
             end   
          end
@@ -507,11 +540,11 @@ module main;
          begin
          if(portUnderTest[12]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[12].send /* src */, ports[5] .recv /* sink */,  12 /* srcPort */ , 5  /* dstPort */);
+                    $display("Try port_12:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[12].send /* src */, ports[5] .recv /* sink */,  12 /* srcPort */ , 5  /* dstPort */);
                  end
             end   
          end
@@ -520,11 +553,11 @@ module main;
          begin
          if(portUnderTest[13]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[13].send /* src */, ports[4] .recv /* sink */,  13 /* srcPort */ , 4  /* dstPort */);
+                    $display("Try port_13:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[13].send /* src */, ports[4] .recv /* sink */,  13 /* srcPort */ , 4  /* dstPort */);
                  end
             end   
          end
@@ -533,11 +566,11 @@ module main;
          begin
          if(portUnderTest[14]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[14].send /* src */, ports[3] .recv /* sink */,  14 /* srcPort */ , 3  /* dstPort */);
+                    $display("Try port_14:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[14].send /* src */, ports[3] .recv /* sink */,  14 /* srcPort */ , 3  /* dstPort */);
                  end
             end   
          end
@@ -546,11 +579,11 @@ module main;
          begin
          if(portUnderTest[15]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[15].send /* src */, ports[2] .recv /* sink */,  15 /* srcPort */ , 2  /* dstPort */);
+                    $display("Try port_15:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[15].send /* src */, ports[2] .recv /* sink */,  15 /* srcPort */ , 2  /* dstPort */);
                  end
             end   
          end
@@ -559,11 +592,11 @@ module main;
          begin
          if(portUnderTest[16]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 200 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[16].send /* src */, ports[1] .recv /* sink */,  16 /* srcPort */ , 1  /* dstPort */);
+                    $display("Try port_16:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[16].send /* src */, ports[1] .recv /* sink */,  16 /* srcPort */ , 1  /* dstPort */);
                  end
             end   
          end
@@ -572,11 +605,11 @@ module main;
          begin
          if(portUnderTest[17]) 
             begin 
-                wait_cycles(20);
+//                 wait_cycles(20);
                for(int g=0;g<tries_number;g++)
                  begin
-                    $display("Try f_6:%d", g);
-                    tx_test(seed /* seed */, 10 /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[17].send /* src */, ports[0] .recv /* sink */,  17 /* srcPort */ , 0  /* dstPort */);
+                    $display("Try port_17:%d",  g);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[17].send /* src */, ports[0] .recv /* sink */,  17 /* srcPort */ , 0  /* dstPort */);
                  end
             end   
          end

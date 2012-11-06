@@ -2,15 +2,81 @@
 -- Title      : eXtended Routing Table Unit (RTU)
 -- Project    : White Rabbit Switch
 -------------------------------------------------------------------------------
--- File       : wrsw_rtu.vhd
--- Authors    : Tomasz Wlostowski
+-- File       : xwrsw_rtu_new.vhd
+-- Authors    : Tomasz Wlostowski, Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2012-01-10
 -- Last update: 2012-06-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
--- Description: With usable interface 
+-- Description: Module takes packet source & destination MAC addresses, VLAN ID
+-- and priority priority and decides where and with what final priority (after
+-- evalating the per MAC-assigned priorities, per-VLAN priorities, per-port and
+-- per-packet), the packet shall be routed. The exact lookup algorithm is described in
+-- rtu_sim.c file.
+--
+-- RTU has c_rtu_num_ports independent request ports which take RTU requests
+-- from the endpoints, and c_rtu_num_ports response ports which deliver the routing
+-- decisions for requests coming to associated input ports.
+--
+-- You can assume that RTU requests won't come more often than every 40 refclk2
+-- cycles for each port. 
+--
+-- Since the RTU engine is shared by all ports, the requests are:
+-- - scheduled by a round-robin arbiter, so each port gets the same priority
+-- - inserted into a common request FIFO
+-- - processed by the lookup engine
+-- - responses are outputted to response FIFO and delivered into appropriate
+--   destination ports.
+--
+-- RTU has 2 memory blocks:
+-- external ZBT memory to store the main MAC table
+-- small BRAM block (HCAM) for storage of entries which cause hash collisions in main
+--
+-- The main MAC table is organized as a
+-- bucketed hashtable (see rtu_sim.c for details). Each bucket contains 4 entries:
+--
+-- addr 0: bucket 0 [entry 1] [entry 2] [entry 3] [entry 4]
+-- addr 1: bucket 1 [entry 1] [entry 2] [entry 3] [entry 4]
+--
+-- If there are more than 4 MAC addresses with the same hash, the last entry in
+-- the bucket contains a pointer to CAM memory which stores the remaining MAC
+-- entries.
+--
+-- Both memories (ZBT and HCAM) are split into 2 banks. While one bank is
+-- being used by the lookup engine, the other can be accessed from the Wishbone.
+-- Bank switching is done by setting appropriate bit in WB control register.
+-- RTU has a separate FIFO for writing the memories by the CPU (MFIFO). Each MFIFO
+-- entry has 2 fields:
+-- - address/data field select bit (determines if A/D field is a new address or
+--   data value)
+-- - address/data value
+-- MFIFO has a separate timeslot for accessing the memory, which is scheduled
+-- in the same manner as the input ports.
+--
+-- For all unrecognized requests RTU should (depending on configuration bit,
+-- independently for each port) either drop or broadcast the packet. The
+-- request itself is put into a separate FIFO (along with requesting port
+-- number) and an interrupt is triggered. CPU parses the request using more sophisticated
+-- algorithm and eventually updates the MAC table.
+--
+-- Aging: There is a separate RAM block ARAM (8192 + some bits for CAM entries), accessible both
+-- from the CPU and the Wishbone. Every time matching entry is found, it's
+-- corresponding bit is set to 1. CPU reads this table every few seconds and
+-- updates the aging counters (aging is not implemented in hardware to make it
+-- simpler)
+--
+-- Additional port configuration bits (needed for RSTP/STP implementation)
+-- - LEARN_EN: enable learning on certain port (unrecognized requests go to
+--   FIFO) (port is in ENABLED or LEARNING mode)
+-- - DROP: drop all the packets regardless of the RTU decision (port is BLOCKING)
+-- - PASS_BPDU: enable passing of BPDU packets (port is BLOCKING). BPDUs go to
+--   the designated NIC port (ID/mask set in separate register)
+--
+-- Maciek: if you decide to use CRC-based hash, make the initial hash value & polynomial
+-- programmable from Wishbone.
+-- 
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2012 Tomasz Wlostowski / CERN
@@ -36,6 +102,7 @@
 -- Date        Version  Author   Description
 -- 2012-01-10  1.0      twlostow created
 -- 2010-11-29  1.1      mlipinsk connected prio, added temp_hack
+-- 2012-11-06  1.2      mlipinsk RTUeX - added fast match and config, integrated with RTU,
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -49,7 +116,6 @@ use work.wrsw_shared_types_pkg.all;
 use work.rtu_private_pkg.all;
 use work.pack_unpack_pkg.all;
 use work.genram_pkg.all;
--- use work.rtu_wbgen2_pkg_old.all;
 use work.rtu_wbgen2_pkg.all;
 use work.gencores_pkg.all;
 
@@ -93,17 +159,19 @@ architecture behavioral of xwrsw_rtu_new is
 
   -- PORT_N -> MATCH_FIFO_ACCESS (round robin access to FIFO)
   signal rq_fifo_wr_access                  : std_logic_vector(g_num_ports-1 downto 0);
-  signal rq_fifo_wr_data                    : std_logic_vector(g_num_ports*c_PACKED_REQUEST_WIDTH-1 downto 0);
-  signal rq_fifo_wr_done                    : std_logic_vector(g_num_ports-1 downto 0);
-  
-  -- MATCH_FIFO_ACCESS -> U_ReqFifo (FIFO with request for MATCH engine)
-  signal rr_mux_wr_vector                   : std_logic_vector(g_num_ports-1 downto 0);
-  signal rr_mux_wr_data                     : std_logic_vector(c_PACKED_REQUEST_WIDTH-1 downto 0);
-  signal rr_mux_wr_fifo_data                : std_logic_vector(g_num_ports+c_PACKED_REQUEST_WIDTH-1 downto 0);
-  signal rr_mux_wr_req                      : std_logic;
-  signal rr_mux_wr_id                       : std_logic_vector(c_g_num_ports_width-1 downto 0);
-  
-  -- U_ReqFifo -> rtu_match
+  signal rq_fifo_write_sng                  : std_logic;
+  signal gnt_fifo_access                    : std_logic_vector(g_num_ports-1 downto 0);
+  type t_rq_fifo_request_array is array (integer range <>) of std_logic_vector(c_PACKED_REQUEST_WIDTH-1 downto 0);
+  signal rq_fifo_d_requests : t_rq_fifo_request_array(0 to g_num_ports-1);
+  signal rq_fifo_d_muxed    : std_logic_vector(g_num_ports+ c_PACKED_REQUEST_WIDTH -1 downto 0);
+
+  -- PORT_N -> Fast_Match
+  signal fast_match_req                     : std_logic_vector(g_num_ports-1 downto 0);
+  signal fast_match_req_data                : t_rtu_request_array(g_num_ports-1 downto 0);
+  signal fast_match_rsp_data                : t_match_response;
+  signal fast_match_rsp_valid               : std_logic_vector(g_num_ports-1 downto 0);
+
+  -- MATCH_FIFO_ACCESS -> rtu_match
   signal rq_fifo_read                       : std_logic;
   signal rq_fifo_qvalid                     : std_logic;
   signal rq_fifo_data                       : std_logic_vector(g_num_ports + c_PACKED_REQUEST_WIDTH - 1 downto 0);
@@ -115,21 +183,6 @@ architecture behavioral of xwrsw_rtu_new is
   -- rtu_match -> PORTs
   signal rsp_valid                          : std_logic;
   signal rsp_data                           : std_logic_vector(g_num_ports + c_PACKED_RESPONSE_WIDTH - 1 downto 0);
-  
-  -- PORT_N -> VLAN_READ_ACCESS
-  signal vtab_rd_addr                       : std_logic_vector(c_wrsw_vid_width*g_num_ports-1 downto 0);
-  signal vtab_rd_req                        : std_logic_vector(g_num_ports-1 downto 0);
-
-  -- VLAN_READ_ACCESS -> VLAN TABLE
-  signal rr_mux_vtab_addr                   : std_logic_vector(c_wrsw_vid_width-1 downto 0);
-  signal rr_mux_vtab_addr_valid             : std_logic;
-  
-  -- VLAN TABLE/VLAN_READ_ACCESS -> PORTs
-  --signal rr_mux_vtab_addr_id                : std_logic_vector(integer(CEIL(LOG2(real(c_wrsw_vid_width))))-1 downto 0);
-  signal rr_mux_vtab_addr_id                : std_logic_vector(f_log2_size(g_num_ports)-1 downto 0);--(4 downto 0);
-  signal rr_mux_vtab_addr_vector            : std_logic_vector(g_num_ports-1 downto 0);
-  signal vtab_rd_valid                      : std_logic_vector(g_num_ports-1 downto 0);  
-  signal vtab_rd_data                       : std_logic_vector(c_VLAN_TAB_ENTRY_WIDTH-1 downto 0);
   
   -- rtu_match -> rtu_lookup_engine (HTAB interface)
   signal htab_start                         : std_logic;
@@ -165,44 +218,44 @@ architecture behavioral of xwrsw_rtu_new is
   signal aram_main_rd                       : std_logic;
   signal aram_main_wr                       : std_logic;
   
-  --
-  signal rsp_fifo_empty                     : std_logic;
   signal irq_nempty                         : std_logic;
 
+  -- U_Adapter <-> U_WB_Slave : wishbone adapter (pipeline2classic) to WBgen-erated wisbhone slave
   signal wb_in                              : t_wishbone_slave_in;
   signal wb_out                             : t_wishbone_slave_out;
 
+  -- FULL_Match to VLAN Tab memory
   signal vlan_tab_rd_vid                    : std_logic_vector(c_wrsw_vid_width-1 downto 0);
-  signal vlan_tab_wr_data                   : std_logic_vector(c_VLAN_TAB_ENTRY_WIDTH-1 downto 0);
-  signal vlan_tab_rd_data4match             : std_logic_vector(c_VLAN_TAB_ENTRY_WIDTH-1 downto 0);
-  signal vlan_tab_rd_data4port              : std_logic_vector(c_VLAN_TAB_ENTRY_WIDTH-1 downto 0);
-  signal vlan_tab_rd_entry4match            : t_rtu_vlan_tab_entry;
-  signal vlan_tab_rd_entry4port             : t_rtu_vlan_tab_entry;
+  signal vlan_tab_rd_data4match             : std_logic_vector(c_VLAN_TAB_ENTRY_WIDTH-1 downto 0); --packed
+  signal vlan_tab_rd_entry4match            : t_rtu_vlan_tab_entry; -- unpacked
+  
+  -- Fast_Match to VLAN Tab memroy
+  signal vlan_tab_rd_entry4fast_match       : t_rtu_vlan_tab_entry;
+  signal fast_match_vtab_addr               : std_logic_vector(c_wrsw_vid_width-1 downto 0);
+  signal fast_match_vtab_data               : std_logic_vector(c_VLAN_TAB_ENTRY_WIDTH-1 downto 0);
 
-  signal port_full                          : std_logic_vector(g_num_ports-1 downto 0);
+  -- WB slave to VLAN tab
+  signal vlan_tab_wr_data                   : std_logic_vector(c_VLAN_TAB_ENTRY_WIDTH-1 downto 0);
+
   signal port_idle                          : std_logic_vector(g_num_ports-1 downto 0);
   signal rtu_special_traffic_config         : t_rtu_special_traffic_config;
   signal zeros                              : std_logic_vector(c_rtu_max_ports-1 downto 0);
   
+  -- coutning fifo occupanccy (no usecnt provided) to indicate full to port when there
+  -- is still N (port number) free places in FIFO (this is in case all the ports make
+  -- request at the same time)
   signal match_req_fifo_cnt                 : unsigned(c_match_req_fifo_size_width-1 downto 0);
-  
-  signal tru_req                            : t_tru_request_array(g_num_ports-1 downto 0);
-  signal tru_req_zero                       : t_tru_request;
+
+  -- aux    
+  signal rsp_fifo_read_all_zeros            : std_logic_vector(g_num_ports - 1 downto 0);
 begin 
 
-  zeros <= (others => '0');
-  irq_nempty <= regs_fromwb.ufifo_wr_empty_o;
-  req_full_o <= not port_idle;
-
- tru_req_zero.valid   <= '0';
- tru_req_zero.smac    <= (others =>'0');
- tru_req_zero.dmac    <= (others =>'0');
- tru_req_zero.fid     <= (others =>'0');
- tru_req_zero.isHP    <= '0';
- tru_req_zero.isBR    <= '0';
- tru_req_zero.reqMask <= (others =>'0');
-
--- ??????????//
+  zeros                    <= (others => '0');
+  rsp_fifo_read_all_zeros  <= (others => '0');
+  irq_nempty               <= regs_fromwb.ufifo_wr_empty_o;
+  req_full_o               <= not port_idle;
+  
+  -- ??? (legacy)
 --   gen_term_unused : for i in g_num_ports to g_num_ports-1 generate
 --     rq_strobe_p(i) <= '0';
 --     rsp_ack(i)   <= '1';
@@ -227,15 +280,10 @@ begin
   wb_out.err <= '0';
   wb_out.rty <= '0';
   --------------------------------------------------------------------------------------------
-
-  --------------------------------------------------------------------------------------------
-
-
-  --------------------------------------------------------------------------------------------
   --| PORTS - g_num_ports number of I/O ports, a port:
   --| - inputs request to REQUEST FIFO
   --| - waits for the response,
-  --| - reads response from RESPONSE FIFO
+  --| - reads response from RESPONSE FIFO  of full match and from fast match
   --------------------------------------------------------------------------------------------
   ports : for i in 0 to (g_num_ports - 1) generate
 
@@ -243,6 +291,7 @@ begin
       generic map (
         g_num_ports      => g_num_ports,
         g_port_mask_bits => g_port_mask_bits,
+        g_match_req_fifo_size => g_match_req_fifo_size,
         g_port_index     => i)
       port map(
         clk_i                    => clk_sys_i,
@@ -254,26 +303,21 @@ begin
         rtu_rsp_o                => rsp_o(i),
         rtu_rsp_ack_i            => rsp_ack_i(i),
         
-        rq_fifo_wr_access_o      => rq_fifo_wr_access(i),
-        rq_fifo_wr_data_o        => rq_fifo_wr_data((i+1)*c_PACKED_REQUEST_WIDTH-1 downto i*c_PACKED_REQUEST_WIDTH),
-        rq_fifo_wr_done_i        => rr_mux_wr_vector(i),
-        rq_fifo_full_i           => rq_fifo_full_for_ports,
-    
-        match_data_i             => rsp_data,
-        match_data_valid_i       => rsp_valid,
+        full_match_wr_req_o      => rq_fifo_wr_access(i),
+        full_match_wr_data_o     => rq_fifo_d_requests(i),
+        full_match_wr_done_i     => gnt_fifo_access(i),
+        full_match_wr_full_i     => rq_fifo_full_for_ports,    
+        full_match_rd_data_i     => rsp_data,
+        full_match_rd_valid_i    => rsp_valid,
 
-        vtab_rd_addr_o           => vtab_rd_addr((i+1)*c_wrsw_vid_width-1 downto i*c_wrsw_vid_width),
-        vtab_rd_req_o            => vtab_rd_req(i),
-        vtab_rd_entry_i          => vlan_tab_rd_entry4port,
-        vtab_rd_valid_i          => rr_mux_vtab_addr_vector(i),
+        fast_match_wr_req_o      => fast_match_req(i),
+        fast_match_wr_data_o     => fast_match_req_data(i),
+        fast_match_rd_valid_i    => fast_match_rsp_valid(i),
+        fast_match_rd_data_i     => fast_match_rsp_data,
 
         port_almost_full_o       => open,
-        port_full_o              => port_full(i),
+        port_full_o              => open,
 
-        tru_req_o                => tru_req(i),--tru_req_o, -- multiplex !!!!!!!!!!!!
-        tru_rsp_i                => tru_resp_i,
-        tru_enabled_i            => tru_enabled_i,
-    
         rtu_str_config_i         => rtu_special_traffic_config,
 
         rtu_gcr_g_ena_i          => regs_fromwb.gcr_g_ena_o,
@@ -283,61 +327,66 @@ begin
         rtu_pcr_prio_val_i       => pcr_prio_val(i)
         );
   end generate;  -- end ports
- 
-  
+   
   ------------------------------------------------------------------------
   -- REQUEST FIFO BUS
   -- Data from all ports into one match module
   ------------------------------------------------------------------------
-
-  MATCH_FIFO_ACCESS: gc_arbitrated_mux
+  U_req_fifo_arbiter : rtu_rr_arbiter
     generic map (
-      g_num_inputs => g_num_ports,
-      g_width      => c_PACKED_REQUEST_WIDTH)
+      g_width => g_num_ports)
     port map(
-      clk_i        => clk_sys_i,
-      rst_n_i      => rst_n_i,
-      d_i          => rq_fifo_wr_data,
-      d_valid_i    => rq_fifo_wr_access,
-      d_req_o      => rq_fifo_wr_done,
-      q_o          => rr_mux_wr_data,
-      q_valid_o    => rr_mux_wr_req,
-      q_input_id_o => rr_mux_wr_id 
-    );
-  
-  rr_mux_wr_vector    <= f_set_bit(zeros(g_num_ports-1 downto 0),'1',to_integer(unsigned(rr_mux_wr_id))) when (rr_mux_wr_req='1') else (others=>'0');
-  rr_mux_wr_fifo_data <= rr_mux_wr_vector & rr_mux_wr_data when (rr_mux_wr_req='1') else (others =>'0');
- 
-  --------------------------------------------------------------------------------------------
+      clk_i   => clk_sys_i,
+      rst_n_i => rst_n_i,
+      req_i   => rq_fifo_wr_access,
+      gnt_o   => gnt_fifo_access
+      );
+
+  p_mux_fifo_req : process(rq_fifo_d_requests, gnt_fifo_access)
+    variable do_wr   : std_logic;
+    variable do_data : std_logic_vector(c_PACKED_REQUEST_WIDTH-1 downto 0);
+  begin
+
+    do_data := (others => 'X');
+    do_wr   := '0';
+
+    if(gnt_fifo_access = rsp_fifo_read_all_zeros) then
+      do_wr := '0';
+    else
+      do_wr := '1';
+    end if;
+
+    for i in 0 to g_num_ports-1 loop
+      if(gnt_fifo_access(i) = '1') then
+        do_data := rq_fifo_d_requests(i);
+      end if;
+    end loop;  -- i
+    
+    rq_fifo_write_sng <= do_wr;
+    rq_fifo_d_muxed   <= gnt_fifo_access & do_data;
+  end process;
+
+  -----------------------------------------------------------------------------
   -- REQUEST FIFO: takes requests from ports and makes it available for RTU MATCH
-  -- This is tricky!!!!
-  -- We have a FIFO which is shared by all the ports, it means that in the worst case
-  -- all the ports can request access at the very same time and the FIFO, after the requests
-  -- are arbitrated by RR, will need to accept all the requests (no way to block it after
-  -- handling).
-  -- This is why, the size of the fifo is: c_match_req_fifo_size =requested_size + port_num
-  -- The process below makes sure to indicate to the ports that the FIFO is full when the
-  -- number of entries reaches "requested_size", so it is still possible to accommodated in
-  -- the FIFO simultaneous requetss from all the ports (a bit waste of resources but seems 
-  -- necessary, any good/better ideas welcome ;)
-  --------------------------------------------------------------------------------------------
-  
+  -----------------------------------------------------------------------------
   U_ReqFifo : generic_shiftreg_fifo
     generic map (
       g_data_width => g_num_ports + c_PACKED_REQUEST_WIDTH,
-      g_size       => c_match_req_fifo_size --32
+      g_size       => 32
       )
     port map
     (
       rst_n_i   => rst_n_i,
+      d_i       => rq_fifo_d_muxed,
       clk_i     => clk_sys_i,
-      we_i      => rr_mux_wr_req,
-      d_i       => rr_mux_wr_fifo_data,
-      rd_i      => rq_fifo_read,        --rtu_match     
+      rd_i      => rq_fifo_read,        --rtu_match
+      we_i      => rq_fifo_write_sng,
       q_o       => rq_fifo_data,
       q_valid_o => rq_fifo_qvalid,
       full_o    => rq_fifo_full
       );
+
+  rq_fifo_empty <= not rq_fifo_qvalid;
 
   p_reqFifo_cnt : process(clk_sys_i)
   begin
@@ -345,73 +394,56 @@ begin
       if(rst_n_i = '0') then
         match_req_fifo_cnt   <= (others =>'0');
       else
-        if(rr_mux_wr_req = '1' and rq_fifo_read ='0') then
+        if(rq_fifo_write_sng = '1' and rq_fifo_read ='0') then
           match_req_fifo_cnt <= match_req_fifo_cnt + 1;
-        elsif(rr_mux_wr_req = '0' and rq_fifo_read ='1') then
+        elsif(rq_fifo_write_sng = '0' and rq_fifo_read ='1') then
           match_req_fifo_cnt <= match_req_fifo_cnt - 1;
         end if;
       end if;
     end if;
   end process p_reqFifo_cnt;
 
+  -- coutning fifo occupanccy (no usecnt provided) to indicate full to port when there
+  -- is still N (port number) free places in FIFO (this is in case all the ports make
+  -- request at the same time)
   rq_fifo_almost_full <= '1' when (match_req_fifo_cnt > to_unsigned(g_match_req_fifo_size,c_match_req_fifo_size_width)) else '0';
   rq_fifo_empty       <= not rq_fifo_qvalid;
   rq_fifo_full_for_ports <= rq_fifo_full or rq_fifo_almost_full;
   
   ------------------------------------------------------------------------
-  -- REQUEST VLAN TABLE access
-  -- Requests from all ports to read VLAN TABLE
+  -- RTU FAST MATCH 
+  -- provides match :
+  -- * for special traffic
+  -- * based on VLANs and TRU (topology resolution: RSTP/MSTP/LACP)
+  -- * deterministic (N+5 cycles)
+  -- * forwarding decision when Full Match abandond when it takes too much time
   ------------------------------------------------------------------------
 
-  VLAN_READ_ACCESS: gc_arbitrated_mux
-    generic map (
-      g_num_inputs => g_num_ports,
-      g_width      => c_wrsw_vid_width)
+  U_Fast_match: rtu_fast_match
+    generic map(
+      g_num_ports          => g_num_ports,
+      g_port_mask_bits     => g_port_mask_bits
+      )
     port map(
-      clk_i        => clk_sys_i,
-      rst_n_i      => rst_n_i,
-      d_i          => vtab_rd_addr,
-      d_valid_i    => vtab_rd_req,
-      d_req_o      => open,
-      q_o          => rr_mux_vtab_addr,
-      q_valid_o    => rr_mux_vtab_addr_valid,
-      q_input_id_o => rr_mux_vtab_addr_id 
+      clk_i                => clk_sys_i,     
+      rst_n_i              => rst_n_i,     
+      match_req_i          => fast_match_req,
+      match_req_data_i     => fast_match_req_data,     
+      match_rsp_data_o     => fast_match_rsp_data,     
+      match_rsp_valid_o    => fast_match_rsp_valid,       
+      vtab_rd_addr_o       => fast_match_vtab_addr,     
+      vtab_rd_entry_i      => vlan_tab_rd_entry4fast_match,     
+      tru_req_o            => tru_req_o,     
+      tru_rsp_i            => tru_resp_i,     
+      tru_enabled_i        => tru_enabled_i,      
+      rtu_str_config_i     => rtu_special_traffic_config,     
+      rtu_pcr_pass_all_i   => pcr_pass_all
     );
 
-  rr_mux_vtab_addr_vector <= f_set_bit(zeros(g_num_ports-1 downto 0),'1',to_integer(unsigned(rr_mux_vtab_addr_id))) when (rr_mux_vtab_addr_valid='1') else (others => '0');
-
-  p_vlan_read_access : process(clk_sys_i)
-  begin
-    if rising_edge(clk_sys_i) then
-      if(rst_n_i = '0') then
-        vtab_rd_valid  <= (others =>'0');
-      else
-        if(rr_mux_vtab_addr_valid = '1') then
-          vtab_rd_valid <= rr_mux_vtab_addr_vector;
-        else
-          vtab_rd_valid <= (others => '0');
-        end if;
-      end if;
-    end if;
-  end process p_vlan_read_access;
-
-  p_tru_mux: process(vtab_rd_valid, tru_req)
-  begin
-    if(vtab_rd_valid = zeros(g_num_ports-1 downto 0)) then
-      tru_req_o <= tru_req_zero;
-    else
-      for i in 0 to g_num_ports-1 loop
-        if(vtab_rd_valid(i) = '1') then
-          tru_req_o <= tru_req(i);
-        end if;
-      end loop;
-    end if;
-  end process p_tru_mux;
   --------------------------------------------------------------------------------------------
-  --| RTU MATCH: Routing Table Unit Engine
+  --| RTU FULL MATCH: Routing Table Unit Engine
   --------------------------------------------------------------------------------------------
-  -- to be added
-  U_Match : rtu_match
+  U_Full_Match : rtu_match
     generic map (
       g_num_ports => g_num_ports)
     port map(
@@ -421,6 +453,7 @@ begin
       rq_fifo_read_o       => rq_fifo_read,
       rq_fifo_empty_i      => rq_fifo_empty,
       rq_fifo_input_i      => rq_fifo_data,
+
       rsp_fifo_write_o     => rsp_valid,
       rsp_fifo_full_i      => '0', --rsp_fifo_full,
       rsp_fifo_output_o    => rsp_data,
@@ -492,9 +525,9 @@ begin
       entry_o => htab_entry
       );
 
-
+  --------------------------------------------------------------------------------------------
   --| WISHBONE I/F: interface with CPU and RAM/CAM
-
+  --------------------------------------------------------------------------------------------
 --   U_WB_Slave : rtu_wishbone_slave_old
   U_WB_Slave : rtu_wishbone_slave
     port map(
@@ -526,6 +559,10 @@ begin
   current_pcr             <= to_integer(unsigned(regs_fromwb.psr_port_sel_o));
   regs_towb.psr_n_ports_i <= std_logic_vector(to_unsigned(g_num_ports, 8));
 
+  --------------------------------------------------------------------------------------------
+  --/  Her we interpret confiration registers (from CPU) provided by WB I/F
+  --------------------------------------------------------------------------------------------
+  
   -- indirectly addressed PCR registers - this is to allow easy generic-based
   -- scaling of the number of ports
   p_pcr_registers : process(clk_sys_i)
@@ -614,10 +651,22 @@ begin
     end if;
   end process;
 
-  rtu_special_traffic_config.hp_prio              <= regs_fromwb.rx_hp_ctr_prio_mask_o;
+  rtu_special_traffic_config.hp_prio              <= regs_fromwb.rx_ctr_prio_mask_o;
   rtu_special_traffic_config.bpd_forward_mask     <= regs_fromwb.rx_llf_ff_mask_o;
-  rtu_special_traffic_config.dop_on_fmatch_full   <= regs_fromwb.rx_hp_ctr_at_fmatch_too_slow_o;
+  rtu_special_traffic_config.dop_on_fmatch_full   <= regs_fromwb.rx_ctr_at_fmatch_too_slow_o;
+  rtu_special_traffic_config.ff_mac_br_ena        <= regs_fromwb.rx_ctr_ff_mac_br_o;
+  rtu_special_traffic_config.ff_mac_range_ena     <= regs_fromwb.rx_ctr_ff_mac_range_o;
+  rtu_special_traffic_config.ff_mac_single_ena    <= regs_fromwb.rx_ctr_ff_mac_single_o;
+  rtu_special_traffic_config.ff_mac_ll_ena        <= regs_fromwb.rx_ctr_ff_mac_ll_o;
+  rtu_special_traffic_config.ff_mac_ptp_ena       <= regs_fromwb.rx_ctr_ff_mac_ptp_o;
+  rtu_special_traffic_config.mr_ena               <= regs_fromwb.rx_ctr_mr_ena_o;
 
+
+  --------------------------------------------------------------------------------------------
+  --| VLAN memories 
+  --| * one used by Full Match
+  --| * one used by Fast Match
+  --------------------------------------------------------------------------------------------
   U_VLAN_Table_for_full_match : generic_dpram
     generic map (
       g_data_width       => c_VLAN_TAB_ENTRY_WIDTH,
@@ -649,8 +698,8 @@ begin
       wea_i   => regs_fromwb.vtr1_update_o,
       aa_i    => regs_fromwb.vtr1_vid_o,
       da_i    => vlan_tab_wr_data,
-      ab_i    => rr_mux_vtab_addr,  -- address
-      qb_o    => vlan_tab_rd_data4port); -- data
+      ab_i    => fast_match_vtab_addr,  -- address
+      qb_o    => fast_match_vtab_data); -- data
 
   vlan_tab_wr_data <= regs_fromwb.vtr2_port_mask_o
                       & regs_fromwb.vtr1_fid_o
@@ -667,30 +716,13 @@ begin
             vlan_tab_rd_entry4match.prio,
             vlan_tab_rd_entry4match.has_prio);
 
-  f_unpack6(vlan_tab_rd_data4port,
-            vlan_tab_rd_entry4port.port_mask,
-            vlan_tab_rd_entry4port.fid,
-            vlan_tab_rd_entry4port.drop,
-            vlan_tab_rd_entry4port.prio_override,
-            vlan_tab_rd_entry4port.prio,
-            vlan_tab_rd_entry4port.has_prio);
+  f_unpack6(fast_match_vtab_data,
+            vlan_tab_rd_entry4fast_match.port_mask,
+            vlan_tab_rd_entry4fast_match.fid,
+            vlan_tab_rd_entry4fast_match.drop,
+            vlan_tab_rd_entry4fast_match.prio_override,
+            vlan_tab_rd_entry4fast_match.prio,
+            vlan_tab_rd_entry4fast_match.has_prio);
 
-----------------------------------------------------------------------------------------------
 
---   rtu_special_traffic_config.single_macs(0)       <= x"FFFFFFFFFFFF";       
---   rtu_special_traffic_config.single_macs(1)       <= x"1234567890AB"; 
---   rtu_special_traffic_config.single_macs(2)       <= (others => '0');
---   rtu_special_traffic_config.single_macs(3)       <= (others => '0');
--- 
---   rtu_special_traffic_config.single_macs_valid    <= "0011";
---   rtu_special_traffic_config.hp_prio              <= "10000000";
---   rtu_special_traffic_config.macs_range_valid     <= '0';
---   rtu_special_traffic_config.macs_range_up        <= (others => '0');
---   rtu_special_traffic_config.macs_range_down      <= (others => '0');
---   rtu_special_traffic_config.bpd_forward_mask     <= f_set_bit(zeros,'1',g_num_ports);
---   rtu_special_traffic_config.mirrored_port_src    <= (others => '0');
---   rtu_special_traffic_config.mirrored_port_dst    <= (others => '0');
-  
-  
---   rtu_special_traffic_config.tru_enabled          <= '1';
 end behavioral;
