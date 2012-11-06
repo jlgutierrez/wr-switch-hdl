@@ -621,7 +621,8 @@ INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[14].U_Endpoint_X/U_Wra
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[14].U_Endpoint_X/U_Wrapped_Endpoint/U_PCS_1000BASEX/U_MDIO_WB/mdio_wr_spec_tx_cal_sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[14].U_Endpoint_X/U_Wrapped_Endpoint/U_Rx_Path/U_early_addr_match/U_sync_done/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[14].U_Endpoint_X/U_Wrapped_Endpoint/U_WB_SLAVE/ep_tscr_cs_done_sync0" TNM = Ignore_sync_ffs;
-INST "U_Real_Top/gen_network_stuff.U_RTU/U_Wrapped_RTU/U_WB_Slave/rtu_gcr_g_ena_sync0" TNM = Ignore_sync_ffs;
+INST "U_Real_Top/gen_network_stuff.U_RTU/U_WB_Slave/rtu_gcr_g_ena_sync0" TNM = Ignore_sync_ffs;
+#INST "U_Real_Top/gen_network_stuff.U_RTU/U_Wrapped_RTU/U_WB_Slave/rtu_gcr_g_ena_sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_PPS_Gen/WRAPPED_PPSGEN/Uwb_slave/ppsg_cr_cnt_en_sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_PPS_Gen/WRAPPED_PPSGEN/Uwb_slave/ppsg_cr_cnt_rst_sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_PPS_Gen/WRAPPED_PPSGEN/Uwb_slave/ppsg_cr_cnt_set_sync0" TNM = Ignore_sync_ffs;
