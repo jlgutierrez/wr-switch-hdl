@@ -134,9 +134,13 @@ begin --rtl
                -- disabled from traffic forwarding. It is to make sure that everything is 
                -- under control and no "unwanted" forwarding does not take place
                if(rtu_pass_all_i = '0' and port_if_i.status = '1') then
-                 s_tru_port_state           <= S_WORKING; 
+                 s_tru_port_state         <= S_WORKING; 
+                 endpoint_o.status        <= '1'; 
+               else
+                 endpoint_o.status        <= '0'; 
                end if;
-               endpoint_o.status          <= port_if_i.status; -- when port is disabled we 
+               
+--                endpoint_o.status          <= port_if_i.status; -- when port is disabled we 
                                                                -- forward the real state of the port
                port_if_ctrl_o             <= '1';              -- we always try to re-vive the port
                                                                -- by turning it ON, it is for 
