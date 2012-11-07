@@ -326,6 +326,10 @@ begin
         rtu_pcr_fix_prio_i       => pcr_fix_prio(i),
         rtu_pcr_prio_val_i       => pcr_prio_val(i)
         );
+        
+        rtu2tru_o.request_valid(i)  <= req_i(i).valid;
+        rtu2tru_o.priorities(i)     <= req_i(i).has_prio;
+        
   end generate;  -- end ports
    
   ------------------------------------------------------------------------
@@ -567,25 +571,46 @@ begin
   -- scaling of the number of ports
   p_pcr_registers : process(clk_sys_i)
   begin
-    if rising_edge(clk_sys_i) then
-      regs_towb.pcr_learn_en_i  <= pcr_learn_en(current_pcr);
-      regs_towb.pcr_pass_all_i  <= pcr_pass_all(current_pcr);
-      regs_towb.pcr_pass_bpdu_i <= pcr_pass_bpdu(current_pcr);
-      regs_towb.pcr_fix_prio_i  <= pcr_fix_prio(current_pcr);
-      regs_towb.pcr_prio_val_i  <= pcr_prio_val(current_pcr);
-      regs_towb.pcr_b_unrec_i   <= pcr_b_unrec(current_pcr);
+    if(rst_n_i = '0') then
 
-      if(regs_fromwb.pcr_learn_en_load_o = '1') then
-        pcr_learn_en(current_pcr)  <= regs_fromwb.pcr_learn_en_o;
-        pcr_pass_all(current_pcr)  <= regs_fromwb.pcr_pass_all_o;
-        pcr_pass_bpdu(current_pcr) <= regs_fromwb.pcr_pass_bpdu_o;
-        pcr_fix_prio(current_pcr)  <= regs_fromwb.pcr_fix_prio_o;
-        pcr_prio_val(current_pcr)  <= regs_fromwb.pcr_prio_val_o;
-        pcr_b_unrec(current_pcr)   <= regs_fromwb.pcr_b_unrec_o;
+        regs_towb.pcr_learn_en_i   <= '0';
+        regs_towb.pcr_pass_all_i   <= '0';
+        regs_towb.pcr_pass_bpdu_i  <= '0';
+        regs_towb.pcr_fix_prio_i   <= '0';
+        regs_towb.pcr_prio_val_i   <= (others => '0');
+        regs_towb.pcr_b_unrec_i    <= '0';
+        pcr_learn_en               <= (others => '0');
+        pcr_pass_all               <= (others => '0');
+        pcr_pass_bpdu              <= (others => '0');
+        pcr_fix_prio               <= (others => '0');
+        pcr_prio_val               <= (others => (others => '0'));
+        pcr_b_unrec                <= (others => '0');
+    
+    else
+      if rising_edge(clk_sys_i) then
+        regs_towb.pcr_learn_en_i  <= pcr_learn_en(current_pcr);
+        regs_towb.pcr_pass_all_i  <= pcr_pass_all(current_pcr);
+        regs_towb.pcr_pass_bpdu_i <= pcr_pass_bpdu(current_pcr);
+        regs_towb.pcr_fix_prio_i  <= pcr_fix_prio(current_pcr);
+        regs_towb.pcr_prio_val_i  <= pcr_prio_val(current_pcr);
+        regs_towb.pcr_b_unrec_i   <= pcr_b_unrec(current_pcr);
 
+        if(regs_fromwb.pcr_learn_en_load_o = '1') then
+          pcr_learn_en(current_pcr)  <= regs_fromwb.pcr_learn_en_o;
+          pcr_pass_all(current_pcr)  <= regs_fromwb.pcr_pass_all_o;
+          pcr_pass_bpdu(current_pcr) <= regs_fromwb.pcr_pass_bpdu_o;
+          pcr_fix_prio(current_pcr)  <= regs_fromwb.pcr_fix_prio_o;
+          pcr_prio_val(current_pcr)  <= regs_fromwb.pcr_prio_val_o;
+          pcr_b_unrec(current_pcr)   <= regs_fromwb.pcr_b_unrec_o;
+        end if;
       end if;
     end if;
   end process;
+
+
+  rtu2tru_o.pass_all             <= pcr_pass_all;
+  rtu2tru_o.forward_bpdu_only    <= pcr_pass_bpdu;
+ 
 
   irq_nempty                     <= regs_fromwb.ufifo_wr_empty_o;
   
@@ -723,6 +748,5 @@ begin
             vlan_tab_rd_entry4fast_match.prio_override,
             vlan_tab_rd_entry4fast_match.prio,
             vlan_tab_rd_entry4fast_match.has_prio);
-
 
 end behavioral;
