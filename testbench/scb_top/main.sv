@@ -22,8 +22,10 @@ module main;
    reg clk_sys=0;
    reg clk_swc_mpm_core=0;
    reg rst_n=0;
-   
+      
    parameter g_num_ports = 18;
+   
+   reg [g_num_ports-1:0] ep_ctrl;
    
    // prameters to create some gaps between pks (not work really well)
    parameter g_enable_pck_gaps = 1;  //1=TRUE, 0=FALSE
@@ -32,8 +34,9 @@ module main;
    
    // defining which ports send pcks -> forwarding is one-to-one 
    // (port_1 to port_14, port_2 to port_13, etc)
-       reg [18:0] portUnderTest = 18'b000000000000000011; // unicast
- //     reg [18:0] portUnderTest = 18'b111000000000000111; // unicast
+  //     reg [18:0] portUnderTest = 18'b000000000000000011; // unicast -- port 0 disabled by VLAN config
+  //    reg [18:0] portUnderTest = 18'b111000000000000111; // unicast
+      reg [18:0] portUnderTest = 18'b000000000000000111; // unicast 
  //     reg [18:0] portUnderTest = 18'b000000000000001000; // broadcast
  //   reg [18:0] portUnderTest = 18'b100000000000000101;
  //   reg [18:0] portUnderTest = 18'b111111111111111111;
@@ -161,7 +164,8 @@ module main;
               .clk_ref_i(clk_ref),
               .rst_n_i(rst_n),
               .cpu_irq(cpu_irq),
-              .clk_swc_mpm_core_i(clk_swc_mpm_core)
+              .clk_swc_mpm_core_i(clk_swc_mpm_core),
+              .ep_ctrl_i(ep_ctrl)
               );
 
    typedef struct {
@@ -270,10 +274,12 @@ module main;
       int seed;
       rtu_vlan_entry_t def_vlan;
       
-      
-    
       CWishboneAccessor cpu_acc = DUT.cpu.get_accessor();
       
+      for(int gg=0;gg<g_num_ports;gg++) 
+      begin 
+        ep_ctrl[gg] = 'b1; 
+      end
       repeat(200) @(posedge clk_sys);
 
       $display("Startup!");
@@ -327,7 +333,7 @@ module main;
 
      // rtu.set_hash_poly();
       
-      def_vlan.port_mask      = 32'hffff412E;
+      def_vlan.port_mask      = 32'hffffFFFF;
       def_vlan.fid            = 0;
       def_vlan.drop           = 0;
       def_vlan.prio           = 0;
@@ -336,14 +342,14 @@ module main;
 
       rtu.add_vlan_entry(0, def_vlan);
 
-      def_vlan.port_mask      = 32'hfffff0Ff;
-      def_vlan.fid            = 0;
-      def_vlan.drop           = 0;
-      def_vlan.prio           = 7;
-      def_vlan.has_prio       = 1;
-      def_vlan.prio_override  = 0;
-
-      rtu.add_vlan_entry(100, def_vlan);
+//       def_vlan.port_mask      = 32'hfffff0Ff;
+//       def_vlan.fid            = 0;
+//       def_vlan.drop           = 0;
+//       def_vlan.prio           = 7;
+//       def_vlan.has_prio       = 1;
+//       def_vlan.prio_override  = 0;
+// 
+//       rtu.add_vlan_entry(100, def_vlan);
 
       ///////////////////////////   RTU extension settings:  ////////////////////////////////
       
@@ -363,8 +369,13 @@ module main;
       tru = new(cpu_acc, 'h57000);      
       init_tru(tru);
       
+      
       ////////////// sending packest on all the ports (16) according to the portUnderTest mask.///////
       fork
+         begin
+           wait_cycles(500);
+           ep_ctrl[0] = 'b0;
+         end 
 //`ifdef none
          begin
          if(portUnderTest[0]) 

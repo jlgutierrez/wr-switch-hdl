@@ -45,7 +45,8 @@ module scb_top_sim_svwrap
    clk_ref_i,
    rst_n_i,
    cpu_irq,
-   clk_swc_mpm_core_i
+   clk_swc_mpm_core_i,
+   ep_ctrl_i
    );
 
    parameter g_num_ports = 6;
@@ -53,8 +54,8 @@ module scb_top_sim_svwrap
 
    
    input clk_sys_i, clk_ref_i,rst_n_i,clk_swc_mpm_core_i;
+   input bit[g_num_ports-1:0] ep_ctrl_i;
    output cpu_irq;
-
 
    wire [g_num_ports-1:0] rbclk;
    
@@ -188,7 +189,20 @@ module scb_top_sim_svwrap
                      .wb_adr_i(U_ep_wb.master.adr[7:0]),
                      .wb_dat_i(U_ep_wb.master.dat_o),
                      .wb_dat_o(U_ep_wb.master.dat_i),
-                     .wb_ack_o (U_ep_wb.master.ack)
+                     .wb_ack_o (U_ep_wb.master.ack),
+
+                      // new stuff
+                     .tru_status_o(),        
+                     .tru_ctrlRd_o(),        
+                     .tru_rx_pck_o(),        
+                     .tru_rx_pck_class_o(),  
+   
+                     .tru_ctrlWr_i(ep_ctrl_i[i]),            
+                     .tru_tx_pck_i(1'b0),            
+                     .tru_tx_pck_class_i(8'b0),      
+                     .tru_pauseSend_i(1'b0),         
+                     .tru_pauseTime_i(16'b0),         
+                     .tru_outQueueBlockMask_i(8'b0)
                      );
 
            initial begin
@@ -223,16 +237,21 @@ module scb_top_sim_svwrap
       for(j=0;j<g_num_ports;j++) begin
          assign rbclk[j] = clk_ref_phys[j];
          
-         
-         assign td[18 * j + 15 : 18 * j] = phys_out[j].tx_data;
-         assign td[18 * j + 17 : 18 * j + 16] = phys_out[j].tx_k;
+         ///////////////// nasty hack by Maciej /////////////////
+         // causing sync error in the Switch 
+         assign td[18 * j + 15 : 18 * j]      = ep_ctrl_i[j] ? phys_out[j].tx_data :  'h00BC;
+         assign td[18 * j + 17 : 18 * j + 16] = ep_ctrl_i[j] ? phys_out[j].tx_k    : 2'b01;
+         // causing transmission error in the driving simulation
+         assign phys_in[j].tx_enc_err         = ~ep_ctrl_i[j];
+         ///////////////////////////////////////////////////////
 
          assign phys_in[j].ref_clk    = clk_ref_phys[j];
          assign phys_in[j].rx_data    = rd[18 * j + 15 : 18 * j];
          assign phys_in[j].rx_k       = rd[18 * j + 17 : 18 * j + 16];
          assign phys_in[j].rx_clk     = clk_ref_i;
-         assign phys_in[j].tx_enc_err = 0;
+//          assign phys_in[j].tx_enc_err = 0;
          assign phys_in[j].rx_enc_err = 0;
+         
  
          always@(posedge clk_ref_i) begin : gen_disparity
             if(phys_out[j].rst)
