@@ -460,9 +460,10 @@ begin
             if(fast_match_rd_valid = '1' and fast_match_wr_req_d = '1') then
               -- response the current fast_match request, registered
              -- fast_match            <= fast_match_rd_data_i;
-              if(fast_match_rd_data_i.nf = '1'   or     -- non-forward (link-limited) e.g.: BPDU
-                 fast_match_rd_data_i.ff = '1'   or     -- fast forward recongized
-                 full_match_aboard       = '1')  then   -- aboard because next frame received
+              if(fast_match_rd_data_i.nf   = '1'   or     -- non-forward (link-limited) e.g.: BPDU
+                 fast_match_rd_data_i.ff   = '1'   or     -- fast forward recongized
+                 fast_match_rd_data_i.drop = '1'   or     -- no point in further work (drop due to VLAN)
+                 full_match_aboard         = '1')  then   -- aboard because next frame received
                 -- if we recognizd special traffic or aboard request , we don't need full match
                 port_state          <= S_FINAL_MASK;
               else

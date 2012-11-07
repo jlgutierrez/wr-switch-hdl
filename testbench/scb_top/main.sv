@@ -32,10 +32,11 @@ module main;
    
    // defining which ports send pcks -> forwarding is one-to-one 
    // (port_1 to port_14, port_2 to port_13, etc)
+       reg [18:0] portUnderTest = 18'b000000000000000011; // unicast
  //     reg [18:0] portUnderTest = 18'b111000000000000111; // unicast
  //     reg [18:0] portUnderTest = 18'b000000000000001000; // broadcast
  //   reg [18:0] portUnderTest = 18'b100000000000000101;
-    reg [18:0] portUnderTest = 18'b111111111111111111;
+ //   reg [18:0] portUnderTest = 18'b111111111111111111;
    integer repeat_number = 10;
    integer tries_number = 3;
 /* -----\/----- EXCLUDED -----\/-----
@@ -326,7 +327,7 @@ module main;
 
      // rtu.set_hash_poly();
       
-      def_vlan.port_mask      = 32'hffff412f;
+      def_vlan.port_mask      = 32'hffff412E;
       def_vlan.fid            = 0;
       def_vlan.drop           = 0;
       def_vlan.prio           = 0;
