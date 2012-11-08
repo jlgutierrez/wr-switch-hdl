@@ -535,8 +535,18 @@ begin
               else
                 -- normal forwarding
                 -- (eliminate self-forward)
-                rsp.port_mask       <= f_set_bit(forwarding_mask,'0',g_port_index) ; 
-                rsp.drop            <= drop;            
+                
+                if(f_set_bit(forwarding_mask,'0',g_port_index) = zeros(c_RTU_MAX_PORTS-1 downto 0)) then
+                   rsp.drop         <= '1';
+                   rsp.port_mask    <= (others=> '0');
+                else
+                  rsp.drop          <= drop;
+                  if(drop = '1') then
+                    rsp.port_mask    <= (others=> '0');
+                  else
+                    rsp.port_mask       <= f_set_bit(forwarding_mask,'0',g_port_index) ;
+                  end if;              
+                end if;
               end if;
             
               port_state          <= S_RESPONSE;

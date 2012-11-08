@@ -87,18 +87,26 @@ module main;
       //int i,j;
       
       arr            = new[n_tries](arr);
-
-      gen.set_seed(seed);
+      if(opt !=3 && opt != 4)
+        gen.set_seed(seed);
   
       tmpl           = new;
-      tmpl.src       = '{srcPort, 2,3,4,5,6};
+
+      if(opt==3 || opt==4)
+        tmpl.src       = '{0, 2,3,4,5,6};
+      else
+        tmpl.src       = '{srcPort, 2,3,4,5,6};
+
       if(opt==0)
         tmpl.dst       = '{dstPort, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       else if(opt==1)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
       else if(opt==2)
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00};
-
+      else if(opt==3)
+        tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
+      else if(opt==3)
+        tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
 
       tmpl.has_smac  = 1;
       tmpl.is_q      = is_q;
@@ -220,6 +228,7 @@ module main;
    
    task automatic init_tru(input CSimDrv_WR_TRU tru_drv);
 
+      $display(">>>>>>>>>>>>>>>>>>> TRU initialization  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
       tru_drv.pattern_config(1 /*replacement*/ ,2 /*addition*/);
       tru_drv.rt_reconf_config(4 /*tx_frame_id*/, 4/*rx_frame_id*/, 1 /*mode*/);
       tru_drv.rt_reconf_enable();
@@ -249,16 +258,16 @@ module main;
        **/
 
       tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
-                             'h00 /*pattern_mask*/, 'h00 /* pattern_match*/,   'h0 /* pattern_mode */,
-                             'hFFFFF /*ports_mask  */, 'hFFFFF /* ports_egress */,'hFFFFF /* ports_ingress   */);
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h3FFFF /*ports_mask  */, 32'b111000000010100001 /* ports_egress */,32'b111000000010100001 /* ports_ingress   */);
 
       tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
-                             'h03 /*pattern_mask*/, 'h01 /* pattern_match*/,'h0  /* pattern_mode */,
-                             'hFF /*ports_mask  */, 'h3E /* ports_egress */,'h1E /* ports_ingress   */);
+                             32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
+                             32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
  
       tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
-                             'h03 /*pattern_mask*/, 'h03 /* pattern_match*/,'h0  /* pattern_mode */,
-                             'hFF /*ports_mask  */, 'h3C /* ports_egress */,'h3C /* ports_ingress   */);
+                             32'b00000011 /*pattern_mask*/, 32'b00000011 /* pattern_match*/,'h0  /* pattern_mode */,
+                             32'b00000111 /*ports_mask  */, 32'b00000100 /* ports_egress */,32'b00000100 /* ports_ingress   */);
 
       tru_drv.write_tru_tab(  0   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
                              'h00 /*pattern_mask*/, 'h00 /* pattern_match*/,'h20 /* pattern_mode */,
@@ -266,7 +275,9 @@ module main;
  
       tru_drv.tru_swap_bank();  
       tru_drv.tru_enable();
+      tru_drv.tru_port_config(0);
       $display("TRU configured and enabled");
+      $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
    endtask; //init_tru
    
    initial begin
@@ -332,8 +343,8 @@ module main;
         if(portUnderTest[17]) rtu.add_static_rule('{ 0, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<0  ));
 
      // rtu.set_hash_poly();
-      
-      def_vlan.port_mask      = 32'hffffFFFF;
+      $display(">>>>>>>>>>>>>>>>>>> RTU initialization  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+      def_vlan.port_mask      = 32'h0003800F;
       def_vlan.fid            = 0;
       def_vlan.drop           = 0;
       def_vlan.prio           = 0;
@@ -365,8 +376,9 @@ module main;
       ////////////////////////////////////////////////////////////////////////////////////////
 
       rtu.enable();
+      $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
       ///TRU
-      tru = new(cpu_acc, 'h57000);      
+      tru = new(cpu_acc, 'h57000,g_num_ports,1);      
       init_tru(tru);
       
       
@@ -375,6 +387,8 @@ module main;
          begin
            wait_cycles(500);
            ep_ctrl[0] = 'b0;
+           wait_cycles(500);
+           ep_ctrl[1] = 'b0;
          end 
 //`ifdef none
          begin
@@ -383,7 +397,7 @@ module main;
                for(int g=0;g<tries_number;g++)
                  begin
                     $display("Try port_0:%d",  g);
-                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[0].send /* src */, ports[17].recv /* sink */,  0 /* srcPort */ , 17 /* dstPort */, 0 /*option*/);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[0].send /* src */, ports[17].recv /* sink */,  0 /* srcPort */ , 17 /* dstPort */, 4 /*option*/);
                  end
             end   
          end // fork begin
@@ -397,7 +411,8 @@ module main;
                for(int g=0;g<tries_number;g++)
                  begin
                     $display("Try port_1:%d",  g);
-                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[1].send /* src */, ports[16] .recv /* sink */,  1 /* srcPort */ , 16  /* dstPort */);
+                    // hacked
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[1].send /* src */, ports[16] .recv /* sink */,  1 /* srcPort */ , 16  /* dstPort */,4/*option*/);
                  end
             end   
          end
@@ -412,7 +427,7 @@ module main;
                for(int g=0;g<tries_number;g++)
                  begin
                     $display("Try port_2:%d",  g);
-                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[2].send /* src */, ports[15] .recv /* sink */,  2 /* srcPort */ , 15  /* dstPort */, 0 /*option*/);
+                    tx_test(seed /* seed */, repeat_number /* n_tries */, 0 /* is_q */, 0 /* unvid */, ports[2].send /* src */, ports[15] .recv /* sink */,  2 /* srcPort */ , 15  /* dstPort */, 4 /*option*/);
                  end
             end   
          end

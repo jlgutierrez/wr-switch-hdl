@@ -505,7 +505,7 @@ endtask // CRTUSimDriver
 task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_single, bit  mac_range, bit mac_br);
    uint64_t mask;
    bus.read(base_addr + `ADDR_RTU_RX_CTR, mask);
-   $display("RTU eXtension features debugging: 1: read mask: 0x%x",mask);
+//    $display("RTU eXtension features debugging: 1: read mask: 0x%x",mask);
 //    mask = !(`RTU_RX_CTR_MR_ENA        |
 //             `RTU_RX_CTR_FF_MAC_PTP    |
 //             `RTU_RX_CTR_FF_MAC_LL     |
@@ -515,7 +515,7 @@ task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_sin
 //             32'h00000000) &
 //              mask; 
    mask = 'hFFFFFFC0 & mask; 
-   $display("RTU eXtension features debugging: 2: cleared mask: 0x%x",mask);         
+   /*$display("RTU eXtension features debugging: 2: cleared mask: 0x%x",mask);*/         
    mask =(((mr          << `RTU_RX_CTR_MR_ENA_OFFSET)        & `RTU_RX_CTR_MR_ENA)        |     
           ((mac_ptp     << `RTU_RX_CTR_FF_MAC_PTP_OFFSET)    & `RTU_RX_CTR_FF_MAC_PTP)    |  
           ((mac_ll      << `RTU_RX_CTR_FF_MAC_LL_OFFSET)     & `RTU_RX_CTR_FF_MAC_LL)     | 
@@ -523,7 +523,7 @@ task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_sin
           ((mac_range   << `RTU_RX_CTR_FF_MAC_RANGE_OFFSET)  & `RTU_RX_CTR_FF_MAC_RANGE)  |  
           ((mac_br      << `RTU_RX_CTR_FF_MAC_BR_OFFSET)     & `RTU_RX_CTR_FF_MAC_BR)   ) |
            mask;
-   $display("RTU eXtension features debugging: 1: written mask: 0x%x",mask);
+//    $display("RTU eXtension features debugging: 1: written mask: 0x%x",mask);
    bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
    $display("RTU eXtension features:");
    if(mr        ) $display("\t Port Mirroring                           - enabled"); 
