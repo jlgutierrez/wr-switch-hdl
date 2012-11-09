@@ -53,8 +53,7 @@ class CRTUSimDriver;
    
    extern task set_bus(CBusAccessor _bus, int _base_addr);
    extern task add_hash_entry(rtu_filtering_entry_t ent);
-   extern task set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en);
-
+   extern task set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en, bit dbg = 0);
    extern task add_static_rule(bit[7:0] dmac[], bit[31:0] dpm);
    extern task add_vlan_entry(int vlan_id, rtu_vlan_entry_t ent);
    extern task poll_ufifo();
@@ -287,18 +286,18 @@ task CRTUSimDriver::add_hash_entry(rtu_filtering_entry_t ent);
         
 endtask // CRTUSimDriver
 
-task CRTUSimDriver::set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en);
+task CRTUSimDriver::set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en, bit dbg = 0);
    uint64_t rv, tmp;
    
    bus.read(base_addr + `ADDR_RTU_PSR, rv);
-   $display("PSel: %d supported ports, configuration for port %d:", (rv>>8) & 'hff, port);
+   if(dbg) $display("PSel: %d supported ports, configuration for port %d:", (rv>>8) & 'hff, port);
    
 
-   if(learn_en  == 1) begin tmp = tmp | `RTU_PCR_LEARN_EN;  $display("learn"); end;
-   if(pass_all  == 1) begin tmp = tmp | `RTU_PCR_PASS_ALL;  $display("pass all"); end;
-   if(pass_bpdu == 1) begin tmp = tmp | `RTU_PCR_PASS_BPDU; $display("pass bpdu"); end;
+   if(learn_en  == 1) begin tmp = tmp | `RTU_PCR_LEARN_EN; if(dbg)  $display("learn"); end;
+   if(pass_all  == 1) begin tmp = tmp | `RTU_PCR_PASS_ALL; if(dbg)  $display("pass all"); end;
+   if(pass_bpdu == 1) begin tmp = tmp | `RTU_PCR_PASS_BPDU;if(dbg)  $display("pass bpdu"); end;
  
-   tmp = `RTU_PCR_B_UNREC | tmp; $display("broadcast unrecognized");
+   tmp = `RTU_PCR_B_UNREC | tmp; if(dbg) $display("broadcast unrecognized");
  
    bus.write(base_addr + `ADDR_RTU_PSR, port);
    bus.write(base_addr + `ADDR_RTU_PCR, tmp);

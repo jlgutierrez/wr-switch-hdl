@@ -522,16 +522,22 @@ begin
               if(mirror_port_src_rx = '1' or mirror_port_src_tx = '1') then
                 -- if mirroring is enabled, and this port is source of mirror traffic, we don't drop
                 -- the traffic, 
-                if(drop = '1') then
+                if(drop = '1' and mirror_port_src_rx = '1') then
                   -- forward only to the mirror (dst) port
                   -- (eliminate self-forward)
                   rsp.port_mask     <= f_set_bit(rtu_str_config_i.mirror_port_dst,'0',g_port_index) ;
+                  rsp.drop          <= '0';
                 else
                   -- forward to "normal forwarding ports" + mirror (dst) port
                   -- (eliminate self-forward)
-                  rsp.port_mask     <= f_set_bit(forwarding_and_mirror_mask,'0',g_port_index); 
+                  rsp.drop          <= drop;
+                  if(drop = '1') then
+                    rsp.port_mask    <= (others=> '0');
+                  else
+                   rsp.port_mask     <= f_set_bit(forwarding_and_mirror_mask,'0',g_port_index); 
+                  end if;                    
                 end if;
-                rsp.drop          <= '0';
+                
               else
                 -- normal forwarding
                 -- (eliminate self-forward)
