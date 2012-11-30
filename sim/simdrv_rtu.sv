@@ -528,7 +528,9 @@ task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_sin
    if(mr        ) $display("\t Port Mirroring                           - enabled"); 
    else           $display("\t Port Mirroring                           - disabled"); 
    if(mac_ptp   ) $display("\t PTP fast forward                         - enabled"); 
-   else           $display("\t PTP fast forward                         - disabled"); 
+   else           $display("\t PTP fast forward                         - disabled");
+   if(mac_br    ) $display("\t Broadcast fast forward                   - enabled"); 
+   else           $display("\t Broadcast fast forward                   - disabled");  
    if(mac_ll    ) $display("\t Link-limited traffic (BPDU) fast forward - enabled"); 
    else           $display("\t Link-limited traffic (BPDU) fast forward - disabled");
    if(mac_single) $display("\t Single configured MACs fast forward      - enabled"); 
