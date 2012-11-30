@@ -634,26 +634,31 @@ package body wrsw_tru_pkg is
     pattern_addition   (c_RTU_MAX_PORTS-1 downto pattern_add'length)  := (others=>'0');
     
     for i in 0 to subentry_num-1 loop
-      case entry(i).pattern_mode is
-        when "0000" => --std_logic_vector(to_unsigned(0,entry(i).pattern_mode'length)) => 
-           if((pattern_replacement and entry(i).pattern_mask) = entry(i).pattern_match) then
-              resp_masks.egress  := (resp_masks.egress  and not entry(i).ports_mask) or (entry(i).ports_egress  and entry(i).ports_mask);
-              resp_masks.ingress := (resp_masks.ingress and not entry(i).ports_mask) or (entry(i).ports_ingress and entry(i).ports_mask);
-           end if;
-        when "0001" => --std_logic_vector(to_unsigned(1,entry(i).pattern_mode'length)) =>
-           if ((pattern_addition and entry(i).pattern_mask) = entry(i).pattern_match) then
+      if(entry(i).valid = '1') then
+        case entry(i).pattern_mode is
+          when "0000" => --std_logic_vector(to_unsigned(0,entry(i).pattern_mode'length)) => 
+            if((pattern_replacement and entry(i).pattern_mask) = entry(i).pattern_match) then
+              resp_masks.egress  := (resp_masks.egress  and (not entry(i).ports_mask)) or (entry(i).ports_egress  and entry(i).ports_mask);
+              resp_masks.ingress := (resp_masks.ingress and (not entry(i).ports_mask)) or (entry(i).ports_ingress and entry(i).ports_mask);
+            end if;
+          when "0001" => --std_logic_vector(to_unsigned(1,entry(i).pattern_mode'length)) =>
+            if ((pattern_addition and entry(i).pattern_mask) = entry(i).pattern_match) then
               resp_masks.egress  := resp_masks.egress  or (entry(i).ports_egress  and entry(i).ports_mask);
               resp_masks.ingress := resp_masks.ingress or (entry(i).ports_ingress and entry(i).ports_mask);
-           end if;
-        when "0010" => --std_logic_vector(to_unsigned(2,entry(i).pattern_mode'length )) => 
-           if ((pattern_addition and entry(i).pattern_mask and entry(i).pattern_match) /= zeros) then
+            end if;
+          when "0010" => --std_logic_vector(to_unsigned(2,entry(i).pattern_mode'length )) => 
+            if ((pattern_addition and entry(i).pattern_mask and entry(i).pattern_match) /= zeros) then
               resp_masks.egress  := resp_masks.egress  or (entry(i).ports_egress  and entry(i).ports_mask and pattern_addition);
               resp_masks.ingress := resp_masks.ingress or (entry(i).ports_ingress and entry(i).ports_mask and pattern_addition);
-           end if;
-        when others =>
-           resp_masks.egress  := resp_masks.egress; 
-           resp_masks.ingress := resp_masks.ingress ;
-        end case;
+            end if;
+          when others =>
+            resp_masks.egress  := resp_masks.egress; 
+            resp_masks.ingress := resp_masks.ingress ;
+          end case;
+        else
+          resp_masks.egress  := resp_masks.egress; 
+          resp_masks.ingress := resp_masks.ingress ;
+        end if;
 
 
 --       if    (entry(i).pattern_mode = std_logic_vector(to_unsigned(0,entry(i).pattern_mode'length)) and  ((pattern_rep and entry(i).pattern_mask) = entry(i).pattern_match)) then
