@@ -99,12 +99,12 @@ begin --rtl
     -----------------------------------------------------------------------------------------------
     -- TODO: case and choose functions according to the config
     -----------------------------------------------------------------------------------------------
-    pattern_o <= (others=>'0')                                  -- default 
-                 when (patternID_i = std_logic_vector(to_unsigned(0,patternID_i'length))) else
-                 not (endpoints_i.status(g_pattern_width-1 downto 0)) -- eRSTP
-                 when (patternID_i = std_logic_vector(to_unsigned(1,patternID_i'length))) else
-                 endpoints_i.rxFrameMaskReg(rxFrameNumber)(g_pattern_width-1 downto 0) -- eRSTP: quick FWD
-                 when (patternID_i = std_logic_vector(to_unsigned(2,patternID_i'length))) else
+    pattern_o <= (others=>'0')                                                                 -- 0: default 
+                 when (patternID_i = std_logic_vector(to_unsigned(0,patternID_i'length))) else -- 0: defaut
+                 not (endpoints_i.status(g_pattern_width-1 downto 0))                          -- 1: eRSTP
+                 when (patternID_i = std_logic_vector(to_unsigned(1,patternID_i'length))) else -- 1: eRSTP
+                 endpoints_i.rxFrameMaskReg(rxFrameNumber)(g_pattern_width-1 downto 0)         -- 2: eRSTP: quick FWD
+                 when (patternID_i = std_logic_vector(to_unsigned(2,patternID_i'length))) else -- 2: eRSTP: quick FWD
                  (others=>'0');
 
 end rtl;
