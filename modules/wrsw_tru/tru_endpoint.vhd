@@ -95,6 +95,7 @@ architecture rtl of tru_endpoint is
  
   signal s_zeros             : std_logic_vector(31 downto 0);
   signal s_port_status_d0    : std_logic;
+  signal s_port_status       : std_logic;
   signal s_port_down         : std_logic;             -- detects edge of the port status signal 
                                                       -- in order to detect the event of "link down"
   signal s_stableUp_cnt      : unsigned(7 downto 0);  -- count the number of cycles while which
@@ -120,7 +121,8 @@ begin --rtl
       if(rst_n_i = '0') then
          
          s_tru_port_state           <= S_DISABLED;
-         endpoint_o.status          <= '0';
+--          endpoint_o.status          <= '0';
+         s_port_status              <= '0';
          port_if_ctrl_o             <= '0';
          
       else
@@ -135,9 +137,11 @@ begin --rtl
                -- under control and no "unwanted" forwarding does not take place
                if(rtu_pass_all_i = '0' and port_if_i.status = '1') then
                  s_tru_port_state         <= S_WORKING; 
-                 endpoint_o.status        <= '1'; 
+--                  endpoint_o.status        <= '1'; 
+                 s_port_status            <= '1';
                else
-                 endpoint_o.status        <= '0'; 
+--                  endpoint_o.status        <= '0'; 
+                 s_port_status            <= '0';
                end if;
                
 --                endpoint_o.status          <= port_if_i.status; -- when port is disabled we 
@@ -152,7 +156,8 @@ begin --rtl
                
                -- we detect that port went down
                if(s_port_down = '1') then
-                 endpoint_o.status        <= '0';  -- informing other TRU modules that port is down
+--                  endpoint_o.status        <= '0';  -- informing other TRU modules that port is down
+                 s_port_status            <= '0';  -- informing other TRU modules that port is down
                  port_if_ctrl_o           <= '0';  -- killing the port to make sure it is down
                  s_tru_port_state         <= S_BROKEN_LINK;
                end if;
@@ -172,7 +177,8 @@ begin --rtl
             when others =>
             --====================================================================================
                s_tru_port_state           <= S_DISABLED;
-               endpoint_o.status          <=  '0';
+--                endpoint_o.status          <=  '0';
+               s_port_status              <= '0';
                port_if_ctrl_o             <= '0';
            
          end case; 
@@ -230,7 +236,8 @@ begin --rtl
       end if;
     end if;
   end process;  
-
+  
+  endpoint_o.status                                         <= s_port_status and rtu_pass_all_i;
   endpoint_o.rxFrameMask(g_pclass_number-1 downto 0)        <= port_if_i.rx_pck_class(g_pclass_number-1 downto 0) when (port_if_i.rx_pck='1') else (others => '0');--s_rxFrameMask;
   endpoint_o.rxFrameMaskReg(g_pclass_number-1 downto 0)     <= s_rxFrameMaskReg(g_pclass_number-1 downto 0);
   
