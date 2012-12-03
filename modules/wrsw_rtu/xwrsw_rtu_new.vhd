@@ -6,7 +6,7 @@
 -- Authors    : Tomasz Wlostowski, Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2012-01-10
--- Last update: 2012-06-25
+-- Last update: 2012-12-03
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -76,6 +76,17 @@
 --
 -- Maciek: if you decide to use CRC-based hash, make the initial hash value & polynomial
 -- programmable from Wishbone.
+-- 
+-- RTUeX:
+-- - debugged new feature (Simulation and H/W on the switch):
+--   * singe MAC FastForward
+--   * range MAC FastForward
+--   * Broadcast FastForward
+--   * PTP FastForward
+--   * LinkLimited FastForward
+--   * Mirroring
+-- - not debbuged: HP packet recognision - I need VLANs
+-- 
 -- 
 -------------------------------------------------------------------------------
 --

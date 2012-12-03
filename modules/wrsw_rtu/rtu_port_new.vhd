@@ -166,6 +166,7 @@ architecture behavioral of rtu_port_new is
   signal rtu_idle                    : std_logic;
   signal forwarding_mask             : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
   signal forwarding_and_mirror_mask  : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
+  signal forwarding_without_mr_dst_mask : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
   signal drop                        : std_logic;
   signal prio                        : std_logic_vector(2 downto 0); 
   signal hp                          : std_logic;
@@ -238,8 +239,12 @@ begin
 
   -- traffic from this port is forwarded (tx) to the port being mirrord , so we forward it
   -- also to mirror port (mirror_port_dst)
+  -- REMARK: if we have broadcast, the forwarding decision will show that we want to transmit
+  --         (tx) frame to the reception port... we don't mirror this traffic, this is why we 
+  --         apply below the f_set_bit() mask 
   mirror_port_src_tx  <= '0' when (rtu_str_config_i.mr_ena = '0') else  -- disabled
-                         '1' when ((forwarding_mask and rtu_str_config_i.mirror_port_src_tx) /=
+                         '1' when ((f_set_bit(forwarding_mask,'0',g_port_index) and --no to myself
+                                    rtu_str_config_i.mirror_port_src_tx) /=
                                      zeros(c_rtu_max_ports-1 downto 0)  ) else
                          '0';
   
@@ -542,7 +547,7 @@ begin
                 -- normal forwarding
                 -- (eliminate self-forward)
                 
-                if(f_set_bit(forwarding_mask,'0',g_port_index) = zeros(c_RTU_MAX_PORTS-1 downto 0)) then
+                if(f_set_bit(forwarding_without_mr_dst_mask,'0',g_port_index) = zeros(c_RTU_MAX_PORTS-1 downto 0)) then
                    rsp.drop         <= '1';
                    rsp.port_mask    <= (others=> '0');
                 else
@@ -550,7 +555,7 @@ begin
                   if(drop = '1') then
                     rsp.port_mask    <= (others=> '0');
                   else
-                    rsp.port_mask       <= f_set_bit(forwarding_mask,'0',g_port_index) ;
+                    rsp.port_mask       <= f_set_bit(forwarding_without_mr_dst_mask,'0',g_port_index) ;
                   end if;              
                 end if;
               end if;
@@ -622,6 +627,12 @@ begin
                          fast_match.prio;
   -- forming final hp: decided by fast match, only 
   hp                  <= fast_match.hp;
+
+
+  -- forwarding mask without mirror destination port
+  -- it prevents sending traffic to mirror port from ports which are not mirrored (e.g.: when 
+  -- we handle braodcast).
+  forwarding_without_mr_dst_mask <= forwarding_mask and (not rtu_str_config_i.mirror_port_dst);
 
   -- adding mirror port (dst) port to the mask
   forwarding_and_mirror_mask <= forwarding_mask or rtu_str_config_i.mirror_port_dst;
