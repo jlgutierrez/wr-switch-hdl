@@ -258,6 +258,7 @@ architecture rtl of scb_top_bare is
   signal control0                   : std_logic_vector(35 downto 0);
   signal trig0, trig1, trig2, trig3 : std_logic_vector(31 downto 0);
   signal rst_n_periph               : std_logic;
+  signal link_kill                  : std_logic_vector(c_NUM_PORTS-1 downto 0);
 
   function f_fabric_2_slv (
     in_i : t_wrf_sink_in;
@@ -486,8 +487,7 @@ begin
 
 
     gen_endpoints_and_phys : for i in 0 to c_NUM_PORTS-1 generate
---       U_Endpoint_X : xwr_endpoint
-      U_Endpoint_X : xwr_endpoint_with_truIF      
+      U_Endpoint_X : xwr_endpoint
         generic map (
           g_interface_mode      => PIPELINED,
           g_address_granularity => BYTE,
@@ -548,13 +548,37 @@ begin
           snk_i      => endpoint_snk_in(i),
           wb_i       => cnx_endpoint_out(i),
           wb_o       => cnx_endpoint_in(i),
-          tru_i      => tru2ep(i),
-          tru_o      => ep2tru(i),
+
+          ----- TRU stuff ------------
+          pfilter_pclass_o     => ep2tru(i).pfilter_pclass_o,
+          pfilter_drop_o       => ep2tru(i).pfilter_drop_o,
+          pfilter_done_o       => ep2tru(i).pfilter_done_o,
+          fc_pause_req_i       => tru2ep(i).fc_pause_req,
+          fc_pause_delay_i     => tru2ep(i).fc_pause_delay,
+          fc_pause_ready_o     => ep2tru(i).fc_pause_ready,
+          inject_req_i         => tru2ep(i).inject_req,
+          inject_ready_o       => ep2tru(i).inject_ready,
+          inject_packet_sel_i  => tru2ep(i).inject_packet_sel,
+          inject_user_value_i  => tru2ep(i).inject_user_value,
+          link_kill_i          => '0' , --link_kill(i), -- to change
+          link_up_o            => ep2tru(i).status,
+          ----------------------------
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
 
       txtsu_timestamps(i).port_id(5) <= '0';
-
+      
+      ------- TEMP ---------
+      link_kill(i)                <= not tru2ep(i).ctrlWr; 
+      tru2ep(i).fc_pause_req      <= '0';
+      tru2ep(i).fc_pause_delay    <= (others =>'0');
+      tru2ep(i).inject_req        <= '0';
+      tru2ep(i).inject_packet_sel <= (others => '0');
+      tru2ep(i).inject_user_value <= (others => '0');
+      ep2tru(i).rx_pck            <= '0';
+      ep2tru(i).rx_pck_class      <= (others => '0');
+      ep2tru(i).ctrlRd            <= '1'; --tru2ep(i).ctrlWr;
+      ---------------------------
 
       clk_rx_vec(i) <= phys_i(i).rx_clk;
     end generate gen_endpoints_and_phys;

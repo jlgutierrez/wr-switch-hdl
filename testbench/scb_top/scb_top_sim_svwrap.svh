@@ -192,17 +192,33 @@ module scb_top_sim_svwrap
                      .wb_ack_o (U_ep_wb.master.ack),
 
                       // new stuff
-                     .tru_status_o(),        
-                     .tru_ctrlRd_o(),        
-                     .tru_rx_pck_o(),        
-                     .tru_rx_pck_class_o(),  
-   
-                     .tru_ctrlWr_i(ep_ctrl_i[i]),            
-                     .tru_tx_pck_i(1'b0),            
-                     .tru_tx_pck_class_i(8'b0),      
-                     .tru_pauseSend_i(1'b0),         
-                     .tru_pauseTime_i(16'b0),         
-                     .tru_outQueueBlockMask_i(8'b0)
+                     .pfilter_pclass_o    (), 
+                     .pfilter_drop_o      (), 
+                     .pfilter_done_o      (), 
+                     .fc_pause_req_i      (1'b0), 
+                     .fc_pause_delay_i    (16'b0), 
+                     .fc_pause_ready_o    (), 
+                     .inject_req_i        (1'b0), 
+                     .inject_ready_o      (), 
+                     .inject_packet_sel_i (3'b0), 
+                     .inject_user_value_i (16'b0), 
+                     .led_link_o          (), 
+                     .led_act_o           (), 
+//                      .link_kill_i         ((~ep_ctrl_i[i])), 
+                     .link_kill_i         (1'b0), 
+                     .link_up_o           () 
+
+//                      .tru_status_o(),        
+//                      .tru_ctrlRd_o(),        
+//                      .tru_rx_pck_o(),        
+//                      .tru_rx_pck_class_o(),  
+//    
+//                      .tru_ctrlWr_i(ep_ctrl_i[i]),            
+//                      .tru_tx_pck_i(1'b0),            
+//                      .tru_tx_pck_class_i(8'b0),      
+//                      .tru_pauseSend_i(1'b0),         
+//                      .tru_pauseTime_i(16'b0),         
+//                      .tru_outQueueBlockMask_i(8'b0)
                      );
 
            initial begin
