@@ -156,6 +156,7 @@ architecture rtl of xwrsw_tru is
   signal wb_in                : t_wishbone_slave_in;
   signal wb_out               : t_wishbone_slave_out;
   signal s_bank_swap          : std_logic;
+  signal s_port_if_ctrl       : std_logic_vector(g_num_ports-1 downto 0);
 begin --rtl
    
   U_T_PORT: tru_port
@@ -193,11 +194,12 @@ begin --rtl
        clk_i               => clk_i,
        rst_n_i             => rst_n_i,
        port_if_i           => ep_i(i),
-       port_if_ctrl_o      => ep_o(i).ctrlWr,
+       port_if_ctrl_o      => s_port_if_ctrl(i), --ep_o(i).ctrlWr,
        rtu_pass_all_i      => rtu_i.pass_all(i),
        endpoint_o          => s_endpoint_array(i), 
        reset_rxFlag_i      => s_config.gcr_rx_frame_reset(i)
        );
+       ep_o(i).link_kill   <= not s_port_if_ctrl(i);
    end generate G_ENDP;
 
   U_TRANSITION: tru_transition 
@@ -240,8 +242,8 @@ begin --rtl
         ep_o(i).tx_pck_class(j) <= s_tx_rt_reconf_FRM(i) 
                                    when (j = to_integer(unsigned(s_config.rtrcr_rtr_rx))) else '0';
      end generate G_TX_O;
-     ep_o(i).pauseSend         <= s_trans_ep_ctr(i).pauseSend;
-     ep_o(i).pauseTime         <= s_trans_ep_ctr(i).pauseTime;
+     ep_o(i).fc_pause_req      <= s_trans_ep_ctr(i).pauseSend;
+     ep_o(i).fc_pause_delay    <= s_trans_ep_ctr(i).pauseTime;
      ep_o(i).outQueueBlockMask <= s_trans_ep_ctr(i).outQueueBlockMask;
   end generate G_EP_O;
   

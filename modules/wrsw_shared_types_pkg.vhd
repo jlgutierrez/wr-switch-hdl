@@ -46,39 +46,40 @@ package wrsw_shared_types_pkg is
   type t_tru_request_array is array(integer range <>) of t_tru_request;
   type t_tru_response_array is array(integer range <>) of t_tru_response;
 
-  type t_tru2ep is record
-    ctrlWr                : std_logic;
-    --frmae generation
-    tx_pck                : std_logic;                    -- in Endpoint this is to be implemented
-    tx_pck_class          : std_logic_vector(7 downto 0); -- in Endpoint this is to be implemented
-    -- pause generation
-    pauseSend             : std_logic;
-    pauseTime             : std_logic_vector(15 downto 0);
-    outQueueBlockMask     : std_logic_vector(7 downto 0);
-    -- new stuff
-    fc_pause_req          : std_logic;
-    fc_pause_delay        : std_logic_vector(15 downto 0);
-    inject_req            : std_logic;
-    inject_packet_sel     : std_logic_vector(2 downto 0)  ;
-    inject_user_value     : std_logic_vector(15 downto 0) ;
-  end record;
-  
-  type t_ep2tru is record
-    status           : std_logic;
-    ctrlRd           : std_logic;
-    -- frame detectin
-    rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
-    rx_pck_class     : std_logic_vector(7 downto 0); -- in Endpoint this is :pfilter_pclass_i    
-    -- new stuff
-    fc_pause_ready   : std_logic;
-    inject_ready     : std_logic;
-    pfilter_pclass_o : std_logic_vector(7 downto 0);
-    pfilter_drop_o   : std_logic;
-    pfilter_done_o   : std_logic;    
-  end record;
-
-  type t_tru2ep_array       is array(integer range <>) of t_tru2ep;
-  type t_ep2tru_array       is array(integer range <>) of t_ep2tru;
+--   type t_tru2ep is record
+-- --     ctrlWr                : std_logic;
+--     --frmae generation
+--     tx_pck                : std_logic;                    -- to be changed
+--     tx_pck_class          : std_logic_vector(7 downto 0); -- to be changed
+--     -- pause generation
+-- --     pauseSend             : std_logic;
+-- --     pauseTime             : std_logic_vector(15 downto 0);
+--     outQueueBlockMask     : std_logic_vector(7 downto 0);
+--     -- new stuff
+--     link_kill             : std_logic;                      --ok
+--     fc_pause_req          : std_logic;                      --ok
+--     fc_pause_delay        : std_logic_vector(15 downto 0);  --ok
+--     inject_req            : std_logic;
+--     inject_packet_sel     : std_logic_vector(2 downto 0)  ;
+--     inject_user_value     : std_logic_vector(15 downto 0) ;
+--   end record;
+--   
+--   type t_ep2tru is record
+--     status           : std_logic;
+-- --     ctrlRd           : std_logic;
+--     -- frame detectin
+--     rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
+--     rx_pck_class     : std_logic_vector(7 downto 0); -- in Endpoint this is :pfilter_pclass_i    
+--     -- new stuff
+--     fc_pause_ready   : std_logic;
+--     inject_ready     : std_logic;
+--     pfilter_pclass_o : std_logic_vector(7 downto 0);
+--     pfilter_drop_o   : std_logic;
+--     pfilter_done_o   : std_logic;    
+--   end record;
+-- 
+--   type t_tru2ep_array       is array(integer range <>) of t_tru2ep;
+--   type t_ep2tru_array       is array(integer range <>) of t_ep2tru;
 
 --   type t_rtu_prio_array is array(integer range <>) of std_logic_vector(7 downto 0);  
   type t_rtu2tru is record -- single port

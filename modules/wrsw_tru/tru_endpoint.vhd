@@ -104,7 +104,7 @@ architecture rtl of tru_endpoint is
   signal s_tru_port_state    : t_tru_port_state;      -- FSM
   signal s_rxFrameMaskReg    : std_logic_vector(g_pclass_number-1 downto 0);-- to remember rx-ed Frame
   signal s_rxFrameMask       : std_logic_vector(g_pclass_number-1 downto 0);
-  
+  signal s_port_if_ctrl      : std_logic;
 begin --rtl
    
   s_zeros <= (others => '0');
@@ -123,7 +123,7 @@ begin --rtl
          s_tru_port_state           <= S_DISABLED;
 --          endpoint_o.status          <= '0';
          s_port_status              <= '0';
-         port_if_ctrl_o             <= '0';
+         s_port_if_ctrl             <= '1';
          
       else
         
@@ -146,7 +146,7 @@ begin --rtl
                
 --                endpoint_o.status          <= port_if_i.status; -- when port is disabled we 
                                                                -- forward the real state of the port
-               port_if_ctrl_o             <= '1';              -- we always try to re-vive the port
+               s_port_if_ctrl             <= '1';              -- we always try to re-vive the port
                                                                -- by turning it ON, it is for 
                                                                -- the case when we are in this state
                                                                -- because link-broke and was disabled
@@ -158,7 +158,7 @@ begin --rtl
                if(s_port_down = '1') then
 --                  endpoint_o.status        <= '0';  -- informing other TRU modules that port is down
                  s_port_status            <= '0';  -- informing other TRU modules that port is down
-                 port_if_ctrl_o           <= '0';  -- killing the port to make sure it is down
+                 s_port_if_ctrl           <= '0';  -- killing the port to make sure it is down
                  s_tru_port_state         <= S_BROKEN_LINK;
                end if;
                
@@ -171,7 +171,7 @@ begin --rtl
                 -- it is still seen by TRU as down.
                 if(rtu_pass_all_i = '0' ) then
                    s_tru_port_state       <= S_DISABLED;
-                   port_if_ctrl_o         <= '1';
+                   s_port_if_ctrl         <= '1';
                 end if;
             --====================================================================================
             when others =>
@@ -179,7 +179,7 @@ begin --rtl
                s_tru_port_state           <= S_DISABLED;
 --                endpoint_o.status          <=  '0';
                s_port_status              <= '0';
-               port_if_ctrl_o             <= '0';
+               s_port_if_ctrl             <= '0';
            
          end case; 
       end if;
@@ -243,6 +243,8 @@ begin --rtl
   
   -- detect link down event (edge of input status signal while the control info says port should
   -- be UP);
-  s_port_down                   <= (not port_if_i.status) and s_port_status_d0 and port_if_i.ctrlRd; 
+  s_port_down                   <= (not port_if_i.status) and s_port_status_d0 and s_port_if_ctrl; 
+--   s_port_down                   <= (not port_if_i.status) and s_port_status_d0 and port_if_i.ctrlRd; 
 
+  port_if_ctrl_o                <= s_port_if_ctrl;
 end rtl;

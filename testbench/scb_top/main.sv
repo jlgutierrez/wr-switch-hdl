@@ -41,6 +41,8 @@ module main;
    integer g_min_pck_gap                      = 300; // cycles
    integer g_max_pck_gap                      = 300; // cycles
    integer g_failure_scenario                 = 0;   // no link failure
+   integer g_active_port                      = 0;
+   integer g_backup_port                      = 1;
    integer g_tru_enable                       = 0;   //TRU disabled
                                         // tx  ,rx ,opt (send from port tx to rx with option opt
    t_trans_path trans_paths[g_max_ports]      ='{{0  ,17 , 0 }, // port 0: 
@@ -249,7 +251,7 @@ module main;
    * testing no-mirroring: verifying bug which makes the dst_mirror port disabled even if
    * mirroring is not enabled (but the dst_mirror mask is set)
    **/
-// /*
+/*
   initial begin
    mirror_src_mask                 = 'h00000002;
    mirror_dst_mask                 = 'h00000080;
@@ -257,18 +259,146 @@ module main;
    mr_tx                           = 1;
    mr                              = 0;
   end
+*/
+   /** ***************************   test scenario 11  ************************************* **/ 
+   /** ***************************     (problematic)   ************************************* **/ 
+  /*
+   * testing switch over for TRU->eRSTP
+   * 1) we put port 1 (backup) down and up again (nothing should happen and  nothing happens)
+   * 2) we put port 0 (active) down and the switch over works, we take packets from port 1 
+   *    (so far this port was dropping ingress packets)
+   * 
+   * here, the switchover takes place during pck reception
+   * 
+   * PROBLEM: we receive the previous packet (somehow)
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps                  = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap                      = 300; // cycles
+    g_max_pck_gap                      = 300; // cycles
+    g_failure_scenario   = 2;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+  end
+*/
+   /** ***************************   test scenario 12  ************************************* **/ 
+   /** ***************************     (problematic)   ************************************* **/ 
+  /*
+   * testing switch over for TRU->eRSTP
+   * 1) we put port 1 (backup) down and up again (nothing should happen and  nothing happens)
+   * 2) we put port 0 (active) down and the switch over works, we take packets from port 1 
+   *    (so far this port was dropping ingress packets)
+   * 
+   * here, the switchover takes place between pck receptions
+   * 
+   * PROBLEM: we receive the previous packet (somehow)
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps                  = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap                      = 300; // cycles
+    g_max_pck_gap                      = 300; // cycles
+    g_failure_scenario                         = 3;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+  end
+*/
+   /** ***************************   test scenario 13  ************************************* **/ 
+  /*
+   * testing switch over for TRU->eRSTP
+   * we kill port 0, works
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps    = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap        = 300; // cycles
+    g_max_pck_gap        = 300; // cycles
+    g_failure_scenario   = 1;
+    g_active_port        = 0;
+    g_backup_port        = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+  end
+*/
+   /** ***************************   test scenario 14  ************************************* **/ 
+  /*
+   * testing switch over for TRU->eRSTP
+   * we kill port 1 (backup) (DOWN) and then revivie it (UP) and then kill port 0 (active)
+   * the killing of port 1 happens between frames being sent... OK
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps    = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap        = 300; // cycles
+    g_max_pck_gap        = 300; // cycles
+    g_failure_scenario   = 4;
+    g_active_port        = 0;
+    g_backup_port        = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+  end
+*/
+   /** ***************************   test scenario 15  ************************************* **/ 
+   /** ***************************     (problematic)   ************************************* **/ 
+  /*
+   * testing switch over for TRU->eRSTP
+   * we kill port 1 (backup) (DOWN) and then revivie it (UP) and then kill port 0 (active)
+   * the killing of port 1 happens during reception of frame... problem
+   **/
+// /*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps    = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap        = 300; // cycles
+    g_max_pck_gap        = 300; // cycles
+    g_failure_scenario   = 2;
+    g_active_port        = 0;
+    g_backup_port        = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+  end
 // */
   /*****************************************************************************************/
  
-   // defining which ports send pcks -> forwarding is one-to-one 
-   // (port_1 to port_14, port_2 to port_13, etc)
-  //     reg [18:0] portUnderTest = 18'b000000000000000011; // unicast -- port 0 disabled by VLAN config
-  //    reg [18:0] portUnderTest = 18'b111000000000000111; // unicast
-  //    reg [18:0] portUnderTest = 18'b000000000000001111; // unicast - switch over
+// defining which ports send pcks -> forwarding is one-to-one 
+// (port_1 to port_14, port_2 to port_13, etc)
+//     reg [18:0] portUnderTest = 18'b000000000000000011; // unicast -- port 0 disabled by VLAN config
+//    reg [18:0] portUnderTest = 18'b111000000000000111; // unicast
+//    reg [18:0] portUnderTest = 18'b000000000000001111; // unicast - switch over
 //       reg [18:0] portUnderTest = 18'b100000000000000001; // unicast 
- //     reg [18:0] portUnderTest = 18'b000000000000001000; // broadcast
- //   reg [18:0] portUnderTest = 18'b100000000000000101;
- //   reg [18:0] portUnderTest = 18'b111111111111111111;
+//     reg [18:0] portUnderTest = 18'b000000000000001000; // broadcast
+//   reg [18:0] portUnderTest = 18'b100000000000000101;
+//   reg [18:0] portUnderTest = 18'b111111111111111111;
 //    integer tx_option[18]             = {4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 //    integer repeat_number = 10;
 //    integer tries_number = 3;
@@ -639,29 +769,35 @@ module main;
            if(g_failure_scenario == 1)
            begin 
              wait_cycles(2000);
-             ep_ctrl[0] = 'b0;
+             ep_ctrl[g_active_port] = 'b0;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
            end
-           else if(g_failure_scenario == 2)
+           else if(g_failure_scenario == 2 | g_failure_scenario == 3 | g_failure_scenario == 4)
            begin
-             wait_cycles(500);
-             ep_ctrl[1] = 'b0;
+             if(g_failure_scenario == 4)
+               wait_cycles(400);
+             else
+               wait_cycles(500);
+             ep_ctrl[g_backup_port] = 'b0;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 1 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
              wait_cycles(200);
              rtu.set_port_config(1, 0, 0, 1); // disable port 1
              wait_cycles(200);
-             ep_ctrl[1] = 'b1;
+             ep_ctrl[g_backup_port] = 'b1;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 1 up <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
              wait_cycles(400);
              rtu.set_port_config(1, 1, 0, 1); // enable port 1
-             wait_cycles(500);
-             ep_ctrl[0] = 'b0;
+             if( g_failure_scenario == 3) 
+               wait_cycles(350);
+             else
+               wait_cycles(500);
+             ep_ctrl[g_active_port] = 'b0;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");

@@ -560,7 +560,7 @@ begin
           inject_ready_o       => ep2tru(i).inject_ready,
           inject_packet_sel_i  => tru2ep(i).inject_packet_sel,
           inject_user_value_i  => tru2ep(i).inject_user_value,
-          link_kill_i          => '0' , --link_kill(i), -- to change
+          link_kill_i          => tru2ep(i).link_kill, --'0' , --link_kill(i), -- to change
           link_up_o            => ep2tru(i).status,
           ----------------------------
           led_link_o => led_link_o(i),
@@ -569,15 +569,14 @@ begin
       txtsu_timestamps(i).port_id(5) <= '0';
       
       ------- TEMP ---------
-      link_kill(i)                <= not tru2ep(i).ctrlWr; 
-      tru2ep(i).fc_pause_req      <= '0';
-      tru2ep(i).fc_pause_delay    <= (others =>'0');
+--       link_kill(i)                <= not tru2ep(i).ctrlWr; 
+--       tru2ep(i).fc_pause_req      <= '0';
+--       tru2ep(i).fc_pause_delay    <= (others =>'0');
       tru2ep(i).inject_req        <= '0';
       tru2ep(i).inject_packet_sel <= (others => '0');
       tru2ep(i).inject_user_value <= (others => '0');
       ep2tru(i).rx_pck            <= '0';
       ep2tru(i).rx_pck_class      <= (others => '0');
-      ep2tru(i).ctrlRd            <= '1'; --tru2ep(i).ctrlWr;
       ---------------------------
 
       clk_rx_vec(i) <= phys_i(i).rx_clk;

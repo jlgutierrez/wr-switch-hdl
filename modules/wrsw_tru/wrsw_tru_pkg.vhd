@@ -69,61 +69,48 @@ package wrsw_tru_pkg is
  constant c_wrsw_max_queue_number      : integer :=8;
  constant c_tru_pattern_mode_width     : integer :=4;
   -------------------------- main input/output data ----------------------------------------
---   type t_tru_request is record
---     valid            : std_logic;
---     smac             : std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
---     dmac             : std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
---     fid              : std_logic_vector(c_wrsw_fid_width-1 downto 0);
---     isHP             : std_logic;                     -- high priority packet flag
---     isBR             : std_logic;                     -- broadcast packet flag
---     reqMask          : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); -- mask indicating requesting port
---   end record;
---    
---   type t_tru_response is record
---     valid            : std_logic;
---     port_mask        : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1's at forward ports
---     drop             : std_logic;
---     respMask         : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1 at requesting port
---   end record;
 
-  --------------------------- tru <-> endpoint I/F ------------------------------------------
---   type t_tru2ep is record
---     ctrlWr                : std_logic;
---     --frmae generation
---     tx_pck                : std_logic;                    -- in Endpoint this is to be implemented
---     tx_pck_class          : std_logic_vector(c_wrsw_pclass_number-1 downto 0); -- in Endpoint this is to be implemented
---     -- pause generation
---     pauseSend             : std_logic;
---     pauseTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
---     outQueueBlockMask     : std_logic_vector(c_wrsw_max_queue_number-1 downto 0);
---   end record;
---   
   type t_trans2ep is record
     pauseSend             : std_logic;
     pauseTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
     outQueueBlockMask     : std_logic_vector(c_wrsw_max_queue_number-1 downto 0);
   end record;
   
-
---   type t_ep2tru is record
---     status           : std_logic;
+  type t_tru2ep is record
+--     ctrlWr                : std_logic;
+    --frmae generation
+    tx_pck                : std_logic;                    -- to be changed
+    tx_pck_class          : std_logic_vector(7 downto 0); -- to be changed
+    -- pause generation
+--     pauseSend             : std_logic;
+--     pauseTime             : std_logic_vector(15 downto 0);
+    outQueueBlockMask     : std_logic_vector(7 downto 0);
+    -- new stuff
+    link_kill             : std_logic;                      --ok
+    fc_pause_req          : std_logic;                      --ok
+    fc_pause_delay        : std_logic_vector(15 downto 0);  --ok
+    inject_req            : std_logic;
+    inject_packet_sel     : std_logic_vector(2 downto 0)  ;
+    inject_user_value     : std_logic_vector(15 downto 0) ;
+  end record;
+  
+  type t_ep2tru is record
+    status           : std_logic;
 --     ctrlRd           : std_logic;
---     -- frame detectin
---     rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
---     rx_pck_class     : std_logic_vector(c_wrsw_pclass_number-1 downto 0); -- in Endpoint this is :pfilter_pclass_i    
---   end record;
+    -- frame detectin
+    rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
+    rx_pck_class     : std_logic_vector(7 downto 0); -- in Endpoint this is :pfilter_pclass_i    
+    -- new stuff
+    fc_pause_ready   : std_logic;
+    inject_ready     : std_logic;
+    pfilter_pclass_o : std_logic_vector(7 downto 0);
+    pfilter_drop_o   : std_logic;
+    pfilter_done_o   : std_logic;    
+  end record;
 
---   type t_rtu_prio_array is array(c_RTU_MAX_PORTS-1  downto 0) of std_logic_vector(c_wrsw_prio_width-1  downto 0);   
--- 
---   --------------------------- tru <-> rtu I/F ------------------------------------------
---   type t_rtu2tru is record -- single port
---     pass_all         : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
---     forward_bpdu_only: std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
---     request_valid    : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
---     priorities       : t_rtu_prio_array;
---   end record;
+  type t_tru2ep_array       is array(integer range <>) of t_tru2ep;
+  type t_ep2tru_array       is array(integer range <>) of t_ep2tru;
 
- 
   type t_tru_tab_subentry is record
     valid          : std_logic;
     ports_ingress  : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
@@ -720,31 +707,31 @@ package body wrsw_tru_pkg is
   end function;
 
 
-  function f_unpack_ep2tru (
+  function f_unpack_ep2tru (  -- this function needs to be changed for tru testbench to work
        input_data: std_logic_vector
     ) return t_ep2tru is
   variable entry: t_ep2tru;
   begin
     entry.status       := input_data(0);
-    entry.ctrlRd       := input_data(1);
+--     entry.ctrlRd       := input_data(1);
     entry.rx_pck       := input_data(2);
     entry.rx_pck_class := input_data(3+c_wrsw_pclass_number-1 downto 3);
     return(entry);
   end function;
 
-  function f_pack_tru2ep (
+  function f_pack_tru2ep ( -- this function needs to be changed for tru testbench to work
        input_data: t_tru2ep
     ) return std_logic_vector is
   variable entry: std_logic_vector(3+c_wrsw_pclass_number+
                                      c_wrsw_pause_delay_width+
                                      c_wrsw_max_queue_number-1 downto 0);
   begin
-    entry(0)                                                        := input_data.ctrlWr;
+--     entry(0)                                                        := input_data.ctrlWr;
     entry(1)                                                        := input_data.tx_pck;
     entry(2+ c_wrsw_pclass_number-1 downto 2)                       := input_data.tx_pck_class;
-    entry(2+ c_wrsw_pclass_number)                                  := input_data.pauseSend;
-    entry(2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width-1 downto 
-          2+ c_wrsw_pclass_number+1)                                := input_data.pauseTime;
+--     entry(2+ c_wrsw_pclass_number)                                  := input_data.pauseSend;
+--     entry(2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width-1 downto 
+--           2+ c_wrsw_pclass_number+1)                                := input_data.pauseTime;
     entry(2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width+
              c_wrsw_max_queue_number-1 downto 
           2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width)     := input_data.outQueueBlockMask;
