@@ -631,8 +631,10 @@ begin
 
   -- forwarding mask without mirror destination port
   -- it prevents sending traffic to mirror port from ports which are not mirrored (e.g.: when 
-  -- we handle braodcast).
-  forwarding_without_mr_dst_mask <= forwarding_mask and (not rtu_str_config_i.mirror_port_dst);
+  -- we handle braodcast). If mirroring is disabled but the mask is set, we don't apply the
+  -- filtering.
+  forwarding_without_mr_dst_mask <=forwarding_mask when (rtu_str_config_i.mr_ena = '0') else 
+                                   forwarding_mask and (not rtu_str_config_i.mirror_port_dst);
 
   -- adding mirror port (dst) port to the mask
   forwarding_and_mirror_mask <= forwarding_mask or rtu_str_config_i.mirror_port_dst;

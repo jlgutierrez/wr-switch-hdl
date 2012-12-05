@@ -94,8 +94,8 @@ module main;
     trans_paths[0]       = '{0  ,17 , 4 };
     trans_paths[1]       = '{1  ,16 , 4 };
     trans_paths[2]       = '{2  ,15 , 4 };
-    integer repeat_number= 30;
-    integer tries_number = 1;
+    repeat_number        = 30;
+    tries_number         = 1;
   end
 */
    /** ***************************   test scenario 2  ************************************* **/ 
@@ -231,7 +231,7 @@ module main;
   /*
    * checking range MAC : 
    **/
-// /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000010;
     vlan_port_mask       = 32'h000000FF; 
@@ -241,6 +241,21 @@ module main;
     trans_paths[1]       = '{1  ,2  , 7 };
     trans_paths[7]       = '{7  ,7  , 7 };  
     
+  end
+*/
+   
+   /** ***************************   test scenario 10  ************************************* **/ 
+  /*
+   * testing no-mirroring: verifying bug which makes the dst_mirror port disabled even if
+   * mirroring is not enabled (but the dst_mirror mask is set)
+   **/
+// /*
+  initial begin
+   mirror_src_mask                 = 'h00000002;
+   mirror_dst_mask                 = 'h00000080;
+   mr_rx                           = 1;
+   mr_tx                           = 1;
+   mr                              = 0;
   end
 // */
   /*****************************************************************************************/
