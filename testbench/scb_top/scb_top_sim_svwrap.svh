@@ -131,7 +131,7 @@ module scb_top_sim_svwrap
               .g_with_rx_buffer (0),
               .g_with_timestamper    (1),
               .g_with_dpi_classifier (1),
-              .g_with_vlans          (0),
+              .g_with_vlans          (1),
               .g_with_rtu            (0)
               ) DUT (
                      .clk_ref_i (clk_ref_phys[i]),
@@ -204,8 +204,8 @@ module scb_top_sim_svwrap
                      .inject_user_value_i (16'b0), 
                      .led_link_o          (), 
                      .led_act_o           (), 
-//                      .link_kill_i         ((~ep_ctrl_i[i])), 
-                     .link_kill_i         (1'b0), 
+                     .link_kill_i         ((~ep_ctrl_i[i])), 
+//                     .link_kill_i         (1'b0), 
                      .link_up_o           () 
 
 //                      .tru_status_o(),        

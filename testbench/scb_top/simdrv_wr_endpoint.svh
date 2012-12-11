@@ -78,6 +78,27 @@ class CSimDrv_WR_Endpoint;
       up= (rval & `MDIO_MSR_LSTATUS) ? 1 : 0;
    endtask // check_link
    
+   task automatic vlan_config(int qmode,int fix_prio, int prio_val, int pvid, int prio_map[]);
+      uint64_t wval;
+      int i;
+      wval = (qmode    << `EP_VCR0_QMODE_OFFSET    ) & `EP_VCR0_QMODE    |
+             (fix_prio << `EP_VCR0_FIX_PRIO_OFFSET ) & `EP_VCR0_FIX_PRIO |
+             (prio_val << `EP_VCR0_PRIO_VAL_OFFSET ) & `EP_VCR0_PRIO_VAL |
+             (pvid     << `EP_VCR0_PVID_OFFSET     ) & `EP_VCR0_PVID;
+      
+      m_acc.write(m_base + `ADDR_EP_VCR0, wval);
+      wval = 0;
+      for(i=0;i<7;i++)
+        wval = ('h7 & prio_map[i]) << (i*3) | wval;
+      
+      m_acc.write(m_base + `ADDR_EP_TCAR, `EP_TCAR_PCP_MAP & (wval << `EP_TCAR_PCP_MAP_OFFSET));
+ 
+      $display("VLAN cofig: qmode=%1d, fix_prio=%1d, prio_val=%1d, pvid=%1d, prio_map=%1d-%1d-%1d-%1d-%1d-%1d-%1d-%1d",
+                qmode,fix_prio, prio_val, pvid, prio_map[7],prio_map[6],prio_map[5],prio_map[4],
+                prio_map[3],prio_map[2],prio_map[1],prio_map[0],);
+   endtask // automatic
+
+
 
 endclass // CSimDrv_WR_Endpoint
 

@@ -24,12 +24,19 @@ module main;
        integer     op;
     }  t_trans_path;
 
+   typedef struct{
+       rtu_vlan_entry_t vlan_entry;
+       integer          vlan_id;
+       bit              valid;
+   } t_sim_vlan_entry;
+
    reg clk_ref=0;
    reg clk_sys=0;
    reg clk_swc_mpm_core=0;
    reg rst_n=0;
    parameter g_max_ports = 18;   
    parameter g_num_ports = 18;
+   parameter g_mvlan     = 3; //max simulation vlans
    
    reg [g_num_ports-1:0] ep_ctrl;
    
@@ -44,25 +51,26 @@ module main;
    integer g_active_port                      = 0;
    integer g_backup_port                      = 1;
    integer g_tru_enable                       = 0;   //TRU disabled
+   integer g_is_qvlan                         = 1;  // has vlan header
                                         // tx  ,rx ,opt (send from port tx to rx with option opt
-   t_trans_path trans_paths[g_max_ports]      ='{{0  ,17 , 0 }, // port 0: 
-                                                '{1  ,16 , 0 }, // port 1
-                                                '{2  ,15 , 0 }, // port 2
-                                                '{3  ,14 , 0 }, // port 3
-                                                '{4  ,13 , 0 }, // port 4
-                                                '{5  ,12 , 0 }, // port 5
-                                                '{6  ,11 , 0 }, // port 6
-                                                '{7  ,10 , 0 }, // port 7
-                                                '{8  ,9  , 0 }, // port 8
-                                                '{9  ,8  , 0 }, // port 9
-                                                '{10 ,7  , 0 }, // port 10
-                                                '{11 ,6  , 0 }, // port 11
-                                                '{12 ,5  , 0 }, // port 12
-                                                '{13 ,4  , 0 }, // port 13
-                                                '{14 ,3  , 0 }, // port 14
-                                                '{15 ,2  , 0 }, // port 15
-                                                '{16 ,1  , 0 }, // port 16
-                                                '{17 ,0  , 0 }};// port 17
+   t_trans_path trans_paths[g_max_ports]      ='{'{0  ,17 , 0 }, // port 0: 
+                                                 '{1  ,16 , 0 }, // port 1
+                                                 '{2  ,15 , 0 }, // port 2
+                                                 '{3  ,14 , 0 }, // port 3
+                                                 '{4  ,13 , 0 }, // port 4
+                                                 '{5  ,12 , 0 }, // port 5
+                                                 '{6  ,11 , 0 }, // port 6
+                                                 '{7  ,10 , 0 }, // port 7
+                                                 '{8  ,9  , 0 }, // port 8
+                                                 '{9  ,8  , 0 }, // port 9
+                                                 '{10 ,7  , 0 }, // port 10
+                                                 '{11 ,6  , 0 }, // port 11
+                                                 '{12 ,5  , 0 }, // port 12
+                                                 '{13 ,4  , 0 }, // port 13
+                                                 '{14 ,3  , 0 }, // port 14
+                                                 '{15 ,2  , 0 }, // port 15
+                                                 '{16 ,1  , 0 }, // port 16
+                                                 '{17 ,0  , 0 }};// port 17
                                          //index: 1,2,3,4,5,6,7,8,9, ....
    integer start_send_init_delay[g_max_ports] = '{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
    //mask with ports we want to use, port number:  18 ...............0
@@ -80,6 +88,28 @@ module main;
    bit mac_single                             = 0;
    bit mac_range                              = 0;
    bit mac_br                                 = 0;
+   
+   // vlans
+   int prio_map[8]                         = '{0, // Class of Service masked into prioTag 0
+                                               1, // Class of Service masked into prioTag 1
+                                               2, // Class of Service masked into prioTag 2
+                                               3, // Class of Service masked into prioTag 3
+                                               4, // Class of Service masked into prioTag 4
+                                               5, // Class of Service masked into prioTag 5
+                                               6, // Class of Service masked into prioTag 6
+                                               7};// Class of Service masked into prioTag 7 
+   int qmode                              = 3; 
+   //0: ACCESS port      - tags untagged received packets with VID from RX_VID field. Drops all tagged packets not belonging to RX_VID VLAN
+   //1: TRUNK port       - passes only tagged VLAN packets. Drops all untagged packets.
+   //3: unqualified port - passes all traffic regardless of VLAN configuration 
+   
+   int fix_prio                           = 0;
+   int prio_val                           = 0; 
+   int pvid                               = 0; 
+                                             //      mask     , fid , prio,has_p,overr, drop   , vid, valid
+   t_sim_vlan_entry sim_vlan_tab[g_mvlan] = '{'{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 100, 1'b1 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 200, 1'b1 }};
    
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
@@ -370,7 +400,7 @@ module main;
    * we kill port 1 (backup) (DOWN) and then revivie it (UP) and then kill port 0 (active)
    * the killing of port 1 happens during reception of frame... problem
    **/
-// /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000111;
     g_tru_enable         = 1;
@@ -387,7 +417,27 @@ module main;
     repeat_number        = 30;
     tries_number         = 1;
   end
+*/
+   /** ***************************   test scenario 15  ************************************* **/ 
+   /** ***************************     (problematic)   ************************************* **/ 
+  /*
+   * testing switch over for TRU->eRSTP
+   * we kill port 1 (backup) (DOWN) and then revivie it (UP) and then kill port 0 (active)
+   * the killing of port 1 happens during reception of frame... problem
+   **/
+// /*
+  initial begin
+    sim_vlan_tab[0] = '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    sim_vlan_tab[1] = '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 200, 1'b1 };
+    sim_vlan_tab[2] = '{'{32'hFFFFFFFF, 8'h1, 3'h0, 1'b0, 1'b0, 1'b0}, 100, 1'b1 };
+
+  end
 // */
+
+
+
+
+   
   /*****************************************************************************************/
  
 // defining which ports send pcks -> forwarding is one-to-one 
@@ -551,13 +601,14 @@ module main;
 
    task automatic init_ports(ref port_t p[$], ref CWishboneAccessor wb);
       int i;
-
+      
       for(i=0;i<g_num_ports;i++)
         begin
            port_t tmp;
            CSimDrv_WR_Endpoint ep;
            ep = new(wb, 'h30000 + i * 'h400);
            ep.init(i);
+           ep.vlan_config(qmode, fix_prio, prio_val, pvid, prio_map);
            tmp.ep = ep;
            tmp.send = EthPacketSource'(DUT.to_port[i]);
            tmp.recv = EthPacketSink'(DUT.from_port[i]);
@@ -707,42 +758,51 @@ module main;
       for (int dd=0;dd<g_num_ports;dd++)
         begin
         rtu.set_port_config(dd, 1, 0, 1);
-
-        end
+      end
         
         //
-        rtu.set_port_config(g_num_ports, 1, 0, 0); // for NIC
+      rtu.set_port_config(g_num_ports, 1, 0, 0); // for NIC
         
-        if(portUnderTest[0])  rtu.add_static_rule('{17, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<17));
-        if(portUnderTest[1])  rtu.add_static_rule('{16, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<16));
-        if(portUnderTest[2])  rtu.add_static_rule('{15, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<15));
-        if(portUnderTest[3])  rtu.add_static_rule('{14, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<14));
-        if(portUnderTest[4])  rtu.add_static_rule('{13, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<13));
-        if(portUnderTest[5])  rtu.add_static_rule('{12, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<12));
-        if(portUnderTest[6])  rtu.add_static_rule('{11, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<11));
-        if(portUnderTest[7])  rtu.add_static_rule('{10, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<10));
-        if(portUnderTest[8])  rtu.add_static_rule('{ 9, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<9 ));
-        if(portUnderTest[9])  rtu.add_static_rule('{ 8, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<8 ));
-        if(portUnderTest[10]) rtu.add_static_rule('{ 7, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<7 ));
-        if(portUnderTest[11]) rtu.add_static_rule('{ 6, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<6 ));
-        if(portUnderTest[12]) rtu.add_static_rule('{ 5, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<5 ));
-        if(portUnderTest[13]) rtu.add_static_rule('{ 4, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<4 ));
-        if(portUnderTest[14]) rtu.add_static_rule('{ 3, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<3 ));
-        if(portUnderTest[15]) rtu.add_static_rule('{ 2, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<2 ));
-        if(portUnderTest[16]) rtu.add_static_rule('{ 1, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<1 ));
-        if(portUnderTest[17]) rtu.add_static_rule('{ 0, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<0  ));
+      if(portUnderTest[0])  rtu.add_static_rule('{17, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<17));
+      if(portUnderTest[1])  rtu.add_static_rule('{16, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<16));
+      if(portUnderTest[2])  rtu.add_static_rule('{15, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<15));
+      if(portUnderTest[3])  rtu.add_static_rule('{14, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<14));
+      if(portUnderTest[4])  rtu.add_static_rule('{13, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<13));
+      if(portUnderTest[5])  rtu.add_static_rule('{12, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<12));
+      if(portUnderTest[6])  rtu.add_static_rule('{11, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<11));
+      if(portUnderTest[7])  rtu.add_static_rule('{10, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<10));
+      if(portUnderTest[8])  rtu.add_static_rule('{ 9, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<9 ));
+      if(portUnderTest[9])  rtu.add_static_rule('{ 8, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<8 ));
+      if(portUnderTest[10]) rtu.add_static_rule('{ 7, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<7 ));
+      if(portUnderTest[11]) rtu.add_static_rule('{ 6, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<6 ));
+      if(portUnderTest[12]) rtu.add_static_rule('{ 5, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<5 ));
+      if(portUnderTest[13]) rtu.add_static_rule('{ 4, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<4 ));
+      if(portUnderTest[14]) rtu.add_static_rule('{ 3, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<3 ));
+      if(portUnderTest[15]) rtu.add_static_rule('{ 2, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<2 ));
+      if(portUnderTest[16]) rtu.add_static_rule('{ 1, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<1 ));
+      if(portUnderTest[17]) rtu.add_static_rule('{ 0, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<0  ));
 
      // rtu.set_hash_poly();
       $display(">>>>>>>>>>>>>>>>>>> RTU initialization  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-      def_vlan.port_mask      = vlan_port_mask;
-      def_vlan.fid            = 0;
-      def_vlan.drop           = 0;
-      def_vlan.prio           = 0;
-      def_vlan.has_prio       = 0;
-      def_vlan.prio_override  = 0;
+      for(int dd=0;dd<g_mvlan;dd++)
+        begin
+        def_vlan.port_mask      = sim_vlan_tab[dd].vlan_entry.port_mask;
+        def_vlan.fid            = sim_vlan_tab[dd].vlan_entry.fid;
+        def_vlan.drop           = sim_vlan_tab[dd].vlan_entry.drop;
+        def_vlan.prio           = sim_vlan_tab[dd].vlan_entry.prio;
+        def_vlan.has_prio       = sim_vlan_tab[dd].vlan_entry.has_prio;
+        def_vlan.prio_override  = sim_vlan_tab[dd].vlan_entry.prio_override;
+        if(sim_vlan_tab[dd].valid == 1)
+          rtu.add_vlan_entry(sim_vlan_tab[dd].vlan_id, def_vlan);
+      end
 
-      rtu.add_vlan_entry(0, def_vlan);
-
+//       def_vlan.port_mask      = vlan_port_mask;
+//       def_vlan.fid            = 0;
+//       def_vlan.drop           = 0;
+//       def_vlan.prio           = 0;
+//       def_vlan.has_prio       = 0;
+//       def_vlan.prio_override  = 0;
+//       rtu.add_vlan_entry(0, def_vlan);
       ///////////////////////////   RTU extension settings:  ////////////////////////////////
       
       rtu.rx_add_ff_mac_single(0/*ID*/,1/*valid*/,'h1150cafebabe /*MAC*/);
@@ -818,7 +878,7 @@ module main;
                   $display("Try port_0:%d",  g);
                   tx_test(seed                          /* seed    */, 
                           repeat_number                 /* n_tries */, 
-                          0                             /* is_q    */, 
+                          g_is_qvlan                    /* is_q    */, 
                           0                             /* unvid   */, 
                           ports[trans_paths[qq].tx].send /* src     */, 
                           ports[trans_paths[qq].rx].recv /* sink    */,  

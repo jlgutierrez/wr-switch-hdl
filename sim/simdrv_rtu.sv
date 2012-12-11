@@ -375,7 +375,9 @@ task CRTUSimDriver::add_vlan_entry(int vlan_id, rtu_vlan_entry_t ent);
    
       bus.write(base_addr + `ADDR_RTU_VTR2, vtr2);
       bus.write(base_addr + `ADDR_RTU_VTR1, vtr1);
- 
+   $display("[CRTUSimDriver::add_vlan_entry] drop=%1d, has_prio=%1d, prio=%1d, \
+            prio_override=%1d, fid=%1d, vlan_id=%1d", ent.drop, ent.has_prio, ent.prio, 
+             ent.prio_override, ent.fid, vlan_id);
    
 endtask // CRTUSimDriver
 
