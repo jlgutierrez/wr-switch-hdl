@@ -110,7 +110,7 @@ module main;
    t_sim_vlan_entry sim_vlan_tab[g_mvlan] = '{'{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 },
                                               '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 100, 1'b1 },
                                               '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 200, 1'b1 }};
-   
+   integer tru_config_opt                 =0;
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -418,22 +418,49 @@ module main;
     tries_number         = 1;
   end
 */
-   /** ***************************   test scenario 15  ************************************* **/ 
-   /** ***************************     (problematic)   ************************************* **/ 
+   /** ***************************   test scenario 16  ************************************* **/ 
   /*
-   * testing switch over for TRU->eRSTP
-   * we kill port 1 (backup) (DOWN) and then revivie it (UP) and then kill port 0 (active)
-   * the killing of port 1 happens during reception of frame... problem
+   * simple VLAN tests: sending pckts on VLAN =100, we have no entries in hashTable for these,
+   * so unrecongizes entries are broadcast
    **/
-// /*
+/*
   initial begin
     sim_vlan_tab[0] = '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
     sim_vlan_tab[1] = '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 200, 1'b1 };
     sim_vlan_tab[2] = '{'{32'hFFFFFFFF, 8'h1, 3'h0, 1'b0, 1'b0, 1'b0}, 100, 1'b1 };
 
   end
-// */
+*/
+   /** ***************************   test scenario 17  ************************************* **/ 
+  /*
+   * test of TRU+VLANs:
+   * we have two VLANs with different active/backup ports
+   * VLAN_0: 0-3 ports: 0-active, 1-backup, 2 & 3 - receive broadcast from 0 & 1
+   * VLAN_1: 4-7 ports: 4-active, 5-backup, 6 & 7 - receive broadcast from 4 & 5
+   * 
+   * at some point we kill both active ports -> change to backup ports
+   **/
+// /*
+  initial begin
+    sim_vlan_tab[0] = '{'{32'h0000000F, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    sim_vlan_tab[1] = '{'{32'h000000F0, 8'h1, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 };
+    sim_vlan_tab[2] = '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b0 };
 
+    portUnderTest        = 18'b000000000000110011;
+    g_tru_enable         = 1;
+    g_failure_scenario   = 5;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,2 , 4 };
+    trans_paths[1]       = '{1  ,3 , 4 };
+    trans_paths[4]       = '{4  ,6 , 10};
+    trans_paths[5]       = '{5  ,7 , 10};
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_is_qvlan           = 1;
+    tru_config_opt       = 1;
+    
+  end
+// */
 
 
 
@@ -496,7 +523,7 @@ module main;
   
       tmpl           = new;
 
-      if(opt==3 || opt==4 || opt==5 || opt==6 || opt==7 || opt==8 || opt==9)
+      if(opt==3 || opt==4 || opt==5 || opt==6 || opt==7 || opt==8 || opt==9 || opt==10)
         tmpl.src       = '{0, 2,3,4,5,6};
       else
         tmpl.src       = '{srcPort, 2,3,4,5,6};
@@ -509,8 +536,8 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00};
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4)
-        tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
+      else if(opt==4 | opt==10)
+        tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
       else if(opt==6)
@@ -525,7 +552,10 @@ module main;
 
       tmpl.has_smac  = 1;
       tmpl.is_q      = is_q;
-      tmpl.vid       = 100;
+      if(opt==10)
+        tmpl.vid     = 1;
+      else
+        tmpl.vid     = 0;
       tmpl.ethertype = 'h88f7;
   // 
       gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
@@ -669,17 +699,35 @@ module main;
        * 
        **/
 
-      tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-                             32'h3FFFF /*ports_mask  */, 32'b111000000010100001 /* ports_egress */,32'b111000000010100001 /* ports_ingress   */);
+      if(tru_config_opt == 0) 
+        begin
+        tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h3FFFF /*ports_mask  */, 32'b111000000010100001 /* ports_egress */,32'b111000000010100001 /* ports_ingress   */);
 
-      tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
-                             32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
-                             32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
+        end
+      else if(tru_config_opt == 1)
+        begin
+        tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h3FFFF /*ports_mask  */, 32'b000000000000001101 /* ports_egress */,32'b000000000000001101 /* ports_ingress   */);
 
-//       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    1 /* subentry_addr*/,
-//                              32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-//                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);    
+
+        tru_drv.write_tru_tab(  1   /* valid     */,     1 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h3FFFF /*ports_mask  */, 32'b000000000011010000 /* ports_egress */,32'b000000000011010000 /* ports_ingress   */);
+
+        tru_drv.write_tru_tab(  1   /* valid     */,   1  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00110000 /*pattern_mask*/, 32'b00010000 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00110000 /*ports_mask  */, 32'b00100000 /* ports_egress */,32'b00100000 /* ports_ingress   */);    
+        end
+      
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    2 /* subentry_addr*/,
                              32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
@@ -862,6 +910,15 @@ module main;
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
            end
+           if(g_failure_scenario == 5)
+           begin 
+             wait_cycles(2000);
+             ep_ctrl[0] = 'b0;
+             ep_ctrl[4] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> links 0 & 4 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+           end           
          end 
       join_none; //
 
