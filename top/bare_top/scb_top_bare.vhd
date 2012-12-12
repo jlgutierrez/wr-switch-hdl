@@ -498,7 +498,7 @@ begin
           g_with_rx_buffer      => true,
           g_with_flow_control   => false,
           g_with_timestamper    => true,
-          g_with_dpi_classifier => false,
+          g_with_dpi_classifier => true,
           g_with_vlans          => true,
           g_with_rtu            => true,
           g_with_leds           => true,

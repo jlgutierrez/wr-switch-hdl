@@ -14,7 +14,7 @@
 
 `include "scb_top_sim_svwrap.svh"
 
-
+`include "pfilter.svh"
 
 module main;
 
@@ -52,6 +52,7 @@ module main;
    integer g_backup_port                      = 1;
    integer g_tru_enable                       = 0;   //TRU disabled
    integer g_is_qvlan                         = 1;  // has vlan header
+   integer g_pfilter_enabled                  = 0;
                                         // tx  ,rx ,opt (send from port tx to rx with option opt
    t_trans_path trans_paths[g_max_ports]      ='{'{0  ,17 , 0 }, // port 0: 
                                                  '{1  ,16 , 0 }, // port 1
@@ -98,7 +99,7 @@ module main;
                                                5, // Class of Service masked into prioTag 5
                                                6, // Class of Service masked into prioTag 6
                                                7};// Class of Service masked into prioTag 7 
-   int qmode                              = 3; 
+   int qmode                              = 2; //VLAN tagging/untagging disabled- pass as is
    //0: ACCESS port      - tags untagged received packets with VID from RX_VID field. Drops all tagged packets not belonging to RX_VID VLAN
    //1: TRUNK port       - passes only tagged VLAN packets. Drops all untagged packets.
    //3: unqualified port - passes all traffic regardless of VLAN configuration 
@@ -110,7 +111,9 @@ module main;
    t_sim_vlan_entry sim_vlan_tab[g_mvlan] = '{'{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 },
                                               '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 100, 1'b1 },
                                               '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 200, 1'b1 }};
-   integer tru_config_opt                 =0;
+   integer tru_config_opt                 = 0;
+   PFilterMicrocode mc                    = new;
+  
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -440,7 +443,7 @@ module main;
    * 
    * at some point we kill both active ports -> change to backup ports
    **/
-// /*
+/*
   initial begin
     sim_vlan_tab[0] = '{'{32'h0000000F, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
     sim_vlan_tab[1] = '{'{32'h000000F0, 8'h1, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 };
@@ -460,11 +463,82 @@ module main;
     tru_config_opt       = 1;
     
   end
-// */
-
-
-
+*/
+   /** ***************************   test scenario 18  ************************************* **/ 
+  /*
+   * simle VLAN tagging test:
+   * we send untagged frame and it should (acccording to the table with which I don't agree)
+   * tagged (simulation errors appear)
+   * 
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000001;
+    g_tru_enable         = 0;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,2 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_is_qvlan           = 0;
+    qmode                = 3;
+    
+  end
+*/
+   /** ***************************   test scenario 19  ************************************* **/ 
+  /*
+   * simle VLAN test
+   * 
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000010001;
+    g_tru_enable         = 0;
+    sim_vlan_tab[0] = '{'{32'h0000000F, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    sim_vlan_tab[1] = '{'{32'h000000F0, 8'h1, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 };
+    sim_vlan_tab[2] = '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b0 };
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,1 , 4 };
+    trans_paths[4]       = '{4  ,5 , 10 };
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_is_qvlan           = 1;
    
+  end
+*/
+   /** ***************************   test scenario 19  ************************************* **/ 
+  /*
+   * simle VLAN test
+   * 
+   **/
+// /*
+  initial begin
+    portUnderTest        = 18'b000000000000000001;
+    g_tru_enable         = 0;
+    sim_vlan_tab[0] = '{'{32'h0000000F, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    sim_vlan_tab[1] = '{'{32'h000000F0, 8'h1, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 };
+    sim_vlan_tab[2] = '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b0 };
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,1 , 4 };
+    trans_paths[5]       = '{5  ,6 , 10 };
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_is_qvlan           = 1;
+    g_pfilter_enabled    = 1;
+
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(6, 'h8100, 'hffff, PFilterMicrocode::MOV, 1);
+    mc.nop();
+    mc.cmp(8, 'h88f7, 'hffff, PFilterMicrocode::AND, 1);    
+    mc.logic2(24, 1, PFilterMicrocode::MOV, 0);
+    
+    
+  end
+// */   
   /*****************************************************************************************/
  
 // defining which ports send pcks -> forwarding is one-to-one 
@@ -639,6 +713,11 @@ module main;
            ep = new(wb, 'h30000 + i * 'h400);
            ep.init(i);
            ep.vlan_config(qmode, fix_prio, prio_val, pvid, prio_map);
+           if(g_pfilter_enabled == 1)
+           begin
+             ep.pfilter_load_microcode(mc.assemble());
+             ep.pfilter_enable(1);             
+           end
            tmp.ep = ep;
            tmp.send = EthPacketSource'(DUT.to_port[i]);
            tmp.recv = EthPacketSink'(DUT.from_port[i]);

@@ -19,6 +19,35 @@ class CSimDrv_WR_Endpoint;
       m_acc.write(m_base + `ADDR_EP_VCR1, vid | ((untag ? 1: 0) << 12));
    endtask // vlan_egress_untag
 
+   task vcr1_buffer_write(int is_vlan, int addr, uint64_t data);
+      m_acc.write(m_base + `ADDR_EP_VCR1, 
+                 (((is_vlan ? 0 : 'h200) + addr) << `EP_VCR1_OFFSET_OFFSET)
+                  | (data << `EP_VCR1_DATA_OFFSET));
+   endtask // vlan_buffer_write
+
+   task write_template(int slot, byte data[], int user_offset=-1);
+      int i;
+
+      if(data.size() & 1)
+        $fatal("CSimDrv_WR_Endpoint::write_template(): data size must be even");
+
+      $display("write_template: size %d", data.size());
+      
+      for(i=0;i<data.size();i+=2)
+        begin
+           uint64_t v; 
+
+           v = (data[i] << 8) | data[i+1];
+           if(i == data.size() - 2)
+             v |= (1<<16);
+
+           if(i == user_offset)
+             v |= (1<<17);
+
+           vcr1_buffer_write(0, slot * 64 + i/2, v);
+        end
+   endtask // write_template
+
    task pfilter_load_microcode(uint64_t mcode[]);
       int i;
 
@@ -37,7 +66,7 @@ class CSimDrv_WR_Endpoint;
       m_acc.write(m_base + `ADDR_EP_PFCR0, enable ? `EP_PFCR0_ENABLE: 0);
    endtask // pfilter_enable
 
-`define EP_QMODE_VLAN_DISABLED 3
+`define EP_QMODE_VLAN_DISABLED 2
    
    task init(int port_id);
       m_acc.write(m_base + `ADDR_EP_ECR, `EP_ECR_TX_EN | `EP_ECR_RX_EN | (port_id << `EP_ECR_PORTID_OFFSET)) ;
