@@ -502,7 +502,8 @@ begin
           g_with_vlans          => true,
           g_with_rtu            => true,
           g_with_leds           => true,
-          g_with_dmtd           => false)
+          g_with_dmtd           => false,
+          g_with_packet_injection => true)
         port map (
           clk_ref_i  => clk_ref_i,
           clk_sys_i  => clk_sys,
@@ -550,9 +551,9 @@ begin
           wb_o       => cnx_endpoint_in(i),
 
           ----- TRU stuff ------------
-          pfilter_pclass_o     => ep2tru(i).pfilter_pclass_o,
-          pfilter_drop_o       => ep2tru(i).pfilter_drop_o,
-          pfilter_done_o       => ep2tru(i).pfilter_done_o,
+          pfilter_pclass_o     => ep2tru(i).pfilter_pclass,
+          pfilter_drop_o       => ep2tru(i).pfilter_drop,
+          pfilter_done_o       => ep2tru(i).pfilter_done,
           fc_pause_req_i       => tru2ep(i).fc_pause_req,
           fc_pause_delay_i     => tru2ep(i).fc_pause_delay,
           fc_pause_ready_o     => ep2tru(i).fc_pause_ready,
@@ -572,11 +573,11 @@ begin
 --       link_kill(i)                <= not tru2ep(i).ctrlWr; 
 --       tru2ep(i).fc_pause_req      <= '0';
 --       tru2ep(i).fc_pause_delay    <= (others =>'0');
-      tru2ep(i).inject_req        <= '0';
-      tru2ep(i).inject_packet_sel <= (others => '0');
-      tru2ep(i).inject_user_value <= (others => '0');
-      ep2tru(i).rx_pck            <= '0';
-      ep2tru(i).rx_pck_class      <= (others => '0');
+--       tru2ep(i).inject_req        <= '0';
+--       tru2ep(i).inject_packet_sel <= (others => '0');
+--       tru2ep(i).inject_user_value <= (others => '0');
+--       ep2tru(i).rx_pck            <= '0';
+--       ep2tru(i).rx_pck_class      <= (others => '0');
       ---------------------------
 
       clk_rx_vec(i) <= phys_i(i).rx_clk;

@@ -79,8 +79,8 @@ package wrsw_tru_pkg is
   type t_tru2ep is record
 --     ctrlWr                : std_logic;
     --frmae generation
-    tx_pck                : std_logic;                    -- to be changed
-    tx_pck_class          : std_logic_vector(7 downto 0); -- to be changed
+--     tx_pck                : std_logic;                    -- to be changed
+--     tx_pck_class          : std_logic_vector(7 downto 0); -- to be changed
     -- pause generation
 --     pauseSend             : std_logic;
 --     pauseTime             : std_logic_vector(15 downto 0);
@@ -98,14 +98,14 @@ package wrsw_tru_pkg is
     status           : std_logic;
 --     ctrlRd           : std_logic;
     -- frame detectin
-    rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
-    rx_pck_class     : std_logic_vector(7 downto 0); -- in Endpoint this is :pfilter_pclass_i    
+--     rx_pck           : std_logic;                    -- in Endpoint this is : pfilter_done_i
+--     rx_pck_class     : std_logic_vector(7 downto 0); -- in Endpoint this is :pfilter_pclass_i    
     -- new stuff
     fc_pause_ready   : std_logic;
     inject_ready     : std_logic;
-    pfilter_pclass_o : std_logic_vector(7 downto 0);
-    pfilter_drop_o   : std_logic;
-    pfilter_done_o   : std_logic;    
+    pfilter_pclass   : std_logic_vector(7 downto 0);
+    pfilter_drop     : std_logic;
+    pfilter_done     : std_logic;    
   end record;
 
   type t_tru2ep_array       is array(integer range <>) of t_tru2ep;
@@ -714,8 +714,8 @@ package body wrsw_tru_pkg is
   begin
     entry.status       := input_data(0);
 --     entry.ctrlRd       := input_data(1);
-    entry.rx_pck       := input_data(2);
-    entry.rx_pck_class := input_data(3+c_wrsw_pclass_number-1 downto 3);
+--     entry.rx_pck       := input_data(2);
+--     entry.rx_pck_class := input_data(3+c_wrsw_pclass_number-1 downto 3);
     return(entry);
   end function;
 
@@ -727,8 +727,8 @@ package body wrsw_tru_pkg is
                                      c_wrsw_max_queue_number-1 downto 0);
   begin
 --     entry(0)                                                        := input_data.ctrlWr;
-    entry(1)                                                        := input_data.tx_pck;
-    entry(2+ c_wrsw_pclass_number-1 downto 2)                       := input_data.tx_pck_class;
+--     entry(1)                                                        := input_data.tx_pck;
+--     entry(2+ c_wrsw_pclass_number-1 downto 2)                       := input_data.tx_pck_class;
 --     entry(2+ c_wrsw_pclass_number)                                  := input_data.pauseSend;
 --     entry(2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width-1 downto 
 --           2+ c_wrsw_pclass_number+1)                                := input_data.pauseTime;

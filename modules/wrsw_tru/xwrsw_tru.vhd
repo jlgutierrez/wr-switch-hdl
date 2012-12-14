@@ -237,13 +237,22 @@ begin --rtl
   end generate G_FRAME_MASK;
 
   G_EP_O: for i in 0 to g_num_ports-1 generate
-     ep_o(i).tx_pck            <= '1' when (s_tx_rt_reconf_FRM(i) ='1') else '0';
-     G_TX_O: for j in 0 to g_pclass_number-1 generate
-        ep_o(i).tx_pck_class(j) <= s_tx_rt_reconf_FRM(i) 
-                                   when (j = to_integer(unsigned(s_config.rtrcr_rtr_rx))) else '0';
-     end generate G_TX_O;
-     ep_o(i).fc_pause_req      <= s_trans_ep_ctr(i).pauseSend;
-     ep_o(i).fc_pause_delay    <= s_trans_ep_ctr(i).pauseTime;
+     
+     ep_o(i).inject_req        <= '1' when (s_tx_rt_reconf_FRM(i)       = '1') else
+                                  '1' when (s_trans_ep_ctr(i).pauseSend = '1') else
+                                  '0';
+     ep_o(i).inject_packet_sel <= s_config.rtrcr_rtr_rx(2 downto 0) when s_tx_rt_reconf_FRM(i) ='1' else
+                                  "000";
+     ep_o(i).inject_user_value <= x"babe"                           when s_tx_rt_reconf_FRM(i) ='1' else 
+                                  s_trans_ep_ctr(i).pauseTime;
+  
+--      ep_o(i).tx_pck            <= '1' when (s_tx_rt_reconf_FRM(i) ='1') else '0';
+--      G_TX_O: for j in 0 to g_pclass_number-1 generate
+--         ep_o(i).tx_pck_class(j) <= s_tx_rt_reconf_FRM(i) 
+--                                    when (j = to_integer(unsigned(s_config.rtrcr_rtr_rx))) else '0';
+--      end generate G_TX_O;
+     ep_o(i).fc_pause_req      <= '0'; --s_trans_ep_ctr(i).pauseSend;
+     ep_o(i).fc_pause_delay    <= (others => '0'); --s_trans_ep_ctr(i).pauseTime;
      ep_o(i).outQueueBlockMask <= s_trans_ep_ctr(i).outQueueBlockMask;
   end generate G_EP_O;
   

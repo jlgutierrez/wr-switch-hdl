@@ -113,7 +113,37 @@ module main;
                                               '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 200, 1'b1 }};
    integer tru_config_opt                 = 0;
    PFilterMicrocode mc                    = new;
-  
+   byte BPDU_templ[]                      ='{'h01,'h80,'hC2,'h00,'h00,'h00, //0 - 5: dst addr
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //6 -11: src addr (to be filled in ?)
+                                             'h26,'h07,'h42,'h42,'h03,      //12-16: rest of the Eth Header
+                                             'h00,'h00,                     //17-18: protocol ID
+                                             'h00,                          //19   : protocol Version
+                                             'h00,                          //20   : BPDU type =>: repleacable
+                                             'h00,                          //21   : flags     =>: repleacable      
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //22-27: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //28-33: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //34-39: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //40-45: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //46-51: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //52-57: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00}; //58-63: padding
+
+   byte PAUSE_templ[]                     ='{'h01,'h80,'hC2,'h00,'h00,'h01, //0 - 5: dst addr
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //6 -11: src addr (to be filled in ?)
+                                             'h88,'h08,                     //12-13: Type Field = MAC control Frame
+                                             'h00,'h01,                     //14-15: MAC Control Opcode = PAUSE
+                                             'h00,'h00,                     //16-17: param: pause time: repleacable
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //18-23: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //24-29: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //30-35: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //36-41: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //42-47: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //48-53: padding
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //54-59: padding
+                                             'h00,'h00,'h00,'h00};          //60-63: padding
+             
+   integer g_injection_templates_programmed = 0;
+   integer g_transition_scenario            = 0;
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -507,10 +537,10 @@ module main;
 */
    /** ***************************   test scenario 19  ************************************* **/ 
   /*
-   * simle VLAN test
+   * simple pfilter test: sets class=1 for each packet sent
    * 
    **/
-// /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000001;
     g_tru_enable         = 0;
@@ -536,9 +566,108 @@ module main;
     mc.cmp(8, 'h88f7, 'hffff, PFilterMicrocode::AND, 1);    
     mc.logic2(24, 1, PFilterMicrocode::MOV, 0);
     
+  end
+*/   
+   /** ***************************   test scenario 20  ************************************* **/ 
+  /*
+   * Testing pFilter:
+   * detecting different classes of incoming packets using pFilter
+   * 
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000010001;
+    g_tru_enable         = 0;
+    sim_vlan_tab[0] = '{'{32'h0000000F, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    sim_vlan_tab[1] = '{'{32'h000000F0, 8'h1, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 };
+    sim_vlan_tab[2] = '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b0 };
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,1 , 100 };
+    trans_paths[4]       = '{4  ,5 , 10 };
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_is_qvlan           = 1;
+    g_pfilter_enabled    = 1;
+
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(6, 'h8100, 'hffff, PFilterMicrocode::MOV, 1);
+    mc.nop();
+    mc.cmp(8, 'hbabe, 'hffff, PFilterMicrocode::AND, 1);
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(16, 'h0001, 'hffff, PFilterMicrocode::MOV, 2);
+    mc.cmp(16, 'h0010, 'hffff, PFilterMicrocode::MOV, 3);
+    mc.cmp(16, 'h0100, 'hffff, PFilterMicrocode::MOV, 4);
+    mc.cmp(16, 'h1000, 'hffff, PFilterMicrocode::MOV, 5);
+    
+    mc.logic2(24, 1, PFilterMicrocode::AND, 2);
+    mc.logic2(25, 1, PFilterMicrocode::AND, 3);
+    mc.logic2(26, 1, PFilterMicrocode::AND, 4);
+    mc.logic2(27, 1, PFilterMicrocode::AND, 5);
     
   end
-// */   
+*/   
+   /** ***************************   test scenario 21  ************************************* **/ 
+  /*
+   * injection/filtering test => transition test
+   * we imitate transition when new (and better) link is added and we change the configuraiton
+   * with pausing taffic not to loose anything
+   */
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000000; // we send pcks (Markers) in other place
+    g_tru_enable         = 1;    
+                         // tx  ,rx ,opt
+    repeat_number        = 1;
+    tries_number         = 1;
+    g_injection_templates_programmed = 1;
+    tru_config_opt       = 2;
+    g_pfilter_enabled    = 1;
+    g_transition_scenario= 1;
+
+    mc.nop();
+    mc.cmp(0, 'h0180, 'hffff, PFilterMicrocode::MOV, 1);
+    mc.cmp(1, 'hc200, 'hffff, PFilterMicrocode::MOV, 1);
+    mc.cmp(2, 'h0000, 'hffff, PFilterMicrocode::MOV, 1);
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(6, 'hbabe, 'hffff, PFilterMicrocode::MOV, 1);    
+    mc.logic2(25, 1, PFilterMicrocode::MOV, 0);
+
+  end
+*/
+   /** ***************************   test scenario 22  ************************************* **/ 
+  /*
+   * 
+   **/
+// /*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_failure_scenario   = 1;
+    g_injection_templates_programmed = 1;
+    g_transition_scenario= 1;
+    tru_config_opt       = 2;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+  end
+// */
   /*****************************************************************************************/
  
 // defining which ports send pcks -> forwarding is one-to-one 
@@ -575,9 +704,7 @@ module main;
  
        end
     endtask // wait_cycles   
-   
-//   assign clk_ref = clk_sys;
-   
+    
    task automatic tx_test(ref int seed, input  int n_tries, input int is_q,input int unvid, ref EthPacketSource src, ref EthPacketSink sink, input int srcPort, input int dstPort, input int opt=0);
       EthPacketGenerator gen = new;
       EthPacket pkt, tmpl, pkt2;
@@ -597,8 +724,10 @@ module main;
   
       tmpl           = new;
 
-      if(opt==3 || opt==4 || opt==5 || opt==6 || opt==7 || opt==8 || opt==9 || opt==10)
-        tmpl.src       = '{0, 2,3,4,5,6};
+      if(opt > 2 )
+        tmpl.src       = '{0,2,3,4,5,6};
+      else if(opt == 101)
+        tmpl.src       = '{0,0,0,0,0,0};
       else
         tmpl.src       = '{srcPort, 2,3,4,5,6};
 
@@ -606,8 +735,8 @@ module main;
         tmpl.dst       = '{dstPort, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       else if(opt==1)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
-      else if(opt==2)
-        tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00};
+      else if(opt==2 || opt==101)
+        tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       else if(opt==4 | opt==10)
@@ -623,57 +752,69 @@ module main;
       else if(opt==9)
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h01}; // link-limited
 
-
+  
       tmpl.has_smac  = 1;
       tmpl.is_q      = is_q;
       if(opt==10)
         tmpl.vid     = 1;
       else
         tmpl.vid     = 0;
-      tmpl.ethertype = 'h88f7;
+      if(opt == 100 ||  opt == 101)
+        tmpl.ethertype = 'hbabe;
+      else
+        tmpl.ethertype = 'h88f7;
   // 
       gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
       gen.set_template(tmpl);
-      gen.set_size(63, 257);
+      if(opt == 101)
+        gen.set_size(63, 64);
+      else
+        gen.set_size(63, 257);
 
       fork
-      begin
-      for(int i=0;i<n_tries;i++)
+        begin // fork 1
+        for(int i=0;i<n_tries;i++)
            begin
               pkt  = gen.gen();
               pkt.oob = TX_FID;
               $display("|=> TX: port = %2d, pck_i = %4d (opt=%1d, pck_gap=%3d)" , srcPort, i,opt,pck_gap);
+              if(opt == 100)
+              begin
+                pkt.payload[14] = 'h00;
+                pkt.payload[15] = 'h01;
+              end
+              else if(opt == 101)
+              begin
+                pkt.payload[0] = 'hba;
+                pkt.payload[1] = 'hbe;
+              end
+              
               src.send(pkt);
               arr[i]  = pkt;
               repeat(60) @(posedge clk_sys);
-              wait_cycles(pck_gap);
-	      
+              wait_cycles(pck_gap); 
            end
-         end 
-	begin
-         for(int j=0;j<n_tries;j++)
-           begin
-           sink.recv(pkt2);
+        end   // fork 1
+        begin // fork 2
+        if(opt != 101)
+          for(int j=0;j<n_tries;j++)
+            begin
+              sink.recv(pkt2);
               $display("|<= RX: port = %2d, pck_i = %4d" , dstPort, j);
-           if(unvid)
-             arr[j].is_q  = 0;
-           if(!arr[j].equal(pkt2))
-             begin
-                $display("Fault at %d", j);
-                $display("Should be: ");
-                arr[j].dump();
-                $display("Is: ");
-                pkt2.dump();
-                //$fatal("dupa"); //ML
-           //sfp     $stop;
-             end
-           end // for (i=0;i<n_tries;i++)
-           end
-         join
+              if(unvid)
+                arr[j].is_q  = 0;
+              if(!arr[j].equal(pkt2))
+                begin
+                  $display("Fault at %d", j);
+                  $display("Should be: ");
+                  arr[j].dump();
+                  $display("Is: ");
+                  pkt2.dump();
+                end
+            end // for (i=0;i<n_tries;i++)
+        end // fork 2
+      join
       seed = gen.get_seed();
-
-//       if(g_enable_pck_gaps == 1) 
-//         wait_cycles($dist_uniform(seed,g_min_pck_gap,g_max_pck_gap));
       
    endtask // tx_test
 
@@ -718,6 +859,12 @@ module main;
              ep.pfilter_load_microcode(mc.assemble());
              ep.pfilter_enable(1);             
            end
+           if(g_injection_templates_programmed == 1)
+           begin
+             ep.write_template(0, PAUSE_templ, 8);
+             ep.write_template(1, BPDU_templ,  10);
+           end
+
            tmp.ep = ep;
            tmp.send = EthPacketSource'(DUT.to_port[i]);
            tmp.recv = EthPacketSink'(DUT.from_port[i]);
@@ -778,17 +925,7 @@ module main;
        * 
        **/
 
-      if(tru_config_opt == 0) 
-        begin
-        tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
-                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-                               32'h3FFFF /*ports_mask  */, 32'b111000000010100001 /* ports_egress */,32'b111000000010100001 /* ports_ingress   */);
-
-        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
-                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
-                               32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
-        end
-      else if(tru_config_opt == 1)
+      if(tru_config_opt == 1)
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
                                32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
@@ -806,6 +943,18 @@ module main;
                                32'b00110000 /*pattern_mask*/, 32'b00010000 /* pattern_match*/,'h0  /* pattern_mode */,
                                32'b00110000 /*ports_mask  */, 32'b00100000 /* ports_egress */,32'b00100000 /* ports_ingress   */);    
         end
+      else // default config == 0
+        begin
+        tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h3FFFF /*ports_mask  */, 32'b111000000010100001 /* ports_egress */,32'b111000000010100001 /* ports_ingress   */);
+
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
+        end
+
+
       
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    2 /* subentry_addr*/,
                              32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
@@ -839,6 +988,10 @@ module main;
 //                              'h00 /*pattern_mask*/, 'h00 /* pattern_match*/,'h20 /* pattern_mode */,
 //                              'h00 /*ports_mask  */, 'h40 /* ports_egress */,'h01 /* ports_ingress   */);
  
+      if(tru_config_opt == 2)
+        tru_drv.transition_config(0 /*mode */,     1 /*rx_id*/, 0 /*prio*/, 20 /*time_diff*/, 
+                                  0 /*port_a_id*/, 1 /*port_b_id*/);
+
       tru_drv.tru_swap_bank();  
       if(g_tru_enable)
          tru_drv.tru_enable();
@@ -1001,6 +1154,50 @@ module main;
          end 
       join_none; //
 
+
+      fork
+         begin
+           if(g_transition_scenario == 1)
+           begin 
+             wait_cycles(200);
+             //program other bank with alternate config
+             tru.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h3FFFF /*ports_mask  */, 32'b111000000010100010 /* ports_egress */,32'b111000000010100010 /* ports_ingress   */);
+
+             tru.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                            32'b00000011 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h0  /* pattern_mode */,
+                            32'b00000011 /*ports_mask  */, 32'b00000001 /* ports_egress */,32'b00000001 /* ports_ingress   */);
+             // enable transition
+             tru.transition_enable();
+             wait_cycles(200);
+             //sent marker to port 1
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[1].send /* src     */, 
+                     ports[1].recv /* sink    */,  
+                     1             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     101             /*option=4 */);             
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> transition 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(200);
+             //sent marker to port 1
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[0].send /* src     */, 
+                     ports[0].recv /* sink    */,  
+                     1             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     101             /*option=4 */);               
+           end
+         end 
+      join_none; //
       
       for(q=0; q<g_max_ports; q++)
         fork

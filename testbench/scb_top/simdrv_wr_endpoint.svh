@@ -20,6 +20,7 @@ class CSimDrv_WR_Endpoint;
    endtask // vlan_egress_untag
 
    task vcr1_buffer_write(int is_vlan, int addr, uint64_t data);
+//       $display("addr=0x%x , data=0x%x",addr,data);
       m_acc.write(m_base + `ADDR_EP_VCR1, 
                  (((is_vlan ? 0 : 'h200) + addr) << `EP_VCR1_OFFSET_OFFSET)
                   | (data << `EP_VCR1_DATA_OFFSET));
@@ -35,9 +36,9 @@ class CSimDrv_WR_Endpoint;
       
       for(i=0;i<data.size();i+=2)
         begin
-           uint64_t v; 
+           uint64_t v = 0; 
 
-           v = (data[i] << 8) | data[i+1];
+           v = ((data[i] << 8) | data[i+1]) & 64'h0000FFFF;
            if(i == data.size() - 2)
              v |= (1<<16);
 

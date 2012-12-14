@@ -199,12 +199,12 @@ begin --rtl
 
          -- accommodating information about HW-detected frames (probably in Endpoint)
          -- we store info about detected frames in the *Reg  
-         if(s_tru_port_state = S_WORKING and reset_rxFlag_i = '0' and port_if_i.rx_pck = '1') then         
-            s_rxFrameMaskReg             <= s_rxFrameMaskReg or port_if_i.rx_pck_class;
-            s_rxFrameMask                <= port_if_i.rx_pck_class;
-         elsif(s_tru_port_state = S_WORKING and reset_rxFlag_i = '1' and port_if_i.rx_pck = '1') then 
-            s_rxFrameMaskReg             <= port_if_i.rx_pck_class;
-            s_rxFrameMask                <= port_if_i.rx_pck_class; 
+         if(s_tru_port_state = S_WORKING and reset_rxFlag_i = '0' and port_if_i.pfilter_done = '1') then         
+            s_rxFrameMaskReg             <= s_rxFrameMaskReg or port_if_i.pfilter_pclass;
+            s_rxFrameMask                <= port_if_i.pfilter_pclass;
+         elsif(s_tru_port_state = S_WORKING and reset_rxFlag_i = '1' and port_if_i.pfilter_done = '1') then 
+            s_rxFrameMaskReg             <= port_if_i.pfilter_pclass;
+            s_rxFrameMask                <= port_if_i.pfilter_pclass; 
          elsif(reset_rxFlag_i = '1') then
             s_rxFrameMaskReg             <= (others => '0');
             s_rxFrameMask                <= (others => '0');        
@@ -238,7 +238,7 @@ begin --rtl
   end process;  
   
   endpoint_o.status                                         <= s_port_status and rtu_pass_all_i;
-  endpoint_o.rxFrameMask(g_pclass_number-1 downto 0)        <= port_if_i.rx_pck_class(g_pclass_number-1 downto 0) when (port_if_i.rx_pck='1') else (others => '0');--s_rxFrameMask;
+  endpoint_o.rxFrameMask(g_pclass_number-1 downto 0)        <= port_if_i.pfilter_pclass(g_pclass_number-1 downto 0) when (port_if_i.pfilter_done='1') else (others => '0');--s_rxFrameMask;
   endpoint_o.rxFrameMaskReg(g_pclass_number-1 downto 0)     <= s_rxFrameMaskReg(g_pclass_number-1 downto 0);
   
   -- detect link down event (edge of input status signal while the control info says port should
