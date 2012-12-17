@@ -496,7 +496,7 @@ begin
           g_pcs_16bit           => true,
           g_rx_buffer_size      => 1024,
           g_with_rx_buffer      => true,
-          g_with_flow_control   => false,
+          g_with_flow_control   => false,-- useless: flow control commented out 
           g_with_timestamper    => true,
           g_with_dpi_classifier => true,
           g_with_vlans          => true,

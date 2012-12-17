@@ -11,12 +11,15 @@
 `include "if_wb_slave.svh"
 `include "wb_packet_source.svh"
 `include "wb_packet_sink.svh"
-
 `include "scb_top_sim_svwrap.svh"
-
 `include "pfilter.svh"
 
 module main;
+
+    typedef enum {
+       PAUSE=0,
+       BPDU_0
+    } tx_special_pck_t;
 
     typedef struct { 
        integer     tx;
@@ -654,16 +657,14 @@ module main;
    **/
 // /*
   initial begin
-    portUnderTest        = 18'b000000000000000111;
+    portUnderTest        = 18'b000000000000000011;
     g_tru_enable         = 1;
-    g_failure_scenario   = 1;
-    g_injection_templates_programmed = 1;
-    g_transition_scenario= 1;
-    tru_config_opt       = 2;
+//     g_injection_templates_programmed = 1;
+    g_transition_scenario= 2;
+    tru_config_opt       = 1;
                          // tx  ,rx ,opt
-    trans_paths[0]       = '{0  ,17 , 4 };
-    trans_paths[1]       = '{1  ,16 , 4 };
-    trans_paths[2]       = '{2  ,15 , 4 };
+    trans_paths[0]       = '{0  ,2 , 4 };
+    trans_paths[1]       = '{1  ,3 , 4 };
     repeat_number        = 30;
     tries_number         = 1;
   end
@@ -817,6 +818,41 @@ module main;
       seed = gen.get_seed();
       
    endtask // tx_test
+
+   task automatic tx_special_pck(ref EthPacketSource src, input tx_special_pck_t opt=PAUSE,input integer user_value=0);
+      EthPacket pkt;
+
+      int i;
+      pkt           = new(64);
+      case(opt)
+      PAUSE:   
+        begin
+        pkt.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h01};
+        pkt.ethertype = 'h8808;        
+        for(i=14;i<64;i++)
+          pkt.payload[i-14]=PAUSE_templ[i];
+        pkt.payload[2]= user_value>>8;
+        pkt.payload[3]= user_value;
+        end
+      BPDU_0:
+        begin
+        pkt.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00};
+        pkt.ethertype = 'h2607;        
+        for(i=14;i<64;i++)
+          pkt.payload[i-14]=BPDU_templ[i];
+        pkt.payload[6]= user_value>>8;
+        pkt.payload[7]= user_value;
+        end
+      endcase;
+        
+      pkt.has_smac  = 0;
+      pkt.is_q      = 0;
+      pkt.vid       = 0;
+      pkt.oob       = TX_FID;
+      src.send(pkt);
+      repeat(60) @(posedge clk_sys);
+      
+   endtask // tx_special_pck
 
    scb_top_sim_svwrap
      #(
@@ -1182,7 +1218,7 @@ module main;
                      0             /* dstPort */, 
                      101             /*option=4 */);             
              $display("");
-             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> transition 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> transition 0  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
              wait_cycles(200);
              //sent marker to port 1
@@ -1196,9 +1232,20 @@ module main;
                      0             /* dstPort */, 
                      101             /*option=4 */);               
            end
+           
+           if(g_transition_scenario == 2)
+           begin 
+             wait_cycles(200);
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> PAUSE  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             //program other bank with alternate config
+             tx_special_pck(ports[3].send,PAUSE /*opt*/,14/*pause time*/);     
+                    
+           end
          end 
       join_none; //
-      
+
       for(q=0; q<g_max_ports; q++)
         fork
           automatic int qq=q;
