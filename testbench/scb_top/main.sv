@@ -165,6 +165,7 @@ module main;
              
    integer g_injection_templates_programmed = 0;
    integer g_transition_scenario            = 0;
+   integer g_do_vlan_config                 = 1;
 //    int vlan_port_mask[]                     ='{32'h00000000,
 //                                                32'h00000001,
 //                                                32'h00000000,
@@ -172,10 +173,10 @@ module main;
 //                                               }
    t_sim_port_distr LACPdistro              = '{  4,  // distribution port nubmer
                                                   0,  // source port (we send on this
-                                                { 1,  // every 4th frame send to port 1
-                                                  2,  // every 4th frame send to port 2
-                                                  3,  // every 4th frame send to port 3
-                                                  4}  // every 4th frame send to port 4
+                                                { 4,  // every 4th frame send to port 1
+                                                  5,  // every 4th frame send to port 2
+                                                  6,  // every 4th frame send to port 3
+                                                  7}  // every 4th frame send to port 4
                                                };
    integer g_LACP_scenario                  = 0;
    /** ***************************   test scenario 1  ************************************* **/ 
@@ -703,7 +704,7 @@ module main;
 */
    /** ***************************   test scenario 23  ************************************* **/ 
   /*
-   * simple LACP tesgt
+   * simple LACP test
    **/
 // /*
   initial begin
@@ -711,31 +712,35 @@ module main;
     g_tru_enable         = 1;
     tru_config_opt       = 2;
                          // tx  ,rx ,opt
-    trans_paths[2]       = '{2  ,0 , 4 };// 
+    trans_paths[2]       = '{5  ,0 , 4 };// 
     repeat_number        = 30;
     tries_number         = 1;
     g_LACP_scenario      = 1;
 
     g_pfilter_enabled    = 1;
+    g_do_vlan_config     = 0; //to make simulation faster, we don't need VLAN config, default is OK
+   // limiting with VLAN
+                     //      mask     , fid , prio,has_p,overr, drop   , vid, valid
+    sim_vlan_tab[0] = '{'{32'h000000F1, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
     
-    mc.nop();
-    mc.cmp(0, 'hFFFF, 'hffff, PFilterMicrocode::MOV, 1);
-    mc.cmp(1, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1);
-    mc.cmp(2, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1);
-    mc.nop();
-    mc.nop();
+    mc.nop();                                          
+    mc.cmp(0, 'hFFFF, 'hffff, PFilterMicrocode::MOV, 1); //setting bit 1 to HIGH if it 
+    mc.cmp(1, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1); // is righ kind of frame, i.e:
+    mc.cmp(2, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1); // 1. broadcast
     mc.nop();
     mc.nop();
     mc.nop();
-    mc.cmp(8, 'hbabe, 'hffff, PFilterMicrocode::AND, 1);    
-    mc.cmp(9, 'h0001, 'hffff, PFilterMicrocode::MOV, 2);    
-    mc.cmp(9, 'h0002, 'hffff, PFilterMicrocode::MOV, 3);    
-    mc.cmp(9, 'h0003, 'hffff, PFilterMicrocode::MOV, 4);    
-    mc.cmp(9, 'h0004, 'hffff, PFilterMicrocode::MOV, 5);    
-    mc.logic2(24, 2, PFilterMicrocode::AND, 1); //class 0
-    mc.logic2(25, 3, PFilterMicrocode::AND, 1); //class 1
-    mc.logic2(26, 4, PFilterMicrocode::AND, 1); //class 2
-    mc.logic2(27, 5, PFilterMicrocode::AND, 1); //class 3
+    mc.nop();
+    mc.nop();
+    mc.cmp(8, 'hbabe, 'hffff, PFilterMicrocode::AND, 1); // 2. EtherType    
+    mc.cmp(9, 'h0000, 'hffff, PFilterMicrocode::MOV, 2); // veryfing info in the frame for aggregation ID
+    mc.cmp(9, 'h0001, 'hffff, PFilterMicrocode::MOV, 3); // veryfing info in the frame for aggregation ID   
+    mc.cmp(9, 'h0002, 'hffff, PFilterMicrocode::MOV, 4); // veryfing info in the frame for aggregation ID   
+    mc.cmp(9, 'h0003, 'hffff, PFilterMicrocode::MOV, 5); // veryfing info in the frame for aggregation ID   
+    mc.logic2(24, 2, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(25, 3, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(26, 4, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(27, 5, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
   end
 // */
   /*****************************************************************************************/
@@ -940,7 +945,7 @@ module main;
                          srcPort, dstPort, dstID, i,opt,pck_gap);
               
               pkt.payload[0] = 'h00;
-              pkt.payload[1] = 'h00FF & dstPort;
+              pkt.payload[1] = 'h00FF & dstID;
               
               p[srcPort].send.send(pkt);
               arr[dstID][ n_dist_tries[dstID]]=pkt;
@@ -1053,7 +1058,8 @@ module main;
            CSimDrv_WR_Endpoint ep;
            ep = new(wb, 'h30000 + i * 'h400);
            ep.init(i);
-           ep.vlan_config(qmode, fix_prio, prio_val, pvid, prio_map);
+           if(g_do_vlan_config == 1)
+             ep.vlan_config(qmode, fix_prio, prio_val, pvid, prio_map);
            if(g_pfilter_enabled == 1)
            begin
              ep.pfilter_load_microcode(mc.assemble());
@@ -1126,76 +1132,89 @@ module main;
        **/
       // initial clean
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */,
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    1 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */,
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);      
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    2 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/, 'h000 /* mode */,
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    3 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    4 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    5 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    6 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
       tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    7 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
 
       if(tru_config_opt == 1)
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
-                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                                32'h3FFFF /*ports_mask  */, 32'b000000000000001101 /* ports_egress */,32'b000000000000001101 /* ports_ingress   */);
 
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
-                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h000 /* mode */, 
                                32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);    
 
         tru_drv.write_tru_tab(  1   /* valid     */,     1 /* entry_addr   */,    0 /* subentry_addr*/,
-                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                                32'h3FFFF /*ports_mask  */, 32'b000000000011010000 /* ports_egress */,32'b000000000011010000 /* ports_ingress   */);
 
         tru_drv.write_tru_tab(  1   /* valid     */,   1  /* entry_addr   */,  1  /* subentry_addr*/,
-                               32'b00110000 /*pattern_mask*/, 32'b00010000 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00110000 /*pattern_mask*/, 32'b00010000 /* pattern_match*/,'h000 /* mode */,
                                32'b00110000 /*ports_mask  */, 32'b00100000 /* ports_egress */,32'b00100000 /* ports_ingress   */);    
         end
-      else if(tru_config_opt == 2)
+      else if(tru_config_opt == 2) // LACP (link aggregation of ports 4-1)
         begin
+        // basic config, excluding link aggregation, only the standard non-LACP ports
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  0  /* subentry_addr*/,
-                               32'b00000000 /*pattern_mask*/, 32'b00000000 /* pattern_match*/,'h0  /* pattern_mode */,
-                               32'b00111111 /*ports_mask  */, 32'b00000011 /* ports_egress */,32'b00111111 /* ports_ingress   */); 
-        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
-                               32'b00001111 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
-                               32'b00011111 /*ports_mask  */, 32'b00000011 /* ports_egress */,32'b00011111 /* ports_ingress   */);    
-        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
-                               32'b00001111 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h0  /* pattern_mode */,
-                               32'b00011111 /*ports_mask  */, 32'b00000101 /* ports_egress */,32'b00011111 /* ports_ingress   */); 
-        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
-                               32'b00001111 /*pattern_mask*/, 32'b00000100 /* pattern_match*/,'h0  /* pattern_mode */,
-                               32'b00011111 /*ports_mask  */, 32'b00001001 /* ports_egress */,32'b00011111 /* ports_ingress   */); 
-        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  4  /* subentry_addr*/,
-                               32'b00001111 /*pattern_mask*/, 32'b00001000 /* pattern_match*/,'h0  /* pattern_mode */,
-                               32'b00011111 /*ports_mask  */, 32'b00010001 /* ports_egress */,32'b00011111 /* ports_ingress   */); 
+                               32'b0000_0000_0000 /*pattern_mask*/, 32'b0000_0000_0000 /* pattern_match*/,'h0 /* mode */, 
+                               32'b1111_0000_1111 /*ports_mask  */, 32'b1111_0000_1111 /* ports_egress */,32'b1111_0000_1111 /* ports_ingress   */); 
 
-        tru_drv.pattern_config(3 /*replacement*/, 0 /*addition*/); // 3-> source is pclass
+        // a bunch of link aggregation ports (ports 4 to 7)
+        // received FEC msg of class 0 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0001 /* pattern_match*/,'h0 /* mode */, 
+                               32'b0000_1111_0000 /*ports_mask  */, 32'b0000_0001_0000 /* ports_egress */,32'b0000_0000_0000 /* ports_ingress   */);    
+        // received FEC msg of class 1
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
+                               32'b0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0010 /* pattern_match*/,'h0 /* mode */, 
+                               32'b0000_1111_0000 /*ports_mask  */, 32'b0000_0010_0000 /* ports_egress */,32'b0000_0000_0000 /* ports_ingress   */); 
+        // received FEC msg of class 2 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
+                               32'b0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0100 /* pattern_match*/,'h0 /* mode */, 
+                               32'b0000_1111_0000  /*ports_mask */, 32'b0000_0100_0000 /* ports_egress */,32'b0000_0000_0000 /* ports_ingress   */); 
+        // received FEC msg of class 3
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  4  /* subentry_addr*/,
+                               32'b0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_1000 /* pattern_match*/,'h0 /* mode */, 
+                               32'b0000_1111_0000 /*ports_mask  */, 32'b0000_1000_0000 /* ports_egress */,32'b0000_0000_0000 /* ports_ingress   */);        
+        
+        // collector: receiving frames on the aggregation ports, forwarding to "normal" (others)
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  5  /* subentry_addr*/,
+                               32'b0000_1111_0000 /*pattern_mask*/, 32'b0000_1111_0000 /* pattern_match*/,'h2 /* mode */, 
+                               32'b0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0000 /* ports_egress */,32'b0000_1111_0000 /* ports_ingress   */); 
+
+
+        tru_drv.pattern_config(3 /*replacement*/, 4 /*addition*/); // 3-> source is pclass
         end
       else // default config == 0
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
-                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h0 /* mode */, 
                                32'h3FFFF /*ports_mask  */, 32'b111000000010100001 /* ports_egress */,32'b111000000010100001 /* ports_ingress   */);
 
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
-                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0 /* mode */,
                                32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
         end
 
@@ -1412,11 +1431,11 @@ module main;
              wait_cycles(200);
              //program other bank with alternate config
              tru.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
-                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,  'h0 /* mode */, 
                                32'h3FFFF /*ports_mask  */, 32'b111000000010100010 /* ports_egress */,32'b111000000010100010 /* ports_ingress   */);
 
              tru.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
-                            32'b00000011 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h0  /* pattern_mode */,
+                            32'b00000011 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h0 /* mode */,
                             32'b00000011 /*ports_mask  */, 32'b00000001 /* ports_egress */,32'b00000001 /* ports_ingress   */);
              // enable transition
              tru.transition_enable();

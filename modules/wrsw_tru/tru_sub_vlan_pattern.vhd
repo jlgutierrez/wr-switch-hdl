@@ -109,6 +109,10 @@ begin --rtl
                  when (patternID_i = std_logic_vector(to_unsigned(2,patternID_i'length))) else -- 2: eRSTP: quick FWD
                  endpoints_i.rxFramePerPortMask(rxPort)(g_pattern_width-1 downto 0)            -- 3: eLACP
                  when (patternID_i = std_logic_vector(to_unsigned(3,patternID_i'length))) else -- 3: eLACP
+
+                 tru_req_i.reqMask(g_pattern_width-1 downto 0)                                 -- 4: eLACP
+                 when (patternID_i = std_logic_vector(to_unsigned(4,patternID_i'length))) else -- 4: eLACP
+
                  (others=>'0');
 
 end rtl;
