@@ -130,11 +130,13 @@ package wrsw_tru_pkg is
   end record;
 
   type t_xFrameMask is array(c_wrsw_pclass_number-1  downto 0) of std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
+  type t_xFramePerPortMask is array(c_RTU_MAX_PORTS-1  downto 0) of std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
 
   type t_tru_endpoints is record
     status             : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); -- port up/down
     rxFrameMask        : t_xFrameMask; -- frame received (current)
     rxFrameMaskReg     : t_xFrameMask; -- frame received (registered)
+    rxFramePerPortMask : t_xFramePerPortMask; -- for LACP
     stableUp           : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
   end record;
 

@@ -226,6 +226,7 @@ begin --rtl
   G_ENDP_CONX: for i in 0 to g_num_ports-1 generate
      s_endpoints.status(i)              <= s_endpoint_array(i).status  ;
      s_endpoints.stableUp(i)            <= s_endpoint_array(i).stableUp;
+     s_endpoints.rxFramePerPortMask(i)(c_wrsw_pclass_number-1  downto 0) <= s_endpoint_array(i).rxFrameMask;
   end generate G_ENDP_CONX;
   
   s_endpoints.status(s_endpoints.status'length-1 downto g_num_ports) <= (others =>'0');

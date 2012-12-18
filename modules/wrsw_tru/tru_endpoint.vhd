@@ -238,7 +238,7 @@ begin --rtl
   end process;  
   
   endpoint_o.status                                         <= s_port_status and rtu_pass_all_i;
-  endpoint_o.rxFrameMask(g_pclass_number-1 downto 0)        <= port_if_i.pfilter_pclass(g_pclass_number-1 downto 0) when (port_if_i.pfilter_done='1') else (others => '0');--s_rxFrameMask;
+  endpoint_o.rxFrameMask(g_pclass_number-1 downto 0)        <= s_rxFrameMask; --port_if_i.pfilter_pclass(g_pclass_number-1 downto 0) when (port_if_i.pfilter_done='1') else (others => '0');--s_rxFrameMask;
   endpoint_o.rxFrameMaskReg(g_pclass_number-1 downto 0)     <= s_rxFrameMaskReg(g_pclass_number-1 downto 0);
   
   -- detect link down event (edge of input status signal while the control info says port should
