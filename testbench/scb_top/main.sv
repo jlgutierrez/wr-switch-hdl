@@ -16,6 +16,14 @@
 
 module main;
 
+   reg clk_ref=0;
+   reg clk_sys=0;
+   reg clk_swc_mpm_core=0;
+   reg rst_n=0;
+   parameter g_max_ports = 18;   
+   parameter g_num_ports = 18;
+   parameter g_mvlan     = 3; //max simulation vlans
+   parameter g_max_dist_port_number = 4;
     typedef enum {
        PAUSE=0,
        BPDU_0
@@ -33,13 +41,23 @@ module main;
        bit              valid;
    } t_sim_vlan_entry;
 
-   reg clk_ref=0;
-   reg clk_sys=0;
-   reg clk_swc_mpm_core=0;
-   reg rst_n=0;
-   parameter g_max_ports = 18;   
-   parameter g_num_ports = 18;
-   parameter g_mvlan     = 3; //max simulation vlans
+   typedef struct{
+       int               distPortN; //number of entries in the distribution
+       int               srcPort;
+       int               distr[g_max_dist_port_number];
+   } t_sim_port_distr;
+
+   typedef struct {
+      CSimDrv_WR_Endpoint ep;
+      EthPacketSource send;
+      EthPacketSink recv;
+   } port_t;
+
+   port_t ports[$];
+   CSimDrv_NIC nic;
+   CRTUSimDriver rtu;
+   CSimDrv_WR_TRU    tru;
+   CSimDrv_TXTSU txtsu;
    
    reg [g_num_ports-1:0] ep_ctrl;
    
@@ -81,7 +99,7 @@ module main;
    reg [g_max_ports-1:0] portUnderTest        = 18'b111111111111111111; //  
    integer repeat_number                      = 20;
    integer tries_number                       = 3;
-   reg [31:0] vlan_port_mask                  = 32'hFFFFFFFF;
+//    reg [31:0] vlan_port_mask                  = 32'hFFFFFFFF;
    reg [31:0] mirror_src_mask                 = 'h00000002;
    reg [31:0] mirror_dst_mask                 = 'h00000080;
    bit mr_rx                                  = 1;
@@ -147,6 +165,19 @@ module main;
              
    integer g_injection_templates_programmed = 0;
    integer g_transition_scenario            = 0;
+//    int vlan_port_mask[]                     ='{32'h00000000,
+//                                                32'h00000001,
+//                                                32'h00000000,
+//                                                32'h00000000,
+//                                               }
+   t_sim_port_distr LACPdistro              = '{  4,  // distribution port nubmer
+                                                  0,  // source port (we send on this
+                                                { 1,  // every 4th frame send to port 1
+                                                  2,  // every 4th frame send to port 2
+                                                  3,  // every 4th frame send to port 3
+                                                  4}  // every 4th frame send to port 4
+                                               };
+   integer g_LACP_scenario                  = 0;
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -653,9 +684,10 @@ module main;
 */
    /** ***************************   test scenario 22  ************************************* **/ 
   /*
-   * 
+   * Sending Pause the switch: a problem is that switch does not react to PAUSEs -- no 
+   * flow control impolemented -- to be FIXED
    **/
-// /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000011;
     g_tru_enable         = 1;
@@ -667,6 +699,43 @@ module main;
     trans_paths[1]       = '{1  ,3 , 4 };
     repeat_number        = 30;
     tries_number         = 1;
+  end
+*/
+   /** ***************************   test scenario 23  ************************************* **/ 
+  /*
+   * simple LACP tesgt
+   **/
+// /*
+  initial begin
+    portUnderTest        = 18'b000000000000000100; // no frames this way
+    g_tru_enable         = 1;
+    tru_config_opt       = 2;
+                         // tx  ,rx ,opt
+    trans_paths[2]       = '{2  ,0 , 4 };// 
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_LACP_scenario      = 1;
+
+    g_pfilter_enabled    = 1;
+    
+    mc.nop();
+    mc.cmp(0, 'hFFFF, 'hffff, PFilterMicrocode::MOV, 1);
+    mc.cmp(1, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1);
+    mc.cmp(2, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1);
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(8, 'hbabe, 'hffff, PFilterMicrocode::AND, 1);    
+    mc.cmp(9, 'h0001, 'hffff, PFilterMicrocode::MOV, 2);    
+    mc.cmp(9, 'h0002, 'hffff, PFilterMicrocode::MOV, 3);    
+    mc.cmp(9, 'h0003, 'hffff, PFilterMicrocode::MOV, 4);    
+    mc.cmp(9, 'h0004, 'hffff, PFilterMicrocode::MOV, 5);    
+    mc.logic2(24, 2, PFilterMicrocode::AND, 1); //class 0
+    mc.logic2(25, 3, PFilterMicrocode::AND, 1); //class 1
+    mc.logic2(26, 4, PFilterMicrocode::AND, 1); //class 2
+    mc.logic2(27, 5, PFilterMicrocode::AND, 1); //class 3
   end
 // */
   /*****************************************************************************************/
@@ -819,6 +888,113 @@ module main;
       
    endtask // tx_test
 
+  task automatic tx_distrib_test(ref int seed, input int n_tries, input int is_q, input int unvid, ref port_t p[$], input t_sim_port_distr portDist, input int opt=0);
+      EthPacketGenerator gen = new;
+      EthPacket pkt, tmpl;
+      EthPacket arr[4][];
+      int n_dist_tries[];
+
+      integer pck_gap = 0;
+      //int i,j;
+      
+      if(g_enable_pck_gaps == 1) 
+        if(g_min_pck_gap == g_max_pck_gap)
+          pck_gap = g_min_pck_gap;
+        else
+          pck_gap = $dist_uniform(seed,g_min_pck_gap,g_max_pck_gap);
+
+      arr[0]            = new[n_tries](arr[0]);
+      arr[1]            = new[n_tries](arr[1]);
+      arr[2]            = new[n_tries](arr[2]);
+      arr[3]            = new[n_tries](arr[3]);
+      
+      if(opt !=3 && opt != 4)
+        gen.set_seed(seed);
+  
+      tmpl           = new;
+
+      tmpl.src       = '{0,2,3,4,5,6};
+      tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
+  
+      tmpl.has_smac  = 1;
+      tmpl.is_q      = is_q;
+      tmpl.vid       = 0;
+      tmpl.ethertype = 'hbabe;
+
+      gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
+      gen.set_template(tmpl);
+      gen.set_size(63, 257);
+
+      fork
+        begin // fork 1
+        for(int i=0;i<n_tries;i++)
+           begin
+              automatic int srcPort, dstID, dstPort;
+              
+              pkt  = gen.gen();
+              pkt.oob = TX_FID;
+              dstID   = (i % portDist.distPortN);
+              dstPort = portDist.distr[dstID];
+              srcPort = portDist.srcPort;
+              $display("|=> TX: srcPort = %2d,dstPort = %2d [dstId=%2d], pck_i = %2d (opt=%1d, pck_gap=%3d)", 
+                         srcPort, dstPort, dstID, i,opt,pck_gap);
+              
+              pkt.payload[0] = 'h00;
+              pkt.payload[1] = 'h00FF & dstPort;
+              
+              p[srcPort].send.send(pkt);
+              arr[dstID][ n_dist_tries[dstID]]=pkt;
+//               n_dist_tries[dstPort]++;
+              fork
+                begin
+                  automatic EthPacket pkt2;
+                  automatic int rxDstID = dstID;
+                  automatic int j = n_dist_tries[dstID];
+                  p[portDist.distr[rxDstID]].recv.recv(pkt2);
+                  $display("|<= RX: port = %2d [dstID=%2d], pck_i = %4d" , portDist.distr[rxDstID], rxDstID, j);
+                  if(unvid)
+                    arr[rxDstID][j].is_q  = 0;
+                  if(!arr[rxDstID][j].equal(pkt2))
+                    begin
+                      $display("Fault at %d", j);
+                      $display("Should be: ");
+                      arr[rxDstID][j].dump();
+                      $display("Is: ");
+                      pkt2.dump();
+                    end
+                  end // fork
+                join
+                n_dist_tries[dstID]++;
+              repeat(60) @(posedge clk_sys);
+              wait_cycles(pck_gap); 
+           end
+        end   // fork 1
+//         begin // fork 2
+//           for(int j=0;j<n_tries/portDist.distPortN;j++)
+//             begin
+//               automatic EthPacket pkt2;
+//               automatic int dstID = 0;
+//               p[portDist.distr[dstID]].recv.recv(pkt2);
+//               $display("|<= RX: port = %2d [dstID=%2d], pck_i = %4d" , portDist.distr[dstID], dstID, j);
+//               if(unvid)
+//                 arr[dstID][j].is_q  = 0;
+//               if(!arr[dstID][j].equal(pkt2))
+//                 begin
+//                   $display("Fault at %d", j);
+//                   $display("Should be: ");
+//                   arr[dstID][j].dump();
+//                   $display("Is: ");
+//                   pkt2.dump();
+//                 end
+// 
+//             end // for (i=0;i<n_tries;i++)
+//         end // fork 2
+
+      join
+      seed = gen.get_seed();
+      
+   endtask // tx_distrib_test
+
    task automatic tx_special_pck(ref EthPacketSource src, input tx_special_pck_t opt=PAUSE,input integer user_value=0);
       EthPacket pkt;
 
@@ -866,18 +1042,6 @@ module main;
               .ep_ctrl_i(ep_ctrl)
               );
 
-   typedef struct {
-      CSimDrv_WR_Endpoint ep;
-      EthPacketSource send;
-      EthPacketSink recv;
-   } port_t;
-
-   port_t ports[$];
-   CSimDrv_NIC nic;
-   CRTUSimDriver rtu;
-   CSimDrv_WR_TRU    tru;
-   CSimDrv_TXTSU txtsu;
-   
    
 
    task automatic init_ports(ref port_t p[$], ref CWishboneAccessor wb);
@@ -960,6 +1124,31 @@ module main;
        *  port 5 is backup ofr 1
        * 
        **/
+      // initial clean
+      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    1 /* subentry_addr*/,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);      
+      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    2 /* subentry_addr*/,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    3 /* subentry_addr*/,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    4 /* subentry_addr*/,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    5 /* subentry_addr*/,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    6 /* subentry_addr*/,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    7 /* subentry_addr*/,
+                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
+                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
 
       if(tru_config_opt == 1)
         begin
@@ -979,6 +1168,26 @@ module main;
                                32'b00110000 /*pattern_mask*/, 32'b00010000 /* pattern_match*/,'h0  /* pattern_mode */,
                                32'b00110000 /*ports_mask  */, 32'b00100000 /* ports_egress */,32'b00100000 /* ports_ingress   */);    
         end
+      else if(tru_config_opt == 2)
+        begin
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  0  /* subentry_addr*/,
+                               32'b00000000 /*pattern_mask*/, 32'b00000000 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00111111 /*ports_mask  */, 32'b00000011 /* ports_egress */,32'b00111111 /* ports_ingress   */); 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00001111 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00011111 /*ports_mask  */, 32'b00000011 /* ports_egress */,32'b00011111 /* ports_ingress   */);    
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
+                               32'b00001111 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00011111 /*ports_mask  */, 32'b00000101 /* ports_egress */,32'b00011111 /* ports_ingress   */); 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
+                               32'b00001111 /*pattern_mask*/, 32'b00000100 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00011111 /*ports_mask  */, 32'b00001001 /* ports_egress */,32'b00011111 /* ports_ingress   */); 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  4  /* subentry_addr*/,
+                               32'b00001111 /*pattern_mask*/, 32'b00001000 /* pattern_match*/,'h0  /* pattern_mode */,
+                               32'b00011111 /*ports_mask  */, 32'b00010001 /* ports_egress */,32'b00011111 /* ports_ingress   */); 
+
+        tru_drv.pattern_config(3 /*replacement*/, 0 /*addition*/); // 3-> source is pclass
+        end
       else // default config == 0
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
@@ -991,25 +1200,7 @@ module main;
         end
 
 
-      
-      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    2 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
-      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    3 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
-      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    4 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
-      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    5 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
-      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    6 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
-      tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    7 /* subentry_addr*/,
-                             32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h000 /* pattern_mode */,
-                             32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+
 
 
 //       tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
@@ -1031,7 +1222,7 @@ module main;
       tru_drv.tru_swap_bank();  
       if(g_tru_enable)
          tru_drv.tru_enable();
-      tru_drv.tru_port_config(0);
+//       tru_drv.tru_port_config(0);
       $display("TRU configured and enabled");
       $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
    endtask; //init_tru
@@ -1190,6 +1381,29 @@ module main;
          end 
       join_none; //
 
+
+      fork
+         begin
+           if(g_LACP_scenario == 1)
+           begin 
+             wait_cycles(200);
+             tx_distrib_test(seed,           /* seed    */
+                             repeat_number,  /* n_tries */
+                             1,              /* is_q    */
+                             0,              /* unvid   */
+                             ports,          /*  */
+                             LACPdistro,       /* port distribution */ 
+                             0);             /* option */
+
+           end
+           else if(g_LACP_scenario == 2)
+           begin
+
+
+
+           end
+         end 
+      join_none; //
 
       fork
          begin
