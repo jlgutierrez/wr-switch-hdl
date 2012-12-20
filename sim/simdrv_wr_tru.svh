@@ -142,8 +142,10 @@ class CSimDrv_WR_TRU;
         $display("\tAddition    pattern ID = %d:",addition);
         $display("\tChoice info:");
         $display("\t\t0: non: zeros");
-        $display("\t\t1: ports status");
-        $display("\t\t2: received special frames (filtered by endpoints)");
+        $display("\t\t1: ports status (bit HIGH when port down");
+        $display("\t\t2: received special frames - filtered by endpoints according to configuration (pfliter in endpoint + RTR_RX class ID in Real Time Reconfiguration Control Register)");
+        $display("\t\t3: according to aggregation ID (the source of the ID depends on the traffic kind: HP/Broadcast/Uniast, set in Link Aggregation Control Register)");
+        $display("\t\t4: received port");
         $display("\t\tx: non: zero");
       end   
    endtask;
