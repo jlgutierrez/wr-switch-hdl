@@ -551,7 +551,7 @@ begin
       g_num_ports       => c_NUM_PORTS,
       g_simulation      => g_simulation,
       g_without_network => false,
-      g_with_TRU        => false)
+      g_with_TRU        => true)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_sys_startup,
