@@ -313,8 +313,10 @@ begin
   -- register input request to make it available for both matches (full/fast)
   --------------------------------------------------------------------------------------------
   -- this gets registered for furthe processing (full/fast match)
-  rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '0', rtu_req_d.prio, rtu_pcr_prio_val_i);
-  rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_req_d.has_prio);
+--   rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '0', rtu_req_d.prio, rtu_pcr_prio_val_i);
+--   rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_req_d.has_prio);
+  rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '0', rtu_rq_i.prio, rtu_pcr_prio_val_i);
+  rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_rq_i.has_prio);
   p_register_req: process(clk_i)
   begin
     if rising_edge(clk_i) then
