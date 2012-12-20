@@ -118,7 +118,7 @@ class CSimDrv_WR_Endpoint;
       
       m_acc.write(m_base + `ADDR_EP_VCR0, wval);
       wval = 0;
-      for(i=0;i<7;i++)
+      for(i=0;i<8;i++)
         wval = ('h7 & prio_map[i]) << (i*3) | wval;
       
       m_acc.write(m_base + `ADDR_EP_TCAR, `EP_TCAR_PCP_MAP & (wval << `EP_TCAR_PCP_MAP_OFFSET));
