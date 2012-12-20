@@ -88,31 +88,31 @@ end tru_sub_vlan_pattern;
 
 architecture rtl of tru_sub_vlan_pattern is
 
+-- type t_pattern is std_logic_vector(patternID_i'lengt-1 downto 0);
+
+constant c_p_default     : std_logic_vector(g_patternID_width-1 downto 0) :=x"0"; -- default
+constant c_p_port_down   : std_logic_vector(g_patternID_width-1 downto 0) :=x"1"; -- port down 
+constant c_p_quick_fwd   : std_logic_vector(g_patternID_width-1 downto 0) :=x"2"; -- quick forward received frames 
+constant c_p_aggr_gr_id  : std_logic_vector(g_patternID_width-1 downto 0) :=x"3"; -- aggregation group id
+constant c_p_rx_port     : std_logic_vector(g_patternID_width-1 downto 0) :=x"4"; -- received port 
+
+
 signal rxFrameNumber : integer range 0 to endpoints_i.rxFrameMaskReg'length-1;
 signal rxPort        : integer range 0 to g_num_ports;
 
 begin --rtl
     
-    
-    rxFrameNumber <= to_integer(unsigned(config_i.rtrcr_rtr_rx));
-    rxPort        <= to_integer(unsigned(portID_i));
     -----------------------------------------------------------------------------------------------
     -- Generate different patterns depending on the input configuration
     -----------------------------------------------------------------------------------------------
     -- TODO: case and choose functions according to the config
     -----------------------------------------------------------------------------------------------
-    pattern_o <= (others=>'0')                                                                 -- 0: default 
-                 when (patternID_i = std_logic_vector(to_unsigned(0,patternID_i'length))) else -- 0: defaut
-                 not (endpoints_i.status(g_pattern_width-1 downto 0))                          -- 1: eRSTP
-                 when (patternID_i = std_logic_vector(to_unsigned(1,patternID_i'length))) else -- 1: eRSTP
-                 endpoints_i.rxFrameMaskReg(rxFrameNumber)(g_pattern_width-1 downto 0)         -- 2: eRSTP: quick FWD
-                 when (patternID_i = std_logic_vector(to_unsigned(2,patternID_i'length))) else -- 2: eRSTP: quick FWD
-                 endpoints_i.rxFramePerPortMask(rxPort)(g_pattern_width-1 downto 0)            -- 3: eLACP
-                 when (patternID_i = std_logic_vector(to_unsigned(3,patternID_i'length))) else -- 3: eLACP
-
-                 tru_req_i.reqMask(g_pattern_width-1 downto 0)                                 -- 4: eLACP
-                 when (patternID_i = std_logic_vector(to_unsigned(4,patternID_i'length))) else -- 4: eLACP
-
-                 (others=>'0');
+    pattern_o <= 
+      (others=>'0')                                                            when (patternID_i = c_p_default)    else -- 0: defaut                 
+      f_pattern_port_down (endpoints_i,g_pattern_width)                        when (patternID_i = c_p_port_down)  else -- 1: eRSTP
+      f_pattern_quick_fwd (endpoints_i,config_i,g_pattern_width)               when (patternID_i = c_p_quick_fwd)  else -- 2: eRSTP:
+      f_pattern_aggr_gr_id(endpoints_i,tru_req_i, portID_i,config_i,g_pattern_width,g_num_ports)   when (patternID_i = c_p_aggr_gr_id) else -- 3: eLACP: 
+      f_pattern_rx_port   (tru_req_i, g_pattern_width)                         when (patternID_i = c_p_rx_port)    else -- 4: eLACP
+      (others=>'0');
 
 end rtl;

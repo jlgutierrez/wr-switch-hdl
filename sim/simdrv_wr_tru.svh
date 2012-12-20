@@ -149,7 +149,8 @@ class CSimDrv_WR_TRU;
    endtask;
 
    task tru_enable();
-      m_acc.write(m_base + `ADDR_TRU_GCR,  1 << `TRU_GCR_G_ENA_OFFSET);    
+      m_acc.write(m_base + `ADDR_TRU_GCR,  1 << `TRU_GCR_G_ENA_OFFSET); 
+      if(m_dbg)   
       begin 
         $display("TRU: enable");
       end 
@@ -159,6 +160,7 @@ class CSimDrv_WR_TRU;
       uint64_t tmp;
       m_acc.read(m_base + `ADDR_TRU_GCR, tmp, 4);
       m_acc.write(m_base +`ADDR_TRU_GCR, tmp |  1 << `TRU_GCR_TRU_BANK_OFFSET);    
+      if(m_dbg)
       begin 
         $display("TRU: swap TABLE banks");
       end 
@@ -168,6 +170,7 @@ class CSimDrv_WR_TRU;
       uint64_t tmp;
       m_acc.read(m_base + `ADDR_TRU_GCR, tmp, 4);
       m_acc.write(m_base +`ADDR_TRU_GCR, tmp |  reset_rx << `TRU_GCR_RX_FRAME_RESET_OFFSET);    
+      if(m_dbg)
       begin 
         $display("TRU: reset rx frame register (foget received frames)");
       end 
@@ -180,6 +183,7 @@ class CSimDrv_WR_TRU;
                                            mode        << `TRU_RTRCR_RTR_MODE_OFFSET |
                                            rx_frame_id << `TRU_RTRCR_RTR_RX_OFFSET   |
                                            tx_frame_id << `TRU_RTRCR_RTR_TX_OFFSET   );    
+      if(m_dbg)
       begin 
         $display("TRU: Real Time re-configuration Mode [%2d]:",mode);
         $display("\tFrames: rx_id = %2d, tx_id = %2d", rx_frame_id, tx_frame_id);
@@ -192,10 +196,26 @@ class CSimDrv_WR_TRU;
       end 
    endtask;
 
+   task lacp_config(int df_hp_id, int df_br_id, int df_un_id);
+      uint64_t tmp;
+      tmp = (`TRU_LACR_AGG_DF_HP_ID & (df_hp_id << `TRU_LACR_AGG_DF_HP_ID_OFFSET))  |
+            (`TRU_LACR_AGG_DF_BR_ID & (df_br_id << `TRU_LACR_AGG_DF_BR_ID_OFFSET))  |
+            (`TRU_LACR_AGG_DF_UN_ID & (df_un_id << `TRU_LACR_AGG_DF_UN_ID_OFFSET));
+      m_acc.write(m_base +`ADDR_TRU_LACR, tmp   );    
+      if(m_dbg)
+      begin 
+        $display("TRU: Link Aggregation config:");
+        $display("\tDistribution Function for High Priority traffic: id = %2d",df_hp_id);
+        $display("\tDistribution Function for Broadcast     traffic: id = %2d",df_br_id);
+        $display("\tDistribution Function for Unicast       traffic: id = %2d",df_un_id);
+      end 
+   endtask;
+
    task rt_reconf_enable();
       uint64_t tmp;
       m_acc.read(m_base + `ADDR_TRU_RTRCR, tmp, 4);
       m_acc.write(m_base +`ADDR_TRU_RTRCR, tmp |  1 << `TRU_RTRCR_RTR_ENA_OFFSET);    
+      if(m_dbg)
       begin 
         $display("TRU: Real Time re-configuration enable");
       end       
@@ -205,6 +225,7 @@ class CSimDrv_WR_TRU;
       uint64_t tmp;
       m_acc.read(m_base + `ADDR_TRU_RTRCR, tmp, 4);
       m_acc.write(m_base +`ADDR_TRU_RTRCR, tmp |  !(1 << `TRU_RTRCR_RTR_ENA_OFFSET));    
+      if(m_dbg)
       begin 
         $display("TRU: Real Time re-configuration disable");
       end       
@@ -214,6 +235,7 @@ class CSimDrv_WR_TRU;
       uint64_t tmp;
       m_acc.read(m_base + `ADDR_TRU_RTRCR, tmp, 4);
       m_acc.write(m_base +`ADDR_TRU_RTRCR, tmp |  1 << `TRU_RTRCR_RTR_RESET_OFFSET);    
+      if(m_dbg)
       begin 
         $display("TRU: Real Time re-configuration reset (memory)");
       end             
@@ -228,6 +250,7 @@ class CSimDrv_WR_TRU;
       
       m_acc.read(m_base + `ADDR_TRU_GSR1, tmp, 4);
       ports_up     = (tmp & `TRU_GSR1_STAT_UP) >> `TRU_GSR1_STAT_UP_OFFSET;
+      if(m_dbg)
       begin 
         $display("TRU: status read:");
         $display("\tactive TABLE bank           : %2d", bank);

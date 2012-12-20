@@ -112,6 +112,14 @@ module main;
    bit mac_br                                 = 0;
    
    // vlans
+//    int prio_map[8]                         = '{7, // Class of Service masked into prioTag 0
+//                                                6, // Class of Service masked into prioTag 1
+//                                                5, // Class of Service masked into prioTag 2
+//                                                4, // Class of Service masked into prioTag 3
+//                                                3, // Class of Service masked into prioTag 4
+//                                                2, // Class of Service masked into prioTag 5
+//                                                1, // Class of Service masked into prioTag 6
+//                                                0};// Class of Service masked into prioTag 7 
    int prio_map[8]                         = '{0, // Class of Service masked into prioTag 0
                                                1, // Class of Service masked into prioTag 1
                                                2, // Class of Service masked into prioTag 2
@@ -179,6 +187,9 @@ module main;
                                                   7}  // every 4th frame send to port 4
                                                };
    integer g_LACP_scenario                  = 0;
+   int lacp_df_hp_id                        = 0;
+   int lacp_df_br_id                        = 2;
+   int lacp_df_un_id                        = 1;
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -704,9 +715,16 @@ module main;
 */
    /** ***************************   test scenario 23  ************************************* **/ 
   /*
-   * simple LACP test
+   * simple LACP test:
+   * - sending frames to port 0
+   * - two link aggregations
+   *    * ports 3  -  7
+   *    * ports 12 & 15
+   * - sending frames on port 5 (from aggregated links)
+   * - we don't recongize HP traffic, all the kinds of traffic have the same distribbution 
+   *   source...
    **/
-// /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000100; // no frames this way
     g_tru_enable         = 1;
@@ -716,12 +734,62 @@ module main;
     repeat_number        = 30;
     tries_number         = 1;
     g_LACP_scenario      = 1;
-
+    mac_br               = 1;
     g_pfilter_enabled    = 1;
     g_do_vlan_config     = 0; //to make simulation faster, we don't need VLAN config, default is OK
    // limiting with VLAN
                      //      mask     , fid , prio,has_p,overr, drop   , vid, valid
-    sim_vlan_tab[0] = '{'{32'h000000F1, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    sim_vlan_tab[0] = '{'{32'h0000F0F1, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    
+    mc.nop();                                          
+    mc.cmp(0, 'hFFFF, 'hffff, PFilterMicrocode::MOV, 1); //setting bit 1 to HIGH if it 
+    mc.cmp(1, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1); // is righ kind of frame, i.e:
+    mc.cmp(2, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1); // 1. broadcast
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(8, 'hbabe, 'hffff, PFilterMicrocode::AND, 1); // 2. EtherType    
+    mc.cmp(9, 'h0000, 'hffff, PFilterMicrocode::MOV, 2); // veryfing info in the frame for aggregation ID
+    mc.cmp(9, 'h0001, 'hffff, PFilterMicrocode::MOV, 3); // veryfing info in the frame for aggregation ID   
+    mc.cmp(9, 'h0002, 'hffff, PFilterMicrocode::MOV, 4); // veryfing info in the frame for aggregation ID   
+    mc.cmp(9, 'h0003, 'hffff, PFilterMicrocode::MOV, 5); // veryfing info in the frame for aggregation ID   
+    mc.logic2(24, 2, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(25, 3, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(26, 4, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(27, 5, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+  end
+*/
+   /** ***************************   test scenario 23  ************************************* **/ 
+  /*
+   * LACP test:
+   * - hp/broadcast/unicast distribution functions
+   * - sending traffic to two port aggregations groups (4-7 and 13&15 ports)
+   * - sending traffic from port on aggregation group
+   * - the simulation is a bit simple, so the distribution looks the same for 
+   *    hp/broarcast/unicast but each of them is derived differently:
+   *    - hp - from plcass detected using packet filter
+   *    - br - from source MAC, bits 8 & 9
+   *    - un - from destination MAC, bits 8 & 9
+   **/
+// /*
+  initial begin
+    g_min_pck_gap        = 50; // cycles
+    g_max_pck_gap        = 50; // cycles  
+    portUnderTest        = 18'b000000000000000100; // no frames this way
+    g_tru_enable         = 1;
+    tru_config_opt       = 2;
+                         // tx  ,rx ,opt
+    trans_paths[2]       = '{5  ,0 , 4 };// 
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_LACP_scenario      = 2;
+    mac_br               = 1;
+    g_pfilter_enabled    = 1;
+    repeat_number        = 20;
+                     //      mask     , fid , prio,has_p,overr, drop   , vid, valid
+    sim_vlan_tab[0] = '{'{32'h0000F0F1, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
     
     mc.nop();                                          
     mc.cmp(0, 'hFFFF, 'hffff, PFilterMicrocode::MOV, 1); //setting bit 1 to HIGH if it 
@@ -894,6 +962,12 @@ module main;
    endtask // tx_test
 
   task automatic tx_distrib_test(ref int seed, input int n_tries, input int is_q, input int unvid, ref port_t p[$], input t_sim_port_distr portDist, input int opt=0);
+      /*
+       * options:
+       * 0: high priority, distribution/class in the first word
+       * 1: boradcast, distribution by looking at src MAC, bits 6 & 7
+       * 2: unicast, distribution by looking at dst MAC, bits 6 & 7
+       **/
       EthPacketGenerator gen = new;
       EthPacket pkt, tmpl;
       EthPacket arr[4][];
@@ -918,12 +992,20 @@ module main;
   
       tmpl           = new;
 
-      tmpl.src       = '{0,2,3,4,5,6};
-      tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
+      tmpl.src       = '{1,2,3,4,5,6};
+      if(opt == 2)
+        tmpl.dst       = '{1,2,3,4,5,6};
+      else
+        tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
   
       tmpl.has_smac  = 1;
       tmpl.is_q      = is_q;
       tmpl.vid       = 0;
+      tmpl.pcp       = 7;
+      if(opt == 1) 
+        tmpl.pcp       = 5;
+      else
+        tmpl.pcp       = 7;
       tmpl.ethertype = 'hbabe;
 
       gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
@@ -944,8 +1026,15 @@ module main;
               $display("|=> TX: srcPort = %2d,dstPort = %2d [dstId=%2d], pck_i = %2d (opt=%1d, pck_gap=%3d)", 
                          srcPort, dstPort, dstID, i,opt,pck_gap);
               
-              pkt.payload[0] = 'h00;
-              pkt.payload[1] = 'h00FF & dstID;
+              if(opt == 1)
+                pkt.src[4] = dstID;
+              else if(opt == 2)
+                pkt.dst[4] = dstID;
+              else
+                begin
+                pkt.payload[0] = 'h00;
+                pkt.payload[1] = 'h00FF & dstID;
+                end
               
               p[srcPort].send.send(pkt);
               arr[dstID][ n_dist_tries[dstID]]=pkt;
@@ -1102,6 +1191,7 @@ module main;
 
       $display(">>>>>>>>>>>>>>>>>>> TRU initialization  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
       tru_drv.pattern_config(1 /*replacement*/, 0 /*addition*/);
+      tru_drv.lacp_config(lacp_df_hp_id,lacp_df_br_id,lacp_df_un_id);
 //       tru_drv.rt_reconf_config(4 /*tx_frame_id*/, 4/*rx_frame_id*/, 1 /*mode*/);
 //       tru_drv.rt_reconf_enable();
         
@@ -1179,30 +1269,30 @@ module main;
         // basic config, excluding link aggregation, only the standard non-LACP ports
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  0  /* subentry_addr*/,
                                32'b0000_0000_0000 /*pattern_mask*/, 32'b0000_0000_0000 /* pattern_match*/,'h0 /* mode */, 
-                               32'b1111_0000_1111 /*ports_mask  */, 32'b1111_0000_1111 /* ports_egress */,32'b1111_0000_1111 /* ports_ingress   */); 
+                               32'b0000_1111_0000_1111 /*ports_mask */, 32'b0000_1111_0000_1111 /* ports_egress */,32'b0000_1111_0000_1111 /* ports_ingress   */); 
 
-        // a bunch of link aggregation ports (ports 4 to 7)
+        // a bunch of link aggregation ports (ports 4 to 7 and 12&15)
         // received FEC msg of class 0 
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
                                32'b0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0001 /* pattern_match*/,'h0 /* mode */, 
-                               32'b0000_1111_0000 /*ports_mask  */, 32'b0000_0001_0000 /* ports_egress */,32'b0000_0000_0000 /* ports_ingress   */);    
+                               32'b1001_0000_1111_0000 /*ports_mask  */, 32'b1000_0000_0001_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */);    
         // received FEC msg of class 1
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
                                32'b0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0010 /* pattern_match*/,'h0 /* mode */, 
-                               32'b0000_1111_0000 /*ports_mask  */, 32'b0000_0010_0000 /* ports_egress */,32'b0000_0000_0000 /* ports_ingress   */); 
+                               32'b1001_0000_1111_0000 /*ports_mask  */, 32'b1000_0000_0010_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */); 
         // received FEC msg of class 2 
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
-                               32'b0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0100 /* pattern_match*/,'h0 /* mode */, 
-                               32'b0000_1111_0000  /*ports_mask */, 32'b0000_0100_0000 /* ports_egress */,32'b0000_0000_0000 /* ports_ingress   */); 
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0100 /* pattern_match*/,'h0 /* mode */, 
+                               32'b1001_0000_1111_0000  /*ports_mask */, 32'b0001_0000_0100_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */); 
         // received FEC msg of class 3
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  4  /* subentry_addr*/,
-                               32'b0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_1000 /* pattern_match*/,'h0 /* mode */, 
-                               32'b0000_1111_0000 /*ports_mask  */, 32'b0000_1000_0000 /* ports_egress */,32'b0000_0000_0000 /* ports_ingress   */);        
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_1000 /* pattern_match*/,'h0 /* mode */, 
+                               32'b1001_0000_1111_0000 /*ports_mask  */, 32'b0001_0000_1000_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */);        
         
         // collector: receiving frames on the aggregation ports, forwarding to "normal" (others)
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  5  /* subentry_addr*/,
-                               32'b0000_1111_0000 /*pattern_mask*/, 32'b0000_1111_0000 /* pattern_match*/,'h2 /* mode */, 
-                               32'b0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0000 /* ports_egress */,32'b0000_1111_0000 /* ports_ingress   */); 
+                               32'b0000_0000_1111_0000 /*pattern_mask*/, 32'b0000_1111_0000 /* pattern_match*/,'h2 /* mode */, 
+                               32'b1001_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0000_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */); 
 
 
         tru_drv.pattern_config(3 /*replacement*/, 4 /*addition*/); // 3-> source is pclass
@@ -1288,25 +1378,35 @@ module main;
         
         //
       rtu.set_port_config(g_num_ports, 1, 0, 0); // for NIC
-        
-      if(portUnderTest[0])  rtu.add_static_rule('{17, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<17));
-      if(portUnderTest[1])  rtu.add_static_rule('{16, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<16));
-      if(portUnderTest[2])  rtu.add_static_rule('{15, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<15));
-      if(portUnderTest[3])  rtu.add_static_rule('{14, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<14));
-      if(portUnderTest[4])  rtu.add_static_rule('{13, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<13));
-      if(portUnderTest[5])  rtu.add_static_rule('{12, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<12));
-      if(portUnderTest[6])  rtu.add_static_rule('{11, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<11));
-      if(portUnderTest[7])  rtu.add_static_rule('{10, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<10));
-      if(portUnderTest[8])  rtu.add_static_rule('{ 9, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<9 ));
-      if(portUnderTest[9])  rtu.add_static_rule('{ 8, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<8 ));
-      if(portUnderTest[10]) rtu.add_static_rule('{ 7, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<7 ));
-      if(portUnderTest[11]) rtu.add_static_rule('{ 6, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<6 ));
-      if(portUnderTest[12]) rtu.add_static_rule('{ 5, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<5 ));
-      if(portUnderTest[13]) rtu.add_static_rule('{ 4, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<4 ));
-      if(portUnderTest[14]) rtu.add_static_rule('{ 3, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<3 ));
-      if(portUnderTest[15]) rtu.add_static_rule('{ 2, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<2 ));
-      if(portUnderTest[16]) rtu.add_static_rule('{ 1, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<1 ));
-      if(portUnderTest[17]) rtu.add_static_rule('{ 0, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<0  ));
+      
+      if(g_LACP_scenario == 2)
+        begin
+          for(int i = 0;i<LACPdistro.distPortN;i++)
+            rtu.add_static_rule('{0,2,i,4,5,6}, (1<<LACPdistro.distr[i]));
+        end
+      else
+        begin  
+          if(portUnderTest[0])  rtu.add_static_rule('{17, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<17));
+          if(portUnderTest[1])  rtu.add_static_rule('{16, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<16));
+          if(portUnderTest[2])  rtu.add_static_rule('{15, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<15));
+          if(portUnderTest[3])  rtu.add_static_rule('{14, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<14));
+          if(portUnderTest[4])  rtu.add_static_rule('{13, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<13));
+          if(portUnderTest[5])  rtu.add_static_rule('{12, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<12));
+          if(portUnderTest[6])  rtu.add_static_rule('{11, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<11));
+          if(portUnderTest[7])  rtu.add_static_rule('{10, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<10));
+          if(portUnderTest[8])  rtu.add_static_rule('{ 9, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<9 ));
+          if(portUnderTest[9])  rtu.add_static_rule('{ 8, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<8 ));
+          if(portUnderTest[10]) rtu.add_static_rule('{ 7, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<7 ));
+          if(portUnderTest[11]) rtu.add_static_rule('{ 6, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<6 ));
+          if(portUnderTest[12]) rtu.add_static_rule('{ 5, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<5 ));
+          if(portUnderTest[13]) rtu.add_static_rule('{ 4, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<4 ));
+          if(portUnderTest[14]) rtu.add_static_rule('{ 3, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<3 ));
+          if(portUnderTest[15]) rtu.add_static_rule('{ 2, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<2 ));
+          if(portUnderTest[16]) rtu.add_static_rule('{ 1, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<1 ));
+          if(portUnderTest[17]) rtu.add_static_rule('{ 0, 'h50, 'hca, 'hfe, 'hba, 'hbe}, (1<<0  ));
+        end
+      
+      
 
      // rtu.set_hash_poly();
       $display(">>>>>>>>>>>>>>>>>>> RTU initialization  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
@@ -1340,6 +1440,7 @@ module main;
       rtu.rx_set_cpu_port     ((1<<g_num_ports)/*mask: virtual port of CPU*/);
       rtu.rx_drop_on_fmatch_full();
       rtu.rx_feature_ctrl(mr, mac_ptp , mac_ll, mac_single, mac_range, mac_br);
+      
       ////////////////////////////////////////////////////////////////////////////////////////
 
       rtu.enable();
@@ -1406,6 +1507,7 @@ module main;
            if(g_LACP_scenario == 1)
            begin 
              wait_cycles(200);
+              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Link Aggregation for HP <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              tx_distrib_test(seed,           /* seed    */
                              repeat_number,  /* n_tries */
                              1,              /* is_q    */
@@ -1413,10 +1515,40 @@ module main;
                              ports,          /*  */
                              LACPdistro,       /* port distribution */ 
                              0);             /* option */
+                                       
 
            end
            else if(g_LACP_scenario == 2)
            begin
+             wait_cycles(200);
+              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Link Aggregation for HP <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             tx_distrib_test(seed,           /* seed    */
+                             repeat_number,  /* n_tries */
+                             1,              /* is_q    */
+                             0,              /* unvid   */
+                             ports,          /*  */
+                             LACPdistro,       /* port distribution */ 
+                             0);             /* option */
+                             
+             wait_cycles(200);                
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Link Aggregation for Broadcast <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             tx_distrib_test(seed,           /* seed    */
+                             repeat_number,  /* n_tries */
+                             1,              /* is_q    */
+                             0,              /* unvid   */
+                             ports,          /*  */
+                             LACPdistro,       /* port distribution */ 
+                             1);             /* option */                
+
+             wait_cycles(200);                
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Link Aggregation for Unicast <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             tx_distrib_test(seed,           /* seed    */
+                             repeat_number,  /* n_tries */
+                             1,              /* is_q    */
+                             0,              /* unvid   */
+                             ports,          /*  */
+                             LACPdistro,       /* port distribution */ 
+                             2);             /* option */                
 
 
 

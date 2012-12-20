@@ -150,7 +150,7 @@ package wrsw_tru_pkg is
     mcr_pattern_mode_rep  : std_logic_vector(3 downto 0);
     mcr_pattern_mode_add  : std_logic_vector(3 downto 0);
     -- linc aggregation config
-    lacr_agg_gr_num       : std_logic_vector(3 downto 0);
+    lacr_agg_df_hp_id     : std_logic_vector(3 downto 0);
     lacr_agg_df_br_id     : std_logic_vector(3 downto 0);
     lacr_agg_df_un_id     : std_logic_vector(3 downto 0);
     lagt_gr_id_mask       : t_lagt_gr_id_mask_array(7 downto 0);
@@ -232,11 +232,16 @@ package wrsw_tru_pkg is
            return std_logic_vector;
   function f_rxFrameMaskRegInv(input_data: t_tru_endpoint_array;rx_class_id: integer;port_number: integer)
            return std_logic_vector;
-  function f_pattern_port_down (endpoints_i: t_tru_endpoints;config_i: t_tru_config; tru_req_i : t_tru_request;pattern_width_i : integer) 
+  function f_pattern_port_down(endpoints_i: t_tru_endpoints;pattern_width_i: integer) 
            return std_logic_vector;
-  function f_pattern_quick_fwd (endpoints_i: t_tru_endpoints; config_i : t_tru_config; tru_req_i : t_tru_request; pattern_width_i : integer) 
+  function f_pattern_quick_fwd (endpoints_i: t_tru_endpoints; config_i: t_tru_config;pattern_width_i: integer)
            return std_logic_vector;
-
+  function f_pattern_aggr_gr_id(endpoints_i: t_tru_endpoints;tru_req_i : t_tru_request;portID_i: std_logic_vector;config_i: t_tru_config;pattern_width_i: integer; port_number_i   : integer)
+           return std_logic_vector;
+  function f_pattern_rx_port (tru_req_i: t_tru_request; pattern_width_i : integer) 
+           return std_logic_vector;
+  function f_aggr_dist_fun (endpoints_i : t_tru_endpoints;tru_req_i : t_tru_request;portID_i : std_logic_vector; aggr_df_id_i : std_logic_vector; pattern_width_i: integer; port_number_i: integer)
+           return std_logic_vector ;
   component tru_wishbone_slave
   port (
     rst_n_i            : in     std_logic;
@@ -762,9 +767,7 @@ package body wrsw_tru_pkg is
 
   --------------------------------------  pattern -------------------------------------------------
   function f_pattern_port_down (
-       endpoints_i     : t_tru_endpoints;
-       config_i        : t_tru_config;
-       tru_req_i       : t_tru_request;       
+       endpoints_i     : t_tru_endpoints;    
        pattern_width_i : integer
     ) return std_logic_vector is
   variable pattern_o : std_logic_vector(pattern_width_i-1 downto 0);
@@ -775,8 +778,7 @@ package body wrsw_tru_pkg is
 
   function f_pattern_quick_fwd (
        endpoints_i     : t_tru_endpoints;
-       config_i        : t_tru_config;
-       tru_req_i       : t_tru_request;       
+       config_i        : t_tru_config;    
        pattern_width_i : integer
     ) return std_logic_vector is
   variable pattern_o     : std_logic_vector(pattern_width_i-1 downto 0);
@@ -786,6 +788,115 @@ package body wrsw_tru_pkg is
     pattern_o     := endpoints_i.rxFrameMaskReg(rxFrameNumber)(pattern_width_i-1 downto 0);
     return(pattern_o);
   end function;
+
+  function f_pattern_aggr_gr_id (
+       endpoints_i     : t_tru_endpoints;
+       tru_req_i       : t_tru_request;
+       portID_i        : std_logic_vector;
+       config_i        : t_tru_config;
+       pattern_width_i : integer;
+       port_number_i   : integer
+    ) return std_logic_vector is
+  variable pattern_o     : std_logic_vector(pattern_width_i-1 downto 0);
+  variable rxPort        : integer range 0 to port_number_i-1;
+  variable zeros         : std_logic_vector(3 downto 0) := "0000";
+  begin
+    rxPort        := to_integer(unsigned(portID_i));
+    if(tru_req_i.isHP = '1') then
+      pattern_o   := f_aggr_dist_fun(endpoints_i,
+                                     tru_req_i,
+                                     portID_i,
+                                     config_i.lacr_agg_df_hp_id, -- aggregation group ID
+                                     pattern_width_i,
+                                     port_number_i);
+    elsif(tru_req_i.isBR = '1') then
+      pattern_o   := f_aggr_dist_fun(endpoints_i,
+                                     tru_req_i,
+                                     portID_i,
+                                     config_i.lacr_agg_df_br_id,
+                                     pattern_width_i,
+                                     port_number_i);
+    else
+      pattern_o   := f_aggr_dist_fun(endpoints_i,
+                                     tru_req_i,
+                                     portID_i,
+                                     config_i.lacr_agg_df_un_id,
+                                     pattern_width_i,
+                                     port_number_i);
+    end if;
+
+    return(pattern_o);
+  end function;
+
+  function f_pattern_rx_port (
+       tru_req_i     : t_tru_request;
+       pattern_width_i : integer
+    ) return std_logic_vector is
+  variable pattern_o     : std_logic_vector(pattern_width_i-1 downto 0);
+  begin
+    pattern_o     := tru_req_i.reqMask(pattern_width_i-1 downto 0);
+    return(pattern_o);
+  end function;
+
+  function f_aggr_dist_fun (
+       endpoints_i     : t_tru_endpoints;
+       tru_req_i       : t_tru_request;
+       portID_i        : std_logic_vector;
+       aggr_df_id_i    : std_logic_vector;    
+       pattern_width_i : integer;
+       port_number_i   : integer
+    ) return std_logic_vector is
+  variable pattern_o     : std_logic_vector(pattern_width_i-1 downto 0);
+  variable dmac          : std_logic_vector(1 downto 0);
+  variable smac          : std_logic_vector(1 downto 0);
+  variable aggr_df_id    : std_logic_vector(3 downto 0);
+  variable rxPort        : integer range 0 to port_number_i-1;
+  begin
+    
+    aggr_df_id    := aggr_df_id_i(3 downto 0);
+    dmac          := tru_req_i.dmac(9) & tru_req_i.dmac(8);
+    smac          := tru_req_i.smac(9) & tru_req_i.smac(8);
+    rxPort        := to_integer(unsigned(portID_i));
+
+    case aggr_df_id is
+      when "0000" => -- class
+        pattern_o   := endpoints_i.rxFramePerPortMask(rxPort)(pattern_width_i-1 downto 0) ; 
+      when "0001" => -- dmac
+        case (dmac) is
+          when "00" =>
+            pattern_o(3 downto 0) :=  "0001";
+          when "01" =>
+            pattern_o(3 downto 0) :=  "0010";
+          when "10" =>
+            pattern_o(3 downto 0) :=  "0100";
+          when "11" =>
+            pattern_o(3 downto 0) :=  "1000";
+          when others =>
+            pattern_o(3 downto 0) :=  "0001";--??
+          end case;           
+        pattern_o(pattern_width_i-1 downto 4) :=  (others =>'0');
+      when "0010" => -- sac
+        case (smac) is
+          when "00" =>
+            pattern_o(3 downto 0) :=  "0001";
+          when "01" =>
+            pattern_o(3 downto 0) :=  "0010";
+          when "10" =>
+            pattern_o(3 downto 0) :=  "0100";
+          when "11" =>
+            pattern_o(3 downto 0) :=  "1000";
+          when others =>
+            pattern_o(3 downto 0) :=  "0001";--??
+          end case;           
+        pattern_o(pattern_width_i-1 downto 4) :=  (others =>'0');      
+      when others => -- Default
+        pattern_o   := endpoints_i.rxFramePerPortMask(rxPort)(pattern_width_i-1 downto 0) ; 
+    end case;
+
+    return(pattern_o);
+
+  end function;
+
 
 end wrsw_tru_pkg;
 

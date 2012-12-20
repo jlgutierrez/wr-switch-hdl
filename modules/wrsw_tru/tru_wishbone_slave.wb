@@ -122,13 +122,17 @@ peripheral {
 
    reg {
       name = "Link Aggregation Control Register";
-      description = "Register controlling Link Aggregation specific config";
+      description = "Enables configuration of Link Aggregation distribution functions for each kind of traffic.\
+       Available functions:\
+       0: based on pclass detected by Packet Filter (need proper pFilter config)\
+       1: based on destination MAC address (bits 6 and 7)\
+       2: based on source MAC address (bits 6 and 7)";
       prefix = "LACR";
 
       field {
-         name = "Aggregation Group Number";
-         description = "Provides number of Link Aggregation groups handled by the switch/network";
-         prefix = "AGG_GR_NUM";
+         name = "HP traffic Distribution Function ID";
+         description = "ID of Aggregation Distribution Function for HP traffic (value of 0 recommended, requires proper pFilter config)";
+         prefix = "AGG_DF_HP_ID";
          
          type = SLV;
          size = 4;
@@ -139,7 +143,7 @@ peripheral {
       
       field {
          name = "Broadcast Distribution Function ID";
-         description = "ID of Aggregation Distribution Function for broadcast traffic";
+         description = "ID of Aggregation Distribution Function for broadcast traffic (value of 2 recommended)";
 
          prefix = "AGG_DF_BR_ID";
          type = SLV;
@@ -161,99 +165,99 @@ peripheral {
          access_bus = READ_WRITE;
       };
   };
-   reg {
-      name = "Link Aggregation Group ID Mask Table";
-      description = "Table which Translation between bit number from the endpoint  mask and Aggregation Group";
-      prefix = "LAGT";
-
-      field {
-         name = "Aggregation Group ID Mask Bit Number for group 0";
-         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
-
-         prefix = "LAGT_GR_ID_MASK_0";
-         type = SLV;
-         size = 4;
-         access_dev = READ_ONLY;
-         access_bus = READ_WRITE;
-      };
-
-      field {
-         name = "Aggregation Group ID Mask Bit Number for group 1";
-         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
-
-         prefix = "LAGT_GR_ID_MASK_1";
-         type = SLV;
-         size = 4;
-         access_dev = READ_ONLY;
-         access_bus = READ_WRITE;
-      };
-
-      field {
-         name = "Aggregation Group ID Mask Bit Number for group 2";
-         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
-
-         prefix = "LAGT_GR_ID_MASK_2";
-         type = SLV;
-         size = 4;
-         access_dev = READ_ONLY;
-         access_bus = READ_WRITE;
-      };
-
-      field {
-         name = "Aggregation Group ID Mask Bit Number for group 3";
-         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
-
-         prefix = "LAGT_GR_ID_MASK_3";
-         type = SLV;
-         size = 4;
-         access_dev = READ_ONLY;
-         access_bus = READ_WRITE;
-      };
-
-      field {
-         name = "Aggregation Group ID Mask Bit Number for group 4";
-         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
-
-         prefix = "LAGT_GR_ID_MASK_4";
-         type = SLV;
-         size = 4;
-         access_dev = READ_ONLY;
-         access_bus = READ_WRITE;
-      };
-
-      field {
-         name = "Aggregation Group ID Mask Bit Number for group 5";
-         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
-
-         prefix = "LAGT_GR_ID_MASK_5";
-         type = SLV;
-         size = 4;
-         access_dev = READ_ONLY;
-         access_bus = READ_WRITE;
-      };
-
-      field {
-         name = "Aggregation Group ID Mask Bit Number for group 6";
-         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
-
-         prefix = "LAGT_GR_ID_MASK_6";
-         type = SLV;
-         size = 4;
-         access_dev = READ_ONLY;
-         access_bus = READ_WRITE;
-      };
-
-      field {
-         name = "Aggregation Group ID Mask Bit Number for group 7";
-         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
-
-         prefix = "LAGT_GR_ID_MASK_7";
-         type = SLV;
-         size = 4;
-         access_dev = READ_ONLY;
-         access_bus = READ_WRITE;
-      };
-   };
+--   reg {
+--      name = "Link Aggregation Group ID Mask Table";
+--      description = "Table which Translation between bit number from the endpoint  mask and Aggregation Group";
+--      prefix = "LAGT";
+--
+--      field {
+--         name = "Aggregation Group ID Mask Bit Number for group 0";
+--         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+--
+--         prefix = "LAGT_GR_ID_MASK_0";
+--         type = SLV;
+--         size = 4;
+--         access_dev = READ_ONLY;
+--         access_bus = READ_WRITE;
+--      };
+--
+--      field {
+--         name = "Aggregation Group ID Mask Bit Number for group 1";
+--         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+--
+--         prefix = "LAGT_GR_ID_MASK_1";
+--         type = SLV;
+--         size = 4;
+--         access_dev = READ_ONLY;
+--         access_bus = READ_WRITE;
+--      };
+--
+--      field {
+--         name = "Aggregation Group ID Mask Bit Number for group 2";
+--         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+--
+--         prefix = "LAGT_GR_ID_MASK_2";
+--         type = SLV;
+--         size = 4;
+--         access_dev = READ_ONLY;
+--         access_bus = READ_WRITE;
+--      };
+--
+--      field {
+--         name = "Aggregation Group ID Mask Bit Number for group 3";
+--         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+--
+--         prefix = "LAGT_GR_ID_MASK_3";
+--         type = SLV;
+--         size = 4;
+--         access_dev = READ_ONLY;
+--         access_bus = READ_WRITE;
+--      };
+--
+--      field {
+--         name = "Aggregation Group ID Mask Bit Number for group 4";
+--         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+--
+--         prefix = "LAGT_GR_ID_MASK_4";
+--         type = SLV;
+--         size = 4;
+--         access_dev = READ_ONLY;
+--         access_bus = READ_WRITE;
+--      };
+--
+--      field {
+--         name = "Aggregation Group ID Mask Bit Number for group 5";
+--         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+--
+--         prefix = "LAGT_GR_ID_MASK_5";
+--         type = SLV;
+--         size = 4;
+--         access_dev = READ_ONLY;
+--         access_bus = READ_WRITE;
+--      };
+--
+--      field {
+--         name = "Aggregation Group ID Mask Bit Number for group 6";
+--         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+--
+--         prefix = "LAGT_GR_ID_MASK_6";
+--         type = SLV;
+--         size = 4;
+--         access_dev = READ_ONLY;
+--         access_bus = READ_WRITE;
+--      };
+--
+--      field {
+--         name = "Aggregation Group ID Mask Bit Number for group 7";
+--         description = "Translation between bit number from the endpoint  mask and Aggregation Group";
+--
+--         prefix = "LAGT_GR_ID_MASK_7";
+--         type = SLV;
+--         size = 4;
+--         access_dev = READ_ONLY;
+--         access_bus = READ_WRITE;
+--      };
+--   };
 
    reg {
       name = "Transition Control General Register";
