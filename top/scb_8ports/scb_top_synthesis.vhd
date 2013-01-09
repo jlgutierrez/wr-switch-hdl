@@ -103,7 +103,7 @@ entity scb_top_synthesis is
     clk_dmtd_divsel_o : out std_logic;
 
     -- UART source selection (FPGA/DBGU)
-    uart_sel_o : out std_logic;
+    -- uart_sel_o : out std_logic;
 
     ---------------------------------------------------------------------------
     -- GTX ports
@@ -146,7 +146,10 @@ entity scb_top_synthesis is
     mbl_sda_b : inout std_logic_vector(1 downto 0);
 
     sensors_scl_b: inout std_logic;
-    sensors_sda_b: inout std_logic
+    sensors_sda_b: inout std_logic;
+
+    mb_fan1_pwm_o : out std_logic;
+    mb_fan2_pwm_o : out std_logic
   );
 
 end scb_top_synthesis;
@@ -271,7 +274,10 @@ architecture Behavioral of scb_top_synthesis is
       i2c_scl_i       : in  std_logic_vector(2 downto 0) := "111";
       i2c_sda_oen_o   : out std_logic_vector(2 downto 0);
       i2c_sda_o       : out std_logic_vector(2 downto 0);
-      i2c_sda_i       : in  std_logic_vector(2 downto 0) := "111");
+      i2c_sda_i       : in  std_logic_vector(2 downto 0) := "111";
+      mb_fan1_pwm_o : out std_logic;
+      mb_fan2_pwm_o : out std_logic
+      );
   end component;
 
   component chipscope_icon
@@ -579,7 +585,7 @@ begin
       uart_rxd_i          => uart_rxd_i,
       clk_en_o            => clk_en_o,
       clk_sel_o           => clk_sel_o,
-      uart_sel_o          => uart_sel_o,
+--      uart_sel_o          => uart_sel_o,
       clk_dmtd_divsel_o   => clk_dmtd_divsel_o,
       gpio_i              => x"00000000",
       phys_o              => to_phys(c_NUM_PORTS-1 downto 0),
@@ -591,7 +597,9 @@ begin
       i2c_scl_i       => i2c_scl_in,
       i2c_sda_oen_o   => i2c_sda_oen,
       i2c_sda_o       => i2c_sda_out,
-      i2c_sda_i       => i2c_sda_in);
+      i2c_sda_i       => i2c_sda_in,
+      mb_fan1_pwm_o => mb_fan1_pwm_o,
+      mb_fan2_pwm_o => mb_fan2_pwm_o);
 
   i2c_scl_in(1 downto 0) <= mbl_scl_b(1 downto 0);
   i2c_sda_in(1 downto 0) <= mbl_sda_b(1 downto 0);
