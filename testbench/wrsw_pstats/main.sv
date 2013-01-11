@@ -1,4 +1,4 @@
-`include "rmon_gen.sv"
+`include "pstats_gen.sv"
 
 `define TRIG_WIDTH 64
 
@@ -15,7 +15,7 @@ module main;
     rst_n <= 1'b1;
   end
 
-  rmon_gen 
+  pstats_gen 
   #(
     .g_trig_width(`TRIG_WIDTH))
   TRIG_GEN
@@ -25,7 +25,7 @@ module main;
     .trig_o(trigs)
   );
 
-  wrsw_rmon
+  port_cntr
   #(
     .g_cnt_pp(`TRIG_WIDTH),
     .g_cnt_pw(4))

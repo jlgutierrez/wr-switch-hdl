@@ -1,4 +1,4 @@
-module rmon_gen (rst_n_i, clk_i, trig_o);
+module pstats_gen (rst_n_i, clk_i, trig_o);
 
   parameter g_trig_width = 10;
   parameter g_time = 25;

@@ -1,10 +1,10 @@
 -------------------------------------------------------------------------------
--- Title      : 
+-- Title      : One port statistics counter
 -- Project    : White Rabbit Switch
 -------------------------------------------------------------------------------
--- File       : wrsw_rmon.vhd
+-- File       : port_cntr.vhd
 -- Author     : Grzegorz Daniluk
--- Company    : CERN BE-Co-HT
+-- Company    : CERN BE-CO-HT
 -- Created    : 2012-12-20
 -- Last update: 2013-01-11
 -- Platform   : FPGA-generic
@@ -28,7 +28,7 @@ library work;
 use work.genram_pkg.all;
 use work.wishbone_pkg.all;
 
-entity wrsw_rmon is
+entity port_cntr is
   generic(
     g_cnt_pp : integer := 64;           --number of counters per port
     g_cnt_pw : integer := 8);           --number of counters per word
@@ -40,9 +40,9 @@ entity wrsw_rmon is
     wb_i     : in  t_wishbone_slave_in := cc_dummy_slave_in;
     wb_o     : out t_wishbone_slave_out
   );
-end wrsw_rmon;
+end port_cntr;
 
-architecture behav of wrsw_rmon is
+architecture behav of port_cntr is
 
   constant c_rr_range   : integer := (g_cnt_pp+g_cnt_pw-1)/g_cnt_pw;
   constant c_evt_range  : integer := c_rr_range*g_cnt_pw;
