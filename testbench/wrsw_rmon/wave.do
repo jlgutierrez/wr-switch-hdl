@@ -14,11 +14,10 @@ add wave -noupdate /main/DUT/events_sub
 add wave -noupdate /main/DUT/real_state
 add wave -noupdate /main/DUT/cnt_state
 add wave -noupdate /main/DUT/mem_adr
-add wave -noupdate /main/DUT/mem_wr
+add wave -noupdate /main/DUT/mem_wb_in.we
 add wave -noupdate /main/DUT/mem_dat_in
 add wave -noupdate /main/DUT/mem_dat_out
 add wave -noupdate /main/DUT/rr_select
-add wave -noupdate /main/DUT/rr_range
 add wave -noupdate /main/DUT/RAM_A1/U_DPRAM/gen_single_clk/U_RAM_SC/ram
 
 add wave -noupdate /main/DUMMY/regs

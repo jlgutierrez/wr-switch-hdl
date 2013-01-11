@@ -27,10 +27,8 @@ module main;
 
   wrsw_rmon
   #(
-    .g_nports(1),
     .g_cnt_pp(`TRIG_WIDTH),
-    .g_cnt_pw(4),
-    .rr_range(`TRIG_WIDTH/4-1))
+    .g_cnt_pw(4))
   DUT
   (
     .rst_n_i(rst_n),
