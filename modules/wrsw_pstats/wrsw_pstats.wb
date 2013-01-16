@@ -1,0 +1,75 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+-- White-Rabbit Per-Port Statistic Couters
+-- author: Grzegorz Daniluk <grzegorz.daniluk@cern.ch>
+--
+-- Use wbgen2 to generate code, documentation and more.
+-- wbgen2 is available at:
+-- http://www.ohwr.org/projects/wishbone-gen
+--
+
+peripheral {
+ 
+  name = "WR Switch Per-Port Statistic Counters";
+  description = "The set of counters for counting traffic statistics on each Ethernet port of WR Switch";
+  hdl_entity = "pstats_wishbone_slave";
+  prefix = "pstats";
+
+
+   reg {
+      name = "Control Register";
+      prefix = "CR";
+
+      field {
+         name = "Enable transfer of counter content";
+         description = "write 1: start reading content \
+                        write 0: no effect \
+                        read  1: reading in progress \
+                        read  0: reading done, counter value available";
+         prefix = "RD_EN";
+         
+         type = BIT;
+         access_dev = READ_WRITE;
+         access_bus = READ_WRITE;
+         load = LOAD_EXT;
+      };
+
+
+    field {
+      name = "Port number";
+      description = "Number of port (0-17) from which couter's value is read";
+      prefix = "PORT";
+      size = 5;
+      align = 8;
+      type = SLV;
+      access_bus = READ_WRITE;
+      access_dev = READ_ONLY;
+    };
+
+    field {
+      name = "Memory address";
+      description = "Address of the 32-bit word in selected port's memory that contains the counter to be read";
+      prefix = "ADDR";
+      size = 5;
+      align = 16;
+      type = SLV;
+      access_bus = READ_WRITE;
+      access_dev = READ_ONLY;
+    };
+  };
+
+  reg {
+    name = "Counter Value";
+    description = "32-bit word read from given memory address of selected Ethernet port containing the value of 4 counters";
+    prefix = "CNT_VAL";
+
+    field {
+      name = "4 counters' values";
+      size = 32;
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+
+};
