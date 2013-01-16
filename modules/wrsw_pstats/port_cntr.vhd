@@ -6,7 +6,7 @@
 -- Author     : Grzegorz Daniluk
 -- Company    : CERN BE-CO-HT
 -- Created    : 2012-12-20
--- Last update: 2013-01-11
+-- Last update: 2013-01-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -36,9 +36,14 @@ entity port_cntr is
     rst_n_i : in std_logic;
     clk_i   : in std_logic;
 
-    events_i : in  std_logic_vector(g_cnt_pp-1 downto 0);
-    wb_i     : in  t_wishbone_slave_in := cc_dummy_slave_in;
-    wb_o     : out t_wishbone_slave_out
+    events_i : in std_logic_vector(g_cnt_pp-1 downto 0);
+
+    --memory interface
+    ext_cyc_i : in  std_logic                                                                := '0';
+    ext_adr_i : in  std_logic_vector(f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)-1 downto 0) := (others => '0');
+    ext_we_i  : in  std_logic                                                                := '0';
+    ext_dat_i : in  std_logic_vector(31 downto 0)                                            := (others => '0');
+    ext_dat_o : out std_logic_vector(31 downto 0)
   );
 end port_cntr;
 
@@ -47,17 +52,15 @@ architecture behav of port_cntr is
   constant c_rr_range   : integer := (g_cnt_pp+g_cnt_pw-1)/g_cnt_pw;
   constant c_evt_range  : integer := c_rr_range*g_cnt_pw;
   constant c_cnt_width  : integer := c_wishbone_data_width/g_cnt_pw;
-  constant c_mem_adr_sz : integer := f_log2_size(g_cnt_pp/g_cnt_pw);
+  constant c_mem_adr_sz : integer := f_log2_size(c_rr_range);
 
   type   t_cnt_st is (SEL, WRITE);
-  signal cnt_state  : t_cnt_st;
-  signal real_state : t_cnt_st;
+  signal cnt_state : t_cnt_st;
 
-  signal mem_wb_in   : t_wishbone_slave_in;
-  signal mem_wb_out  : t_wishbone_slave_out;
   signal mem_dat_in  : std_logic_vector(31 downto 0);
   signal mem_dat_out : std_logic_vector(31 downto 0);
   signal mem_adr     : integer range 0 to c_rr_range-1;
+  signal mem_adr_lv  : std_logic_vector(c_mem_adr_sz-1 downto 0);
   signal mem_wr      : std_logic;
 
   signal events_reg : std_logic_vector(c_evt_range-1 downto 0);
@@ -87,30 +90,31 @@ architecture behav of port_cntr is
 
 begin
 
-  RAM_A1 : xwb_dpram
+  RAM_A1 : generic_dpram
     generic map(
-      g_size                  => (g_cnt_pp + g_cnt_pw-1)/g_cnt_pw,
-      g_must_have_init_file   => false,
-      g_slave1_interface_mode => PIPELINED,
-      g_slave2_interface_mode => PIPELINED,
-      g_slave1_granularity    => WORD,
-      g_slave2_granularity    => WORD)
-    port map(
-      clk_sys_i => clk_i,
-      rst_n_i   => rst_n_i,
+      g_data_width               => 32,
+      g_size                     => c_rr_range,
+      g_with_byte_enable         => false,
+      g_addr_conflict_resolution => "write_first",
+      g_dual_clock               => false)   
+  port map(
+      rst_n_i => rst_n_i,
 
-      slave1_i => wb_i,
-      slave1_o => wb_o,
-      slave2_i => mem_wb_in,
-      slave2_o => mem_wb_out);
+      clka_i => clk_i,
+      bwea_i => (others => '1'),
+      wea_i  => ext_we_i,
+      aa_i   => ext_adr_i,
+      da_i   => ext_dat_i,
+      qa_o   => ext_dat_o,
 
-  mem_wb_in.cyc                          <= '1';
-  mem_wb_in.stb                          <= '1';
-  mem_wb_in.adr(c_mem_adr_sz-1 downto 0) <= std_logic_vector(to_unsigned(mem_adr, c_mem_adr_sz));
-  mem_wb_in.sel                          <= "1111";
-  mem_wb_in.we                           <= mem_wr;
-  mem_wb_in.dat                          <= mem_dat_in;
-  mem_dat_out                            <= mem_wb_out.dat;
+      clkb_i => clk_i,
+      bweb_i => (others => '1'),
+      web_i  => mem_wr,
+      ab_i   => mem_adr_lv,
+      db_i   => mem_dat_in,
+      qb_o   => mem_dat_out);
+
+  mem_adr_lv <= std_logic_vector(to_unsigned(mem_adr, c_mem_adr_sz));
 
   --store events into temp register, and clear those already counted
   process(clk_i)
@@ -145,20 +149,16 @@ begin
         events_sub                      <= (others => '0');
       else
 
-        
         case(cnt_state) is
           when SEL =>
-            real_state <= SEL;
             --check each segment of events_i starting from the one pointed by round robin
             events_clr <= (others => '0');
-            --events_sub <= (others=>'0');
             mem_wr     <= '0';
             for i in 0 to c_rr_range-1 loop
-              --report "SEL " & integer'image(i) & " " & integer'image(rr_select);
               if(to_integer(unsigned(evt_subset(events_reg, i, rr_select))) /= 0) then
-                mem_adr         <= evt_sel(i, rr_select);
-                cnt_state       <= WRITE;
-                events_sub      <= events_reg((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw);
+                mem_adr                                                                                <= evt_sel(i, rr_select);
+                cnt_state                                                                              <= WRITE;
+                events_sub                                                                             <= events_reg((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw);
                 events_clr((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw) <=
                   events_reg((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw);  --events_sub
                 exit;
@@ -172,10 +172,14 @@ begin
             end if;
 
           when WRITE =>
-            real_state <= WRITE;
-            mem_wr     <= '1';
             events_clr <= (others => '0');
-            cnt_state  <= SEL;
+            if(std_logic_vector(to_unsigned(mem_adr, c_mem_adr_sz)) = ext_adr_i and ext_cyc_i = '1' and ext_we_i = '0') then
+              mem_wr    <= '0';
+              cnt_state <= WRITE;
+            else
+              mem_wr    <= '1';
+              cnt_state <= SEL;
+            end if;
         end case;
 
 
