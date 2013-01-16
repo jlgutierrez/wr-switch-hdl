@@ -69,6 +69,7 @@ architecture behav of port_cntr is
 
   signal rr_select    : integer range 0 to c_rr_range-1 := 0;
   signal evt_overflow : std_logic;
+  signal wr_conflict  : std_logic;
 
   function evt_sel(i, rr_select : integer) return integer is
     variable sel : integer range 0 to (g_cnt_pp+g_cnt_pw-1)/g_cnt_pw-1;  --c_rr_range-1;
@@ -95,14 +96,14 @@ begin
       g_data_width               => 32,
       g_size                     => c_rr_range,
       g_with_byte_enable         => false,
-      g_addr_conflict_resolution => "write_first",
+      g_addr_conflict_resolution => "read_first",
       g_dual_clock               => false)   
   port map(
       rst_n_i => rst_n_i,
 
       clka_i => clk_i,
       bwea_i => (others => '1'),
-      wea_i  => ext_we_i,
+      wea_i  => '0', --ext_we_i,
       aa_i   => ext_adr_i,
       da_i   => ext_dat_i,
       qa_o   => ext_dat_o,
@@ -147,6 +148,7 @@ begin
         mem_adr                         <= 0;
         mem_wr                          <= '0';
         events_sub                      <= (others => '0');
+        wr_conflict                     <= '0';
       else
 
         case(cnt_state) is
@@ -154,11 +156,12 @@ begin
             --check each segment of events_i starting from the one pointed by round robin
             events_clr <= (others => '0');
             mem_wr     <= '0';
+            wr_conflict <= '0';
             for i in 0 to c_rr_range-1 loop
               if(to_integer(unsigned(evt_subset(events_reg, i, rr_select))) /= 0) then
-                mem_adr                                                                                <= evt_sel(i, rr_select);
-                cnt_state                                                                              <= WRITE;
-                events_sub                                                                             <= events_reg((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw);
+                mem_adr     <= evt_sel(i, rr_select);
+                cnt_state   <= WRITE;
+                events_sub  <= events_reg((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw);
                 events_clr((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw) <=
                   events_reg((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw);  --events_sub
                 exit;
@@ -176,6 +179,7 @@ begin
             if(std_logic_vector(to_unsigned(mem_adr, c_mem_adr_sz)) = ext_adr_i and ext_cyc_i = '1' and ext_we_i = '0') then
               mem_wr    <= '0';
               cnt_state <= WRITE;
+              wr_conflict <= '0'; --'1';
             else
               mem_wr    <= '1';
               cnt_state <= SEL;
@@ -188,8 +192,14 @@ begin
   end process;
 
   GEN_INCR : for i in 0 to g_cnt_pw-1 generate
-    mem_dat_in((i+1)*c_cnt_width-1 downto i*c_cnt_width) <= std_logic_vector(unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)) + 1) when events_sub(i) = '1' else
-                                        mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width);
+    mem_dat_in((i+1)*c_cnt_width-1 downto i*c_cnt_width) <= --if processor has accessed counter, it has cleared it for sure
+                                                            std_logic_vector(to_unsigned(1, c_cnt_width)) when(wr_conflict='1' and events_sub(i)='1') else    
+                                                            --if processor has accessed counter,but there is no event for it, just write there '0', since mem_dat_out still holds old value
+                                                            std_logic_vector(to_unsigned(0, c_cnt_width)) when(wr_conflict='1' and events_sub(i)='0') else
+                                                            --otherwise, normal situation, just increment
+                                                            std_logic_vector(unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)) + 1) when events_sub(i)='1' else
+                                                            --no change
+                                                            mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width);
   end generate;
 
 end behav;
