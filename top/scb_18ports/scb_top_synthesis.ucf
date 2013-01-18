@@ -277,7 +277,8 @@ NET "mbl_scl_b[1]" LOC="AC25";
 NET "mbl_sda_b[1]" LOC="AG31"; 
 
 NET "clk_dmtd_divsel_o" LOC="AN15";
-NET "uart_sel_o" LOC="C12";
+NET "mb_fan1_pwm_o" LOC="C12";
+NET "mb_fan2_pwm_o" LOC="D12";
 
 
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/20
