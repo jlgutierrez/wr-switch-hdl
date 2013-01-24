@@ -103,7 +103,7 @@ begin
 
       clka_i => clk_i,
       bwea_i => (others => '1'),
-      wea_i  => '0', --ext_we_i,
+      wea_i  => ext_we_i,
       aa_i   => ext_adr_i,
       da_i   => ext_dat_i,
       qa_o   => ext_dat_o,
