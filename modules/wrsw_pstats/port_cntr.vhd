@@ -6,7 +6,7 @@
 -- Author     : Grzegorz Daniluk
 -- Company    : CERN BE-CO-HT
 -- Created    : 2012-12-20
--- Last update: 2013-01-16
+-- Last update: 2013-01-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -154,8 +154,8 @@ begin
         case(cnt_state) is
           when SEL =>
             --check each segment of events_i starting from the one pointed by round robin
-            events_clr <= (others => '0');
-            mem_wr     <= '0';
+            events_clr  <= (others => '0');
+            mem_wr      <= '0';
             wr_conflict <= '0';
             for i in 0 to c_rr_range-1 loop
               if(to_integer(unsigned(evt_subset(events_reg, i, rr_select))) /= 0) then
@@ -177,8 +177,8 @@ begin
           when WRITE =>
             events_clr <= (others => '0');
             if(std_logic_vector(to_unsigned(mem_adr, c_mem_adr_sz)) = ext_adr_i and ext_cyc_i = '1' and ext_we_i = '0') then
-              mem_wr    <= '0';
-              cnt_state <= WRITE;
+              mem_wr      <= '0';
+              cnt_state   <= WRITE;
               wr_conflict <= '0'; --'1';
             else
               mem_wr    <= '1';
@@ -192,14 +192,17 @@ begin
   end process;
 
   GEN_INCR : for i in 0 to g_cnt_pw-1 generate
-    mem_dat_in((i+1)*c_cnt_width-1 downto i*c_cnt_width) <= --if processor has accessed counter, it has cleared it for sure
-                                                            std_logic_vector(to_unsigned(1, c_cnt_width)) when(wr_conflict='1' and events_sub(i)='1') else    
-                                                            --if processor has accessed counter,but there is no event for it, just write there '0', since mem_dat_out still holds old value
-                                                            std_logic_vector(to_unsigned(0, c_cnt_width)) when(wr_conflict='1' and events_sub(i)='0') else
-                                                            --otherwise, normal situation, just increment
-                                                            std_logic_vector(unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)) + 1) when events_sub(i)='1' else
-                                                            --no change
-                                                            mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width);
+    mem_dat_in((i+1)*c_cnt_width-1 downto i*c_cnt_width) <= 
+               --if processor has accessed counter, it has cleared it for sure
+               std_logic_vector(to_unsigned(1, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '1') else
+               --if processor has accessed counter,but there is no event for it, just write there '0', since mem_dat_out still holds old value
+               std_logic_vector(to_unsigned(0, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '0') else
+               --counter overflow, don't increment
+               mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)  when (unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width))+1 = 0) else
+               --otherwise, normal situation, just increment
+               std_logic_vector(unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)) + 1) when (events_sub(i) = '1') else
+               --no change
+               mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width);
   end generate;
 
 end behav;
