@@ -157,6 +157,12 @@ architecture rtl of xwrsw_tru is
   signal wb_out               : t_wishbone_slave_out;
   signal s_bank_swap          : std_logic;
   signal s_port_if_ctrl       : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_pinject_ctr        : t_pinject_ctr_array(g_num_ports-1 downto 0);
+  -- debugging pfilter + pinjection
+  signal s_debug_port_sel     : integer range 0 to 2**8-1;
+  signal s_pidr_inject        : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_debug_filter       : t_debug_stuff_array(g_num_ports-1 downto 0);
+
 begin --rtl
    
   U_T_PORT: tru_port
@@ -237,15 +243,51 @@ begin --rtl
      s_endpoints.rxFrameMaskReg(i) <= f_rxFrameMaskRegInv(s_endpoint_array,i,g_num_ports);
   end generate G_FRAME_MASK;
 
+  
+  CTRL_PINJECT: process(clk_i, rst_n_i) -- this is not really optimal for resources... shit
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        CLEAR: for i in 0 to g_num_ports-1 loop
+          s_pinject_ctr(i).inject_packet_sel <= (others=>'0');
+          s_pinject_ctr(i).inject_user_value <= (others=>'0');
+        end loop;
+      else
+        REMEMBER: for i in 0 to g_num_ports-1 loop
+          if(ep_i(i).inject_ready = '1') then
+            if(s_pidr_inject(i) ='1') then
+              s_pinject_ctr(i).inject_packet_sel <= s_regs_fromwb.pidr_psel_o;
+              s_pinject_ctr(i).inject_user_value <= s_regs_fromwb.pidr_uval_o;          
+            elsif(s_tx_rt_reconf_FRM(i) ='1') then
+              s_pinject_ctr(i).inject_packet_sel <= s_config.rtrcr_rtr_rx(2 downto 0);
+              s_pinject_ctr(i).inject_user_value <=  x"babe";                    
+            elsif(s_trans_ep_ctr(i).pauseSend = '1') then 
+              s_pinject_ctr(i).inject_packet_sel <= "000";
+              s_pinject_ctr(i).inject_user_value <= s_trans_ep_ctr(i).pauseTime;                    
+            end if;
+          end if;
+        end loop;     
+      end if;
+    end if;
+  end process;  
+
   G_EP_O: for i in 0 to g_num_ports-1 generate
      
-     ep_o(i).inject_req        <= '1' when (s_tx_rt_reconf_FRM(i)       = '1') else
+     ep_o(i).inject_req        <= '1' when (s_pidr_inject(i)            = '1') else        
+                                  '1' when (s_tx_rt_reconf_FRM(i)       = '1') else
                                   '1' when (s_trans_ep_ctr(i).pauseSend = '1') else
                                   '0';
-     ep_o(i).inject_packet_sel <= s_config.rtrcr_rtr_rx(2 downto 0) when s_tx_rt_reconf_FRM(i) ='1' else
-                                  "000";
-     ep_o(i).inject_user_value <= x"babe"                           when s_tx_rt_reconf_FRM(i) ='1' else 
-                                  s_trans_ep_ctr(i).pauseTime;
+
+     ----------- this is not really optimal for resources... shit
+     ep_o(i).inject_packet_sel <= s_pinject_ctr(i).inject_packet_sel;
+     ep_o(i).inject_user_value <= s_pinject_ctr(i).inject_user_value;
+
+--      ep_o(i).inject_packet_sel <= s_regs_fromwb.pidr_psel_o         when s_pidr_inject(i)      ='1' else
+--                                   s_config.rtrcr_rtr_rx(2 downto 0) when s_tx_rt_reconf_FRM(i) ='1' else
+--                                   "000";
+--      ep_o(i).inject_user_value <= s_regs_fromwb.pidr_uval_o         when s_pidr_inject(i)      ='1' else
+--                                   x"babe"                           when s_tx_rt_reconf_FRM(i) ='1' else 
+--                                   s_trans_ep_ctr(i).pauseTime;
   
 --      ep_o(i).tx_pck            <= '1' when (s_tx_rt_reconf_FRM(i) ='1') else '0';
 --      G_TX_O: for j in 0 to g_pclass_number-1 generate
@@ -303,7 +345,8 @@ begin --rtl
   port map(
     rst_n_i            => rst_n_i,
     wb_clk_i           => clk_i,
-    wb_addr_i          => wb_in.adr(3 downto 0),
+--     wb_addr_i          => wb_in.adr(3 downto 0),
+    wb_addr_i          => wb_in.adr(4 downto 0),
     wb_data_i          => wb_in.dat,
     wb_data_o          => wb_out.dat,
     wb_cyc_i           => wb_in.cyc,
@@ -380,4 +423,56 @@ begin --rtl
  -- TODO:
   swc_o                <= (others =>'0');
   enabled_o            <= s_regs_fromwb.gcr_g_ena_o  ;
+
+  --------------
+  s_debug_port_sel <=  to_integer(unsigned(s_regs_fromwb.dps_pid_o));
+
+  DEBUG_CTRL_GEN: for i in 0 to g_num_ports-1 generate
+    s_pidr_inject(i) <= s_regs_fromwb.pidr_inject_o when (i = s_debug_port_sel) else
+                        '0';
+  end generate;
+  
+  DEBUG: process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        CLEAR: for i in 0 to g_num_ports-1 loop
+          s_debug_filter(i).pfdr_class <= (others =>'0');
+          s_debug_filter(i).pfdr_cnt   <= (others =>'0');
+        end loop;
+        s_regs_towb.pidr_iready_i      <= '0';
+        s_regs_towb.pfdr_class_i       <= (others =>'0');
+        s_regs_towb.pfdr_cnt_i         <= (others =>'0');
+      else
+        REMEMBER: for i in 0 to g_num_ports-1 loop
+          if(ep_i(i).pfilter_done ='1' and ep_i(i).pfilter_pclass /= x"00") then -- something filtered
+            if(s_debug_port_sel = i and s_regs_fromwb.pfdr_clr_o = '1') then
+              s_debug_filter(i).pfdr_class <= ep_i(i).pfilter_pclass;
+              s_debug_filter(i).pfdr_cnt(7 downto 0)    <= x"01"; -- filtered
+              s_debug_filter(i).pfdr_cnt(15 downto 8)   <= x"01";
+            else
+              s_debug_filter(i).pfdr_class <= ep_i(i).pfilter_pclass or s_debug_filter(i).pfdr_class;
+              s_debug_filter(i).pfdr_cnt(7  downto 0)  <= std_logic_vector(unsigned(s_debug_filter(i).pfdr_cnt(7  downto 0))+1);          
+              s_debug_filter(i).pfdr_cnt(15 downto 8)  <= std_logic_vector(unsigned(s_debug_filter(i).pfdr_cnt(15 downto 8))+1);          
+            end if;  
+          elsif(ep_i(i).pfilter_done ='1' and ep_i(i).pfilter_pclass = x"00") then -- non-recognzied pck
+            if(s_debug_port_sel = i and s_regs_fromwb.pfdr_clr_o = '1') then
+              s_debug_filter(i).pfdr_cnt(15 downto 8)   <= x"01";
+            else        
+              s_debug_filter(i).pfdr_cnt(15 downto 8)  <= std_logic_vector(unsigned(s_debug_filter(i).pfdr_cnt(15 downto 8))+1);          
+            end if;             
+          elsif(s_debug_port_sel = i and s_regs_fromwb.pfdr_clr_o = '1') then
+            s_debug_filter(i).pfdr_class <= (others =>'0');
+            s_debug_filter(i).pfdr_cnt   <= (others =>'0');
+          end if;
+        end loop; 
+
+        s_regs_towb.pidr_iready_i <= ep_i(s_debug_port_sel).inject_ready;       
+        s_regs_towb.pfdr_class_i  <= s_debug_filter(s_debug_port_sel).pfdr_class;
+        s_regs_towb.pfdr_cnt_i    <= s_debug_filter(s_debug_port_sel).pfdr_cnt;
+        
+      end if;
+    end if;
+  end process;  
+
 end rtl;

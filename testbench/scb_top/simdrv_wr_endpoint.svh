@@ -60,7 +60,14 @@ class CSimDrv_WR_Endpoint;
                        (i << `EP_PFCR0_MM_ADDR_OFFSET) | 
                        (((mcode[i] >> 12) & 'hffffff) << `EP_PFCR0_MM_DATA_MSB_OFFSET) |
                        `EP_PFCR0_MM_WRITE);
+                       
+           $display("code_pos=%2d : PFCR0=0x%4x PFCR1=0x%4x ",i, 
+                    ((i << `EP_PFCR0_MM_ADDR_OFFSET) | 
+                       (((mcode[i] >> 12) & 'hffffff) << `EP_PFCR0_MM_DATA_MSB_OFFSET) |
+                       `EP_PFCR0_MM_WRITE ),
+                       ((mcode[i] & 'hfff) << `EP_PFCR1_MM_DATA_LSB_OFFSET));
         end
+           $display("pfilter: loaded code [size=%d] ",mcode.size());
    endtask // pfilter_load_microcde
 
    task pfilter_enable(int enable);

@@ -576,6 +576,95 @@ peripheral {
          access_dev = READ_ONLY;
       };
    };
+
+   reg { -- added by ML
+      name = "Debug port select";
+      description = "Select port number for applying debugging measures in boht: \
+                     Packet Injection Debug Register \
+                     Packet Filter Debug Register";
+      prefix = "DPS";
+      field {
+         name = "Port ID";
+         description = "ID of the port to be debugged";
+         type = SLV;
+         size = 8;
+         prefix = "PID";
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+   reg { -- added by ML
+      name = "Packet Injection Debug Register";
+      description = "Used for debugging (ctrl/status) HW packet injection of a selected port";
+      prefix = "PIDR";
+      field {
+         name = "Injection Request";
+         prefix = "INJECT";
+         type = MONOSTABLE;
+      };
+      field {
+         name = "Packet Select";
+         description = "ID of the packet-template to be sent";
+         type = SLV;
+         size = 3;
+         prefix = "PSEL";
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         name = "USER VALUE";
+         description = "Value to be inserted at predefined place in the injected packet";
+         type = SLV;
+         size = 16;
+         align = 8;
+         prefix = "UVAL";
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+       };
+      field {
+         name = "Injection Ready";
+         prefix = "IREADY";
+         type = BIT;
+         align = 8;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+      };
+
+   };
+
+   reg {
+      name = "Packet Filter Debug Register";
+      description = "This register stores information about detected packages (class, number)";
+      prefix = "PFDR";
+      field {
+         name = "Clear register";
+         description = "Clears the status regs (count and class)";
+         type = MONOSTABLE;
+         prefix = "CLR";
+      };
+
+      field {
+         name = "Filtered class";
+         description = "Shows which class messages has been detected";
+         prefix = "CLASS";
+         type = SLV;
+         size = 8;
+         align = 8;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+      };
+      field {
+         name = "CNT";
+         description = "Counts all detections (regardless of the class)";
+         prefix = "CNT";
+         type = SLV;
+         size = 16;
+         align = 16;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+     };
+   };
 };
 
 

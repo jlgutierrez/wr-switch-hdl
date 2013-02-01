@@ -178,6 +178,55 @@ class CSimDrv_WR_TRU;
       end 
    endtask;
 
+   task ep_debug_read_pfilter(int port);
+      uint64_t tmp,cnt, cnt1, cnt2;
+      m_acc.write(m_base +`ADDR_TRU_DPS, `TRU_DPS_PID & port);    
+      m_acc.read(m_base + `ADDR_TRU_PFDR, tmp, 4);
+      cnt = (`TRU_PFDR_CNT & tmp)>>`TRU_PFDR_CNT_OFFSET; 
+      cnt1 = 'hFF & cnt;
+      cnt2 = 'hFF & (cnt>>8);
+      if(m_dbg)
+      begin 
+        $display("DBG [pFILTER-port_%2d]: filtered packet classes 0x%x [cnt_filtered=%4d, cnt_all=%4d]",port, 
+                   (`TRU_PFDR_CLASS & tmp)>>`TRU_PFDR_CLASS_OFFSET, cnt1,cnt2);
+      end             
+   endtask;
+
+   task ep_debug_clear_pfilter(int port);
+      uint64_t tmp;
+      m_acc.write(m_base +`ADDR_TRU_DPS, `TRU_DPS_PID & port);    
+      m_acc.write(m_base +`ADDR_TRU_PFDR, `TRU_PFDR_CLR);    
+      if(m_dbg)
+      begin 
+        $display("DBG [pFILTER-port_%2d]: filtered packet classes & cnt cleared",port);
+      end             
+   endtask;
+
+   task ep_debug_inject_packet(int port, int user_val, int pck_sel);
+      uint64_t tmp, tmp2;
+      m_acc.write(m_base +`ADDR_TRU_DPS, `TRU_DPS_PID & port);    
+      tmp =                                      `TRU_PIDR_INJECT |
+            (pck_sel << `TRU_PIDR_PSEL_OFFSET) & `TRU_PIDR_PSEL   |
+            (user_val<< `TRU_PIDR_UVAL_OFFSET) & `TRU_PIDR_UVAL;
+      m_acc.write(m_base +`ADDR_TRU_PIDR, tmp, 4);    
+      if(m_dbg)
+      begin 
+        $display("DBG [pINJECT-port_%2d]: inject packet: pck_sel=%2d, user_val=0x%x",port,pck_sel, user_val);
+      end             
+   endtask;
+
+   task ep_debug_read_pinject(int port);
+      uint64_t tmp;
+      m_acc.write(m_base +`ADDR_TRU_DPS, `TRU_DPS_PID & port);    
+      m_acc.read(m_base + `ADDR_TRU_PIDR, tmp, 4);
+      if(m_dbg)
+      begin 
+        $display("DBG [pINJECT-port_%2d]: inject ready = %1d ",port, 
+                   (`TRU_PIDR_IREADY & tmp)>>`TRU_PIDR_IREADY_OFFSET);
+      end             
+   endtask;
+
+
    task rt_reconf_config(int tx_frame_id, int rx_frame_id, int mode);
       uint64_t tmp;
       m_acc.read(m_base + `ADDR_TRU_RTRCR, tmp, 4);

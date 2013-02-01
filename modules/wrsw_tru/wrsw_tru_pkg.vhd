@@ -196,8 +196,20 @@ package wrsw_tru_pkg is
 --   type t_tru_tab_subentry_array is array(integer range <>) of std_logic_vector(g_tru_subentry_width-1 downto 0); 
 --   type t_ep_array is array(integer range <>) of std_logic_vector(g_ep2tru_record_width-1 downto 0); 
 
+  type t_pinject_ctr is record
+    inject_packet_sel     : std_logic_vector(2 downto 0)  ;
+    inject_user_value     : std_logic_vector(15 downto 0) ;
+  end record;
   
-   
+  type t_pinject_ctr_array     is array(integer range<>) of t_pinject_ctr;
+--------------------------------- dubigging ----------------------------------------------
+  type t_debug_stuff is record
+    pfdr_class                             : std_logic_vector(7 downto 0);
+    pfdr_cnt                               : std_logic_vector(15 downto 0);
+  end record;
+
+  type t_debug_stuff_array      is array(integer range <>) of t_debug_stuff;
+-------------------------------------------------------------------------------------------   
 
 
   function f_one_hot_to_binary   (One_Hot : std_logic_vector) 
@@ -246,7 +258,8 @@ package wrsw_tru_pkg is
   port (
     rst_n_i            : in     std_logic;
     wb_clk_i           : in     std_logic;
-    wb_addr_i          : in     std_logic_vector(3 downto 0);
+--     wb_addr_i          : in     std_logic_vector(3 downto 0);
+    wb_addr_i          : in     std_logic_vector(4 downto 0);
     wb_data_i          : in     std_logic_vector(31 downto 0);
     wb_data_o          : out    std_logic_vector(31 downto 0);
     wb_cyc_i           : in     std_logic;

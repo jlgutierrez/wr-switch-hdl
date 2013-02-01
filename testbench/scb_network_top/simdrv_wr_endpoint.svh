@@ -37,7 +37,7 @@ class CSimDrv_WR_Endpoint;
       m_acc.write(m_base + `ADDR_EP_PFCR0, enable ? `EP_PFCR0_ENABLE: 0);
    endtask // pfilter_enable
 
-`define EP_QMODE_VLAN_DISABLED 3
+`define EP_QMODE_VLAN_DISABLED 2
    
    task init(int port_id);
       m_acc.write(m_base + `ADDR_EP_ECR, `EP_ECR_TX_EN | `EP_ECR_RX_EN | (port_id << `EP_ECR_PORTID_OFFSET)) ;

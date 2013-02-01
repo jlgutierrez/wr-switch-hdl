@@ -74,6 +74,7 @@ module main;
    integer g_tru_enable                       = 0;   //TRU disabled
    integer g_is_qvlan                         = 1;  // has vlan header
    integer g_pfilter_enabled                  = 0;
+   integer g_limit_config_to_port_num         = g_num_ports;
                                         // tx  ,rx ,opt (send from port tx to rx with option opt
    t_trans_path trans_paths[g_max_ports]      ='{'{0  ,17 , 0 }, // port 0: 
                                                  '{1  ,16 , 0 }, // port 1
@@ -670,7 +671,7 @@ module main;
    * we imitate transition when new (and better) link is added and we change the configuraiton
    * with pausing taffic not to loose anything
    */
-/*
+// /*
   initial begin
     portUnderTest        = 18'b000000000000000000; // we send pcks (Markers) in other place
     g_tru_enable         = 1;    
@@ -681,19 +682,29 @@ module main;
     tru_config_opt       = 2;
     g_pfilter_enabled    = 1;
     g_transition_scenario= 1;
+    g_limit_config_to_port_num = 8; //to speed up the config, don't configure VLANS and stuff 
+                                    // in ports above nubmer 7
 
     mc.nop();
+//     mc.cmp(0, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 1);
+//     mc.cmp(1, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 25);
+//     mc.cmp(2, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 26);
+//     mc.cmp(3, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 27);
+//     mc.cmp(4, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 28);
+//     mc.cmp(5, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 29);
+//     mc.cmp(6, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 30);
+//     mc.cmp(7, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 31);
     mc.cmp(0, 'h0180, 'hffff, PFilterMicrocode::MOV, 1);
-    mc.cmp(1, 'hc200, 'hffff, PFilterMicrocode::MOV, 1);
-    mc.cmp(2, 'h0000, 'hffff, PFilterMicrocode::MOV, 1);
+    mc.cmp(1, 'hc200, 'hffff, PFilterMicrocode::AND, 1);
+    mc.cmp(2, 'h0000, 'hffff, PFilterMicrocode::AND, 1);
     mc.nop();
     mc.nop();
     mc.nop();
-    mc.cmp(6, 'hbabe, 'hffff, PFilterMicrocode::MOV, 1);    
+    mc.cmp(6, 'hbabe, 'hffff, PFilterMicrocode::AND, 1);    
     mc.logic2(25, 1, PFilterMicrocode::MOV, 0);
 
   end
-*/
+//*/
    /** ***************************   test scenario 22  ************************************* **/ 
   /*
    * Sending Pause the switch: a problem is that switch does not react to PAUSEs -- no 
@@ -773,7 +784,7 @@ module main;
    *    - br - from source MAC, bits 8 & 9
    *    - un - from destination MAC, bits 8 & 9
    **/
-// /*
+ /*
   initial begin
     g_min_pck_gap        = 50; // cycles
     g_max_pck_gap        = 50; // cycles  
@@ -810,7 +821,7 @@ module main;
     mc.logic2(26, 4, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
     mc.logic2(27, 5, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
   end
-// */
+ */
   /*****************************************************************************************/
  
 // defining which ports send pcks -> forwarding is one-to-one 
@@ -869,7 +880,7 @@ module main;
 
       if(opt > 2 )
         tmpl.src       = '{0,2,3,4,5,6};
-      else if(opt == 101)
+      else if(opt == 101 | opt == 102)
         tmpl.src       = '{0,0,0,0,0,0};
       else
         tmpl.src       = '{srcPort, 2,3,4,5,6};
@@ -882,7 +893,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 | opt==10)
+      else if(opt==4 || opt==10)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -894,6 +905,9 @@ module main;
         tmpl.dst       = '{'h01, 'h1b, 'h19, 'h00, 'h00, 'h00}; // PTP
       else if(opt==9)
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h01}; // link-limited
+      else
+        tmpl.dst       = '{'h00, 'h00, 'h00, 'h00, 'h00, 'h00}; // link-limited
+
 
   
       tmpl.has_smac  = 1;
@@ -902,14 +916,14 @@ module main;
         tmpl.vid     = 1;
       else
         tmpl.vid     = 0;
-      if(opt == 100 ||  opt == 101)
+      if(opt == 100 ||  opt == 101 ||  opt == 102)
         tmpl.ethertype = 'hbabe;
       else
         tmpl.ethertype = 'h88f7;
   // 
       gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
       gen.set_template(tmpl);
-      if(opt == 101)
+      if(opt == 101 ||  opt == 102)
         gen.set_size(63, 64);
       else
         gen.set_size(63, 257);
@@ -1147,17 +1161,17 @@ module main;
            CSimDrv_WR_Endpoint ep;
            ep = new(wb, 'h30000 + i * 'h400);
            ep.init(i);
-           if(g_do_vlan_config == 1)
+           if(g_do_vlan_config == 1 & i < g_limit_config_to_port_num )
              ep.vlan_config(qmode, fix_prio, prio_val, pvid, prio_map);
-           if(g_pfilter_enabled == 1)
+           if(g_pfilter_enabled == 1 & i < g_limit_config_to_port_num )
            begin
              ep.pfilter_load_microcode(mc.assemble());
              ep.pfilter_enable(1);             
            end
-           if(g_injection_templates_programmed == 1)
+           if(g_injection_templates_programmed == 1 & i < g_limit_config_to_port_num)
            begin
-             ep.write_template(0, PAUSE_templ, 8);
-             ep.write_template(1, BPDU_templ,  10);
+             ep.write_template(0, PAUSE_templ, 16);
+             ep.write_template(1, BPDU_templ,  20);
            end
 
            tmp.ep = ep;
@@ -1558,6 +1572,7 @@ module main;
 
       fork
          begin
+           int dd;
            if(g_transition_scenario == 1)
            begin 
              wait_cycles(200);
@@ -1572,6 +1587,19 @@ module main;
              // enable transition
              tru.transition_enable();
              wait_cycles(200);
+
+             // send normal stuff
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[0].send /* src     */, 
+                     ports[7].recv /* sink    */,  
+                     0             /* srcPort */ , 
+                     7             /* dstPort */, 
+                     4             /*option=4 */);  
+             wait_cycles(200);
+
              //sent marker to port 1
              tx_test(seed                         /* seed    */, 
                      1                 /* n_tries */, 
@@ -1595,7 +1623,29 @@ module main;
                      ports[0].recv /* sink    */,  
                      1             /* srcPort */ , 
                      0             /* dstPort */, 
-                     101             /*option=4 */);               
+                     101             /*option=4 */);  
+             wait_cycles(200);
+             
+             for(dd=0;dd<8;dd++)
+               tru.ep_debug_read_pfilter(dd);
+
+             wait_cycles(10);
+             tru.ep_debug_clear_pfilter(1);
+             wait_cycles(10);
+             tru.ep_debug_read_pfilter(1);
+             wait_cycles(10);
+             tru.ep_debug_inject_packet(3,'h1234,1);
+             wait_cycles(10);
+             tru.ep_debug_inject_packet(4,'h1234,0);
+             wait_cycles(100);
+             tru.ep_debug_inject_packet(4,'hFFFF,1);
+             wait_cycles(100);
+             tru.ep_debug_inject_packet(4,'h1234,0);
+             wait_cycles(10);
+             tru.ep_debug_inject_packet(3,'h4321,0);
+             wait_cycles(10);
+             
+
            end
            
            if(g_transition_scenario == 2)
