@@ -160,6 +160,7 @@ package wrsw_tru_pkg is
     tcr_trans_mode        : std_logic_vector(2 downto 0);
     tcr_trans_rx_id       : std_logic_vector(2 downto 0);
     tcr_trans_prio        : std_logic_vector(2 downto 0);  -- added
+    tcr_trans_prio_mode   : std_logic;
     tcr_trans_port_a_id   : std_logic_vector(5 downto 0);
     tcr_trans_port_a_pause: std_logic_vector(15 downto 0); -- added
     tcr_trans_port_a_valid: std_logic;
@@ -397,6 +398,7 @@ package wrsw_tru_pkg is
     statTransFinished_o: out std_logic;
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
+    ports_req_strobe_i : in std_logic_vector(g_num_ports - 1 downto 0);
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
   end component;
@@ -418,6 +420,7 @@ package wrsw_tru_pkg is
     statTransFinished_o: out std_logic;
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
+    ports_req_strobe_i : in std_logic_vector(g_num_ports - 1 downto 0);
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
   end component;

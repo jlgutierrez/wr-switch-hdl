@@ -116,13 +116,19 @@ entity rtu_port_new is
     port_full_o               : out std_logic;
 
     -------------------------------------------------------------------------------
+    -- info to TRU
+    ------------------------------------------------------------------------------- 
+--     tru_o                     : out t_rtu2tru;
+    -------------------------------------------------------------------------------
     -- control register
     ------------------------------------------------------------------------------- 
     rtu_str_config_i          : in t_rtu_special_traffic_config;
 
     rtu_gcr_g_ena_i           : in std_logic;  
-    rtu_pcr_pass_bpdu_i       : in std_logic_vector(c_rtu_max_ports -1 downto 0);
-    rtu_pcr_pass_all_i        : in std_logic_vector(c_rtu_max_ports -1 downto 0);
+--     rtu_pcr_pass_bpdu_i       : in std_logic_vector(c_rtu_max_ports -1 downto 0);
+--     rtu_pcr_pass_all_i        : in std_logic_vector(c_rtu_max_ports -1 downto 0);
+    rtu_pcr_pass_bpdu_i       : in std_logic;
+    rtu_pcr_pass_all_i        : in std_logic;
     rtu_pcr_fix_prio_i        : in std_logic;
     rtu_pcr_prio_val_i        : in std_logic_vector(c_wrsw_prio_width - 1 downto 0)
     );
@@ -209,8 +215,11 @@ begin
   zeros              <= (others => '0');
 
   
-  port_pcr_pass_bpdu <= rtu_pcr_pass_bpdu_i(g_port_index);
-  port_pcr_pass_all  <= rtu_pcr_pass_all_i(g_port_index);
+--   port_pcr_pass_bpdu <= rtu_pcr_pass_bpdu_i(g_port_index);
+--   port_pcr_pass_all  <= rtu_pcr_pass_all_i(g_port_index);
+
+  port_pcr_pass_bpdu <= rtu_pcr_pass_bpdu_i;
+  port_pcr_pass_all  <= rtu_pcr_pass_all_i;
 
   -- create request fifo input data (registered data)
   rq_fifo_d        <=
@@ -317,6 +326,14 @@ begin
 --   rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_req_d.has_prio);
   rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '0', rtu_rq_i.prio, rtu_pcr_prio_val_i);
   rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_rq_i.has_prio);
+  
+--   -- NOTE: inside {fast,full}_match we also take into account the priority assigned to VLAN,
+--   --       this value is not taken into account in TRU !!
+--   tru_o.pass_all          <= rtu_pcr_pass_all_i and rtu_gcr_g_ena_i;
+--   tru_o.forward_bpdu_only <= rtu_pcr_pass_bpdu_i;
+--   tru_o.request_valid     <= rtu_rq_i.valid;
+--   tru_o.priorities        <= rq_prio when (rq_has_prio = '1') else (others =>'0');
+  
   p_register_req: process(clk_i)
   begin
     if rising_edge(clk_i) then

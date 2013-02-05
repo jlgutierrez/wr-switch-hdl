@@ -329,20 +329,32 @@ begin
         port_almost_full_o       => open,
         port_full_o              => open,
 
+--         tru_o                    => rtu2tru_o,
+
         rtu_str_config_i         => rtu_special_traffic_config,
 
         rtu_gcr_g_ena_i          => regs_fromwb.gcr_g_ena_o,
-        rtu_pcr_pass_bpdu_i      => pcr_pass_bpdu,
-        rtu_pcr_pass_all_i       => pcr_pass_all,
+        rtu_pcr_pass_bpdu_i      => pcr_pass_bpdu(i),
+        rtu_pcr_pass_all_i       => pcr_pass_all(i),
+--         rtu_pcr_pass_bpdu_i      => pcr_pass_bpdu,
+--         rtu_pcr_pass_all_i       => pcr_pass_all,
         rtu_pcr_fix_prio_i       => pcr_fix_prio(i),
         rtu_pcr_prio_val_i       => pcr_prio_val(i)
         );
         
+        -- NOTE: inside {fast,full}_match we also take into account the priority assigned to VLAN,
+        --       this value is not taken into account in TRU !!       
         rtu2tru_o.request_valid(i)  <= req_i(i).valid;
-        rtu2tru_o.priorities(i)     <= req_i(i).has_prio;
-        
-  end generate;  -- end ports
+        rtu2tru_o.priorities(i)     <= f_pick(pcr_fix_prio(i) = '0', req_i(i).prio, pcr_prio_val(i)) when (pcr_fix_prio(i)='1' or req_i(i).has_prio='1') else
+                                       (others=>'0');
+
+--         rtu2tru_o.priorities(i)     <= f_pick(pcr_fix_prio(i) = '0', req_i(i).prio, pcr_prio_val(i));
+        rtu2tru_o.has_prio(i)       <= '1' ;--req_i(i).has_prio;
    
+  end generate;  -- end ports
+
+  rtu2tru_o.pass_all             <= pcr_pass_all;
+  rtu2tru_o.forward_bpdu_only    <= pcr_pass_bpdu;   
   ------------------------------------------------------------------------
   -- REQUEST FIFO BUS
   -- Data from all ports into one match module
@@ -617,11 +629,6 @@ begin
       end if;
     end if;
   end process;
-
-
-  rtu2tru_o.pass_all             <= pcr_pass_all;
-  rtu2tru_o.forward_bpdu_only    <= pcr_pass_bpdu;
- 
 
   irq_nempty                     <= regs_fromwb.ufifo_wr_empty_o;
   

@@ -162,9 +162,11 @@ architecture rtl of xwrsw_tru is
   signal s_debug_port_sel     : integer range 0 to 2**8-1;
   signal s_pidr_inject        : std_logic_vector(g_num_ports-1 downto 0);
   signal s_debug_filter       : t_debug_stuff_array(g_num_ports-1 downto 0);
-
+  signal s_ports_req_strobe   : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_req_s_hp           : std_logic;
+  signal s_req_s_prio         : std_logic;
 begin --rtl
-   
+
   U_T_PORT: tru_port
   generic map(     
      g_num_ports        => g_num_ports,
@@ -208,6 +210,21 @@ begin --rtl
        ep_o(i).link_kill   <= not s_port_if_ctrl(i);
    end generate G_ENDP;
 
+  -- generating strobe to count packets which enter switch after receiving MARKER/sending PAUSE
+  -- * if transition priority (trans_prio) configured to 0, then we use indication of HP frames
+  --   from fast match
+  s_req_s_hp    <= req_i.valid and req_i.isHP when (s_config.tcr_trans_prio_mode = '0') else
+                   '0';
+  -- * if trans_prio is set, we take packets with indicated priority (more for testing)
+  s_req_s_prio  <= req_i.valid when (s_config.tcr_trans_prio_mode = '1' and 
+                                     s_config.tcr_trans_prio = req_i.prio    ) else
+                  '0';
+
+  -- generating the strobe 
+  s_ports_req_strobe <= req_i.reqMask(g_num_ports-1 downto 0) when (s_req_s_hp   = '1' or 
+                                                                    s_req_s_prio = '1') else
+                        (others => '0');
+  
   U_TRANSITION: tru_transition 
   generic map(     
      g_num_ports           => g_num_ports,
@@ -225,6 +242,7 @@ begin --rtl
     statTransFinished_o    => s_transitionFinished,
     rxFrameMask_i          => s_trans_rxFrameMask,
     rtu_i                  => rtu_i,
+    ports_req_strobe_i     => s_ports_req_strobe, -- new shit
     ep_o                   => s_trans_ep_ctr
     );
   s_trans_rxFrameMask <= s_endpoints.rxFrameMask(to_integer(unsigned(s_config.tcr_trans_rx_id)))(g_num_ports-1 downto 0);
@@ -399,6 +417,7 @@ begin --rtl
   s_config.tcr_trans_mode                <= s_regs_fromwb.tcgr_trans_mode_o         ;
   s_config.tcr_trans_rx_id               <= s_regs_fromwb.tcgr_trans_rx_id_o        ;
   s_config.tcr_trans_prio                <= s_regs_fromwb.tcgr_trans_prio_o         ;
+  s_config.tcr_trans_prio_mode           <= s_regs_fromwb.tcgr_trans_prio_mode_o    ;
   s_config.tcr_trans_port_a_id           <= s_regs_fromwb.tcpr_trans_port_a_id_o    ;
   s_config.tcr_trans_port_a_pause        <= s_regs_fromwb.tcgr_trans_time_diff_o    ;
   s_config.tcr_trans_port_a_valid        <= s_regs_fromwb.tcpr_trans_port_a_valid_o ;

@@ -82,6 +82,7 @@ entity tru_transition is
     statTransFinished_o: out std_logic;
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
+    ports_req_strobe_i : in std_logic_vector(g_num_ports - 1 downto 0);
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
 end tru_transition;
@@ -128,10 +129,11 @@ begin --rtl
     endpoints_i            => endpoints_i,
     config_i               => config_i,
     tru_tab_bank_i         => tru_tab_bank_i,
-    
+    ports_req_strobe_i     => ports_req_strobe_i,
     tru_tab_bank_o         => s_tru_tab_bank(0),
     statTransActive_o      => s_statTransActive(0),
     statTransFinished_o    => s_statTransFinished(0),
+    
     ep_o                   => s_ep_array(0)
     );
 

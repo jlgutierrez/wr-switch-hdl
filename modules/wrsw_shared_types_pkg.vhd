@@ -34,6 +34,7 @@ package wrsw_shared_types_pkg is
     isHP             : std_logic;                     -- high priority packet flag
     isBR             : std_logic;                     -- broadcast packet flag
     reqMask          : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); -- mask indicating requesting port
+    prio             : std_logic_vector(2 downto 0); -- more for testing then to be used
   end record;
    
   type t_tru_response is record
@@ -81,13 +82,15 @@ package wrsw_shared_types_pkg is
 --   type t_tru2ep_array       is array(integer range <>) of t_tru2ep;
 --   type t_ep2tru_array       is array(integer range <>) of t_ep2tru;
 
---   type t_rtu_prio_array is array(integer range <>) of std_logic_vector(7 downto 0);  
+  type t_rtu_prio_array is array(integer range <>) of std_logic_vector(2 downto 0);  
+
   type t_rtu2tru is record -- single port
     pass_all         : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
     forward_bpdu_only: std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
     request_valid    : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
-    priorities       : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
---     priorities       : t_rtu_prio_array(c_RTU_MAX_PORTS-1  downto 0);
+--     priorities       : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
+    priorities       : t_rtu_prio_array(c_RTU_MAX_PORTS-1  downto 0);
+    has_prio         : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
   end record;
 
 end wrsw_shared_types_pkg;

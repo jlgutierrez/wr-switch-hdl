@@ -851,6 +851,23 @@ tru_tcgr_trans_prio_o[2:0]
 
 </td>
 <td  class="td_pblock_right">
+tru_tcgr_trans_prio_mode_o
+</td>
+<td  class="td_arrow_right">
+&rarr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
 tru_tcgr_trans_time_diff_o[15:0]
 </td>
 <td  class="td_arrow_right">
@@ -3265,8 +3282,8 @@ TRANS_TIME_DIFF[7:0]
 </td>
 </tr>
 <tr>
-<td  class="td_unused">
--
+<td style="border: solid 1px black;" colspan=1  class="td_field">
+TRANS_PRIO_MODE
 </td>
 <td style="border: solid 1px black;" colspan=3  class="td_field">
 TRANS_PRIO[2:0]
@@ -3366,6 +3383,10 @@ TRANS_RX_ID
 TRANS_PRIO
 </b>[<i>read/write</i>]: Priority
 <br>Indicates at which traffic priority the transition attempts not to loose <br>         frames
+<li><b>
+TRANS_PRIO_MODE
+</b>[<i>read/write</i>]: Priority Mode
+<br>Specifies whether<br>         - use indication of HP packet from RTU (fast match)<br>         - use the priority specified in TRANS_PRIO register<br>         to count packets during transition
 <li><b>
 TRANS_TIME_DIFF
 </b>[<i>read/write</i>]: Port Time Difference

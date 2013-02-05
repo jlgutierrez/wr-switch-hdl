@@ -665,13 +665,25 @@ module main;
     
   end
 */   
-   /** ***************************   test scenario 21  ************************************* **/ 
+   /** ***************************   test scenario 21   ********************** **/ 
+   /** ***************************     (IMPORTANT)      ********************** **/ 
   /*
    * injection/filtering test => transition test
    * we imitate transition when new (and better) link is added and we change the configuraiton
-   * with pausing taffic not to loose anything
+   * with pausing taffic not to loose anything, so we have
+   * ports 0 & 7 - normal = active 
+   * ports 1 & 2 - 1 is active and 2 is backup (ingress blocking, egress forwarding)
+   * 
+   * what we do:
+   * 1. send frame to 0,1,2 ports just for test
+   * 2. send special "marker" on port 2 to start transition
+   * 3. send few frames to port 2 which are counted
+   * 4. send "marker" to port 1 to indicate that ports can be changed
+   * 5. send few frames to port 1 (the are counted, as soon as the same number as on port 2 is counted
+   *    the configuration is swapped and the frames start to be blocked)
+   * 6. saend frames to port 2 which now works as active
    */
-// /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000000; // we send pcks (Markers) in other place
     g_tru_enable         = 1;    
@@ -679,21 +691,13 @@ module main;
     repeat_number        = 1;
     tries_number         = 1;
     g_injection_templates_programmed = 1;
-    tru_config_opt       = 2;
+    tru_config_opt       = 3;
     g_pfilter_enabled    = 1;
     g_transition_scenario= 1;
     g_limit_config_to_port_num = 8; //to speed up the config, don't configure VLANS and stuff 
                                     // in ports above nubmer 7
 
     mc.nop();
-//     mc.cmp(0, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 1);
-//     mc.cmp(1, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 25);
-//     mc.cmp(2, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 26);
-//     mc.cmp(3, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 27);
-//     mc.cmp(4, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 28);
-//     mc.cmp(5, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 29);
-//     mc.cmp(6, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 30);
-//     mc.cmp(7, 'h0000, 'hFFFF, PFilterMicrocode::MOV, 31);
     mc.cmp(0, 'h0180, 'hffff, PFilterMicrocode::MOV, 1);
     mc.cmp(1, 'hc200, 'hffff, PFilterMicrocode::AND, 1);
     mc.cmp(2, 'h0000, 'hffff, PFilterMicrocode::AND, 1);
@@ -704,7 +708,7 @@ module main;
     mc.logic2(25, 1, PFilterMicrocode::MOV, 0);
 
   end
-//*/
+*/
    /** ***************************   test scenario 22  ************************************* **/ 
   /*
    * Sending Pause the switch: a problem is that switch does not react to PAUSEs -- no 
@@ -837,7 +841,46 @@ module main;
 //    integer repeat_number = 10;
 //    integer tries_number = 3;
 
-   /** *********************************************************************************** **/
+ /** ***************************   test scenario 24  ************************************* **/ 
+ /** ***************************     (PROBLEMATIC)   ************************************* **/ 
+  /*
+   * problematic, packets get merged
+   **/
+  /*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    tru_config_opt       = 4;
+    g_failure_scenario   = 1;
+    g_injection_templates_programmed = 1;
+    mac_single           = 1; // enable single mac entry for fast forward
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 5 };
+    trans_paths[1]       = '{1  ,16 , 5 };
+    trans_paths[2]       = '{2  ,15 , 5 };
+  end
+ */
+
+ /** ***************************   test scenario 25  ************************************* **/ 
+  /*
+   * testing Fast forward of single mac entry
+   **/
+ // /*
+  initial begin
+    portUnderTest        = 18'b000000000000000011;
+    g_tru_enable         = 1;
+    tru_config_opt       = 4;
+    g_failure_scenario   = 1;
+    g_active_port        = 0;
+    g_injection_templates_programmed = 1;
+    mac_single           = 1; // enable single mac entry for fast forward
+                         // tx  ,rx ,opt
+   // trans_paths[0]       = '{0  ,17 , 5 };
+    trans_paths[0]       = '{0  ,2 , 5 };
+    trans_paths[1]       = '{1  ,2 , 5 };
+  end
+ //*/
+
    always #2.5ns clk_swc_mpm_core <=~clk_swc_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
    always #8ns clk_ref <= ~clk_ref;
@@ -893,7 +936,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 || opt==10)
+      else if(opt==4 || opt==10 || opt==201)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -953,7 +996,7 @@ module main;
            end
         end   // fork 1
         begin // fork 2
-        if(opt != 101)
+        if(opt != 101 && opt != 201)
           for(int j=0;j<n_tries;j++)
             begin
               sink.recv(pkt2);
@@ -1212,7 +1255,7 @@ module main;
       /*
        * transition
        **/
-//       tru_drv.transition_config(0 /*mode */,     4 /*rx_id*/, 0 /*prio*/, 20 /*time_diff*/, 
+//       tru_drv.transition_config(0 /*mode */,     4 /*rx_id*/, 1, /*prio mode*/, 0 /*prio*/, 20 /*time_diff*/, 
 //                                 3 /*port_a_id*/, 4 /*port_b_id*/);
 
 
@@ -1260,7 +1303,7 @@ module main;
                              32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                              32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
 
-      if(tru_config_opt == 1)
+      if(tru_config_opt == 1 || tru_config_opt == 4)
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
                                32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
@@ -1311,6 +1354,25 @@ module main;
 
         tru_drv.pattern_config(3 /*replacement*/, 4 /*addition*/); // 3-> source is pclass
         end
+      else if(tru_config_opt == 3) 
+        begin
+        /* port 2 is backup for port 1*/
+        tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
+                               32'h3FFFF /*ports_mask  */, 32'b1000_0111 /* ports_egress */,32'b1000_0011 /* ports_ingress   */);
+
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00000110 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h000 /* mode */, 
+                               32'b00000110 /*ports_mask  */, 32'b00000110 /* ports_egress */,32'b00000100 /* ports_ingress   */);    
+
+        tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    2 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/, 'h000 /* mode */,
+                               32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);
+
+        tru_drv.write_tru_tab(  0   /* valid     */,     0 /* entry_addr   */,    3 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
+                               32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);  
+        end
       else // default config == 0
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
@@ -1321,10 +1383,6 @@ module main;
                                32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0 /* mode */,
                                32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
         end
-
-
-
-
 
 //       tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
 //                              32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
@@ -1339,10 +1397,20 @@ module main;
 //                              'h00 /*ports_mask  */, 'h40 /* ports_egress */,'h01 /* ports_ingress   */);
  
       if(tru_config_opt == 2)
-        tru_drv.transition_config(0 /*mode */,     1 /*rx_id*/, 0 /*prio*/, 20 /*time_diff*/, 
-                                  0 /*port_a_id*/, 1 /*port_b_id*/);
+        tru_drv.transition_config(0 /*mode */,     1 /*rx_id*/,     1 /*prio mode*/, 0 /*prio*/, 
+                                 20 /*time_diff*/, 0 /*port_a_id*/, 1 /*port_b_id*/);
+      else if(tru_config_opt == 3)
+        tru_drv.transition_config(0 /*mode */,     1 /*rx_id*/,     0 /*prio mode*/, 0 /*prio*/, 
+                                  20 /*time_diff*/,1 /*port_a_id*/, 2 /*port_b_id*/);
+      
+      if(tru_config_opt == 4)
+        begin 
+          tru_drv.rt_reconf_config(1 /*tx_frame_id*/, 1/*rx_frame_id*/, 1 /*mode*/);
+          tru_drv.rt_reconf_enable();        
+        end       
 
       tru_drv.tru_swap_bank();  
+      
       if(g_tru_enable)
          tru_drv.tru_enable();
 //       tru_drv.tru_port_config(0);
@@ -1392,6 +1460,9 @@ module main;
         
         //
       rtu.set_port_config(g_num_ports, 1, 0, 0); // for NIC
+      
+      rtu.add_static_rule('{'h01, 'h80, 'hc2, 'h00, 'h00, 'h00}, (1<<18));
+      rtu.add_static_rule('{'h01, 'h80, 'hc2, 'h00, 'h00, 'h01}, (1<<18));
       
       if(g_LACP_scenario == 2)
         begin
@@ -1579,11 +1650,11 @@ module main;
              //program other bank with alternate config
              tru.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
                                32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,  'h0 /* mode */, 
-                               32'h3FFFF /*ports_mask  */, 32'b111000000010100010 /* ports_egress */,32'b111000000010100010 /* ports_ingress   */);
+                               32'h3FFFF /*ports_mask  */, 32'b1000_0111 /* ports_egress */,32'b1000_0101 /* ports_ingress   */);
 
              tru.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
-                            32'b00000011 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h0 /* mode */,
-                            32'b00000011 /*ports_mask  */, 32'b00000001 /* ports_egress */,32'b00000001 /* ports_ingress   */);
+                            32'b00000110 /*pattern_mask*/, 32'b0100 /* pattern_match*/,'h0 /* mode */,
+                            32'b00000110 /*ports_mask  */, 32'b1000_0111 /* ports_egress */,32'b1000_0011 /* ports_ingress   */);
              // enable transition
              tru.transition_enable();
              wait_cycles(200);
@@ -1599,7 +1670,61 @@ module main;
                      7             /* dstPort */, 
                      4             /*option=4 */);  
              wait_cycles(200);
+             //send some crap - is to be blocked by the port and counted
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[1].send /* src     */, 
+                     ports[1].recv /* sink    */,  
+                     1             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201             /*non-blocking => does not wait for reception */);     
+             wait_cycles(200);
+             //send some crap - is to be blocked by the port and counted
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[2].send /* src     */, 
+                     ports[2].recv /* sink    */,  
+                     2             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201             /*non-blocking => does not wait for reception */);     
+             wait_cycles(200);
+             //sent marker to port 1
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[2].send /* src     */, 
+                     ports[2].recv /* sink    */,  
+                     2             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     101             /*option=4 */);     
+             //send some crap - is to be blocked by the port and counted
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[2].send /* src     */, 
+                     ports[2].recv /* sink    */,  
+                     2             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201             /*non-blocking => does not wait for reception */);     
 
+              //send some crap - is to be blocked by the port and counted
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[2].send /* src     */, 
+                     ports[2].recv /* sink    */,  
+                     2             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201             /*non-blocking => does not wait for reception */);             
+
+             wait_cycles(200);
              //sent marker to port 1
              tx_test(seed                         /* seed    */, 
                      1                 /* n_tries */, 
@@ -1609,23 +1734,97 @@ module main;
                      ports[1].recv /* sink    */,  
                      1             /* srcPort */ , 
                      0             /* dstPort */, 
-                     101             /*option=4 */);             
-             $display("");
-             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> transition 0  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-             $display("");
+                     101             /*option=4 */);  
              wait_cycles(200);
-             //sent marker to port 1
+             
+             //send some crap - it should be forwarded/counted before transition
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[1].send /* src     */, 
+                     ports[1].recv /* sink    */,  
+                     1             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201             /*non-blocking => does not wait for reception */);     
+
+             //send some crap - it should be forwarded/counted before transition
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[1].send /* src     */, 
+                     ports[1].recv /* sink    */,  
+                     1             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201             /*non-blocking => does not wait for reception */);    
+
+
+             //send some crap - it should be forwarded/counted before transition
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[1].send /* src     */, 
+                     ports[1].recv /* sink    */,  
+                     1             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201             /*non-blocking => does not wait for reception */);     
+
+             //send some crap - it should be forwarded/counted before transition
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[1].send /* src     */, 
+                     ports[1].recv /* sink    */,  
+                     1             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201    /*non-blocking => does not wait for reception */); 
+             //send some crap - it should be forwarded/counted before transition
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[2].send /* src     */, 
+                     ports[2].recv /* sink    */,  
+                     2             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201    /*non-blocking => does not wait for reception */); 
+             //send some crap - it should be forwarded/counted before transition
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[1].send /* src     */, 
+                     ports[1].recv /* sink    */,  
+                     1             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201    /*non-blocking => does not wait for reception */); 
+             //send some crap - it should be forwarded/counted before transition
+             tx_test(seed                         /* seed    */, 
+                     1                 /* n_tries */, 
+                     0                    /* is_q    */, 
+                     0                             /* unvid   */, 
+                     ports[2].send /* src     */, 
+                     ports[2].recv /* sink    */,  
+                     2             /* srcPort */ , 
+                     0             /* dstPort */, 
+                     201    /*non-blocking => does not wait for reception */); 
+             //send some crap - it should be forwarded/counted before transition
              tx_test(seed                         /* seed    */, 
                      1                 /* n_tries */, 
                      0                    /* is_q    */, 
                      0                             /* unvid   */, 
                      ports[0].send /* src     */, 
                      ports[0].recv /* sink    */,  
-                     1             /* srcPort */ , 
+                     0             /* srcPort */ , 
                      0             /* dstPort */, 
-                     101             /*option=4 */);  
-             wait_cycles(200);
-             
+                     201    /*non-blocking => does not wait for reception */); 
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> transition 0  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+
              for(dd=0;dd<8;dd++)
                tru.ep_debug_read_pfilter(dd);
 

@@ -106,6 +106,7 @@ entity tru_trans_marker_trig is
     statTransFinished_o: out std_logic;
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
+    ports_req_strobe_i : in std_logic_vector(g_num_ports - 1 downto 0);
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
 end tru_trans_marker_trig;
@@ -127,6 +128,8 @@ architecture rtl of tru_trans_marker_trig is
   signal s_port_B_mask       : std_logic_vector(g_num_ports-1 downto 0);
   signal s_port_A_prio       : std_logic_vector(g_prio_width-1 downto 0);
   signal s_port_B_prio       : std_logic_vector(g_prio_width-1 downto 0);
+  signal s_port_A_has_prio   : std_logic;
+  signal s_port_B_has_prio   : std_logic;
 
   signal s_port_A_prio_mask  : std_logic_vector(2**g_prio_width-1 downto 0);
   signal s_port_B_prio_mask  : std_logic_vector(2**g_prio_width-1 downto 0);
@@ -145,10 +148,10 @@ begin --rtl
                           config_i.tcr_trans_port_a_valid and 
                           config_i.tcr_trans_port_b_valid;
 
-   -- generating mask with 1 at the priority for with we perform transition
+   -- generating mask with 1 at the priority for with we perform transition (configured value)
    G_PRIO_MASK: for i in 0 to 2**g_prio_width-1 generate
-      s_port_A_prio_mask(i) <= '1' when(i = to_integer(unsigned(s_port_A_prio))) else '0';
-      s_port_B_prio_mask(i) <= '1' when(i = to_integer(unsigned(s_port_B_prio))) else '0';
+      s_port_A_prio_mask(i) <= '1' when(i = to_integer(unsigned(config_i.tcr_trans_prio))) else '0';
+      s_port_B_prio_mask(i) <= '1' when(i = to_integer(unsigned(config_i.tcr_trans_prio))) else '0';
    end generate G_PRIO_MASK;
    
    -- generating mask with 1 at the port for with we perform transition
@@ -161,15 +164,20 @@ begin --rtl
 --   s_port_A_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_a_id)));
 --   s_port_B_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_b_id)));
 
---   s_port_A_prio       <= rtu_i.priorities;
---   s_port_B_prio       <= rtu_i.priorities;
+--    s_port_A_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_a_id)));
+--    s_port_A_has_prio   <= rtu_i.has_prio(to_integer(unsigned(config_i.tcr_trans_port_a_id)));
+--    s_port_B_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_b_id)));
+--    s_port_B_has_prio   <= rtu_i.has_prio(to_integer(unsigned(config_i.tcr_trans_port_b_id)));
+
+--   s_port_A_rtu_srobe  <= '1' when ((s_port_A_mask and rtu_i.request_valid(g_num_ports-1 downto 0)) = s_port_A_mask and 
+--                                     s_port_A_prio = config_i.tcr_trans_prio and s_port_A_has_prio = '1') else '0';
+--   s_port_B_rtu_srobe  <= '1' when ((s_port_B_mask and rtu_i.request_valid(g_num_ports-1 downto 0)) = s_port_B_mask and
+--                                     s_port_B_prio = config_i.tcr_trans_prio and s_port_B_has_prio = '1') else '0';
+                               
+  s_port_A_rtu_srobe  <= ports_req_strobe_i(to_integer(unsigned(config_i.tcr_trans_port_a_id)));
+  s_port_B_rtu_srobe  <= ports_req_strobe_i(to_integer(unsigned(config_i.tcr_trans_port_b_id)));
 
 
-  s_port_A_rtu_srobe  <= '1' when ((s_port_A_mask and rtu_i.request_valid(g_num_ports-1 downto 0)) = s_port_A_mask and 
-                                    s_port_A_prio = config_i.tcr_trans_prio) else '0';
-  s_port_B_rtu_srobe  <= '1' when ((s_port_B_mask and rtu_i.request_valid(g_num_ports-1 downto 0)) = s_port_B_mask and
-                                    s_port_B_prio = config_i.tcr_trans_prio) else '0';
-                                    
   -- an empty entry
   s_ep_zero.pauseSend          <= '0';
   s_ep_zero.pauseTime          <= (others => '0');
@@ -269,6 +277,11 @@ begin --rtl
             
             -- as soon as the number of frames received on port A equals the number of frames
             -- received on port B, transition
+            -- "+ 1" => we change before the next packet - the things is that the strobe
+            -- which increments the counter comes before the request is considered by 
+            -- TRU so, instead of making some delay not to make the new TRU TAB configuration 
+            -- too fast...  we change configuration before the request whic is to be 
+            -- handled by new configuration (we have time to change)
             if(s_portA_frame_cnt = s_portB_frame_cnt) then
               s_tru_trans_state    <= S_TRANSITIONED;
               tru_tab_bank_o       <= '1';                 -- request bank swap of TRU TAB

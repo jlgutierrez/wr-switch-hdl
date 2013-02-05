@@ -317,6 +317,18 @@ peripheral {
          access_dev = READ_ONLY;
       };
       field {
+         name = "Priority Mode";
+         prefix = "TRANS_PRIO_MODE";
+         description = "Specifies whether\
+         - 0: use indication of HP packet from RTU (fast match)\
+         - 1: use the priority specified in TRANS_PRIO register\
+         to count packets during transition";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
          name = "Port Time Difference";
          prefix = "TRANS_TIME_DIFF";
          description = "Difference of time between the packet delay going through port A and B\

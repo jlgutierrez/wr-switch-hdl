@@ -302,10 +302,13 @@ package rtu_private_pkg is
       fast_match_rd_data_i      : in t_match_response;
       port_almost_full_o        : out std_logic;
       port_full_o               : out std_logic;
+--       tru_o                     : out t_rtu2tru;
       rtu_str_config_i          : in t_rtu_special_traffic_config;
       rtu_gcr_g_ena_i           : in std_logic;  
-      rtu_pcr_pass_bpdu_i       : in std_logic_vector(c_rtu_max_ports -1 downto 0);
-      rtu_pcr_pass_all_i        : in std_logic_vector(c_rtu_max_ports -1 downto 0);
+--       rtu_pcr_pass_bpdu_i       : in std_logic_vector(c_rtu_max_ports -1 downto 0);
+--       rtu_pcr_pass_all_i        : in std_logic_vector(c_rtu_max_ports -1 downto 0);
+      rtu_pcr_pass_bpdu_i       : in std_logic;
+      rtu_pcr_pass_all_i        : in std_logic;
       rtu_pcr_fix_prio_i        : in std_logic;
       rtu_pcr_prio_val_i        : in std_logic_vector(c_wrsw_prio_width - 1 downto 0)
       );

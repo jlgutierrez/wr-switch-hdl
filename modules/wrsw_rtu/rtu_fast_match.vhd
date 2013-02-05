@@ -112,6 +112,7 @@ architecture behavioral of rtu_fast_match is
   signal pipeline_grant         : t_std_vector_array;
   signal pipeline_valid         : std_logic_vector(pipeline_depth-1 downto 0);
   signal zeros                  : std_logic_vector(47 downto 0);
+  signal ones                   : std_logic_vector(47 downto 0);
   signal pipeline_match_rsp     : t_match_rsp_array;
   signal rsp_fast_match         : t_match_response;
   signal rtu_req_stage_g        : t_rtu_request;
@@ -140,6 +141,7 @@ architecture behavioral of rtu_fast_match is
 begin
 
   zeros <= (others => '0');
+  ones  <= (others => '1');
 
   -- round robin arbitration stuff (stolen from Toms module)
   gen_inputs : for i in 0 to g_num_ports-1 generate
@@ -193,6 +195,8 @@ begin
 
   traffic_hp       <= '1' when (traffic_ff='1' and rtu_req_stage_0.has_prio = '1' and 
                                 (rtu_str_config_i.hp_prio and rq_prio_mask) /= zeros(7 downto 0) ) else
+                      '1' when  traffic_ff='1' and rtu_req_stage_0.has_prio = '0' and 
+                                (rtu_str_config_i.hp_prio = ones(7 downto 0)) else
                       '0';
 
   ----------------------------- stage: 1     -------------------------------------------------
@@ -305,6 +309,8 @@ begin
   tru_req_o.isBR              <= traffic_br_d;
   tru_req_o.reqMask(g_num_ports-1 downto 0)                <= pipeline_grant(1); 
   tru_req_o.reqMask(c_rtu_max_ports-1 downto g_num_ports)  <= (others => '0'); 
+  -- this is more for testing then to be used
+  tru_req_o.prio              <= rtu_req_stage_1.prio when(rtu_req_stage_1.has_prio = '1') else (others=>'0');
   
   -- fast match response
   -- 1) if TRU is disabled, we don't take TRU's decision in consideration and we can respond

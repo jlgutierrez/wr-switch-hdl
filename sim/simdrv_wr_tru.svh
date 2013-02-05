@@ -76,18 +76,21 @@ class CSimDrv_WR_TRU;
      end
    endtask;
 
-   task transition_config(int mode,      int rx_id,       int prio, int time_diff,
+   task transition_config(int mode,      int rx_id,  int prio_mode  ,   int prio, int time_diff,
                      int port_a_id, int port_b_id);
 
-      m_acc.write(m_base +`ADDR_TRU_TCGR,  mode       << `TRU_TCGR_TRANS_MODE_OFFSET  |
-                                           rx_id      << `TRU_TCGR_TRANS_RX_ID_OFFSET |
-                                           prio       << `TRU_TCGR_TRANS_PRIO_OFFSET  |
-                                           time_diff  << `TRU_TCGR_TRANS_TIME_DIFF_OFFSET);
+      m_acc.write(m_base +`ADDR_TRU_TCGR,           
+         (mode       << `TRU_TCGR_TRANS_MODE_OFFSET     ) & `TRU_TCGR_TRANS_MODE      |
+         (rx_id      << `TRU_TCGR_TRANS_RX_ID_OFFSET    ) & `TRU_TCGR_TRANS_RX_ID     |
+         (prio       << `TRU_TCGR_TRANS_PRIO_OFFSET     ) & `TRU_TCGR_TRANS_PRIO      |
+         (prio_mode  << `TRU_TCGR_TRANS_PRIO_MODE_OFFSET) & `TRU_TCGR_TRANS_PRIO_MODE |
+         (time_diff  << `TRU_TCGR_TRANS_TIME_DIFF_OFFSET) & `TRU_TCGR_TRANS_TIME_DIFF);
         
-      m_acc.write(m_base +`ADDR_TRU_TCPR,  port_a_id  << `TRU_TCPR_TRANS_PORT_A_ID_OFFSET    |
-                                           1          << `TRU_TCPR_TRANS_PORT_A_VALID_OFFSET |
-                                           port_b_id  << `TRU_TCPR_TRANS_PORT_B_ID_OFFSET    |
-                                           1          << `TRU_TCPR_TRANS_PORT_B_VALID_OFFSET);         
+      m_acc.write(m_base +`ADDR_TRU_TCPR,  
+         (port_a_id  << `TRU_TCPR_TRANS_PORT_A_ID_OFFSET   ) & `TRU_TCPR_TRANS_PORT_A_ID    |
+         (1          << `TRU_TCPR_TRANS_PORT_A_VALID_OFFSET) & `TRU_TCPR_TRANS_PORT_A_VALID |
+         (port_b_id  << `TRU_TCPR_TRANS_PORT_B_ID_OFFSET   ) & `TRU_TCPR_TRANS_PORT_B_ID    |
+         (1          << `TRU_TCPR_TRANS_PORT_B_VALID_OFFSET) & `TRU_TCPR_TRANS_PORT_B_VALID );         
       if(m_dbg) 
       begin 
         $display("TRU: transition configuration [mode id = %2d]:",mode);
@@ -97,8 +100,10 @@ class CSimDrv_WR_TRU;
         $display("\tMode   : LACP distributor");
         if(mode == 1)  
         $display("\tMode   : LACP collector");
-        $display("\tPorts  : A_ID = %2d (before tran), B_ID = %d2 (after trans)",port_a_id, port_b_id);
-        $display("\tParams : Rx Frame ID =  %2d, Priority = %2d, Time diff = %3d", rx_id, prio, time_diff);
+        $display("\tPorts  : A_ID = %2d (before tran), B_ID = %d2 (after trans)",port_a_id, 
+                 port_b_id);
+        $display("\tParams : Rx Frame ID =  %2d, PrioMode = %s, Priority = %2d, Time diff = %3d", 
+                 rx_id, prio_mode, prio, time_diff);
       end     
    endtask;
 
