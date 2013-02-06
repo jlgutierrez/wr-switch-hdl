@@ -677,6 +677,20 @@ peripheral {
          access_dev = WRITE_ONLY;
      };
    };
+   reg {
+      name = "RT Reconfig Debug Register";
+      description = "This register stores information about detected packages (class, number)";
+      prefix = "PTRDR";
+      field {
+         name = "globalIngMask";
+         description = "Global Ingress Mask";
+         prefix = "GING_MASK";
+         type = SLV;
+         size = 32;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
+      };
+   };
 };
 
 

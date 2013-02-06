@@ -77,6 +77,7 @@ entity tru_port is
     ----------------------------------------------------------------------------------
     config_i           : in  t_tru_config;     -- WB-accesable configration
     tru_tab_bank_swap_i: in  std_logic;
+    globIngMask_dbg_o  : out std_logic_vector(g_num_ports-1 downto 0);
     txFrameMask_o      : out std_logic_vector(g_num_ports - 1 downto 0) -- info to (e.g. Endpoint
                                                             -- or other module to HW-generate frame)
     );
@@ -160,8 +161,10 @@ begin --rtl
     read_valid_i       => s_valid_d0,
     read_data_i        => tru_tab_entry_i,
     resp_masks_i       => s_resp_masks,
+    endpoints_i        => endpoints_i,
     config_i           => config_i,
     tru_tab_bank_swap_i=> tru_tab_bank_swap_i,
+    globIngMask_dbg_o  => globIngMask_dbg_o,
     txFrameMask_o      => txFrameMask_o
     );
   

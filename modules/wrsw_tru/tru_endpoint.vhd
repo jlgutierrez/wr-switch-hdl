@@ -240,7 +240,7 @@ begin --rtl
   endpoint_o.status                                         <= s_port_status and rtu_pass_all_i;
   endpoint_o.rxFrameMask(g_pclass_number-1 downto 0)        <= s_rxFrameMask; --port_if_i.pfilter_pclass(g_pclass_number-1 downto 0) when (port_if_i.pfilter_done='1') else (others => '0');--s_rxFrameMask;
   endpoint_o.rxFrameMaskReg(g_pclass_number-1 downto 0)     <= s_rxFrameMaskReg(g_pclass_number-1 downto 0);
-  
+  endpoint_o.inject_ready                                   <= port_if_i.inject_ready;
   -- detect link down event (edge of input status signal while the control info says port should
   -- be UP);
   s_port_down                   <= (not port_if_i.status) and s_port_status_d0 and s_port_if_ctrl; 

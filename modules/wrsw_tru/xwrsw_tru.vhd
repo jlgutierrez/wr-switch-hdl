@@ -185,9 +185,11 @@ begin --rtl
      endpoints_i        => s_endpoints,
      config_i           => s_config,
      tru_tab_bank_swap_i=> s_bank_swap,
+     globIngMask_dbg_o  => s_regs_towb.ptrdr_ging_mask_i(g_num_ports-1 downto 0),
      txFrameMask_o      => s_tx_rt_reconf_FRM
     );
-
+  s_regs_towb.ptrdr_ging_mask_i(31 downto g_num_ports) <= (others => '0');
+  
   G_ENDP: for i in 0 to g_num_ports-1 generate
      U_T_ENDPOINT: tru_endpoint
      generic map(     
@@ -251,6 +253,7 @@ begin --rtl
      s_endpoints.status(i)              <= s_endpoint_array(i).status  ;
      s_endpoints.stableUp(i)            <= s_endpoint_array(i).stableUp;
      s_endpoints.rxFramePerPortMask(i)(c_wrsw_pclass_number-1  downto 0) <= s_endpoint_array(i).rxFrameMask;
+     s_endpoints.inject_ready(i)        <= s_endpoint_array(i).inject_ready;
   end generate G_ENDP_CONX;
   
   s_endpoints.status(s_endpoints.status'length-1 downto g_num_ports) <= (others =>'0');

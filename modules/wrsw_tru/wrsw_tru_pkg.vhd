@@ -127,6 +127,7 @@ package wrsw_tru_pkg is
     rxFrameMask        : std_logic_vector(c_wrsw_pclass_number-1  downto 0); -- frame received (current)
     rxFrameMaskReg     : std_logic_vector(c_wrsw_pclass_number-1  downto 0); -- frame received (registered)
     stableUp           : std_logic;
+    inject_ready       : std_logic;
   end record;
 
   type t_xFrameMask is array(c_wrsw_pclass_number-1  downto 0) of std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
@@ -138,6 +139,7 @@ package wrsw_tru_pkg is
     rxFrameMaskReg     : t_xFrameMask; -- frame received (registered)
     rxFramePerPortMask : t_xFramePerPortMask; -- for LACP
     stableUp           : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
+    inject_ready       : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
   end record;
 
   type t_lagt_gr_id_mask_array is array(integer range <>) of std_logic_vector(3 downto 0);
@@ -302,8 +304,10 @@ package wrsw_tru_pkg is
     read_valid_i       : in std_logic;
     read_data_i        : in t_tru_tab_entry(g_tru_subentry_num - 1 downto 0);
     resp_masks_i       : in  t_resp_masks;    
+    endpoints_i        : in  t_tru_endpoints;
     config_i           : in  t_tru_config;
     tru_tab_bank_swap_i: in  std_logic;
+    globIngMask_dbg_o  : out std_logic_vector(g_num_ports-1 downto 0);
     txFrameMask_o      : out std_logic_vector(g_num_ports-1 downto 0)
     );
   end component;  
@@ -326,6 +330,7 @@ package wrsw_tru_pkg is
     endpoints_i        : in  t_tru_endpoints;
     config_i           : in  t_tru_config;
     tru_tab_bank_swap_i: in  std_logic;
+    globIngMask_dbg_o  : out std_logic_vector(g_num_ports-1 downto 0);
     txFrameMask_o      : out std_logic_vector(g_num_ports - 1 downto 0)
     );
   end component;

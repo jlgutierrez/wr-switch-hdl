@@ -52,6 +52,7 @@
 <span style="margin-left: 20px; ">3.16. <A href="#sect_3_16">Debug port select</a></span><br/>
 <span style="margin-left: 20px; ">3.17. <A href="#sect_3_17">Packet Injection Debug Register</a></span><br/>
 <span style="margin-left: 20px; ">3.18. <A href="#sect_3_18">Packet Filter Debug Register</a></span><br/>
+<span style="margin-left: 20px; ">3.19. <A href="#sect_3_19">RT Reconfig Debug Register</a></span><br/>
 <h3><a name="sect_1_0">1. Memory map summary</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
@@ -375,6 +376,23 @@ tru_pfdr
 </td>
 <td  class="td_code">
 PFDR
+</td>
+</tr>
+<tr class="tr_odd">
+<td  class="td_code">
+0x12
+</td>
+<td >
+REG
+</td>
+<td >
+<A href="#PTRDR">RT Reconfig Debug Register</a>
+</td>
+<td  class="td_code">
+tru_ptrdr
+</td>
+<td  class="td_code">
+PTRDR
 </td>
 </tr>
 </table>
@@ -1770,6 +1788,57 @@ tru_pfdr_class_i[7:0]
 </td>
 <td  class="td_pblock_right">
 tru_pfdr_cnt_i[15:0]
+</td>
+<td  class="td_arrow_right">
+&lArr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+&nbsp;
+</td>
+<td  class="td_pblock_right">
+
+</td>
+<td  class="td_arrow_right">
+
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+<b>RT Reconfig Debug Register:</b>
+</td>
+<td  class="td_arrow_right">
+
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+tru_ptrdr_ging_mask_i[31:0]
 </td>
 <td  class="td_arrow_right">
 &lArr;
@@ -3386,7 +3455,7 @@ TRANS_PRIO
 <li><b>
 TRANS_PRIO_MODE
 </b>[<i>read/write</i>]: Priority Mode
-<br>Specifies whether<br>         - use indication of HP packet from RTU (fast match)<br>         - use the priority specified in TRANS_PRIO register<br>         to count packets during transition
+<br>Specifies whether<br>         - 0: use indication of HP packet from RTU (fast match)<br>         - 1: use the priority specified in TRANS_PRIO register<br>         to count packets during transition
 <li><b>
 TRANS_TIME_DIFF
 </b>[<i>read/write</i>]: Port Time Difference
@@ -6564,6 +6633,267 @@ CLASS
 CNT
 </b>[<i>read-only</i>]: CNT
 <br>Counts all detections (regardless of the class)
+</ul>
+<a name="PTRDR"></a>
+<h3><a name="sect_3_19">3.19. RT Reconfig Debug Register</a></h3>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td >
+<b>HW prefix: </b>
+</td>
+<td  class="td_code">
+tru_ptrdr
+</td>
+</tr>
+<tr>
+<td >
+<b>HW address: </b>
+</td>
+<td  class="td_code">
+0x12
+</td>
+</tr>
+<tr>
+<td >
+<b>C prefix: </b>
+</td>
+<td  class="td_code">
+PTRDR
+</td>
+</tr>
+<tr>
+<td >
+<b>C offset: </b>
+</td>
+<td  class="td_code">
+0x48
+</td>
+</tr>
+</table>
+<p>
+This register stores information about detected packages (class, number)
+</p>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td  class="td_bit">
+31
+</td>
+<td  class="td_bit">
+30
+</td>
+<td  class="td_bit">
+29
+</td>
+<td  class="td_bit">
+28
+</td>
+<td  class="td_bit">
+27
+</td>
+<td  class="td_bit">
+26
+</td>
+<td  class="td_bit">
+25
+</td>
+<td  class="td_bit">
+24
+</td>
+</tr>
+<tr>
+<td style="border: solid 1px black;" colspan=8  class="td_field">
+GING_MASK[31:24]
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+</tr>
+</table>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td  class="td_bit">
+23
+</td>
+<td  class="td_bit">
+22
+</td>
+<td  class="td_bit">
+21
+</td>
+<td  class="td_bit">
+20
+</td>
+<td  class="td_bit">
+19
+</td>
+<td  class="td_bit">
+18
+</td>
+<td  class="td_bit">
+17
+</td>
+<td  class="td_bit">
+16
+</td>
+</tr>
+<tr>
+<td style="border: solid 1px black;" colspan=8  class="td_field">
+GING_MASK[23:16]
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+</tr>
+</table>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td  class="td_bit">
+15
+</td>
+<td  class="td_bit">
+14
+</td>
+<td  class="td_bit">
+13
+</td>
+<td  class="td_bit">
+12
+</td>
+<td  class="td_bit">
+11
+</td>
+<td  class="td_bit">
+10
+</td>
+<td  class="td_bit">
+9
+</td>
+<td  class="td_bit">
+8
+</td>
+</tr>
+<tr>
+<td style="border: solid 1px black;" colspan=8  class="td_field">
+GING_MASK[15:8]
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+</tr>
+</table>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td  class="td_bit">
+7
+</td>
+<td  class="td_bit">
+6
+</td>
+<td  class="td_bit">
+5
+</td>
+<td  class="td_bit">
+4
+</td>
+<td  class="td_bit">
+3
+</td>
+<td  class="td_bit">
+2
+</td>
+<td  class="td_bit">
+1
+</td>
+<td  class="td_bit">
+0
+</td>
+</tr>
+<tr>
+<td style="border: solid 1px black;" colspan=8  class="td_field">
+GING_MASK[7:0]
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+</tr>
+</table>
+<ul>
+<li><b>
+GING_MASK
+</b>[<i>read-only</i>]: globalIngMask
+<br>Global Ingress Mask
 </ul>
 
 

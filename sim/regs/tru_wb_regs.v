@@ -110,3 +110,6 @@
 `define TRU_PFDR_CLASS 32'h0000ff00
 `define TRU_PFDR_CNT_OFFSET 16
 `define TRU_PFDR_CNT 32'hffff0000
+`define ADDR_TRU_PTRDR                 7'h48
+`define TRU_PTRDR_GING_MASK_OFFSET 0
+`define TRU_PTRDR_GING_MASK 32'hffffffff

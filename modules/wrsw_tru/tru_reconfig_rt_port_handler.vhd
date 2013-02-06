@@ -72,9 +72,11 @@ entity tru_reconfig_rt_port_handler is
      
     read_valid_i       : in std_logic;
     read_data_i        : in t_tru_tab_entry(g_tru_subentry_num - 1 downto 0);
-    resp_masks_i       : in t_resp_masks;    
+    resp_masks_i       : in t_resp_masks; 
+    endpoints_i        : in  t_tru_endpoints;   
     config_i           : in  t_tru_config;
     tru_tab_bank_swap_i: in  std_logic;
+    globIngMask_dbg_o  : out std_logic_vector(g_num_ports-1 downto 0);
     txFrameMask_o      : out std_logic_vector(g_num_ports-1 downto 0)
     );
 end tru_reconfig_rt_port_handler;
@@ -85,8 +87,12 @@ architecture rtl of tru_reconfig_rt_port_handler is
   signal s_globIngMask_d0   : std_logic_vector(g_num_ports-1 downto 0);
   signal s_globIngMask_or   : std_logic_vector(g_num_ports-1 downto 0);
   signal s_txFrameMask      : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_globIngMask_xor  : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_inject_ready     : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_zeros            : std_logic_vector(g_num_ports-1 downto 0);
 begin --rtl
 
+  s_zeros <= (others =>'0');
   -------------------------------------------------------------------------------------------------
   -- The below code is used to send HW-generated "quick forwrad" frames to request the neighbour
   -- port to open (for ingress) port connected to the port which has just been made "active" on 
@@ -107,8 +113,10 @@ begin --rtl
                     (not s_globIngMask_d0);
   
   -- to make the code less messy
-  s_globIngMask_or <= s_globIngMask or s_globIngMask_d0;
-
+  s_globIngMask_or  <= s_globIngMask or s_globIngMask_d0;
+  s_globIngMask_xor <= s_globIngMask_d0 xor s_globIngMask_or;
+  s_inject_ready    <= endpoints_i.inject_ready(g_num_ports-1 downto 0);
+  
   -- send HW-generated frame
   txFrameMask_o    <= s_txFrameMask;
 
@@ -142,10 +150,11 @@ begin --rtl
            
            -- Generate signal to send HW-generated frames based on the remembered info and
            -- newly generated mask
-           elsif(read_valid_i = '1') then
+--            elsif(read_valid_i = '1') then
+--            else
+           elsif((s_inject_ready and s_globIngMask_xor) /= s_zeros) then
               s_globIngMask_d0 <= s_globIngMask_or;
-              s_txFrameMask    <= s_globIngMask_d0 xor s_globIngMask_or;
-
+              s_txFrameMask    <= s_globIngMask_xor;
            end if;
         --------------------------------------------------------------------------------------------  
         when others =>
@@ -157,4 +166,8 @@ begin --rtl
       end if;
     end if;
   end process;  
+  
+  -- debugging
+  globIngMask_dbg_o <= s_globIngMask_d0;
+
 end rtl;

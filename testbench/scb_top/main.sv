@@ -1545,6 +1545,8 @@ module main;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
+             wait_cycles(600);
+             tru.tru_swap_bank();  
            end
            else if(g_failure_scenario == 2 | g_failure_scenario == 3 | g_failure_scenario == 4)
            begin
