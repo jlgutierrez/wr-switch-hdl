@@ -83,6 +83,7 @@ architecture rtl of wrsw_rt_subsystem is
       g_with_debug_fifo      : boolean;
       g_with_ext_clock_input : boolean;
       g_with_undersampling   : boolean;
+      g_divide_input_by_2 : boolean;
       g_reverse_dmtds        : boolean;
       g_bb_ref_divider       : integer;
       g_bb_feedback_divider  : integer;
@@ -279,8 +280,9 @@ begin  -- rtl
       g_address_granularity  => BYTE,
       g_num_ref_inputs       => g_num_rx_clocks,
       g_num_outputs          => 1,
-      g_reverse_dmtds        => false,
+      g_reverse_dmtds        => true,
       g_with_ext_clock_input => true,
+      g_divide_input_by_2    => false,
       g_with_period_detector => false,
       g_with_undersampling   => false,
       g_with_debug_fifo      => true,

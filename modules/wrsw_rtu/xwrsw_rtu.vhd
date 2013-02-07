@@ -6,7 +6,7 @@
 -- Authors    : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2012-01-10
--- Last update: 2012-03-06
+-- Last update: 2012-06-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ use ieee.math_real.log2;
 
 use work.wishbone_pkg.all;
 use work.wrsw_shared_types_pkg.all;
-use work.wrsw_rtu_private_pkg.all;
+use work.rtu_private_pkg.all;
 
 entity xwrsw_rtu is
   
@@ -67,6 +67,11 @@ entity xwrsw_rtu is
     rsp_o     : out t_rtu_response_array(g_num_ports-1 downto 0);
     rsp_ack_i : in  std_logic_vector(g_num_ports-1 downto 0);
 
+    tru_req_o   : out  t_tru_request;
+    tru_resp_i  : in   t_tru_response;  
+    rtu2tru_o   : out  t_rtu2tru;
+    tru_enabled_i: in std_logic;
+
     wb_i : in  t_wishbone_slave_in;
     wb_o : out t_wishbone_slave_out
     );
@@ -74,59 +79,82 @@ entity xwrsw_rtu is
 end xwrsw_rtu;
 architecture wrapper of xwrsw_rtu is
 
-
   component wrsw_rtu
+    generic (
+      g_num_ports : integer);
     port (
       clk_sys_i           : in  std_logic;
       clk_match_i         : in  std_logic;
       rst_n_i             : in  std_logic;
-      rtu_idle_o          : out std_logic_vector(c_rtu_num_ports-1 downto 0);
-      rq_strobe_p_i       : in  std_logic_vector(c_rtu_num_ports-1 downto 0);
-      rq_smac_i           : in  std_logic_vector(c_wrsw_mac_addr_width * c_rtu_num_ports - 1 downto 0);
-      rq_dmac_i           : in  std_logic_vector(c_wrsw_mac_addr_width * c_rtu_num_ports -1 downto 0);
-      rq_vid_i            : in  std_logic_vector(c_wrsw_vid_width * c_rtu_num_ports - 1 downto 0);
-      rq_has_vid_i        : in  std_logic_vector(c_rtu_num_ports -1 downto 0);
-      rq_prio_i           : in  std_logic_vector(c_wrsw_prio_width * c_rtu_num_ports -1 downto 0);
-      rq_has_prio_i       : in  std_logic_vector(c_rtu_num_ports -1 downto 0);
-      rsp_valid_o         : out std_logic_vector (c_rtu_num_ports-1 downto 0);
-      rsp_dst_port_mask_o : out std_logic_vector(c_wrsw_num_ports * c_rtu_num_ports - 1 downto 0);
-      rsp_drop_o          : out std_logic_vector(c_rtu_num_ports -1 downto 0);
-      rsp_prio_o          : out std_logic_vector (c_rtu_num_ports * c_wrsw_prio_width-1 downto 0);
-      rsp_ack_i           : in  std_logic_vector(c_rtu_num_ports -1 downto 0);
-      port_almost_full_o  : out std_logic_vector(c_rtu_num_ports -1 downto 0);
-      port_full_o         : out std_logic_vector(c_rtu_num_ports -1 downto 0);
-      wb_addr_i           : in  std_logic_vector(13 downto 0);
-      wb_data_i           : in  std_logic_vector(31 downto 0);
-      wb_data_o           : out std_logic_vector(31 downto 0);
+      rtu_idle_o          : out std_logic_vector(g_num_ports-1 downto 0);
+      rq_strobe_p_i       : in  std_logic_vector(g_num_ports-1 downto 0);
+      rq_smac_i           : in  std_logic_vector(c_wrsw_mac_addr_width * g_num_ports - 1 downto 0);
+      rq_dmac_i           : in  std_logic_vector(c_wrsw_mac_addr_width * g_num_ports -1 downto 0);
+      rq_vid_i            : in  std_logic_vector(c_wrsw_vid_width * g_num_ports - 1 downto 0);
+      rq_has_vid_i        : in  std_logic_vector(g_num_ports -1 downto 0);
+      rq_prio_i           : in  std_logic_vector(c_wrsw_prio_width * g_num_ports -1 downto 0);
+      rq_has_prio_i       : in  std_logic_vector(g_num_ports -1 downto 0);
+      rsp_valid_o         : out std_logic_vector (g_num_ports-1 downto 0);
+      rsp_dst_port_mask_o : out std_logic_vector(c_rtu_max_ports * g_num_ports - 1 downto 0);
+      rsp_drop_o          : out std_logic_vector(g_num_ports -1 downto 0);
+      rsp_prio_o          : out std_logic_vector (g_num_ports * c_wrsw_prio_width-1 downto 0);
+      rsp_ack_i           : in  std_logic_vector(g_num_ports -1 downto 0);
+      port_almost_full_o  : out std_logic_vector(g_num_ports -1 downto 0);
+      port_full_o         : out std_logic_vector(g_num_ports -1 downto 0);
+-------------------------------------------------------------------------------
+-- TRU stuff
+-------------------------------------------------------------------------------
+    tru_req_valid_o         : out std_logic;
+    tru_req_smac_o          : out std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
+    tru_req_dmac_o          : out std_logic_vector(c_wrsw_mac_addr_width-1 downto 0);
+    tru_req_fid_o           : out std_logic_vector(c_wrsw_fid_width    -1 downto 0);
+    tru_req_isHP_o          : out std_logic;                     -- high priority packet flag
+    tru_req_isBR_o          : out std_logic;                     -- broadcast packet flag
+    tru_req_reqMask_o       : out std_logic_vector(g_num_ports-1  downto 0); -- mask indicating requesting port
+    tru_resp_valid_i        : in  std_logic;
+    tru_resp_port_mask_i    : in  std_logic_vector(g_num_ports-1 downto 0); -- mask with 1's at forward ports
+    tru_resp_drop_i         : in  std_logic;
+    tru_resp_respMask_i     : in  std_logic_vector(g_num_ports-1 downto 0); -- mask with 1 at requesting port
+    tru_if_pass_all_o         : out std_logic_vector(g_num_ports-1  downto 0); 
+    tru_if_forward_bpdu_only_o: out std_logic_vector(g_num_ports-1  downto 0); 
+    tru_if_request_valid_o    : out std_logic_vector(g_num_ports-1  downto 0); 
+    tru_if_priorities_o       : out std_logic_vector(g_num_ports*c_wrsw_prio_width-1 downto 0);
+      wb_adr_i            : in  std_logic_vector(13 downto 0);
+      wb_dat_i            : in  std_logic_vector(31 downto 0);
+      wb_dat_o            : out std_logic_vector(31 downto 0);
       wb_sel_i            : in  std_logic_vector(3 downto 0);
       wb_cyc_i            : in  std_logic;
       wb_stb_i            : in  std_logic;
-      wb_ack_o            :     out std_logic;
+      wb_ack_o            : out std_logic;
       wb_irq_o            : out std_logic;
-      wb_we_i             : in  std_logic);
+      wb_we_i             : in  std_logic;
+      wb_stall_o          : out std_logic);
   end component;
-
+  
   constant c_prio_num_width       : integer := integer(CEIL(LOG2(real(g_prio_num ))));
    
   signal wb_in  : t_wishbone_slave_in;
   signal wb_out : t_wishbone_slave_out;
 
 
-  signal rq_strobe_p       : std_logic_vector(c_rtu_num_ports-1 downto 0);
-  signal rq_smac           : std_logic_vector(c_wrsw_mac_addr_width * c_rtu_num_ports - 1 downto 0);
-  signal rq_dmac           : std_logic_vector(c_wrsw_mac_addr_width * c_rtu_num_ports -1 downto 0);
-  signal rq_vid            : std_logic_vector(c_wrsw_vid_width * c_rtu_num_ports - 1 downto 0);
-  signal rq_has_vid        : std_logic_vector(c_rtu_num_ports -1 downto 0);
-  signal rq_prio           : std_logic_vector(c_wrsw_prio_width * c_rtu_num_ports -1 downto 0);
-  signal rq_has_prio       : std_logic_vector(c_rtu_num_ports -1 downto 0);
-  signal rsp_valid         : std_logic_vector (c_rtu_num_ports-1 downto 0);
-  signal rsp_dst_port_mask : std_logic_vector(c_wrsw_num_ports * c_rtu_num_ports - 1 downto 0);
-  signal rsp_drop          : std_logic_vector(c_rtu_num_ports -1 downto 0);
-  signal rsp_prio          : std_logic_vector (c_rtu_num_ports * c_wrsw_prio_width-1 downto 0);
-  signal rsp_ack           : std_logic_vector(c_rtu_num_ports -1 downto 0);
-  signal port_full_hacked  : std_logic_vector(c_rtu_num_ports -1 downto 0);
-  signal port_full         : std_logic_vector(c_rtu_num_ports -1 downto 0);
-  signal port_idle         : std_logic_vector(c_rtu_num_ports -1 downto 0);
+  signal rq_strobe_p       : std_logic_vector(g_num_ports-1 downto 0);
+  signal rq_smac           : std_logic_vector(c_wrsw_mac_addr_width * g_num_ports - 1 downto 0);
+  signal rq_dmac           : std_logic_vector(c_wrsw_mac_addr_width * g_num_ports -1 downto 0);
+  signal rq_vid            : std_logic_vector(c_wrsw_vid_width * g_num_ports - 1 downto 0);
+  signal rq_has_vid        : std_logic_vector(g_num_ports -1 downto 0);
+  signal rq_prio           : std_logic_vector(c_wrsw_prio_width * g_num_ports -1 downto 0);
+  signal rq_has_prio       : std_logic_vector(g_num_ports -1 downto 0);
+  signal rsp_valid         : std_logic_vector (g_num_ports-1 downto 0);
+  signal rsp_dst_port_mask : std_logic_vector(g_num_ports * c_rtu_max_ports - 1 downto 0);
+  signal rsp_drop          : std_logic_vector(g_num_ports -1 downto 0);
+  signal rsp_prio          : std_logic_vector (g_num_ports * c_wrsw_prio_width-1 downto 0);
+  signal rsp_ack           : std_logic_vector(g_num_ports -1 downto 0);
+  signal port_full_hacked  : std_logic_vector(g_num_ports -1 downto 0);
+  signal port_full         : std_logic_vector(g_num_ports -1 downto 0);
+  signal port_idle         : std_logic_vector(g_num_ports -1 downto 0);
+  ----------- TRU stuff ---------
+  signal priorities        : std_logic_vector(g_num_ports*c_wrsw_prio_width-1 downto 0);
+  -------------------------------
   
 begin  -- wrapper
 
@@ -140,11 +168,14 @@ begin  -- wrapper
     rq_has_vid(i)                                                               <= req_i(i).has_vid;
 
     rsp_o(i).valid                                  <= rsp_valid(i);
-    rsp_o(i).port_mask(g_port_mask_bits-1 downto 0) <= rsp_dst_port_mask(c_wrsw_num_ports * i + g_port_mask_bits -1 downto c_wrsw_num_ports * i);
+    rsp_o(i).port_mask(c_rtu_max_ports-1 downto 0) <= rsp_dst_port_mask(c_rtu_max_ports * (i+1) -1 downto c_rtu_max_ports * i);
     rsp_o(i).drop                                   <= rsp_drop(i);
     rsp_ack(i)                                      <= rsp_ack_i(i);
     rsp_o(i).prio                                   <= rsp_prio(c_wrsw_prio_width*i + c_prio_num_width-1 downto c_wrsw_prio_width*i);
     req_full_o(i)                                   <= port_full_hacked(i) or port_full(i) or (not port_idle(i));
+    --- TRU stuff -------
+--     rtu2tru_o.priorities(i)(c_wrsw_prio_width-1 downto 0) <= priorities((i+1)*c_wrsw_prio_width-1 downto i*c_wrsw_prio_width);
+    -----------------------
   end generate gen_merge_signals;
 
   -------------------------- TEMPORARY HACK  -------------------------------------------------------
@@ -180,7 +211,7 @@ begin  -- wrapper
   end generate gen_hack_f;
   --------------------------------------------------------------------------------------------------
 
-  gen_term_unused : for i in g_num_ports to c_rtu_num_ports-1 generate
+  gen_term_unused : for i in g_num_ports to g_num_ports-1 generate
     rq_strobe_p(i) <= '0';
     rsp_ack(i)   <= '1';
   end generate gen_term_unused;
@@ -206,6 +237,9 @@ begin  -- wrapper
 
 
   U_Wrapped_RTU : wrsw_rtu
+    generic map (
+      g_num_ports => g_num_ports)
+    
     port map (
       clk_sys_i           => clk_sys_i,
       clk_match_i         => clk_sys_i,
@@ -224,14 +258,41 @@ begin  -- wrapper
       rsp_prio_o          => rsp_prio,
       rsp_ack_i           => rsp_ack,
       port_full_o         => port_full,
-      wb_addr_i           => wb_in.adr(13 downto 0),
-      wb_data_i           => wb_in.dat,
-      wb_data_o           => wb_out.dat,
+      wb_adr_i           => wb_in.adr(13 downto 0),
+      ----------------------------------------------------------------------------
+      tru_req_valid_o            => tru_req_o.valid ,
+      tru_req_smac_o             => tru_req_o.smac,
+      tru_req_dmac_o             => tru_req_o.dmac,
+      tru_req_fid_o              => tru_req_o.fid,
+      tru_req_isHP_o             => tru_req_o.isHP,
+      tru_req_isBR_o             => tru_req_o.isBR,
+      tru_req_reqMask_o          => tru_req_o.reqMask(g_num_ports-1  downto 0),
+      tru_resp_valid_i           => tru_resp_i.valid,
+      tru_resp_port_mask_i       => tru_resp_i.port_mask(g_num_ports-1  downto 0),
+      tru_resp_drop_i            => tru_resp_i.drop,
+      tru_resp_respMask_i        => tru_resp_i.respMask(g_num_ports-1  downto 0),
+      tru_if_pass_all_o          => rtu2tru_o.pass_all(g_num_ports-1  downto 0),
+      tru_if_forward_bpdu_only_o => rtu2tru_o.forward_bpdu_only(g_num_ports-1  downto 0),
+      tru_if_request_valid_o     => rtu2tru_o.request_valid(g_num_ports-1  downto 0),
+      tru_if_priorities_o        => priorities,
+      ----------------------------------------------------------------------------      
+      wb_dat_i           => wb_in.dat,
+      wb_dat_o           => wb_out.dat,
       wb_sel_i            => wb_in.sel,
       wb_cyc_i            => wb_in.cyc,
       wb_stb_i            => wb_in.stb,
       wb_ack_o            => wb_out.ack,
       wb_irq_o            => wb_out.int,
       wb_we_i             => wb_in.we);
+
+-- dummy TRU signals assigment
+--   
+--     tru_req_o.valid      <= req_i(0).valid;
+--     tru_req_o.smac       <= req_i(0).smac;
+--     tru_req_o.dmac       <= req_i(0).dmac;
+--     tru_req_o.fid        <= req_i(0).vid(c_wrsw_fid_width-1 downto 0);
+--     tru_req_o.isHP       <= req_i(0).has_prio when (tru_resp_i.drop = '0') else '1';
+--     tru_req_o.isBR       <= req_i(0).has_vid;
+--     tru_req_o.reqMask    <= req_i(0).smac(c_RTU_MAX_PORTS-1 downto 0) when (tru_resp_i.valid='1') else (others=>'0');
 
 end wrapper;

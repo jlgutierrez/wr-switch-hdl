@@ -5,6 +5,7 @@ use work.wr_fabric_pkg.all;
 use work.wishbone_pkg.all;
 use work.wrsw_txtsu_pkg.all;
 use work.wrsw_shared_types_pkg.all;
+use work.endpoint_pkg.all;
 
 package wrsw_top_pkg is
 
@@ -214,7 +215,8 @@ package wrsw_top_pkg is
     generic (
       g_num_ports       : integer;
       g_simulation      : boolean;
-      g_without_network : boolean);
+      g_without_network : boolean;
+      g_with_TRU        : boolean  := false);
     port (
       sys_rst_n_i         : in  std_logic;
       clk_startup_i       : in  std_logic;
@@ -250,12 +252,12 @@ package wrsw_top_pkg is
       led_act_o           : out std_logic_vector(g_num_ports-1 downto 0);
       gpio_o              : out std_logic_vector(31 downto 0);
       gpio_i              : in  std_logic_vector(31 downto 0);
-      i2c_mbl_scl_oen_o   : out std_logic_vector(1 downto 0);
-      i2c_mbl_scl_o       : out std_logic_vector(1 downto 0);
-      i2c_mbl_scl_i       : in  std_logic_vector(1 downto 0) := "11";
-      i2c_mbl_sda_oen_o   : out std_logic_vector(1 downto 0);
-      i2c_mbl_sda_o       : out std_logic_vector(1 downto 0);
-      i2c_mbl_sda_i       : in  std_logic_vector(1 downto 0) := "11");
+      i2c_scl_oen_o   : out std_logic_vector(2 downto 0);
+      i2c_scl_o       : out std_logic_vector(2 downto 0);
+      i2c_scl_i       : in  std_logic_vector(2 downto 0) := "111";
+      i2c_sda_oen_o   : out std_logic_vector(2 downto 0);
+      i2c_sda_o       : out std_logic_vector(2 downto 0);
+      i2c_sda_i       : in  std_logic_vector(2 downto 0) := "111");
   end component;
   component xswc_core is
     generic( 
@@ -309,10 +311,38 @@ package wrsw_top_pkg is
       req_full_o : out std_logic_vector(g_num_ports-1 downto 0);
       rsp_o      : out t_rtu_response_array(g_num_ports-1 downto 0);
       rsp_ack_i  : in  std_logic_vector(g_num_ports-1 downto 0);
+      tru_req_o  : out  t_tru_request;
+      tru_resp_i : in   t_tru_response;      
+      rtu2tru_o  : out  t_rtu2tru;
+      tru_enabled_i: in std_logic;
       wb_i       : in  t_wishbone_slave_in;
       wb_o       : out t_wishbone_slave_out);
   end component;
-  
+  component xwrsw_rtu_new
+    generic (
+      g_interface_mode                  : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity             : t_wishbone_address_granularity := BYTE;
+      g_handle_only_single_req_per_port : boolean                        := FALSE;
+      g_prio_num                        : integer;
+      g_num_ports                       : integer;
+      g_match_req_fifo_size             : integer := 32;        
+      g_port_mask_bits                  : integer);
+    port (
+      clk_sys_i   : in std_logic;
+      rst_n_i     : in std_logic;
+      req_i       : in  t_rtu_request_array(g_num_ports-1 downto 0);
+      req_full_o  : out std_logic_vector(g_num_ports-1 downto 0);
+      rsp_o       : out t_rtu_response_array(g_num_ports-1 downto 0);
+      rsp_ack_i   : in  std_logic_vector(g_num_ports-1 downto 0);
+      tru_req_o   : out  t_tru_request;
+      tru_resp_i  : in   t_tru_response;  
+      rtu2tru_o   : out  t_rtu2tru;
+      tru_enabled_i: in std_logic;
+      wb_i        : in  t_wishbone_slave_in;
+      wb_o        : out t_wishbone_slave_out
+      );
+  end component; 
+   
   component pll200MhZ is
     port
     (-- Clock in ports (62.5MhZ)

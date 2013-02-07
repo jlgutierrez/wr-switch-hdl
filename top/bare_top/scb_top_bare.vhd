@@ -12,7 +12,7 @@ use work.endpoint_pkg.all;
 use work.wrsw_txtsu_pkg.all;
 use work.wrsw_top_pkg.all;
 use work.wrsw_shared_types_pkg.all;
-
+use work.wrsw_tru_pkg.all;
 
 library UNISIM;
 use UNISIM.vcomponents.all;
@@ -21,7 +21,8 @@ entity scb_top_bare is
   generic(
     g_num_ports       : integer := 6;
     g_simulation      : boolean := false;
-    g_without_network : boolean := false
+    g_without_network : boolean := false;
+    g_with_TRU        : boolean := false
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -41,7 +42,6 @@ entity scb_top_bare is
 
     -- Muxed system clock
     clk_sys_o : out std_logic;
-
 
     -------------------------------------------------------------------------------
     -- Master wishbone bus (from the CPU bridge)
@@ -83,10 +83,20 @@ entity scb_top_bare is
     uart_rxd_i : in  std_logic;
 
     -------------------------------------------------------------------------------
-    -- Clock fanout control
+    -- Misc pins
     -------------------------------------------------------------------------------
+
+    -- GTX clock fanout enable
     clk_en_o  : out std_logic;
+
+    -- GTX clock fanout source select
     clk_sel_o : out std_logic;
+
+    -- DMTD clock divider selection (0 = 125 MHz, 1 = 62.5 MHz)
+    clk_dmtd_divsel_o: out std_logic;
+
+    -- UART source selection (FPGA/DBGU)
+    uart_sel_o: out std_logic;
 
     ---------------------------------------------------------------------------
     -- GTX ports
@@ -102,21 +112,23 @@ entity scb_top_bare is
     gpio_i : in  std_logic_vector(31 downto 0);
 
     ---------------------------------------------------------------------------
-    -- Mini-backplane I/O
+    -- I2C I/Os
+    -- mapping: 0/1 -> MiniBackplane busses 0/1
+    --          2   -> Onboard temp sensors
     ---------------------------------------------------------------------------
 
-    i2c_mbl_scl_oen_o : out std_logic_vector(1 downto 0);
-    i2c_mbl_scl_o     : out std_logic_vector(1 downto 0);
-    i2c_mbl_scl_i     : in  std_logic_vector(1 downto 0) := "11";
-    i2c_mbl_sda_oen_o : out std_logic_vector(1 downto 0);
-    i2c_mbl_sda_o     : out std_logic_vector(1 downto 0);
-    i2c_mbl_sda_i     : in  std_logic_vector(1 downto 0) := "11"
+    i2c_scl_oen_o : out std_logic_vector(2 downto 0);
+    i2c_scl_o     : out std_logic_vector(2 downto 0);
+    i2c_scl_i     : in  std_logic_vector(2 downto 0) := "111";
+    i2c_sda_oen_o : out std_logic_vector(2 downto 0);
+    i2c_sda_o     : out std_logic_vector(2 downto 0);
+    i2c_sda_i     : in  std_logic_vector(2 downto 0) := "111"
     );
 end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 9;
+  constant c_NUM_WB_SLAVES : integer := 11;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
 
@@ -134,9 +146,13 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_GPIO         : integer := 6;
   constant c_SLAVE_MBL_I2C0     : integer := 7;
   constant c_SLAVE_MBL_I2C1     : integer := 8;
+  constant c_SLAVE_SENSOR_I2C   : integer := 9;
+  constant c_SLAVE_TRU          : integer := 10;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
+      x"00057000",                      -- TRU
+      x"00056000",                      -- Sensors-I2C
       x"00055000",                      -- MBL-I2C1
       x"00054000",                      -- MBL-I2C0
       x"00053000",                      -- GPIO
@@ -150,6 +166,8 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000f0000",
@@ -230,7 +248,7 @@ architecture rtl of scb_top_bare is
   signal txtsu_timestamps_ack : std_logic_vector(c_NUM_PORTS-1 downto 0);
   signal txtsu_timestamps     : t_txtsu_timestamp_array(c_NUM_PORTS-1 downto 0);
   signal dummy                : std_logic_vector(31 downto 0);
-
+  signal tru_enabled          : std_logic;
   -----------------------------------------------------------------------------
   -- Component declarations
   -----------------------------------------------------------------------------
@@ -240,6 +258,7 @@ architecture rtl of scb_top_bare is
   signal control0                   : std_logic_vector(35 downto 0);
   signal trig0, trig1, trig2, trig3 : std_logic_vector(31 downto 0);
   signal rst_n_periph               : std_logic;
+  signal link_kill                  : std_logic_vector(c_NUM_PORTS-1 downto 0);
 
   function f_fabric_2_slv (
     in_i : t_wrf_sink_in;
@@ -264,7 +283,7 @@ architecture rtl of scb_top_bare is
     if(g_num_ports < 12) then
       return 4;
     else
-      return 8;
+      return 6;
     end if;
   end f_swc_ratio;
 
@@ -289,6 +308,17 @@ architecture rtl of scb_top_bare is
       TRIG3   : in    std_logic_vector(31 downto 0));
   end component;
 
+  signal gpio_out : std_logic_vector(31 downto 0);
+
+  -----------------------------------------------------------------------------
+  -- TRU stuff
+  -----------------------------------------------------------------------------
+  signal tru_req    : t_tru_request;
+  signal tru_resp   : t_tru_response;    
+  signal rtu2tru    : t_rtu2tru;
+  signal ep2tru     : t_ep2tru_array(g_num_ports-1 downto 0);
+  signal tru2ep     : t_tru2ep_array(g_num_ports-1 downto 0);
+  signal swc2tru    : std_logic_vector(g_num_ports-1 downto 0); -- for pausing
 
 begin
 
@@ -466,13 +496,14 @@ begin
           g_pcs_16bit           => true,
           g_rx_buffer_size      => 1024,
           g_with_rx_buffer      => true,
-          g_with_flow_control   => false,
+          g_with_flow_control   => false,-- useless: flow control commented out 
           g_with_timestamper    => true,
-          g_with_dpi_classifier => false,
-          g_with_vlans          => false,
+          g_with_dpi_classifier => true,
+          g_with_vlans          => true,
           g_with_rtu            => true,
           g_with_leds           => true,
-          g_with_dmtd           => false)
+          g_with_dmtd           => false,
+          g_with_packet_injection => true)
         port map (
           clk_ref_i  => clk_ref_i,
           clk_sys_i  => clk_sys,
@@ -512,19 +543,42 @@ begin
           rtu_rq_has_vid_o   => rtu_req(i).has_vid,
           rtu_rq_has_prio_o  => rtu_req(i).has_prio,
 
-
-
           src_o      => endpoint_src_out(i),
           src_i      => endpoint_src_in(i),
           snk_o      => endpoint_snk_out(i),
           snk_i      => endpoint_snk_in(i),
           wb_i       => cnx_endpoint_out(i),
           wb_o       => cnx_endpoint_in(i),
+
+          ----- TRU stuff ------------
+          pfilter_pclass_o     => ep2tru(i).pfilter_pclass,
+          pfilter_drop_o       => ep2tru(i).pfilter_drop,
+          pfilter_done_o       => ep2tru(i).pfilter_done,
+          fc_pause_req_i       => tru2ep(i).fc_pause_req,
+          fc_pause_delay_i     => tru2ep(i).fc_pause_delay,
+          fc_pause_ready_o     => ep2tru(i).fc_pause_ready,
+          inject_req_i         => tru2ep(i).inject_req,
+          inject_ready_o       => ep2tru(i).inject_ready,
+          inject_packet_sel_i  => tru2ep(i).inject_packet_sel,
+          inject_user_value_i  => tru2ep(i).inject_user_value,
+          link_kill_i          => tru2ep(i).link_kill, --'0' , --link_kill(i), -- to change
+          link_up_o            => ep2tru(i).status,
+          ----------------------------
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
 
       txtsu_timestamps(i).port_id(5) <= '0';
-
+      
+      ------- TEMP ---------
+--       link_kill(i)                <= not tru2ep(i).ctrlWr; 
+--       tru2ep(i).fc_pause_req      <= '0';
+--       tru2ep(i).fc_pause_delay    <= (others =>'0');
+--       tru2ep(i).inject_req        <= '0';
+--       tru2ep(i).inject_packet_sel <= (others => '0');
+--       tru2ep(i).inject_user_value <= (others => '0');
+--       ep2tru(i).rx_pck            <= '0';
+--       ep2tru(i).rx_pck_class      <= (others => '0');
+      ---------------------------
 
       clk_rx_vec(i) <= phys_i(i).rx_clk;
     end generate gen_endpoints_and_phys;
@@ -539,8 +593,13 @@ begin
     end generate gen_terminate_unused_eps;
 
 
-
-
+    gen_txtsu_debug: for i in 0 to c_NUM_PORTS-1 generate
+      TRIG0(i) <= txtsu_timestamps(i).stb;
+      trig1(i) <= txtsu_timestamps_ack(i);
+      trig2(0) <= vic_irqs(0);
+      trig2(1) <= vic_irqs(1);
+      trig2(2) <= vic_irqs(2);
+    end generate gen_txtsu_debug;
 
     U_Swcore : xswc_core
       generic map (
@@ -549,16 +608,16 @@ begin
         g_max_pck_size                    => 10 * 1024,
         g_max_oob_size                    => 3,
         g_num_ports                       => g_num_ports+1,
-        g_pck_pg_free_fifo_size           => ((65536/64)/2),
+        g_pck_pg_free_fifo_size           => 512,
         g_input_block_cannot_accept_data  => "drop_pck",
         g_output_block_per_queue_fifo_size=> 64,
         g_wb_data_width                   => 16,
         g_wb_addr_width                   => 2,
         g_wb_sel_width                    => 2,
         g_wb_ob_ignore_ack                => false,
-        g_mpm_mem_size                    => 65536,
-        g_mpm_page_size                   => 64,
-        g_mpm_ratio                       => f_swc_ratio,  --2
+        g_mpm_mem_size                    => 67584,
+        g_mpm_page_size                   => 66,
+        g_mpm_ratio                       => 6, --f_swc_ratio,  --2
         g_mpm_fifo_size                   => 8,
         g_mpm_fetch_next_pg_in_advance    => false,
         g_drop_outqueue_head_on_full      => true)
@@ -577,23 +636,21 @@ begin
         );
 
     -- NIC sink
-    TRIG0 <= f_fabric_2_slv(endpoint_snk_in(1), endpoint_snk_out(1));
-    -- NIC source
-    TRIG1 <= f_fabric_2_slv(endpoint_src_out(1), endpoint_src_in(1));
-    -- NIC sink
-    TRIG2 <= f_fabric_2_slv(endpoint_snk_in(2), endpoint_snk_out(2));
-    -- NIC source
-    TRIG3 <= f_fabric_2_slv(endpoint_src_out(2), endpoint_src_in(2));
+    --TRIG0 <= f_fabric_2_slv(endpoint_snk_in(1), endpoint_snk_out(1));
+    ---- NIC source
+    --TRIG1 <= f_fabric_2_slv(endpoint_src_out(1), endpoint_src_in(1));
+    ---- NIC sink
+    --TRIG2 <= f_fabric_2_slv(endpoint_snk_in(2), endpoint_snk_out(2));
+    ---- NIC source
+    --TRIG3 <= f_fabric_2_slv(endpoint_src_out(2), endpoint_src_in(2));
     --TRIG3(31) <= rst_n_periph;
 
     --TRIG2 <= rtu_rsp(c_NUM_PORTS).port_mask(31 downto 0);
     --TRIG3(0) <= rtu_rsp(c_NUM_PORTS).valid;
     --TRIG3(1) <= rtu_rsp_ack(c_NUM_PORTS);
 
-
-
-
-    U_RTU : xwrsw_rtu
+   U_RTU : xwrsw_rtu_new
+--   U_RTU : xwrsw_rtu
       generic map (
         g_prio_num                        => 8,
         g_interface_mode                  => PIPELINED,
@@ -603,13 +660,55 @@ begin
         g_handle_only_single_req_per_port => true)
       port map (
         clk_sys_i  => clk_sys,
-        rst_n_i    => rst_n_periph,
+        rst_n_i    => rst_n_sys,--rst_n_periph,
         req_i      => rtu_req(g_num_ports-1 downto 0),
         req_full_o => rtu_full(g_num_ports-1 downto 0),
         rsp_o      => rtu_rsp(g_num_ports-1 downto 0),
         rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
+        ------ new TRU stuff ----------
+        tru_req_o  => tru_req,
+        tru_resp_i => tru_resp,
+        rtu2tru_o  => rtu2tru,
+        tru_enabled_i => tru_enabled,
+        -------------------------------
         wb_i       => cnx_master_out(c_SLAVE_RTU),
         wb_o       => cnx_master_in(c_SLAVE_RTU));
+
+    gen_TRU : if(g_with_TRU = true) generate
+      U_TRU: xwrsw_tru
+        generic map(     
+          g_num_ports           => g_num_ports,
+          g_tru_subentry_num    => 8,
+          g_patternID_width     => 4,
+          g_pattern_width       => g_num_ports,
+          g_stableUP_treshold   => 100,
+          g_pclass_number       => 8,
+          g_mt_trans_max_fr_cnt => 1000,
+          g_prio_width          => 3,
+          g_pattern_mode_width  => 4,
+          g_tru_entry_num       => 256,
+          g_interface_mode      => PIPELINED,
+          g_address_granularity => BYTE 
+         )
+        port map(
+          clk_i               => clk_sys,
+          rst_n_i             => rst_n_periph,
+          req_i               => tru_req,
+          resp_o              => tru_resp,
+          rtu_i               => rtu2tru, 
+          ep_i                => ep2tru,
+          ep_o                => tru2ep,
+          swc_o               => swc2tru,
+          enabled_o           => tru_enabled,
+          wb_i                => cnx_master_out(c_SLAVE_TRU),
+          wb_o                => cnx_master_in(c_SLAVE_TRU));
+    end generate gen_TRU;    
+
+    gen_no_TRU : if(g_with_TRU = false) generate
+      swc2tru                        <= (others =>'0');  
+      tru_enabled                    <= '0';
+      cnx_master_in(c_SLAVE_TRU).ack <= '1';
+    end generate gen_no_TRU; 
 
   end generate gen_network_stuff;
 
@@ -652,8 +751,13 @@ begin
       slave_i    => cnx_master_out(c_SLAVE_GPIO),
       slave_o    => cnx_master_in(c_SLAVE_GPIO),
       gpio_b     => dummy,
-      gpio_out_o => gpio_o,
+      gpio_out_o => gpio_out,
       gpio_in_i  => gpio_i);
+
+  uart_sel_o <= gpio_out(31);
+
+  
+  gpio_o <= gpio_out;
 
   U_MiniBackplane_I2C0 : xwb_i2c_master
     generic map (
@@ -665,12 +769,12 @@ begin
       slave_i      => cnx_master_out(c_SLAVE_MBL_I2C0),
       slave_o      => cnx_master_in(c_SLAVE_MBL_I2C0),
       desc_o       => open,
-      scl_pad_i    => i2c_mbl_scl_i(0),
-      scl_pad_o    => i2c_mbl_scl_o(0),
-      scl_padoen_o => i2c_mbl_scl_oen_o(0),
-      sda_pad_i    => i2c_mbl_sda_i(0),
-      sda_pad_o    => i2c_mbl_sda_o(0),
-      sda_padoen_o => i2c_mbl_sda_oen_o(0));
+      scl_pad_i    => i2c_scl_i(0),
+      scl_pad_o    => i2c_scl_o(0),
+      scl_padoen_o => i2c_scl_oen_o(0),
+      sda_pad_i    => i2c_sda_i(0),
+      sda_pad_o    => i2c_sda_o(0),
+      sda_padoen_o => i2c_sda_oen_o(0));
 
   U_MiniBackplane_I2C1 : xwb_i2c_master
     generic map (
@@ -682,12 +786,29 @@ begin
       slave_i      => cnx_master_out(c_SLAVE_MBL_I2C1),
       slave_o      => cnx_master_in(c_SLAVE_MBL_I2C1),
       desc_o       => open,
-      scl_pad_i    => i2c_mbl_scl_i(1),
-      scl_pad_o    => i2c_mbl_scl_o(1),
-      scl_padoen_o => i2c_mbl_scl_oen_o(1),
-      sda_pad_i    => i2c_mbl_sda_i(1),
-      sda_pad_o    => i2c_mbl_sda_o(1),
-      sda_padoen_o => i2c_mbl_sda_oen_o(1));
+      scl_pad_i    => i2c_scl_i(1),
+      scl_pad_o    => i2c_scl_o(1),
+      scl_padoen_o => i2c_scl_oen_o(1),
+      sda_pad_i    => i2c_sda_i(1),
+      sda_pad_o    => i2c_sda_o(1),
+      sda_padoen_o => i2c_sda_oen_o(1));
+
+  U_Sensors_I2C : xwb_i2c_master
+    generic map (
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE)
+    port map (
+      clk_sys_i    => clk_sys,
+      rst_n_i      => rst_n_periph,
+      slave_i      => cnx_master_out(c_SLAVE_SENSOR_I2C),
+      slave_o      => cnx_master_in(c_SLAVE_SENSOR_I2C),
+      desc_o       => open,
+      scl_pad_i    => i2c_scl_i(2),
+      scl_pad_o    => i2c_scl_o(2),
+      scl_padoen_o => i2c_scl_oen_o(2),
+      sda_pad_i    => i2c_sda_i(2),
+      sda_pad_o    => i2c_sda_o(2),
+      sda_padoen_o => i2c_sda_oen_o(2));
 
   -----------------------------------------------------------------------------
   -- Interrupt assignment
@@ -704,6 +825,7 @@ begin
 
   clk_en_o  <= '0';
   clk_sel_o <= '0';
+  clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
   clk_sys_o <= clk_sys;
   
 end rtl;

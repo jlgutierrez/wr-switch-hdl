@@ -99,6 +99,11 @@ entity scb_top_synthesis is
     clk_en_o  : out std_logic;
     clk_sel_o : out std_logic;
 
+    -- DMTD clock divider selection (0 = 125 MHz, 1 = 62.5 MHz)
+    clk_dmtd_divsel_o : out std_logic;
+
+    -- UART source selection (FPGA/DBGU)
+    uart_sel_o : out std_logic;
 
     ---------------------------------------------------------------------------
     -- GTX ports
@@ -138,9 +143,11 @@ entity scb_top_synthesis is
     led_act_o : out std_logic_vector(7 downto 0);
 
     mbl_scl_b : inout std_logic_vector(1 downto 0);
-    mbl_sda_b : inout std_logic_vector(1 downto 0)
+    mbl_sda_b : inout std_logic_vector(1 downto 0);
 
-    );
+    sensors_scl_b: inout std_logic;
+    sensors_sda_b: inout std_logic
+  );
 
 end scb_top_synthesis;
 
@@ -210,16 +217,19 @@ architecture Behavioral of scb_top_synthesis is
   signal top_master_in, bridge_master_in   : t_wishbone_master_in;
   signal top_master_out, bridge_master_out : t_wishbone_master_out;
 
-  signal i2c_mbl_scl_oen : std_logic_vector(1 downto 0);
-  signal i2c_mbl_scl_out : std_logic_vector(1 downto 0);
-  signal i2c_mbl_sda_oen : std_logic_vector(1 downto 0);
-  signal i2c_mbl_sda_out : std_logic_vector(1 downto 0);
+  signal i2c_scl_oen : std_logic_vector(2 downto 0);
+  signal i2c_scl_out : std_logic_vector(2 downto 0);
+  signal i2c_sda_oen : std_logic_vector(2 downto 0);
+  signal i2c_sda_out : std_logic_vector(2 downto 0);
+  signal i2c_sda_in : std_logic_vector(2 downto 0);
+  signal i2c_scl_in : std_logic_vector(2 downto 0);
 
   component scb_top_bare
     generic (
       g_num_ports       : integer;
       g_simulation      : boolean;
-      g_without_network : boolean);
+      g_without_network : boolean;
+      g_with_TRU        : boolean);
     port (
       sys_rst_n_i         : in  std_logic;
       clk_startup_i       : in  std_logic;
@@ -249,18 +259,20 @@ architecture Behavioral of scb_top_synthesis is
       uart_rxd_i          : in  std_logic;
       clk_en_o            : out std_logic;
       clk_sel_o           : out std_logic;
+      uart_sel_o          : out std_logic;
+      clk_dmtd_divsel_o   : out std_logic;
       phys_o              : out t_phyif_output_array(g_num_ports-1 downto 0);
       phys_i              : in  t_phyif_input_array(g_num_ports-1 downto 0);
       led_link_o          : out std_logic_vector(g_num_ports-1 downto 0);
       led_act_o           : out std_logic_vector(g_num_ports-1 downto 0);
       gpio_o              : out std_logic_vector(31 downto 0);
       gpio_i              : in  std_logic_vector(31 downto 0);
-      i2c_mbl_scl_oen_o   : out std_logic_vector(1 downto 0);
-      i2c_mbl_scl_o       : out std_logic_vector(1 downto 0);
-      i2c_mbl_scl_i       : in  std_logic_vector(1 downto 0) := "11";
-      i2c_mbl_sda_oen_o   : out std_logic_vector(1 downto 0);
-      i2c_mbl_sda_o       : out std_logic_vector(1 downto 0);
-      i2c_mbl_sda_i       : in  std_logic_vector(1 downto 0) := "11");
+      i2c_scl_oen_o   : out std_logic_vector(2 downto 0);
+      i2c_scl_o       : out std_logic_vector(2 downto 0);
+      i2c_scl_i       : in  std_logic_vector(2 downto 0) := "111";
+      i2c_sda_oen_o   : out std_logic_vector(2 downto 0);
+      i2c_sda_o       : out std_logic_vector(2 downto 0);
+      i2c_sda_i       : in  std_logic_vector(2 downto 0) := "111");
   end component;
 
   component chipscope_icon
@@ -285,10 +297,6 @@ architecture Behavioral of scb_top_synthesis is
   signal TRIG3   : std_logic_vector(31 downto 0);
 begin
 
-  gen_i2c_tribufs : for i in 0 to 1 generate
-    mbl_scl_b(i) <= i2c_mbl_scl_out(i) when i2c_mbl_scl_oen(i) = '0' else 'Z';
-    mbl_sda_b(i) <= i2c_mbl_sda_out(i) when i2c_mbl_sda_oen(i) = '0' else 'Z';
-  end generate gen_i2c_tribufs;
 
   --chipscope_icon_1 : chipscope_icon
   --  port map (
@@ -490,7 +498,7 @@ begin
 
   clk_gtx(1 downto 0) <= (others => clk_gtx16_19);
   clk_gtx(5 downto 2) <= (others => clk_gtx12_15);
-  clk_gtx(7 downto 6)   <= (others => clk_gtx8_11);
+  clk_gtx(7 downto 6) <= (others => clk_gtx8_11);
   --clk_gtx(11 downto 8)  <= (others => clk_gtx8_11);
   --clk_gtx(14 downto 12) <= (others => clk_gtx12_15);
   --clk_gtx(17 downto 16) <= (others => clk_gtx16_19);
@@ -542,7 +550,8 @@ begin
     generic map (
       g_num_ports       => c_NUM_PORTS,
       g_simulation      => g_simulation,
-      g_without_network => false)
+      g_without_network => false,
+      g_with_TRU        => true)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_sys_startup,
@@ -572,17 +581,34 @@ begin
       uart_rxd_i          => uart_rxd_i,
       clk_en_o            => clk_en_o,
       clk_sel_o           => clk_sel_o,
+      uart_sel_o          => uart_sel_o,
+      clk_dmtd_divsel_o   => clk_dmtd_divsel_o,
       gpio_i              => x"00000000",
       phys_o              => to_phys(c_NUM_PORTS-1 downto 0),
       phys_i              => from_phys(c_NUM_PORTS-1 downto 0),
 --      led_link_o          => led_link_o,
       led_act_o           => led_act_o(c_NUM_PORTS-1 downto 0),
-      i2c_mbl_scl_oen_o   => i2c_mbl_scl_oen,
-      i2c_mbl_scl_o       => i2c_mbl_scl_out,
-      i2c_mbl_scl_i       => mbl_scl_b,
-      i2c_mbl_sda_oen_o   => i2c_mbl_sda_oen,
-      i2c_mbl_sda_o       => i2c_mbl_sda_out,
-      i2c_mbl_sda_i       => mbl_sda_b);
+      i2c_scl_oen_o   => i2c_scl_oen,
+      i2c_scl_o       => i2c_scl_out,
+      i2c_scl_i       => i2c_scl_in,
+      i2c_sda_oen_o   => i2c_sda_oen,
+      i2c_sda_o       => i2c_sda_out,
+      i2c_sda_i       => i2c_sda_in);
+
+  i2c_scl_in(1 downto 0) <= mbl_scl_b(1 downto 0);
+  i2c_sda_in(1 downto 0) <= mbl_sda_b(1 downto 0);
+
+  i2c_scl_in(2) <= sensors_scl_b;
+  i2c_sda_in(2) <= sensors_sda_b;
+  
+  gen_i2c_tribufs : for i in 0 to 1 generate
+    mbl_scl_b(i) <= i2c_scl_out(i) when i2c_scl_oen(i) = '0' else 'Z';
+    mbl_sda_b(i) <= i2c_sda_out(i) when i2c_sda_oen(i) = '0' else 'Z';
+  end generate gen_i2c_tribufs;
+
+  sensors_scl_b <= i2c_scl_out(2) when i2c_scl_oen(2) = '0' else 'Z';
+  sensors_sda_b <= i2c_sda_out(2) when i2c_sda_oen(2) = '0' else 'Z';
+
 
 end Behavioral;
 

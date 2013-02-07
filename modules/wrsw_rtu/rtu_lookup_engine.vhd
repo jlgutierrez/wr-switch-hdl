@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-22
--- Last update: 2012-04-26
+-- Last update: 2012-06-28
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -43,86 +43,86 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 
-use work.wrsw_rtu_private_pkg.all;
+use work.rtu_private_pkg.all;
 use work.genram_pkg.all;
 
 
 entity rtu_lookup_engine is
   generic(
     g_hash_size : integer := 11);
-    port(
+  port(
 
-      -----------------------------------------------------------------
-      --| General IOs
-      -----------------------------------------------------------------
-      clk_match_i : in std_logic;
-      clk_sys_i   : in std_logic;
+    -----------------------------------------------------------------
+    --| General IOs
+    -----------------------------------------------------------------
+    clk_match_i : in std_logic;
+    clk_sys_i   : in std_logic;
 
-      -- reset (synchronous, active low)
-      rst_n_i : in std_logic;
+    -- reset (synchronous, active low)
+    rst_n_i : in std_logic;
 
-      -------------------------------------------------------------------------
-      -- MFIFO I/F
-      -------------------------------------------------------------------------
+    -------------------------------------------------------------------------
+    -- MFIFO I/F
+    -------------------------------------------------------------------------
 
-      mfifo_rd_req_o   : out std_logic;
-      mfifo_rd_empty_i : in  std_logic;
-      mfifo_ad_sel_i   : in  std_logic;
-      mfifo_ad_val_i   : in  std_logic_vector(31 downto 0);
-      mfifo_trigger_i  : in  std_logic;
-      mfifo_busy_o     : out std_logic;
+    mfifo_rd_req_o   : out std_logic;
+    mfifo_rd_empty_i : in  std_logic;
+    mfifo_ad_sel_i   : in  std_logic;
+    mfifo_ad_val_i   : in  std_logic_vector(31 downto 0);
+    mfifo_trigger_i  : in  std_logic;
+    mfifo_busy_o     : out std_logic;
 
-      -------------------------------------------------------------------------------
-      -- read ctrl/search
-      -------------------------------------------------------------------------------
-      -- high pulse - start searching
-      start_i : in  std_logic;
-      -- high pulse acknowledges that the response data was read
-      ack_i   : in  std_logic;
-      -- '1' - entry foud, '0'- not found
-      found_o : out std_logic;
-      -- indicates the address of entry (address read from hash table)
-      hash_i  : in  std_logic_vector(c_wrsw_hash_width-1 downto 0);
-      -- mac to be found
-      mac_i   : in  std_logic_vector(c_wrsw_mac_addr_width -1 downto 0);
-      -- fid to be found
-      fid_i   : in  std_logic_vector(c_wrsw_fid_width - 1 downto 0);
-      -- indicates that the search has been finished (whether the entry was found or not)
-      drdy_o  : out std_logic;
+    -------------------------------------------------------------------------------
+    -- read ctrl/search
+    -------------------------------------------------------------------------------
+    -- high pulse - start searching
+    start_i : in  std_logic;
+    -- high pulse acknowledges that the response data was read
+    ack_i   : in  std_logic;
+    -- '1' - entry foud, '0'- not found
+    found_o : out std_logic;
+    -- indicates the address of entry (address read from hash table)
+    hash_i  : in  std_logic_vector(c_wrsw_hash_width-1 downto 0);
+    -- mac to be found
+    mac_i   : in  std_logic_vector(c_wrsw_mac_addr_width -1 downto 0);
+    -- fid to be found
+    fid_i   : in  std_logic_vector(c_wrsw_fid_width - 1 downto 0);
+    -- indicates that the search has been finished (whether the entry was found or not)
+    drdy_o  : out std_logic;
 
-      -------------------------------------------------------------------------------
-      -- read data
-      -------------------------------------------------------------------------------  
+    -------------------------------------------------------------------------------
+    -- read data
+    -------------------------------------------------------------------------------  
 
-      entry_o : out t_rtu_htab_entry
+    entry_o : out t_rtu_htab_entry
 
-      );
+    );
 
 end rtu_lookup_engine;
 
 architecture behavioral of rtu_lookup_engine is
 
-type t_slv32_array is array(integer range<>) of std_logic_vector(31 downto 0);
-type t_lookup_state is (IDLE, NEXT_BUCKET, OUTPUT_RESULT);
-type t_mfifo_state is (EMPTY, READ_1ST_WORD, WAIT_LOOKUP_IDLE, UPDATE_MEM);
+  type t_slv32_array is array(integer range<>) of std_logic_vector(31 downto 0);
+  type t_lookup_state is (IDLE, NEXT_BUCKET, OUTPUT_RESULT);
+  type t_mfifo_state is (EMPTY, READ_1ST_WORD, WAIT_LOOKUP_IDLE, UPDATE_MEM);
 
-signal cur_entry   : t_rtu_htab_entry;
-signal mem_out     : t_slv32_array(4 downto 0);
-signal mem_host_we : std_logic_vector(4 downto 0);
-signal mem_addr    : std_logic_vector(c_wrsw_hash_width-1 + 2 downto 0);
+  signal cur_entry   : t_rtu_htab_entry;
+  signal mem_out     : t_slv32_array(4 downto 0);
+  signal mem_host_we : std_logic_vector(4 downto 0);
+  signal mem_addr    : std_logic_vector(c_wrsw_hash_width-1 + 2 downto 0);
 
-signal bucket_entry    : unsigned(1 downto 0);
-signal bucket_entry_d0 : unsigned(1 downto 0);
-signal lookup_state           : t_lookup_state;
-signal hash_reg        : std_logic_vector(c_wrsw_hash_width-1 downto 0);
+  signal bucket_entry    : unsigned(1 downto 0);
+  signal bucket_entry_d0 : unsigned(1 downto 0);
+  signal lookup_state    : t_lookup_state;
+  signal hash_reg        : std_logic_vector(c_wrsw_hash_width-1 downto 0);
 
 
-signal host_waddr : std_logic_vector(c_wrsw_hash_width+4 downto 0);
-signal host_wdata : std_logic_vector(31 downto 0);
-signal host_we : std_logic;
+  signal host_waddr : std_logic_vector(c_wrsw_hash_width+4 downto 0);
+  signal host_wdata : std_logic_vector(31 downto 0);
+  signal host_we    : std_logic;
 
-signal mfifo_state : t_mfifo_state;
-signal mfifo_update_busy : std_logic;
+  signal mfifo_state       : t_mfifo_state;
+  signal mfifo_update_busy : std_logic;
 
 
 begin
@@ -169,24 +169,34 @@ begin
 
   end generate gen_ram_blocks;
 
+
+  p_register_hash : process(clk_match_i)
+  begin
+    if rising_edge(clk_match_i) then
+      if(start_i = '1' and lookup_state = IDLE) then
+        hash_reg <= hash_i;
+      end if;
+    end if;
+  end process;
+
+
   p_gen_mem_addr : process(bucket_entry, hash_i, lookup_state, start_i)
   begin
     if(start_i = '1' and lookup_state = IDLE) then
       mem_addr <= hash_i & "00";
-      hash_reg <= hash_i;
     else
       mem_addr <= hash_reg &std_logic_vector(bucket_entry);
     end if;
   end process;
 
-  cur_entry              <= f_unmarshall_htab_entry(mem_out(0), mem_out(1), mem_out(2), mem_out(3));
+  cur_entry              <= f_unmarshall_htab_entry(mem_out(0), mem_out(1), mem_out(2), mem_out(3), mem_out(4));
   cur_entry.bucket_entry <= std_logic_vector(bucket_entry_d0);
 
   p_match : process(clk_match_i)
   begin
     if rising_edge(clk_match_i) then
       if(rst_n_i = '0') then
-        lookup_state           <= IDLE;
+        lookup_state    <= IDLE;
         bucket_entry    <= (others => '0');
         bucket_entry_d0 <= (others => '0');
         drdy_o          <= '0';
@@ -198,9 +208,9 @@ begin
         case lookup_state is
           when IDLE =>
 
-              
+            
             if(start_i = '1' and mfifo_update_busy = '0') then
-              lookup_state        <= NEXT_BUCKET;
+              lookup_state <= NEXT_BUCKET;
               bucket_entry <= bucket_entry +1;
             else
               bucket_entry <= (others => '0');
@@ -211,14 +221,14 @@ begin
 
             -- got a match?
             if(cur_entry.valid = '1' and cur_entry.fid = fid_i and cur_entry.mac = mac_i) then
-              drdy_o  <= '1';
-              found_o <= '1';
-              entry_o <= cur_entry;
-              lookup_state   <= OUTPUT_RESULT;
+              drdy_o       <= '1';
+              found_o      <= '1';
+              entry_o      <= cur_entry;
+              lookup_state <= OUTPUT_RESULT;
             elsif(bucket_entry = "00" or cur_entry.valid = '0') then
-              drdy_o  <= '1';
-              found_o <= '0';
-              lookup_state   <= OUTPUT_RESULT;
+              drdy_o       <= '1';
+              found_o      <= '0';
+              lookup_state <= OUTPUT_RESULT;
             end if;
 
             bucket_entry <= bucket_entry + 1;
@@ -226,76 +236,76 @@ begin
           when OUTPUT_RESULT =>
             bucket_entry <= (others => '0');
             if(ack_i = '1') then
-              lookup_state   <= IDLE;
-              found_o <= '0';
-              drdy_o  <= '0';
+              lookup_state <= IDLE;
+              found_o      <= '0';
+              drdy_o       <= '0';
             end if;
         end case;
       end if;
     end if;
   end process;
 
-  p_mfifo_update: process(clk_sys_i)
-    begin
-      if rising_edge(clk_sys_i) then
-        if rst_n_i ='0' then
-          host_wdata <= (others => '0');
-          host_waddr <= (others => '0');
-          host_we <= '0';
-          mfifo_state <= EMPTY;
-          mfifo_update_busy <= '0';
-          mfifo_rd_req_o <= '0';
-          else
-            case mfifo_state is
-              when EMPTY =>
-                host_we <= '0';
+  p_mfifo_update : process(clk_sys_i)
+  begin
+    if rising_edge(clk_sys_i) then
+      if rst_n_i = '0' then
+        host_wdata        <= (others => '0');
+        host_waddr        <= (others => '0');
+        host_we           <= '0';
+        mfifo_state       <= EMPTY;
+        mfifo_update_busy <= '0';
+        mfifo_rd_req_o    <= '0';
+      else
+        case mfifo_state is
+          when EMPTY =>
+            host_we <= '0';
 
-                if(mfifo_rd_empty_i= '0' and mfifo_trigger_i = '1') then
-                  if(lookup_state /= IDLE) then
-                    mfifo_state <= WAIT_LOOKUP_IDLE;
-                  else
-                    mfifo_rd_req_o <= '1';
-                    mfifo_state <= READ_1ST_WORD;
-                    mfifo_update_busy <= '1';
-                  end if;
-                end if;
+            if(mfifo_rd_empty_i = '0' and mfifo_trigger_i = '1') then
+              if(lookup_state /= IDLE) then
+                mfifo_state <= WAIT_LOOKUP_IDLE;
+              else
+                mfifo_rd_req_o    <= '1';
+                mfifo_state       <= READ_1ST_WORD;
+                mfifo_update_busy <= '1';
+              end if;
+            end if;
 
-              when WAIT_LOOKUP_IDLE =>
-                if(lookup_state = IDLE) then
-                  mfifo_rd_req_o <= '1';
-                  mfifo_state <= READ_1ST_WORD;
-                  mfifo_update_busy <= '1';
-                end if;
+          when WAIT_LOOKUP_IDLE =>
+            if(lookup_state = IDLE) then
+              mfifo_rd_req_o    <= '1';
+              mfifo_state       <= READ_1ST_WORD;
+              mfifo_update_busy <= '1';
+            end if;
 
-              when READ_1ST_WORD =>
-                mfifo_state <= UPDATE_MEM;
-                
-              when UPDATE_MEM =>
-                if(mfifo_rd_empty_i = '1') then
-                  mfifo_state <= EMPTY;
-                  mfifo_rd_req_o <= '0';
-                  mfifo_update_busy <= '0';
-                end if;
-
-                if(mfifo_ad_sel_i = '1') then
-                  host_waddr <= mfifo_ad_val_i (host_waddr'left downto 0);
-                  host_we <= '0';
-                else
-                  if(host_we = '1') then
-                    host_waddr <= std_logic_vector(unsigned(host_waddr) + 1);
-                  end if;
-
-                  host_wdata <= mfifo_ad_val_i;
-                  host_we <= '1';
-                end if;
-                
-            end case;
+          when READ_1ST_WORD =>
+            mfifo_state <= UPDATE_MEM;
             
-        end if;
-      end if;
-    end process;
+          when UPDATE_MEM =>
+            if(mfifo_rd_empty_i = '1') then
+              mfifo_state       <= EMPTY;
+              mfifo_rd_req_o    <= '0';
+              mfifo_update_busy <= '0';
+            end if;
 
-      
+            if(mfifo_ad_sel_i = '1') then
+              host_waddr <= mfifo_ad_val_i (host_waddr'left downto 0);
+              host_we    <= '0';
+            else
+              if(host_we = '1') then
+                host_waddr <= std_logic_vector(unsigned(host_waddr) + 1);
+              end if;
+
+              host_wdata <= mfifo_ad_val_i;
+              host_we    <= '1';
+            end if;
+            
+        end case;
+        
+      end if;
+    end if;
+  end process;
+
+
   mfifo_busy_o <= mfifo_update_busy;
   
 end architecture;

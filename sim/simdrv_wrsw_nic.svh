@@ -199,6 +199,7 @@ class CSimDrv_NIC;
       desc.pad_e   = (length < 59) ? 1: 0;
       desc.ts_e    = ts_e;
       desc.ts_id   = (ts_e ? tx_oob_fid ++ : 0);
+      
       desc.dpm 	   = 32'hffffffff;
       write_tx_desc(idx, desc);
    endtask // automatic
@@ -273,7 +274,7 @@ class CSimDrv_NIC;
       desc.pad_e   = (desc.length < 60 ? 1 : 0);
       desc.ts_e    = (pkt.oob == TX_FID ? 1: 0);
       desc.dpm 	   = 32'hffffffff;
-      desc.ts_id   = 0;
+      desc.ts_id   = tx_oob_fid++;
       desc.ready   = 1;
       desc.error   = 0;
       

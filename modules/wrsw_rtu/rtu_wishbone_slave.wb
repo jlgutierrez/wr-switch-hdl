@@ -174,6 +174,88 @@ peripheral {
       };
    };
 
+   reg {
+      name = "VLAN Table Register 1";
+      prefix = "VTR1";
+      
+      field {
+         prefix = "VID";
+         name = "VLAN ID";
+         size = 12;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+     };
+
+      field {
+         prefix = "FID";
+         name = "Filtering Database ID";
+         description = "Assigns the VID to a particular filtering database";
+         size = 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         prefix = "DROP";
+         name = "Drop";
+         description = "1: drop all packets belonging to this VLAN";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         prefix = "HAS_PRIO";
+         name = "Has user-defined priority";
+         description = "1: VLAN has user-defined priority";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         prefix = "PRIO_OVERRIDE";
+         name = "Override endpoint-assigned priority";
+         description = "1: always take the priority from the PRIO field, regardless of the priority value assigned at the endpoint. ";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         prefix = "PRIO";
+         name = "Priority value";
+         type = SLV;
+         size = 3;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+
+      field {
+         prefix = "UPDATE";
+         name = "Force VLAN table entry update";
+         description = "write 1: flush VTR1 and VTR2 registers to VLAN table entry designated in VTR1.VID";
+         type = MONOSTABLE;
+      }
+   };
+
+   reg {
+      prefix = "VTR2";
+      name = "VLAN Table Register 2";
+      
+      field {
+         name = "Port Mask";
+         prefix = "PORT_MASK";
+         type = SLV;
+         size = 32;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+
+   
 	irq {
 		 name = "UFIFO Not Empty IRQ";
 		 description = "Interrupt active when there are some requests in UFIFO.";
@@ -255,8 +337,8 @@ peripheral {
 				name = "Port ID";
 				description = "Identifier of RTU port to which came the request.";
 				prefix = "PID";
-				size = 4;
-				align = 4;
+				size = 8;
+				align = 8;
 				type = SLV;
 		 };
 
@@ -280,6 +362,7 @@ peripheral {
 		 };
 	};
 
+
 	ram {
 		 name = "Aging bitmap for main hashtable";
 		 description = "Each bit in this memory reflects the state of corresponding entry in main hashtable:\
@@ -294,21 +377,6 @@ peripheral {
 		 access_bus = READ_WRITE;
 		 
 		 --[changed 6/10/2010] clock = "clk_match_i";
-		 --clock = "clk_match_i"; --async?
-
-	};
-
-	ram {
-		 name = "VLAN table (VLAN_TAB)";
-		 description = "It stores VLAN-related information identified by VLAN ID (VID)";
-		 prefix = "VLAN_TAB";
-
-		 width = 32;
-		 size = 4096 ; -- 4096 entries as defined in 802.1Q-2005, page 12
-		 access_dev = READ_ONLY;
-		 access_bus = READ_WRITE;
-		 
-		 -- --[changed 6/10/2010]  clock = "clk_match_i";
 		 --clock = "clk_match_i"; --async?
 
 	};

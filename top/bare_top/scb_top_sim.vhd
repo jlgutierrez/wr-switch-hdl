@@ -108,17 +108,18 @@ architecture rtl of scb_top_sim is
   signal phys_in    : t_phyif_input_array(g_num_ports-1 downto 0);
   signal cpu_irq_n  : std_logic;
 
-  signal i2c_mbl_scl_oen : std_logic_vector(1 downto 0);
-  signal i2c_mbl_scl_out : std_logic_vector(1 downto 0);
-  signal i2c_mbl_sda_oen : std_logic_vector(1 downto 0);
-  signal i2c_mbl_sda_out : std_logic_vector(1 downto 0);
-
+  signal i2c_scl_oen : std_logic_vector(2 downto 0);  
+  signal i2c_scl_out : std_logic_vector(2 downto 0);
+  signal i2c_scl_in : std_logic_vector(2 downto 0);
+  signal i2c_sda_oen : std_logic_vector(2 downto 0);
+  signal i2c_sda_out : std_logic_vector(2 downto 0);
+  signal i2c_sda_in : std_logic_vector(2 downto 0);
   
 begin  -- rtl
 
   gen_i2c_tribufs : for i in 0 to 1 generate
-    mbl_scl_b(i) <= i2c_mbl_scl_out(i) when i2c_mbl_scl_oen(i) = '0' else 'Z';
-    mbl_sda_b(i) <= i2c_mbl_sda_out(i) when i2c_mbl_sda_oen(i) = '0' else 'Z';
+    mbl_scl_b(i) <= i2c_scl_out(i) when i2c_scl_oen(i) = '0' else 'Z';
+    mbl_sda_b(i) <= i2c_sda_out(i) when i2c_sda_oen(i) = '0' else 'Z';
   end generate gen_i2c_tribufs;
 
   cpu_wb_in.adr <= wb_adr_i;
@@ -136,7 +137,8 @@ begin  -- rtl
     generic map (
       g_num_ports  => g_num_ports,
       g_simulation => true,
-      g_without_network => false)
+      g_without_network => false,
+      g_with_TRU        => true)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_startup_i,
@@ -172,12 +174,12 @@ begin  -- rtl
       led_act_o           => led_act_o,
       gpio_o              => open,
       gpio_i              => (others => '0'),
-      i2c_mbl_scl_oen_o   => i2c_mbl_scl_oen,
-      i2c_mbl_scl_o       => i2c_mbl_scl_out,
-      i2c_mbl_scl_i       => mbl_scl_b,
-      i2c_mbl_sda_oen_o   => i2c_mbl_sda_oen,
-      i2c_mbl_sda_o       => i2c_mbl_sda_out,
-      i2c_mbl_sda_i       => mbl_sda_b
+      i2c_scl_oen_o   => i2c_scl_oen,
+      i2c_scl_o       => i2c_scl_out,
+      i2c_scl_i       => i2c_scl_in,
+      i2c_sda_oen_o   => i2c_sda_oen,
+      i2c_sda_o       => i2c_sda_out,
+      i2c_sda_i       => i2c_sda_in
       );
 
   gen_phys : for i in 0 to g_num_ports-1 generate
