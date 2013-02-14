@@ -10,17 +10,17 @@ use work.genram_pkg.all;                -- for f_log2_size
 entity mpm_read_path is
   
   generic (
-    g_data_width           : integer;
-    g_ratio                : integer;
-    g_page_size            : integer;
-    g_num_pages            : integer;
-    g_num_ports            : integer;
-    g_fifo_size            : integer;
-    g_page_addr_width      : integer;
-    g_partial_select_width : integer;
-    g_max_oob_size         : integer;
-    g_max_packet_size      : integer;
-    g_ll_data_width        : integer
+    g_data_width           : integer := 6;
+    g_ratio                : integer := 6;
+    g_page_size            : integer := 66;
+    g_num_pages            : integer := 1024;
+    g_num_ports            : integer := 19;
+    g_fifo_size            : integer := 8;
+    g_page_addr_width      : integer := 10;
+    g_partial_select_width : integer := 2;
+    g_max_oob_size         : integer := 3;
+    g_max_packet_size      : integer := 10000;
+    g_ll_data_width        : integer := 15
     );
 
   port(
@@ -216,19 +216,26 @@ begin  -- rtl
   end generate gen_serialize_ios;
 
 
-
   -- The actual round-robin arbiter for muxing memory accesses.
-  p_mem_arbiter : process(clk_core_i)
-  begin
-    if rising_edge(clk_core_i) then
-      if rst_n_core_i = '0' then
-        mem_grant <= (others => '0');
-      else
-        f_rr_arbitrate(mem_req, mem_grant, mem_grant);
-      end if;
-    end if;
-  end process;
+  --p_mem_arbiter : process(clk_core_i)
+  --begin
+  --  if rising_edge(clk_core_i) then
+  --    if rst_n_core_i = '0' then
+  --      mem_grant <= (others => '0');
+  --    else
+  --      f_rr_arbitrate(mem_req, mem_grant, mem_grant);
+  --    end if;
+  --  end if;
+  --end process;
 
+  U_Mem_Arbiter: gc_rr_arbiter
+    generic map (
+      g_size => g_num_ports)
+    port map (
+      clk_i   => clk_core_i,
+      rst_n_i => rst_n_core_i,
+      req_i   => mem_req,
+      grant_o => mem_grant);
 
   gen_mux_inputs : for i in 0 to g_num_ports-1 generate
     rd_mux_a_in(c_fbm_addr_width * (i + 1) - 1 downto c_fbm_addr_width * i) <= core(i).fbm_addr;
@@ -293,23 +300,30 @@ begin  -- rtl
 
 
 -- The arbiter for accessing the linked list
-  p_ll_arbiter : process(clk_io_i)
-  begin
-    if rising_edge(clk_io_i) then
-      if rst_n_io_i = '0' then
-        ll_grant <= (others => '0');
-      else
-        f_rr_arbitrate(ll_req, ll_grant, ll_grant);
-      end if;
-    end if;
-  end process;
+  --p_ll_arbiter : process(clk_io_i)
+  --begin
+  --  if rising_edge(clk_io_i) then
+  --    if rst_n_io_i = '0' then
+  --      ll_grant <= (others => '0');
+  --    else
+  --      f_rr_arbitrate(ll_req, ll_grant, ll_grant);
+  --    end if;
+  --  end if;
+  --end process;
 
   gen_ll_access_arbiter : for i in 0 to g_num_ports-1 generate
-    ll_req(i)           <= io(i).ll_req and not io(i).ll_grant;
+    ll_req(i)           <= io(i).ll_req ; --and not io(i).ll_grant;
     io(i).ll_grant <= ll_grant(i);
   end generate gen_ll_access_arbiter;
 
-
+  U_LL_Arbiter: gc_rr_arbiter
+    generic map (
+      g_size => g_num_ports)
+    port map (
+      clk_i   => clk_io_i,
+      rst_n_i => rst_n_io_i,
+      req_i   => ll_req,
+      grant_o => ll_grant);
 
   p_ll_mux_addr : process(clk_io_i)
     variable muxed : std_logic_vector(g_page_addr_width-1 downto 0);

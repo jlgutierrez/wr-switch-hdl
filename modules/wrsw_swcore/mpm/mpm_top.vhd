@@ -198,14 +198,15 @@ begin  -- rtl
   U_F_B_Memory : generic_dpram
     generic map (
       g_data_width => g_data_width * g_ratio,
-      g_size       => g_num_pages * (g_page_size / g_ratio))
+      g_size       => g_num_pages * (g_page_size / g_ratio),
+      g_dual_clock => false)
     port map (
       rst_n_i => rst_n_core,
       clka_i  => clk_core_i,
       wea_i   => fbm_we,
       aa_i    => fbm_wr_addr,
       da_i    => fbm_wr_data,
-      clkb_i  => clk_core_i,
+      clkb_i => '0',
       web_i   => '0',
       ab_i    => fbm_rd_addr,
       qb_o    => fbm_rd_data);
