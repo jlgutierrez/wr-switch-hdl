@@ -863,9 +863,9 @@ module main;
 
  /** ***************************   test scenario 25  ************************************* **/ 
   /*
-   * testing Fast forward of single mac entry
+   * 
    **/
- // /*
+ /*
   initial begin
     portUnderTest        = 18'b000000000000000011;
     g_tru_enable         = 1;
@@ -878,6 +878,43 @@ module main;
    // trans_paths[0]       = '{0  ,17 , 5 };
     trans_paths[0]       = '{0  ,2 , 5 };
     trans_paths[1]       = '{1  ,2 , 5 };
+  end
+*/
+
+
+ /** ***************************   test scenario 26  ************************************* **/ 
+  /*
+   * 
+   **/
+ // /*
+  initial begin
+    portUnderTest        = 18'b000000011111111111;
+//     g_tru_enable         = 1;
+    g_active_port        = 0;
+    g_enable_pck_gaps    = 0;
+    repeat_number        = 200;
+    tries_number         = 3;    
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 200 };
+    trans_paths[1]       = '{1  ,16 , 200 };
+    trans_paths[2]       = '{2  ,15 , 200 };
+    trans_paths[3]       = '{3  ,14 , 200 };
+    trans_paths[4]       = '{4  ,13 , 200 };
+    trans_paths[5]       = '{5  ,12 , 200 };
+    trans_paths[6]       = '{6  ,11 , 200 };
+    trans_paths[7]       = '{7  ,10 , 200 };
+    trans_paths[8]       = '{8  ,9  , 200 };
+    trans_paths[9]       = '{9  ,8  , 200 };
+    trans_paths[10]      = '{10 ,7  , 200 };
+    trans_paths[11]      = '{11 ,6  , 200 };
+    trans_paths[12]      = '{12 ,5  , 200 };
+    trans_paths[13]      = '{13 ,4  , 200 };
+    trans_paths[14]      = '{14 ,3  , 200 };
+    trans_paths[15]      = '{15 ,2  , 200 };
+    trans_paths[16]      = '{16 ,1  , 200 };
+    trans_paths[17]      = '{17 ,0  , 200 };
+
+    start_send_init_delay = '{0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340};
   end
  //*/
 
@@ -921,14 +958,16 @@ module main;
   
       tmpl           = new;
 
-      if(opt > 2 )
-        tmpl.src       = '{0,2,3,4,5,6};
+      if(opt == 0 || opt == 200 || opt == 201)
+        tmpl.src       = '{srcPort, 2,3,4,5,6};
       else if(opt == 101 | opt == 102)
         tmpl.src       = '{0,0,0,0,0,0};
+      else if(opt > 2 )
+        tmpl.src       = '{0,2,3,4,5,6};
       else
         tmpl.src       = '{srcPort, 2,3,4,5,6};
 
-      if(opt==0)
+      if(opt==0 || opt == 200 || opt == 201)
         tmpl.dst       = '{dstPort, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       else if(opt==1)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
@@ -968,6 +1007,10 @@ module main;
       gen.set_template(tmpl);
       if(opt == 101 ||  opt == 102)
         gen.set_size(63, 64);
+      else if(opt == 201)
+        gen.set_size(63, 1001);
+      else if(opt == 200)
+        gen.set_size(1000, 1001);
       else
         gen.set_size(63, 257);
 
@@ -977,7 +1020,7 @@ module main;
            begin
               pkt  = gen.gen();
               pkt.oob = TX_FID;
-              $display("|=> TX: port = %2d, pck_i = %4d (opt=%1d, pck_gap=%3d)" , srcPort, i,opt,pck_gap);
+              $display("|=> TX: port = %2d, pck_i = %4d (opt=%1d, pck_gap=%3d, size=%2d)" , srcPort, i,opt,pck_gap,  pkt.payload.size);
               if(opt == 100)
               begin
                 pkt.payload[14] = 'h00;
@@ -1000,7 +1043,7 @@ module main;
           for(int j=0;j<n_tries;j++)
             begin
               sink.recv(pkt2);
-              $display("|<= RX: port = %2d, pck_i = %4d" , dstPort, j);
+              $display("|<= RX: port = %2d, pck_i = %4d (size=%2d)" , dstPort, j,  pkt2.payload.size);
               if(unvid)
                 arr[j].is_q  = 0;
               if(!arr[j].equal(pkt2))
@@ -1868,7 +1911,7 @@ module main;
           begin
           if(portUnderTest[qq]) 
             begin 
-              wait_cycles(start_send_init_delay[q]);
+              wait_cycles(start_send_init_delay[qq]);
               for(int g=0;g<tries_number;g++)
                 begin
                   $display("Try port_0:%d",  g);
