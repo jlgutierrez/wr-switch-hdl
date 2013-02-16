@@ -491,7 +491,7 @@ architecture rtl of xswc_core is
         mpm_d_i                  => mpm2ob_d((i+1)*c_mpm_data_width-1 downto i*c_mpm_data_width),
         mpm_dvalid_i             => mpm2ob_dvalid(i),
         mpm_dlast_i              => mpm2ob_dlast(i),
-        mpm_dsel_i               => mpm2ob_dsel((i+1)*c_mpm_partial_sel_width -1 downto i*c_mpm_partial_sel_width),
+--dsel--        mpm_dsel_i               => mpm2ob_dsel((i+1)*c_mpm_partial_sel_width -1 downto i*c_mpm_partial_sel_width),
         mpm_dreq_o               => ob2mpm_dreq(i),
         mpm_abort_o              => ob2mpm_abort(i),
         mpm_pg_addr_o            => ob2mpm_pg_addr((i+1)*c_mpm_page_addr_width -1 downto i*c_mpm_page_addr_width),

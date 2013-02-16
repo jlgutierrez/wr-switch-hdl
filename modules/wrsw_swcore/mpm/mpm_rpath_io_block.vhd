@@ -110,8 +110,8 @@ architecture behavioral of mpm_rpath_io_block is
     next_page : std_logic_vector(g_page_addr_width-1 downto 0);
     dsel      : std_logic_vector(g_partial_select_width-1 downto 0);
     size      : std_logic_vector(f_log2_size(g_page_size + 1)-1 downto 0);
-    oob_size  : std_logic_vector(c_max_oob_size_width   - 1 downto 0);
-    oob_dsel  : std_logic_vector(g_partial_select_width - 1 downto 0);    
+--dsel--    oob_size  : std_logic_vector(c_max_oob_size_width   - 1 downto 0);
+--dsel--    oob_dsel  : std_logic_vector(g_partial_select_width - 1 downto 0);    
   end record;
 
 
@@ -146,13 +146,13 @@ architecture behavioral of mpm_rpath_io_block is
   -- next packet.
   signal fetch_abort    : std_logic;
   
-  signal fetch_dsel_words  :  unsigned(f_log2_size(g_page_size+1)-1 downto 0);
+--dsel--  signal fetch_dsel_words  :  unsigned(f_log2_size(g_page_size+1)-1 downto 0);
   
-  signal fetch_oob_dsel   : std_logic_vector(g_partial_select_width-1 downto 0);
+--dsel--  signal fetch_oob_dsel   : std_logic_vector(g_partial_select_width-1 downto 0);
 
 
-  signal saved_dat_dsel : std_logic_vector(g_partial_select_width-1 downto 0);
-  signal saved_oob_dsel : std_logic_vector(g_partial_select_width-1 downto 0);
+--dsel--  signal saved_dat_dsel : std_logic_vector(g_partial_select_width-1 downto 0);
+--dsel--  signal saved_oob_dsel : std_logic_vector(g_partial_select_width-1 downto 0);
 
 -- Datapath signals
   signal df_we_d0      : std_logic;
@@ -161,7 +161,8 @@ architecture behavioral of mpm_rpath_io_block is
   signal dsel_words_total   : unsigned(c_word_count_width-1 downto 0);
   signal words_xmitted : unsigned(c_word_count_width-1 downto 0);
 
-  signal last_int, d_valid_int, df_rd_int, d_endOfData_int : std_logic;
+--dsel--  signal last_int, d_valid_int, df_rd_int, d_endOfData_int : std_logic;
+  signal last_int, d_valid_int, df_rd_int : std_logic; --dsel--
   signal pf_we_int                          : std_logic;
 
   signal ll_req_int, ll_grant_d0, ll_grant_d1 : std_logic;
@@ -211,7 +212,7 @@ begin  -- behavioral
   --counters_equal <= '1' when (words_total = words_xmitted) else '0';
   counters_equal <= '1' when (words_total = words_xmitted and rport_dreq_i = '1') else '0';
   -- ML
-  data_dsel_valid  <= '1' when (dsel_words_total = words_xmitted and rport_dreq_i = '1') else '0';
+--dsel--  data_dsel_valid  <= '1' when (dsel_words_total = words_xmitted and rport_dreq_i = '1') else '0';
 
   wait_next_valid_ll_read <= '1' when ((words_total <  words_xmitted+2) and 
                                        last_int   = '0'               and 
@@ -228,24 +229,24 @@ begin  -- behavioral
         -- ML : pre-fetching
         if(pre_fetch = '1') then
           words_total      <= resize(fetch_pg_words, words_total'length);
-          dsel_words_total <= resize(fetch_dsel_words, dsel_words_total'length);          
+--dsel--          dsel_words_total <= resize(fetch_dsel_words, dsel_words_total'length);          
         else
           words_total     <= (others => '0');
-          dsel_words_total<= (others => '0');
+--dsel--          dsel_words_total<= (others => '0');
         end if;
         -----
         words_xmitted   <= to_unsigned(1, words_xmitted'length);
         -- ML
         -- last_int      <= '0'; 
         d_counter_equal <= '0';
-        d_endOfData_int <= '0';
+--dsel--        d_endOfData_int <= '0';
       else
 
-        if(data_dsel_valid = '1') then
-          saved_dat_dsel <= fetch_dsel;
-        elsif(fetch_last = '1' and fetch_ack = '1') then
-          saved_oob_dsel <= fetch_oob_dsel;
-        end if;
+--dsel--        if(data_dsel_valid = '1') then
+--dsel--          saved_dat_dsel <= fetch_dsel;
+--dsel--        elsif(fetch_last = '1' and fetch_ack = '1') then
+--dsel--          saved_oob_dsel <= fetch_oob_dsel;
+--dsel--        end if;
 
         if(df_rd_int = '1') then
           words_xmitted <= words_xmitted + 1;
@@ -256,10 +257,10 @@ begin  -- behavioral
           --if(fetch_first = '1') then -- ML : prefetching
           if(fetch_first = '1' ) then
             words_total      <= resize(fetch_pg_words, words_total'length);
-            dsel_words_total <= resize(fetch_dsel_words, dsel_words_total'length);
+--dsel--            dsel_words_total <= resize(fetch_dsel_words, dsel_words_total'length);
           else
             words_total      <= words_total      + fetch_pg_words;
-            dsel_words_total <= dsel_words_total + fetch_dsel_words;
+--dsel--            dsel_words_total <= dsel_words_total + fetch_dsel_words;
           end if;
         end if;
 
@@ -268,7 +269,7 @@ begin  -- behavioral
         d_counter_equal    <= counters_equal;
         ---------
         
-        d_endOfData_int <= data_dsel_valid;
+--dsel--        d_endOfData_int <= data_dsel_valid;
       end if;
     end if;
   end process;
@@ -327,8 +328,9 @@ begin  -- behavioral
 
   rport_dlast_o  <= last_int;
   rport_d_o      <= df_d_i;
-  rport_dsel_o   <= saved_dat_dsel when d_endOfData_int = '1' else                  -- order is important
-                    saved_oob_dsel when last_int      = '1' else (others => '1'); -- first eod, then oob
+--dsel--  rport_dsel_o   <= saved_dat_dsel when d_endOfData_int = '1' else                  -- order is important
+--dsel--                    saved_oob_dsel when last_int      = '1' else (others => '1'); -- first eod, then oob
+  rport_dsel_o   <= (others =>'1'); --dsel--
   rport_pg_req_o <= rport_pg_req;
 -------------------------------------------------------------------------------
 -- Page fetcher logic
@@ -344,12 +346,12 @@ begin  -- behavioral
   cur_ll.size      <= ll_data_i(c_page_size_width-1 downto 0);
   -- 1: partial select bits (number of bytes in the last word of the page. For
   -- 16-bit datapath: 0 = 1 byte, 1 = 2 bytes, etc.)
-  cur_ll.dsel      <= ll_data_i(g_ll_data_width-3 downto g_ll_data_width-2-g_partial_select_width);
-  
-  cur_ll.oob_size  <= ll_data_i(g_ll_data_width-2-g_partial_select_width-1 downto 
-                                g_ll_data_width-2-g_partial_select_width-c_max_oob_size_width);
-
-  cur_ll.oob_dsel  <= ll_data_i(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width);
+--dsel--  cur_ll.dsel      <= ll_data_i(g_ll_data_width-3 downto g_ll_data_width-2-g_partial_select_width);
+--dsel--  
+--dsel--  cur_ll.oob_size  <= ll_data_i(g_ll_data_width-2-g_partial_select_width-1 downto 
+--dsel--                                g_ll_data_width-2-g_partial_select_width-c_max_oob_size_width);
+--dsel--
+--dsel--  cur_ll.oob_dsel  <= ll_data_i(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width);
 
   fetch_valid <= fvalid_int and not fetch_ack;
 
@@ -393,8 +395,8 @@ begin  -- behavioral
         ll_req_int       <= '0';
         ll_grant_d0 <= '0';
         ll_grant_d1 <= '0';
-        fetch_dsel_words<= (others =>'0');
-        fetch_oob_dsel  <=  (others =>'0');
+--dsel--        fetch_dsel_words<= (others =>'0');
+--dsel--        fetch_oob_dsel  <=  (others =>'0');
         wait_first_fetched <='1';
         fetch_first     <= '0';
         last_pg_start_ptr <= (others => '0');
@@ -442,11 +444,11 @@ begin  -- behavioral
                 fetch_pg_words <= unsigned(cur_ll.size);
                 fetch_pg_lines <= f_fast_div_pagesize(unsigned(cur_ll.size), g_ratio);
                 fetch_pg_addr  <= cur_page;
-                fetch_oob_dsel <= cur_ll.oob_dsel;
+--dsel--                fetch_oob_dsel <= cur_ll.oob_dsel;
                 fvalid_int     <= '1';
                 fetch_last     <= '1';
-                fetch_dsel       <= cur_ll.dsel;
-                fetch_dsel_words <= unsigned(cur_ll.size) - unsigned(cur_ll.oob_size);
+--dsel--                fetch_dsel       <= cur_ll.dsel;
+--dsel--                fetch_dsel_words <= unsigned(cur_ll.size) - unsigned(cur_ll.oob_size);
                 
                 -- remember the total up to before the last page starts
                 if(fetch_first = '1') then -- this is first and last page
@@ -461,12 +463,12 @@ begin  -- behavioral
                 
                 page_state <= WAIT_ACK;
                 
-                if(unsigned(cur_ll.oob_size) /= to_unsigned(0, c_max_oob_size_width)) then
-                  fetch_dsel       <= cur_ll.dsel;
-                  fetch_dsel_words <= to_unsigned(g_page_size, fetch_dsel_words'length) - resize(unsigned(cur_ll.oob_size), fetch_dsel_words'length);
-                else
-                  fetch_dsel_words <= to_unsigned(g_page_size, fetch_pg_words'length);
-                end if;
+--dsel--                if(unsigned(cur_ll.oob_size) /= to_unsigned(0, c_max_oob_size_width)) then
+--dsel--                  fetch_dsel       <= cur_ll.dsel;
+--dsel--                  fetch_dsel_words <= to_unsigned(g_page_size, fetch_dsel_words'length) - resize(unsigned(cur_ll.oob_size), fetch_dsel_words'length);
+--dsel--                else
+--dsel--                  fetch_dsel_words <= to_unsigned(g_page_size, fetch_pg_words'length);
+--dsel--                end if;
 
                 fetch_pg_words <= to_unsigned(g_page_size, fetch_pg_words'length);
                 fetch_pg_lines <= to_unsigned(c_lines_per_page, fetch_pg_lines'length);
