@@ -32,7 +32,8 @@ use work.wishbone_pkg.all;
 entity port_cntr is
   generic(
     g_cnt_pp : integer := 64;           --number of counters per port
-    g_cnt_pw : integer := 8);           --number of counters per word
+    g_cnt_pw : integer := 8;            --number of counters per word
+    g_keep_ov: integer := 1);
   port(
     rst_n_i : in std_logic;
     clk_i   : in std_logic;
@@ -220,6 +221,8 @@ begin
   end process;
 
   GEN_INCR : for i in 0 to g_cnt_pw-1 generate
+
+    KEEP_OV: if g_keep_ov=1 generate
     mem_dat_in((i+1)*c_cnt_width-1 downto i*c_cnt_width) <= 
                --if processor has accessed counter, it has cleared it for sure
                std_logic_vector(to_unsigned(1, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '1') else
@@ -231,6 +234,20 @@ begin
                std_logic_vector(unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)) + 1) when (events_sub(i) = '1') else
                --no change
                mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width);
+    end generate;
+
+    NKEEP_OV: if g_keep_ov=0 generate
+      mem_dat_in((i+1)*c_cnt_width-1 downto i*c_cnt_width) <= 
+                 --if processor has accessed counter, it has cleared it for sure
+                 std_logic_vector(to_unsigned(1, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '1') else
+                 --if processor has accessed counter,but there is no event for it, just write there '0', since mem_dat_out still holds old value
+                 std_logic_vector(to_unsigned(0, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '0') else
+                 --otherwise, normal situation, just increment
+                 std_logic_vector(unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)) + 1) when (events_sub(i) = '1') else
+                 --no change
+                 mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width);
+    end generate;
+
     cnt_afull(i) <= '1' when(mem_dat_in((i+1)*c_cnt_width-1 downto (i+1)*c_cnt_width-2)="01") else
                     '0';
 
