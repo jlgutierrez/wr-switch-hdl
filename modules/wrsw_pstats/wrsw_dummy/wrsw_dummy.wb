@@ -1,0 +1,240 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+-- White-Rabbit Per-Port Statistic Couters
+-- author: Grzegorz Daniluk <grzegorz.daniluk@cern.ch>
+--
+-- Use wbgen2 to generate code, documentation and more.
+-- wbgen2 is available at:
+-- http://www.ohwr.org/projects/wishbone-gen
+--
+
+peripheral {
+ 
+  name = "WR Switch dummy Statistic Counters";
+  description = "The set of counters for counting traffic statistics on each Ethernet port of WR Switch";
+  hdl_entity = "dummy_wishbone_slave";
+  prefix = "dummy";
+
+  reg {
+    name = "control reg";
+    prefix = "CR";
+
+    field {
+      name = "reset counters";
+      prefix = "RST";
+      type = MONOSTABLE;
+      size = 1;
+    };
+  };
+
+  reg {
+    name = "port 0 cnt";
+    prefix = "P0_TX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 0 cnt";
+    prefix = "P0_RX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 1 cnt";
+    prefix = "P1_TX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 1 cnt";
+    prefix = "P1_RX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+
+  reg {
+    name = "port 1 cnt";
+    prefix = "P2_TX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 1 cnt";
+    prefix = "P2_RX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 3 cnt";
+    prefix = "P3_TX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 3 cnt";
+    prefix = "P3_RX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 4 cnt";
+    prefix = "P4_TX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 4 cnt";
+    prefix = "P4_RX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 5 cnt";
+    prefix = "P5_TX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 5 cnt";
+    prefix = "P5_RX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+
+  reg {
+    name = "port 6 cnt";
+    prefix = "P6_TX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 6 cnt";
+    prefix = "P6_RX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+
+  reg {
+    name = "port 7 cnt";
+    prefix = "P7_TX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "port 7 cnt";
+    prefix = "P7_RX";
+
+    field {
+      name = "Enable transfer of counter content";
+      size = 32; 
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
+};
