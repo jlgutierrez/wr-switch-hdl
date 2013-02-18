@@ -187,6 +187,11 @@ begin
                 events_sub  <= events_reg((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw);
                 events_clr((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw) <=
                   events_reg((evt_sel(i, rr_select)+1)*g_cnt_pw-1 downto evt_sel(i, rr_select)*g_cnt_pw);  --events_sub
+
+                if(std_logic_vector(to_unsigned(evt_sel(i, rr_select), c_mem_adr_sz)) = ext_adr_i and ext_cyc_i = '1' and ext_we_i = '0') then
+                  wr_conflict <= '1';
+                end if;
+
                 exit;
               end if;
             end loop;
@@ -202,7 +207,7 @@ begin
             if(std_logic_vector(to_unsigned(mem_adr, c_mem_adr_sz)) = ext_adr_i and ext_cyc_i = '1' and ext_we_i = '0') then
               mem_wr      <= '0';
               cnt_state   <= WRITE;
-              wr_conflict <= '0'; --'1';
+              wr_conflict <= '1';
             else
               mem_wr    <= '1';
               cnt_state <= SEL;
