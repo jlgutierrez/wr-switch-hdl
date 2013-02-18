@@ -1,8 +1,8 @@
 `include "pstats_gen.sv"
 `include "if_wb_master.svh"
 
-`define TRIG_WIDTH 16
-`define NPORTS 2
+`define TRIG_WIDTH 8 
+`define NPORTS 8
 
 module main;
 
@@ -19,26 +19,30 @@ module main;
 
   pstats_gen 
   #(
-    .g_trig_width(`NPORTS * `TRIG_WIDTH))
+//    .g_trig_width(`NPORTS * `TRIG_WIDTH))
+    .g_trig_width(4))
   TRIG_GEN
   (
     .rst_n_i(rst_n),
     .clk_i(clk_sys),
-    .trig_o(trigs)
+    .trig_o(trigs[3:0])
   );
+
+  assign trigs[7:4] = 'h0;
 
   wrsw_pstats
   #(
     .g_nports(`NPORTS),
     .g_cnt_pp(`TRIG_WIDTH),
-    .g_cnt_pw(4))
+    .g_cnt_pw(4),
+    .g_keep_ov(0))
   DUT
   (
     .rst_n_i(rst_n),
     .clk_i(clk_sys),
     .events_i(trigs),
 
-    .wb_adr_i(WB.master.adr[0]),
+    .wb_adr_i(WB.master.adr[2:0]),
     .wb_dat_i(WB.master.dat_o),
     .wb_dat_o(WB.master.dat_i),
     .wb_cyc_i(WB.master.cyc),
@@ -76,8 +80,22 @@ module main;
       while(1)
       begin
         rnd = $urandom()%10;
-        if(rnd < 5) acc.write('h0, 'h1);
+        //if(rnd < 5) acc.write('h0, 'h1);
         #50ns;
+        //acc.read('h8, dat);
+        //if(dat[7:0]=='h1f)
+        //begin
+          acc.write('h0, 'h1);
+        //  acc.read('h4, dat);
+        //  acc.write('h0, 'h010001);
+        //  acc.read('h4, dat);
+        //  acc.write('h0, 'h020001);
+        //  acc.read('h4, dat);
+        //  acc.write('h0, 'h030001);
+        //  acc.read('h4, dat);
+        //  acc.write('h0, 'h040001);
+        //  acc.read('h4, dat);
+        //end
       end 
 
       //#500ns

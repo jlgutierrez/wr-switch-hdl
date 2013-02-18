@@ -1,10 +1,11 @@
-action = "simulation"
-files = "main.sv"
-#fetchto = "../../ip_cores"
-
 target = "xilinx"
+action = "simulation"
+syn_device = "XC6VLX130T"
+fetchto = "../../ip_cores"
+vlog_opt = "+incdir+../../sim +incdir+../../sim/wr-hdl"
 
-vlog_opt="+incdir+../../sim"
+files = [ "main.sv" ]
 
 modules ={"local" : ["../../ip_cores/general-cores",
-                     "../../modules/wrsw_pstats" ] };
+                     "../../modules/wrsw_pstats",
+                     "../../modules/wrsw_pstats/wrsw_dummy"] };
