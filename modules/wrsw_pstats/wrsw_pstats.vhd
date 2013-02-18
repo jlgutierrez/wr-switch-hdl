@@ -32,14 +32,15 @@ entity wrsw_pstats is
   generic(
     g_nports : integer := 2;
     g_cnt_pp : integer := 16;
-    g_cnt_pw : integer := 4);
+    g_cnt_pw : integer := 4;
+    g_keep_ov: integer := 1);
   port(
     rst_n_i : in std_logic;
     clk_i   : in std_logic;
 
     events_i : in std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
 
-    wb_adr_i   : in  std_logic_vector(0 downto 0);
+    wb_adr_i   : in  std_logic_vector(2 downto 0);
     wb_dat_i   : in  std_logic_vector(31 downto 0);
     wb_dat_o   : out std_logic_vector(31 downto 0);
     wb_cyc_i   : in  std_logic;
@@ -56,7 +57,7 @@ architecture behav of wrsw_pstats is
     port (
       rst_n_i    : in  std_logic;
       clk_sys_i  : in  std_logic;
-      wb_adr_i   : in  std_logic_vector(0 downto 0);
+      wb_adr_i   : in  std_logic_vector(2 downto 0);
       wb_dat_i   : in  std_logic_vector(31 downto 0);
       wb_dat_o   : out std_logic_vector(31 downto 0);
       wb_cyc_i   : in  std_logic;
@@ -73,22 +74,29 @@ architecture behav of wrsw_pstats is
   component port_cntr
     generic(
       g_cnt_pp : integer;
-      g_cnt_pw : integer);
+      g_cnt_pw : integer;
+      g_keep_ov: integer);
     port(
       rst_n_i : in std_logic;
       clk_i   : in std_logic;
 
-      events_i : in std_logic_vector(g_cnt_pp-1 downto 0);
+      events_i : in  std_logic_vector(g_cnt_pp-1 downto 0);
+      irq_o    : out std_logic_vector((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw-1 downto 0);
 
       ext_cyc_i : in  std_logic;
       ext_adr_i : in  std_logic_vector(f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)-1 downto 0);
       ext_we_i  : in  std_logic;
       ext_dat_i : in  std_logic_vector(31 downto 0);
-      ext_dat_o : out std_logic_vector(31 downto 0));
+      ext_dat_o : out std_logic_vector(31 downto 0);
+
+      dbg_evt_ov_o  : out std_logic;
+      dbg_cnt_ov_o  : out std_logic;
+      clr_flags_i   : in  std_logic);
   end component;
 
   constant c_adr_mem_sz  : integer := f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw);
   constant c_adr_psel_sz : integer := f_log2_size(g_nports);
+  constant c_portirq_sz  : integer := (g_cnt_pp+g_cnt_pw-1)/g_cnt_pw;
 
   --for wishbone interface
   signal wb_regs_in  : t_pstats_in_registers;
@@ -110,6 +118,10 @@ architecture behav of wrsw_pstats is
 
   type   t_rd_st is (IDLE, READ, WRITE);
   signal rd_state : t_rd_st;
+
+  signal irq  : std_logic_vector(g_nports*c_portirq_sz-1 downto 0);
+  signal evt_ov : std_logic_vector(g_nports-1 downto 0);
+  signal cnt_ov : std_logic_vector(g_nports-1 downto 0);
 
 begin
   
@@ -134,24 +146,42 @@ begin
   wb_regs_in.cnt_val_i  <= rd_val;
   rd_port               <= wb_regs_out.cr_port_o(c_adr_psel_sz-1 downto 0);
 
+  wb_regs_in.irq_r1_port0_i(c_portirq_sz-1 downto 0) <= irq(c_portirq_sz-1 downto 0);
+  wb_regs_in.irq_r1_port1_i(c_portirq_sz-1 downto 0) <= irq(2*c_portirq_sz-1 downto 1*c_portirq_sz);
+  wb_regs_in.irq_r1_port2_i(c_portirq_sz-1 downto 0) <= irq(3*c_portirq_sz-1 downto 2*c_portirq_sz);
+  wb_regs_in.irq_r1_port3_i(c_portirq_sz-1 downto 0) <= irq(4*c_portirq_sz-1 downto 3*c_portirq_sz);
+  wb_regs_in.irq_r2_port4_i(c_portirq_sz-1 downto 0) <= irq(5*c_portirq_sz-1 downto 4*c_portirq_sz);
+  wb_regs_in.irq_r2_port5_i(c_portirq_sz-1 downto 0) <= irq(6*c_portirq_sz-1 downto 5*c_portirq_sz);
+  wb_regs_in.irq_r2_port6_i(c_portirq_sz-1 downto 0) <= irq(7*c_portirq_sz-1 downto 6*c_portirq_sz);
+  wb_regs_in.irq_r2_port7_i(c_portirq_sz-1 downto 0) <= irq(8*c_portirq_sz-1 downto 7*c_portirq_sz);
+
+  --TODO: change this for 18-port version
+  wb_regs_in.dbg_evt_ov_i <= evt_ov(7 downto 0);
+  wb_regs_in.dbg_cnt_ov_i <= cnt_ov(7 downto 0);
+
 
   GEN_PCNT : for i in 0 to g_nports-1 generate
 
     PER_PORT_CNT : port_cntr
       generic map(
         g_cnt_pp => g_cnt_pp,
-        g_cnt_pw => g_cnt_pw)
+        g_cnt_pw => g_cnt_pw,
+        g_keep_ov=> g_keep_ov)
       port map(
         rst_n_i => rst_n_i,
         clk_i   => clk_i,
 
         events_i => events_i((i+1)*g_cnt_pp-1 downto i*g_cnt_pp),
+        irq_o    => irq((i+1)*c_portirq_sz-1 downto i*c_portirq_sz),
 
         ext_cyc_i => p_cyc(i),
         ext_adr_i => wb_regs_out.cr_addr_o(c_adr_mem_sz-1 downto 0),
         ext_we_i  => p_we(i),
         ext_dat_i => (others => '0'),
-        ext_dat_o => p_dat_out(i));
+        ext_dat_o => p_dat_out(i),
+        dbg_evt_ov_o => evt_ov(i),
+        dbg_cnt_ov_o => cnt_ov(i),
+        clr_flags_i  => wb_regs_out.dbg_clr_o);
 
   end generate;
 
