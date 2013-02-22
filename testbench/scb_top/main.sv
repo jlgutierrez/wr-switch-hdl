@@ -68,6 +68,7 @@ module main;
    integer g_enable_pck_gaps                  = 1;   // 1=TRUE, 0=FALSE
    integer g_min_pck_gap                      = 300; // cycles
    integer g_max_pck_gap                      = 300; // cycles
+   integer g_force_payload_size               = 0; // if 0, then opt is used
    integer g_failure_scenario                 = 0;   // no link failure
    integer g_active_port                      = 0;
    integer g_backup_port                      = 1;
@@ -884,18 +885,21 @@ module main;
 
  /** ***************************   test scenario 26  ************************************* **/ 
   /*
-   * 
+   *8 
    **/
  // /*
   initial begin
-    portUnderTest        = 18'b000000011111111111;
+//     portUnderTest        = 18'b000000011111111111;
+    portUnderTest        = 18'b000000000000000001;
 //     g_tru_enable         = 1;
     g_active_port        = 0;
     g_enable_pck_gaps    = 0;
     repeat_number        = 200;
-    tries_number         = 3;    
+    tries_number         = 3;  
+//     g_force_payload_size = 800;
                          // tx  ,rx ,opt
-    trans_paths[0]       = '{0  ,17 , 200 };
+    trans_paths[0]       = '{0  ,17 , 1 };
+//     trans_paths[0]       = '{0  ,17 , 200 };
     trans_paths[1]       = '{1  ,16 , 200 };
     trans_paths[2]       = '{2  ,15 , 200 };
     trans_paths[3]       = '{3  ,14 , 200 };
@@ -915,6 +919,8 @@ module main;
     trans_paths[17]      = '{17 ,0  , 200 };
 
     start_send_init_delay = '{0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340};
+
+//     mac_br = 1;
   end
  //*/
 
@@ -1005,15 +1011,20 @@ module main;
   // 
       gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
       gen.set_template(tmpl);
-      if(opt == 101 ||  opt == 102)
-        gen.set_size(63, 64);
-      else if(opt == 201)
-        gen.set_size(63, 1001);
-      else if(opt == 200)
-        gen.set_size(1000, 1001);
+      if(g_force_payload_size < 64)
+        begin
+        if(opt == 101 ||  opt == 102)
+          gen.set_size(63, 64);
+        else if(opt == 201)
+          gen.set_size(63, 1001);
+        else if(opt == 200)
+          gen.set_size(1000, 1001);
+        else
+          gen.set_size(63, 257);
+        end
       else
-        gen.set_size(63, 257);
-
+        gen.set_size(g_force_payload_size, g_force_payload_size+1);
+      
       fork
         begin // fork 1
         for(int i=0;i<n_tries;i++)
