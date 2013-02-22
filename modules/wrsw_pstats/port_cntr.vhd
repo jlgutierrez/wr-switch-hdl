@@ -48,10 +48,14 @@ entity port_cntr is
     ext_dat_i : in  std_logic_vector(31 downto 0)                                            := (others => '0');
     ext_dat_o : out std_logic_vector(31 downto 0);
 
+    --overflow events for 2nd layer
+    --ov_w_adr_o  : out std_logic_vector( f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)-1 downto 0); --c_mem_adr_sz-1 downto 0
+    ov_cnt_o    : out std_logic_vector( ((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)*g_cnt_pw-1 downto 0); --c_evt_range
+
     --debug
     dbg_evt_ov_o  : out std_logic;
     dbg_cnt_ov_o  : out std_logic;
-    clr_flags_i   : in std_logic
+    clr_flags_i   : in std_logic  := '0'
   );
 end port_cntr;
 
@@ -68,6 +72,7 @@ architecture behav of port_cntr is
   signal mem_dat_in  : std_logic_vector(31 downto 0);
   signal mem_dat_out : std_logic_vector(31 downto 0);
   signal mem_adr     : integer range 0 to c_rr_range-1;
+  signal mem_adr_d1  : integer range 0 to c_rr_range-1;
   signal mem_adr_lv  : std_logic_vector(c_mem_adr_sz-1 downto 0);
   signal mem_wr      : std_logic;
 
@@ -178,7 +183,7 @@ begin
             events_clr  <= (others => '0');
             mem_wr      <= '0';
             wr_conflict <= '0';
-            if(irq(mem_adr) = '0') then
+            if(mem_wr='1' and irq(mem_adr) = '0') then  --check only on 1st clock cycle in this state
               irq(mem_adr) <= or_reduce(cnt_afull);
             end if;
             for i in 0 to c_rr_range-1 loop
@@ -248,7 +253,7 @@ begin
                  mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width);
     end generate;
 
-    cnt_afull(i) <= '1' when(mem_dat_in((i+1)*c_cnt_width-1 downto (i+1)*c_cnt_width-2)="01") else
+    cnt_afull(i) <= '1' when(mem_dat_in((i+1)*c_cnt_width-1 downto (i+1)*c_cnt_width-4)="1111") else
                     '0';
 
     process(clk_i)
@@ -257,10 +262,11 @@ begin
         if(rst_n_i='0') then
           cnt_ov(i) <= '0';
         else
-          if( (unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width))+1=0) and mem_wr='1') then
+          cnt_ov(i) <= '0';
+          if( (unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width))+1=0) and mem_wr='1' and events_sub(i)='1') then
             cnt_ov(i) <= '1';
-          elsif(clr_flags_i='1') then
-            cnt_ov(i) <= '0';
+          --elsif(clr_flags_i='1') then
+          --  cnt_ov(i) <= '0';
           end if;
         end if;
       end if;
@@ -271,6 +277,26 @@ begin
   dbg_cnt_ov_o <= or_reduce(cnt_ov);
 
   irq_o <= irq;
+
+
+  -----------------------------------------------
+  --overflow events for 2nd layer counter
+  process(clk_i)  --delay mem_adr by 1 cycle to match ov_cnt_o signal
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i='0') then
+        mem_adr_d1 <= 0;
+      else
+        mem_adr_d1 <= mem_adr;
+      end if;
+    end if;
+  end process;
+  --multiplexer driven from mem_adr delayed by 1 cycle
+  process(mem_adr_d1, cnt_ov)  
+  begin
+        ov_cnt_o <= (others=>'0');
+        ov_cnt_o((mem_adr_d1+1)*g_cnt_pw-1 downto g_cnt_pw*mem_adr_d1) <= cnt_ov;
+  end process;
 
 
 end behav;
