@@ -714,6 +714,8 @@ component  swc_multiport_pck_pg_free_module is
                                                   resource      : std_logic_vector;
                                                   queue_full    : std_logic_vector;
                                                   queue_num     : integer) return std_logic_vector;
+  function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector;
+  function f_onehot_decode(x : std_logic_vector) return std_logic_vector;
 end swc_swcore_pkg;
 
 package body swc_swcore_pkg is
@@ -818,6 +820,23 @@ package body swc_swcore_pkg is
 --
 --    return std_logic_vector(tmp);
   end function;
+
+  function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector is
+    variable tmp : std_logic_vector(len-1 downto 0);
+  begin
+    tmp                      := (others => '0');
+    tmp(x'length-1 downto 0) := x;
+    return tmp;
+  end f_slv_resize;
+   
+  function f_onehot_decode(x : std_logic_vector) return std_logic_vector is
+    variable tmp : std_logic_vector(2**x'length-1 downto 0);
+  begin
+    tmp                          := (others => '0');
+    tmp(to_integer(unsigned(x))) := '1';
+
+    return tmp;
+  end function f_onehot_decode;
 
 
 end swc_swcore_pkg;

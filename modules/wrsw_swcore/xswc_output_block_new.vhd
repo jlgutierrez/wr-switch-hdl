@@ -176,33 +176,33 @@ architecture behavoural of xswc_output_block_new is
                       S_WAIT_FREE_PCK
                       );
 
-  function f_prepstate_2_slv (arg : t_prep_to_send) return std_logic_vector is
-  begin
-    case arg is
-      when S_IDLE                       => return "000";
-      when S_NEWPCK_PAGE_READY          => return "001";
-      when S_NEWPCK_PAGE_SET_IN_ADVANCE => return "010";
-      when S_NEWPCK_PAGE_USED           => return "011";
-      when S_RETRY_PREPARE              => return "100";
-      when S_RETRY_READY                => return "101";
-      when others                       => return "111";
-    end case;
-    return "111";
-  end f_prepstate_2_slv;
-
-  function f_sendstate_2_slv (arg : t_send_pck) return std_logic_vector is
-  begin
-    case arg is
-      when S_IDLE          => return "000";
-      when S_DATA          => return "001";
-      when S_FLUSH_STALL   => return "010";
-      when S_FINISH_CYCLE  => return "011";
-      when S_EOF           => return "100";
-      when S_RETRY         => return "101";
-      when S_WAIT_FREE_PCK => return "110";
-    end case;
-    return "111";
-  end f_sendstate_2_slv;
+--   function f_prepstate_2_slv (arg : t_prep_to_send) return std_logic_vector is
+--   begin
+--     case arg is
+--       when S_IDLE                       => return "000";
+--       when S_NEWPCK_PAGE_READY          => return "001";
+--       when S_NEWPCK_PAGE_SET_IN_ADVANCE => return "010";
+--       when S_NEWPCK_PAGE_USED           => return "011";
+--       when S_RETRY_PREPARE              => return "100";
+--       when S_RETRY_READY                => return "101";
+--       when others                       => return "111";
+--     end case;
+--     return "111";
+--   end f_prepstate_2_slv;
+-- 
+--   function f_sendstate_2_slv (arg : t_send_pck) return std_logic_vector is
+--   begin
+--     case arg is
+--       when S_IDLE          => return "000";
+--       when S_DATA          => return "001";
+--       when S_FLUSH_STALL   => return "010";
+--       when S_FINISH_CYCLE  => return "011";
+--       when S_EOF           => return "100";
+--       when S_RETRY         => return "101";
+--       when S_WAIT_FREE_PCK => return "110";
+--     end case;
+--     return "111";
+--   end f_sendstate_2_slv;
 
 
   signal s_send_pck     : t_send_pck;
@@ -270,23 +270,6 @@ architecture behavoural of xswc_output_block_new is
   signal cycle_frozen     : std_logic;
   signal cycle_frozen_cnt : unsigned(5 downto 0);
  
-
-  function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector is
-    variable tmp : std_logic_vector(len-1 downto 0);
-  begin
-    tmp                      := (others => '0');
-    tmp(x'length-1 downto 0) := x;
-    return tmp;
-  end f_slv_resize;
-   
-  function f_onehot_decode(x : std_logic_vector) return std_logic_vector is
-    variable tmp : std_logic_vector(2**x'length-1 downto 0);
-  begin
-    tmp                          := (others => '0');
-    tmp(to_integer(unsigned(x))) := '1';
-
-    return tmp;
-  end function f_onehot_decode;
   
 begin  --  behavoural
 
