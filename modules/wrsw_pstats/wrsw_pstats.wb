@@ -58,9 +58,9 @@ peripheral {
   };
 
   reg {
-    name = "Counter Value";
+    name = "L1 Counter Value";
     description = "32-bit word read from given memory address of selected Ethernet port containing the value of 4 counters";
-    prefix = "CNT_VAL";
+    prefix = "L1_CNT_VAL";
 
     field {
       name = "4 counters' values";
@@ -70,6 +70,21 @@ peripheral {
       access_dev = WRITE_ONLY;
     };
   };
+
+  reg {
+    name = "L2 Counter Value";
+    description = "32-bit word read from given memory address of selected Ethernet port containing the value of 4 counters";
+    prefix = "L2_CNT_VAL";
+
+    field {
+      name = "4 counters' values";
+      size = 32;
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+  };
+
 
   reg {
     name = "IRQ reg 1";
@@ -176,6 +191,33 @@ peripheral {
       access_bus = READ_ONLY;
       access_dev = WRITE_ONLY;
     };
+
+    field{
+      name = "L2 Events overflow";
+      prefix = "L2_EVT_OV";
+      size = 1;
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+
+    field{
+      name = "L2 Counters overflow";
+      prefix = "L2_CNT_OV";
+      size = 1;
+      type = SLV;
+      access_bus = READ_ONLY;
+      access_dev = WRITE_ONLY;
+    };
+
+    field{
+      name = "L2 Clear flags";
+      prefix = "L2_CLR";
+      size = 1;
+      align = 30;
+      type = MONOSTABLE;
+    };
+
 
     field{
       name = "Clear flags";
