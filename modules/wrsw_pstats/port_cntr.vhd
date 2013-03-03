@@ -41,11 +41,8 @@ entity port_cntr is
 
     events_i : in  std_logic_vector(g_cnt_pp-1 downto 0);
 
-    --memory interface
-    ext_cyc_i : in  std_logic                                                                := '0';
+    --memory interface, only for reading
     ext_adr_i : in  std_logic_vector(f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)-1 downto 0) := (others => '0');
-    ext_we_i  : in  std_logic                                                                := '0';
-    ext_dat_i : in  std_logic_vector(31 downto 0)                                            := (others => '0');
     ext_dat_o : out std_logic_vector(31 downto 0);
 
     --overflow events for 2nd layer
@@ -85,7 +82,6 @@ architecture behav of port_cntr is
   signal events_presub : std_logic_vector(g_cnt_pw-1 downto 0);
 
   signal cnt_ov      : std_logic_vector(g_cnt_pw-1 downto 0);
-  signal wr_conflict : std_logic;
 
   function f_onehot_decode
     (x : std_logic_vector) return integer is
@@ -112,9 +108,9 @@ begin
 
       clka_i => clk_i,
       bwea_i => (others => '1'),
-      wea_i  => ext_we_i,
+      wea_i  => '0',
       aa_i   => ext_adr_i,
-      da_i   => ext_dat_i,
+      da_i   => (others=>'0'),
       qa_o   => ext_dat_o,
 
       clkb_i => clk_i,
@@ -166,7 +162,6 @@ begin
         mem_adr                         <= 0;
         mem_wr                          <= '0';
         events_sub                      <= (others => '0');
-        wr_conflict                     <= '0';
         events_preg                     <= (others => '0');
       else
 
@@ -176,7 +171,6 @@ begin
             --check each segment of events_i starting from the one pointed by round robin
             events_clr  <= (others => '0');
             mem_wr      <= '0';
-            wr_conflict <= '0';
 
             f_rr_arbitrate(events_ored, events_preg, events_grant);
             if(or_reduce(events_ored) = '1') then
@@ -185,22 +179,13 @@ begin
               events_sub                                                                                             <= events_presub;
               events_clr((f_onehot_decode(events_grant)+1)*g_cnt_pw-1 downto f_onehot_decode(events_grant)*g_cnt_pw) <= events_presub;
 
-              if(f_onehot_decode(events_grant) = to_integer(unsigned(ext_adr_i)) and ext_cyc_i = '1' and ext_we_i = '0') then
-                wr_conflict <= '1';
-              end if;
               cnt_state <= WRITE;
             end if;
 
           when WRITE =>
             events_clr <= (others => '0');
-            if(std_logic_vector(to_unsigned(mem_adr, c_mem_adr_sz)) = ext_adr_i and ext_cyc_i = '1' and ext_we_i = '0') then
-              mem_wr      <= '0';
-              cnt_state   <= WRITE;
-              wr_conflict <= '1';
-            else
-              mem_wr    <= '1';
-              cnt_state <= SEL;
-            end if;
+            mem_wr    <= '1';
+            cnt_state <= SEL;
         end case;
 
 
@@ -212,10 +197,6 @@ begin
 
     KEEP_OV : if g_keep_ov = 1 generate
     mem_dat_in((i+1)*c_cnt_width-1 downto i*c_cnt_width) <=
-               --if processor has accessed counter, it has cleared it for sure
-               std_logic_vector(to_unsigned(1, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '1') else
-               --if processor has accessed counter,but there is no event for it, just write there '0', since mem_dat_out still holds old value
-               std_logic_vector(to_unsigned(0, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '0') else
                --counter overflow, don't increment
                mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)  when (unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width))+1 = 0) else
                --otherwise, normal situation, just increment
@@ -226,10 +207,6 @@ begin
 
     NKEEP_OV : if g_keep_ov = 0 generate
       mem_dat_in((i+1)*c_cnt_width-1 downto i*c_cnt_width) <=
-                 --if processor has accessed counter, it has cleared it for sure
-                 std_logic_vector(to_unsigned(1, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '1') else
-                 --if processor has accessed counter,but there is no event for it, just write there '0', since mem_dat_out still holds old value
-                 std_logic_vector(to_unsigned(0, c_cnt_width)) when(wr_conflict = '1' and events_sub(i) = '0') else
                  --otherwise, normal situation, just increment
                  std_logic_vector(unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width)) + 1) when (events_sub(i) = '1') else
                  --no change
