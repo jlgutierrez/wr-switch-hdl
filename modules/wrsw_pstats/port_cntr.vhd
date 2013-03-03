@@ -40,7 +40,6 @@ entity port_cntr is
     clk_i   : in std_logic;
 
     events_i : in  std_logic_vector(g_cnt_pp-1 downto 0);
-    irq_o    : out std_logic_vector((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw-1 downto 0);
 
     --memory interface
     ext_cyc_i : in  std_logic                                                                := '0';
@@ -87,9 +86,6 @@ architecture behav of port_cntr is
 
   signal cnt_ov      : std_logic_vector(g_cnt_pw-1 downto 0);
   signal wr_conflict : std_logic;
-  signal cnt_afull   : std_logic_vector(g_cnt_pw-1 downto 0);  -- which counter(-s) from the word currently 
-                                        -- written to memory is almost full
-  signal irq         : std_logic_vector(c_rr_range-1 downto 0);
 
   function f_onehot_decode
     (x : std_logic_vector) return integer is
@@ -171,14 +167,9 @@ begin
         mem_wr                          <= '0';
         events_sub                      <= (others => '0');
         wr_conflict                     <= '0';
-        irq                             <= (others => '0');
         events_preg                     <= (others => '0');
       else
 
-        --clear irq for mem word being read from ext interface
-        if(ext_cyc_i = '1') then
-          irq(to_integer(unsigned(ext_adr_i))) <= '0';
-        end if;
 
         case(cnt_state) is
           when SEL =>
@@ -186,9 +177,6 @@ begin
             events_clr  <= (others => '0');
             mem_wr      <= '0';
             wr_conflict <= '0';
-            if(mem_wr = '1' and irq(mem_adr) = '0') then  --check only on 1st clock cycle in this state
-              irq(mem_adr) <= or_reduce(cnt_afull);
-            end if;
 
             f_rr_arbitrate(events_ored, events_preg, events_grant);
             if(or_reduce(events_ored) = '1') then
@@ -248,8 +236,6 @@ begin
                  mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width);
     end generate;
 
-    cnt_afull(i) <= '1' when(mem_dat_in((i+1)*c_cnt_width-1 downto (i+1)*c_cnt_width-4) = "1111") else
-                    '0';
 
     process(clk_i)
     begin
@@ -271,7 +257,6 @@ begin
 
   dbg_cnt_ov_o <= or_reduce(cnt_ov);
 
-  irq_o <= irq;
 
 
   -----------------------------------------------
