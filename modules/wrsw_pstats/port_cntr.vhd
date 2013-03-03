@@ -46,12 +46,10 @@ entity port_cntr is
     ext_dat_o : out std_logic_vector(31 downto 0);
 
     --overflow events for 2nd layer
-    --ov_w_adr_o  : out std_logic_vector( f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)-1 downto 0); --c_mem_adr_sz-1 downto 0
     ov_cnt_o : out std_logic_vector(((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)*g_cnt_pw-1 downto 0);  --c_evt_range
 
     --debug
     dbg_evt_ov_o : out std_logic;
-    dbg_cnt_ov_o : out std_logic;
     clr_flags_i  : in  std_logic := '0'
   );
 end port_cntr;
@@ -232,7 +230,6 @@ begin
 
   end generate;
 
-  dbg_cnt_ov_o <= or_reduce(cnt_ov);
 
 
 
