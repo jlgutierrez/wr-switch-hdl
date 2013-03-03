@@ -33,7 +33,7 @@ architecture wrapper of xwrsw_pstats is
 
       events_i : in std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
 
-      wb_adr_i   : in  std_logic_vector(2 downto 0);
+      wb_adr_i   : in  std_logic_vector(3 downto 0);
       wb_dat_i   : in  std_logic_vector(31 downto 0);
       wb_dat_o   : out std_logic_vector(31 downto 0);
       wb_cyc_i   : in  std_logic;
@@ -41,7 +41,8 @@ architecture wrapper of xwrsw_pstats is
       wb_stb_i   : in  std_logic;
       wb_we_i    : in  std_logic;
       wb_ack_o   : out std_logic;
-      wb_stall_o : out std_logic);
+      wb_stall_o : out std_logic;
+      wb_int_o   : out std_logic);
   end component;
 
 
@@ -80,7 +81,7 @@ begin
 
       events_i => events_i,
 
-      wb_adr_i   => wb_in.adr(2 downto 0),
+      wb_adr_i   => wb_in.adr(3 downto 0),
       wb_dat_i   => wb_in.dat,
       wb_dat_o   => wb_out.dat,
       wb_cyc_i   => wb_in.cyc,
@@ -88,6 +89,7 @@ begin
       wb_stb_i   => wb_in.stb,
       wb_we_i    => wb_in.we,
       wb_ack_o   => wb_out.ack,
-      wb_stall_o => wb_out.stall);
+      wb_stall_o => wb_out.stall,
+      wb_int_o   => wb_out.int);
 
 end wrapper;

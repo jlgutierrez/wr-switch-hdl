@@ -15,24 +15,37 @@ peripheral {
   prefix = "pstats";
 
 
-   reg {
-      name = "Control Register";
-      prefix = "CR";
+  reg {
+    name = "Control Register";
+    prefix = "CR";
 
-      field {
-         name = "Enable transfer of counter content";
-         description = "write 1: start reading content \
-                        write 0: no effect \
-                        read  1: reading in progress \
-                        read  0: reading done, counter value available";
-         prefix = "RD_EN";
-         
-         type = BIT;
-         access_dev = READ_WRITE;
-         access_bus = READ_WRITE;
-         load = LOAD_EXT;
-      };
+    field {
+       name = "Enable transfer of counter content";
+       description = "write 1: start reading content \
+                      write 0: no effect \
+                      read  1: reading in progress \
+                      read  0: reading done, counter value available";
+       prefix = "RD_EN";
+       
+       type = BIT;
+       access_dev = READ_WRITE;
+       access_bus = READ_WRITE;
+       load = LOAD_EXT;
+    };
 
+    field {
+       name = "Enable transfer of per-counter IRQ state";
+       description = "write 1: start reading content \
+                      write 0: no effect \
+                      read  1: reading in progress \
+                      read  0: reading done, counter value available";
+       prefix = "RD_IRQ";
+       
+       type = BIT;
+       access_dev = READ_WRITE;
+       access_bus = READ_WRITE;
+       load = LOAD_EXT;
+    };
 
     field {
       name = "Port number";
@@ -58,8 +71,9 @@ peripheral {
   };
 
   reg {
-    name = "L1 Counter Value";
-    description = "32-bit word read from given memory address of selected Ethernet port containing the value of 4 counters";
+    name = "L1 Counter Value/First word of per-counter IRQ state";
+    description = "32-bit word read from given memory address of selected Ethernet port containing the value of 4 counters \
+                   or lower half of per-counter IRQ state for port given in CR register";
     prefix = "L1_CNT_VAL";
 
     field {
@@ -73,7 +87,8 @@ peripheral {
 
   reg {
     name = "L2 Counter Value";
-    description = "32-bit word read from given memory address of selected Ethernet port containing the value of 4 counters";
+    description = "32-bit word read from given memory address of selected Ethernet port containing the value of 4 counters \
+                   or higher half of per-counter IRQ state for port given in CR register";
     prefix = "L2_CNT_VAL";
 
     field {
@@ -86,89 +101,252 @@ peripheral {
   };
 
 
-  reg {
-    name = "IRQ reg 1";
-    description = "IRQ register for ports 0-3, where each bit signals that in corresponding word at least one counter is nearly overflowing";
-    prefix = "IRQ_R1";
-
-    field{
-      name = "port0 IRQ";
-      prefix = "PORT0";
-      size = 5;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-    field{
-      name = "port1 IRQ";
-      prefix = "PORT1";
-      size = 5;
-      align = 8;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-    field{
-      name = "port2 IRQ";
-      prefix = "PORT2";
-      size = 5;
-      align = 16;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-    field{
-      name = "port3 IRQ";
-      prefix = "PORT3";
-      size = 5;
-      align = 24;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
+  irq {
+    name = "Port0 IRQ";
+    prefix = "port0";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
   };
 
-  reg {
-    name = "IRQ reg 2";
-    description = "IRQ register for ports 4-7, where each bit signals that in corresponding word at least one counter is nearly overflowing";
-    prefix = "IRQ_R2";
-
-    field{
-      name = "port4 IRQ";
-      prefix = "PORT4";
-      size = 5;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-    field{
-      name = "port5 IRQ";
-      prefix = "PORT5";
-      size = 5;
-      align = 8;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-    field{
-      name = "port6 IRQ";
-      prefix = "PORT6";
-      size = 5;
-      align = 16;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-    field{
-      name = "port7 IRQ";
-      prefix = "PORT7";
-      size = 5;
-      align = 24;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
+  irq {
+    name = "Port1 IRQ";
+    prefix = "port1";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
   };
+
+  irq {
+    name = "Port2 IRQ";
+    prefix = "port2";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port3 IRQ";
+    prefix = "port3";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port4 IRQ";
+    prefix = "port4";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port5 IRQ";
+    prefix = "port5";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port6 IRQ";
+    prefix = "port6";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port7 IRQ";
+    prefix = "port7";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port8 IRQ";
+    prefix = "port8";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port9 IRQ";
+    prefix = "port9";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port10 IRQ";
+    prefix = "port10";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port11 IRQ";
+    prefix = "port11";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port12 IRQ";
+    prefix = "port12";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port13 IRQ";
+    prefix = "port13";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port14 IRQ";
+    prefix = "port14";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port15 IRQ";
+    prefix = "port15";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port16 IRQ";
+    prefix = "port16";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+  irq {
+    name = "Port17 IRQ";
+    prefix = "port17";
+    ack_line = true;
+    mask_line = false;
+    description = "At least one of the counters on Port0 has overflown";
+    trigger = LEVEL_1;
+  };
+
+
+--  reg {
+--    name = "IRQ reg 1";
+--    description = "IRQ register for ports 0-3, where each bit signals that in corresponding word at least one counter is nearly overflowing";
+--    prefix = "IRQ_R1";
+--
+--    field{
+--      name = "port0 IRQ";
+--      prefix = "PORT0";
+--      size = 5;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--    field{
+--      name = "port1 IRQ";
+--      prefix = "PORT1";
+--      size = 5;
+--      align = 8;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--    field{
+--      name = "port2 IRQ";
+--      prefix = "PORT2";
+--      size = 5;
+--      align = 16;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--    field{
+--      name = "port3 IRQ";
+--      prefix = "PORT3";
+--      size = 5;
+--      align = 24;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--  };
+--
+--  reg {
+--    name = "IRQ reg 2";
+--    description = "IRQ register for ports 4-7, where each bit signals that in corresponding word at least one counter is nearly overflowing";
+--    prefix = "IRQ_R2";
+--
+--    field{
+--      name = "port4 IRQ";
+--      prefix = "PORT4";
+--      size = 5;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--    field{
+--      name = "port5 IRQ";
+--      prefix = "PORT5";
+--      size = 5;
+--      align = 8;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--    field{
+--      name = "port6 IRQ";
+--      prefix = "PORT6";
+--      size = 5;
+--      align = 16;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--    field{
+--      name = "port7 IRQ";
+--      prefix = "PORT7";
+--      size = 5;
+--      align = 24;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--  };
 
   reg {
     name = "Debug register";
@@ -177,15 +355,6 @@ peripheral {
     field{
       name = "Events overflow";
       prefix = "EVT_OV";
-      size = 8;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-
-    field{
-      name = "Counters overflow";
-      prefix = "CNT_OV";
       size = 8;
       type = SLV;
       access_bus = READ_ONLY;
@@ -202,22 +371,12 @@ peripheral {
     };
 
     field{
-      name = "L2 Counters overflow";
-      prefix = "L2_CNT_OV";
-      size = 1;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-
-    field{
       name = "L2 Clear flags";
       prefix = "L2_CLR";
       size = 1;
       align = 30;
       type = MONOSTABLE;
     };
-
 
     field{
       name = "Clear flags";
