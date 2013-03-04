@@ -892,17 +892,16 @@ module main;
   /*
    * problem with small frames and min InterFrame Gap: Linked-list is too slow 
    **/
- // /*
+ /*
   initial begin
-//     portUnderTest        = 18'b000000011111111111;
+
     portUnderTest        = 18'b000000000000000001;
-//     g_tru_enable         = 1;
     g_active_port        = 0;
     g_enable_pck_gaps    = 0;
     repeat_number        = 2000;
     tries_number         = 1;  
     g_force_payload_size = 64;
-    g_traffic_shaper_scenario = 1;
+
 //     mac_br               = 1;
                          // tx  ,rx ,opt
     trans_paths[0]       = '{0  ,17 , 203 };
@@ -910,7 +909,7 @@ module main;
 
 //     mac_br = 1;
   end
- //*/
+ */
 
  /** ***************************   test scenario 27  ************************************* **/ 
   /*
@@ -938,13 +937,13 @@ module main;
  */
  /** ***************************   test scenario 28  ************************************* **/ 
   /*
-   * PAUSE tets
+   * PAUSE test - simple test of Time Aware Traffic Shaper (TATSU) and output queues
+   * - sending PAUSE frames 
+   * - making some strange configuration of TATSU
    **/
- // /*
+  /*
   initial begin
-//     portUnderTest        = 18'b000000011111111111;
     portUnderTest        = 18'b000000000000000111;
-//     g_tru_enable         = 1;
     g_active_port        = 0;
     g_enable_pck_gaps    = 1;
     repeat_number        = 200;
@@ -953,30 +952,37 @@ module main;
     g_min_pck_gap        = 800; // cycles
     g_max_pck_gap        = 800; // cycles  
     g_pause_mode         = 2;
-//     mac_br               = 1;
+    
                          // tx  ,rx ,opt
     trans_paths[0]       = '{0  ,17 , 900 };
     trans_paths[1]       = '{1  ,16 , 901 };
     trans_paths[2]       = '{2  ,15 , 1 };
-    trans_paths[3]       = '{3  ,14 , 200 };
-    trans_paths[4]       = '{4  ,13 , 200 };
-    trans_paths[5]       = '{5  ,12 , 200 };
-    trans_paths[6]       = '{6  ,11 , 200 };
-    trans_paths[7]       = '{7  ,10 , 200 };
-    trans_paths[8]       = '{8  ,9  , 200 };
-    trans_paths[9]       = '{9  ,8  , 200 };
-    trans_paths[10]      = '{10 ,7  , 200 };
-    trans_paths[11]      = '{11 ,6  , 200 };
-    trans_paths[12]      = '{12 ,5  , 200 };
-    trans_paths[13]      = '{13 ,4  , 200 };
-    trans_paths[14]      = '{14 ,3  , 200 };
-    trans_paths[15]      = '{15 ,2  , 200 };
-    trans_paths[16]      = '{16 ,1  , 200 };
-    trans_paths[17]      = '{17 ,0  , 200 };
 
-//     start_send_init_delay = '{0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340};
+    g_traffic_shaper_scenario = 1;
+  end
+ */
+ /** ***************************   test scenario 29  ************************************* **/ 
+  /*
+   * 
+   **/
+ // /*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_active_port        = 0;
+    g_enable_pck_gaps    = 1;
+    repeat_number        = 200;
+    tries_number         = 1;  
+    g_force_payload_size = 0;
+    g_min_pck_gap        = 1000; // cycles
+    g_max_pck_gap        = 1000; // cycles  
+    g_pause_mode         = 2;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 900 };
+    trans_paths[1]       = '{1  ,16 , 901 };
+    trans_paths[2]       = '{2  ,15 , 205 };
 
-//     mac_br = 1;
+    g_traffic_shaper_scenario = 2;
+
   end
  //*/
    always #2.5ns clk_swc_mpm_core <=~clk_swc_mpm_core;
@@ -1036,7 +1042,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 || opt==10 || opt==201 || opt == 203 || opt == 204)
+      else if(opt==4 || opt==10 || opt==201 || opt == 203 || opt == 204 || opt == 205)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -1118,16 +1124,22 @@ module main;
               begin
                 pkt.payload[0] = 'h01;
                 pkt.payload[1] = 'h01;
+                
+                // prio vector
                 pkt.payload[2] = 'h00;
-                pkt.payload[3] = 'h01;                  
+                pkt.payload[3] = 'h81;  
+                
+                //Quanta of prio 0                
                 pkt.payload[4] = 'h00;
                 pkt.payload[5] = 'h0A;                  
 
-                //prio 7            
-                pkt.payload[16]= 'h01;
-                pkt.payload[17]= 'h01;
+                //Quanta of prio 7            
+                pkt.payload[18]= 'h00;
+                pkt.payload[19]= 'h14;
               end
               
+              if(opt == 205)
+                pkt.pcp = i%8;
               src.send(pkt);
               arr[i]  = pkt;
 //               repeat(60) @(posedge clk_sys);
@@ -1136,7 +1148,7 @@ module main;
            end
         end   // fork 1
         begin // fork 2
-        if(opt != 101 && opt != 201)
+        if(opt != 101 && opt != 201 && opt != 900 && opt != 901)
           for(int j=0;j<n_tries;j++)
             begin
               sink.recv(pkt2);
@@ -1722,6 +1734,17 @@ module main;
             wait_cycles(500); 
             cpu_acc.write('h1051c, (0<<2)); // tm_valid HIGH
             wait_cycles(50000); 
+          end
+          if(g_traffic_shaper_scenario == 2)
+          begin          
+          
+            tatsu.set_tatsu(50                     /* pause quanta                  */,
+                            0 , 7000               /* start time: tm_tai, tm_cycles */ ,
+                            8'b10000000            /* prio_mask                     */, 
+                            32'b111111111111111111 /* port_mask                     */,  
+                            8000                   /* repeat_cycles                 */);
+            tatsu.print_status();          
+          
           end
         end
       join_none
