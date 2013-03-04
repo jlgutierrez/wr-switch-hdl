@@ -799,7 +799,8 @@ begin
   vic_irqs(0)           <= cnx_master_in(c_SLAVE_NIC).int;
   vic_irqs(1)           <= cnx_master_in(c_SLAVE_TXTSU).int;
   vic_irqs(2)           <= cnx_master_in(c_SLAVE_RTU).int;
-  vic_irqs(31 downto 3) <= (others => '0');
+  vic_irqs(3)           <= cnx_master_in(c_SLAVE_PSTATS).int;
+  vic_irqs(31 downto 4) <= (others => '0');
 
 -------------------------------------------------------------------------------
 -- Various constant-driven I/Os
