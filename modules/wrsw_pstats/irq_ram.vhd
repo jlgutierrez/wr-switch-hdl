@@ -1,3 +1,29 @@
+-------------------------------------------------------------------------------
+-- Title      : IRQ RAM for Per-port statistics counters
+-- Project    : White Rabbit Switch
+-------------------------------------------------------------------------------
+-- File       : irq_ram.vhd
+-- Author     : Grzegorz Daniluk
+-- Company    : CERN BE-CO-HT
+-- Created    : 2013-02-27
+-- Last update: 2013-03-04
+-- Platform   : FPGA-generic
+-- Standard   : VHDL
+-------------------------------------------------------------------------------
+-- Description:
+-- Module stores irq flags from each counter of each port of WR Switch. Its
+-- structure is simplified design of port_cntr module. IRQ flags are stored in
+-- Block-RAM. Each 32-bit memory word can store up to 32 irq flags. IRQ events
+-- comming from each port are first aligned so that each port's flags start
+-- from a new word in memory to simplify reading FSM in top module.
+-------------------------------------------------------------------------------
+-- Copyright (c) 2013 Grzegorz Daniluk / CERN
+-------------------------------------------------------------------------------
+-- Revisions  :
+-- Date        Version  Author          Description
+-- 2013-02-27  0.1      greg.d          Created
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_misc.all;
@@ -10,35 +36,33 @@ use work.gencores_pkg.all;
 
 entity irq_ram is
   generic(
-    g_nports  : integer := 8;
-    g_cnt_pp  : integer := 64;          --number of counters per port
-    g_cnt_pw  : integer := 32);           --number of counters per word
+    g_nports : integer := 8;
+    g_cnt_pp : integer := 64;           --number of counters per port
+    g_cnt_pw : integer := 32);          --number of counters per word
   port(
     rst_n_i : in std_logic;
     clk_i   : in std_logic;
 
-    irq_i : in  std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
+    irq_i : in std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
 
     --memory interface
-    ext_cyc_i : in  std_logic                                                                := '0';
+    ext_cyc_i : in  std_logic  := '0';
     ext_adr_i : in  std_logic_vector(f_log2_size(g_nports*((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw))-1 downto 0) := (others => '0');
-    ext_we_i  : in  std_logic                                                                := '0';
-    ext_dat_i : in  std_logic_vector(31 downto 0)                                            := (others => '0');
+    ext_we_i  : in  std_logic  := '0';
+    ext_dat_i : in  std_logic_vector(31 downto 0) := (others => '0');
     ext_dat_o : out std_logic_vector(31 downto 0);
 
     --debug
     dbg_evt_ov_o : out std_logic;
-    --dbg_cnt_ov_o : out std_logic;
     clr_flags_i  : in  std_logic := '0'
   );
 end irq_ram;
 
 architecture behav of irq_ram is
 
-  constant c_rr_range   : integer := g_nports*((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw);
-  constant c_evt_range  : integer := c_rr_range*g_cnt_pw;
-  --constant c_cnt_width  : integer := c_wishbone_data_width/g_cnt_pw;
-  constant c_mem_adr_sz : integer := f_log2_size(c_rr_range);
+  constant c_rr_range     : integer := g_nports*((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw);
+  constant c_evt_range    : integer := c_rr_range*g_cnt_pw;
+  constant c_mem_adr_sz   : integer := f_log2_size(c_rr_range);
   constant c_evt_align_sz : integer := ((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)*g_cnt_pw;
 
   type   t_cnt_st is (SEL, WRITE);
@@ -51,20 +75,16 @@ architecture behav of irq_ram is
   signal mem_adr_lv  : std_logic_vector(c_mem_adr_sz-1 downto 0);
   signal mem_wr      : std_logic;
 
-  signal events_reg    : std_logic_vector(c_evt_range-1 downto 0);
-  signal events_aligned: std_logic_vector(c_evt_range-1 downto 0);
-  signal events_clr    : std_logic_vector(c_evt_range-1 downto 0);
-  signal events_sub    : std_logic_vector(g_cnt_pw-1 downto 0);
-  signal events_ored   : std_logic_vector(c_rr_range-1 downto 0);
-  signal events_preg   : std_logic_vector(c_rr_range-1 downto 0);
-  signal events_grant  : std_logic_vector(c_rr_range-1 downto 0);
-  signal events_presub : std_logic_vector(g_cnt_pw-1 downto 0);
+  signal events_reg     : std_logic_vector(c_evt_range-1 downto 0);
+  signal events_aligned : std_logic_vector(c_evt_range-1 downto 0);
+  signal events_clr     : std_logic_vector(c_evt_range-1 downto 0);
+  signal events_sub     : std_logic_vector(g_cnt_pw-1 downto 0);
+  signal events_ored    : std_logic_vector(c_rr_range-1 downto 0);
+  signal events_preg    : std_logic_vector(c_rr_range-1 downto 0);
+  signal events_grant   : std_logic_vector(c_rr_range-1 downto 0);
+  signal events_presub  : std_logic_vector(g_cnt_pw-1 downto 0);
 
-  --signal cnt_ov      : std_logic_vector(g_cnt_pw-1 downto 0);
   signal wr_conflict : std_logic;
-  --signal cnt_afull   : std_logic_vector(g_cnt_pw-1 downto 0);  -- which counter(-s) from the word currently 
-                                        -- written to memory is almost full
-  signal irq         : std_logic_vector(c_rr_range-1 downto 0);
 
   function f_onehot_decode
     (x : std_logic_vector) return integer is
@@ -107,11 +127,11 @@ begin
 
 
   --align events to 32-bit words
-  GEN_ALIGN: for i in 0 to g_nports-1 generate
-    events_aligned(i*c_evt_align_sz+g_cnt_pp-1 downto i*c_evt_align_sz) <= 
+  GEN_ALIGN : for i in 0 to g_nports-1 generate
+    events_aligned(i*c_evt_align_sz+g_cnt_pp-1 downto i*c_evt_align_sz) <=
       irq_i((i+1)*g_cnt_pp-1 downto i*g_cnt_pp);
     --zero padding for word aligning
-    events_aligned((i+1)*c_evt_align_sz-1 downto i*c_evt_align_sz+g_cnt_pp) <= (others=>'0');
+    events_aligned((i+1)*c_evt_align_sz-1 downto i*c_evt_align_sz+g_cnt_pp) <= (others => '0');
   end generate;
 
   --store events into temp register, and clear those already counted
@@ -148,20 +168,14 @@ begin
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        events_clr   <= (others => '0');
-        cnt_state    <= SEL;
-        mem_adr      <= 0;
-        mem_wr       <= '0';
-        events_sub   <= (others => '0');
-        wr_conflict  <= '0';
-        --irq          <= (others => '0');
-        events_preg  <= (others => '0');
+        events_clr  <= (others => '0');
+        cnt_state   <= SEL;
+        mem_adr     <= 0;
+        mem_wr      <= '0';
+        events_sub  <= (others => '0');
+        wr_conflict <= '0';
+        events_preg <= (others => '0');
       else
-
-        --clear irq for mem word being read from ext interface
-        --if(ext_cyc_i = '1') then
-        --  irq(to_integer(unsigned(ext_adr_i))) <= '0';
-        --end if;
 
         case(cnt_state) is
           when SEL =>
@@ -172,9 +186,9 @@ begin
 
             f_rr_arbitrate(events_ored, events_preg, events_grant);
             if(or_reduce(events_ored) = '1') then
-              events_preg          <= events_grant;
-              mem_adr              <= f_onehot_decode(events_grant);
-              events_sub           <= events_presub;
+              events_preg   <= events_grant;
+              mem_adr       <= f_onehot_decode(events_grant);
+              events_sub    <= events_presub;
               events_clr((f_onehot_decode(events_grant)+1)*g_cnt_pw-1 downto f_onehot_decode(events_grant)*g_cnt_pw) <= events_presub;
 
               if(f_onehot_decode(events_grant) = to_integer(unsigned(ext_adr_i)) and ext_cyc_i = '1' and ext_we_i = '0') then
@@ -201,26 +215,6 @@ begin
   end process;
 
   mem_dat_in <= mem_dat_out or events_sub;
-
-  --GEN_INCR : for i in 0 to g_cnt_pw-1 generate
-  --  process(clk_i)
-  --  begin
-  --    if rising_edge(clk_i) then
-  --      if(rst_n_i = '0') then
-  --        cnt_ov(i) <= '0';
-  --      else
-  --        cnt_ov(i) <= '0';
-  --        if((unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width))+1 = 0) and mem_wr = '1' and events_sub(i) = '1') then
-  --          cnt_ov(i) <= '1';
-  --        elsif(clr_flags_i = '1') then
-  --          cnt_ov(i) <= '0';
-  --        end if;
-  --      end if;
-  --    end if;
-  --  end process;
-  --end generate;
-
-  --dbg_cnt_ov_o <= or_reduce(cnt_ov);
 
 
 end behav;

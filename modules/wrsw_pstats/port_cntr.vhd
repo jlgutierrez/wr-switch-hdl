@@ -6,14 +6,16 @@
 -- Author     : Grzegorz Daniluk
 -- Company    : CERN BE-CO-HT
 -- Created    : 2012-12-20
--- Last update: 2013-02-22
+-- Last update: 2013-03-03
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
--- Description: 
-
+-- Description:
+-- Set of counters for a single Ethernet port of WR Switch. Inputs a vector of
+-- events and increments counters stored in Block-RAM. Each word of RAM stores
+-- g_cnt_pw counters so that they can be incremented all at once.
 -------------------------------------------------------------------------------
--- Copyright (c) 2012 Grzegorz Daniluk
+-- Copyright (c) 2012, 2013 Grzegorz Daniluk / CERN
 -------------------------------------------------------------------------------
 -- Revisions  :
 -- Date        Version  Author          Description
@@ -39,7 +41,7 @@ entity port_cntr is
     rst_n_i : in std_logic;
     clk_i   : in std_logic;
 
-    events_i : in  std_logic_vector(g_cnt_pp-1 downto 0);
+    events_i : in std_logic_vector(g_cnt_pp-1 downto 0);
 
     --memory interface, only for reading
     ext_adr_i : in  std_logic_vector(f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)-1 downto 0) := (others => '0');
@@ -79,7 +81,7 @@ architecture behav of port_cntr is
   signal events_grant  : std_logic_vector(c_rr_range-1 downto 0);
   signal events_presub : std_logic_vector(g_cnt_pw-1 downto 0);
 
-  signal cnt_ov      : std_logic_vector(g_cnt_pw-1 downto 0);
+  signal cnt_ov : std_logic_vector(g_cnt_pw-1 downto 0);
 
   function f_onehot_decode
     (x : std_logic_vector) return integer is
@@ -108,7 +110,7 @@ begin
       bwea_i => (others => '1'),
       wea_i  => '0',
       aa_i   => ext_adr_i,
-      da_i   => (others=>'0'),
+      da_i   => (others => '0'),
       qa_o   => ext_dat_o,
 
       clkb_i => clk_i,
@@ -167,14 +169,14 @@ begin
         case(cnt_state) is
           when SEL =>
             --check each segment of events_i starting from the one pointed by round robin
-            events_clr  <= (others => '0');
-            mem_wr      <= '0';
+            events_clr <= (others => '0');
+            mem_wr     <= '0';
 
             f_rr_arbitrate(events_ored, events_preg, events_grant);
             if(or_reduce(events_ored) = '1') then
-              events_preg                                                                                            <= events_grant;
-              mem_adr                                                                                                <= f_onehot_decode(events_grant);
-              events_sub                                                                                             <= events_presub;
+              events_preg   <= events_grant;
+              mem_adr       <= f_onehot_decode(events_grant);
+              events_sub    <= events_presub;
               events_clr((f_onehot_decode(events_grant)+1)*g_cnt_pw-1 downto f_onehot_decode(events_grant)*g_cnt_pw) <= events_presub;
 
               cnt_state <= WRITE;
@@ -182,8 +184,8 @@ begin
 
           when WRITE =>
             events_clr <= (others => '0');
-            mem_wr    <= '1';
-            cnt_state <= SEL;
+            mem_wr     <= '1';
+            cnt_state  <= SEL;
         end case;
 
 

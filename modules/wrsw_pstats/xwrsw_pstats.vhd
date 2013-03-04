@@ -1,3 +1,25 @@
+-------------------------------------------------------------------------------
+-- Title      : Per-port statistics counters wrapper
+-- Project    : White Rabbit Switch
+-------------------------------------------------------------------------------
+-- File       : xwrsw_pstats.vhd
+-- Author     : Grzegorz Daniluk
+-- Company    : CERN BE-CO-HT
+-- Created    : 2013-01-11
+-- Last update: 2013-03-04
+-- Platform   : FPGA-generic
+-- Standard   : VHDL
+-------------------------------------------------------------------------------
+-- Description:
+-- Record-based wrapper for wrsw_pstats module.
+-------------------------------------------------------------------------------
+-- Copyright (c) 2013 Grzegorz Daniluk / CERN
+-------------------------------------------------------------------------------
+-- Revisions  :
+-- Date        Version  Author          Description
+-- 2013-01-11  0.1      greg.d          Created
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.std_logic_1164.all;
 
