@@ -61,6 +61,7 @@ package swc_swcore_pkg is
 
   type t_slv_array is array(integer range <>, integer range <>) of std_logic;
 
+  type t_classes_array is array(integer range <>) of std_logic_vector(7 downto 0);
   component swc_prio_encoder
     generic (
       g_num_inputs  : integer range 2 to 80;
@@ -505,6 +506,8 @@ package swc_swcore_pkg is
       ppfm_free_o            : out  std_logic;
       ppfm_free_done_i       : in   std_logic;
       ppfm_free_pgaddr_o     : out  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+      ots_output_mask_i : in  std_logic_vector(7 downto 0);
+      ots_output_drop_at_rx_hp_i : in std_logic;      
       src_i : in  t_wrf_source_in;
       src_o : out t_wrf_source_out;
       tap_out_o : out std_logic_vector(15 downto 0)
@@ -703,6 +706,18 @@ component  swc_multiport_pck_pg_free_module is
     );
    end component;
 
+   component swc_output_traffic_shaper is  
+   generic (
+     g_num_ports      : natural := 32);
+   port (
+     rst_n_i                   : in  std_logic;
+     clk_i                     : in  std_logic;
+     shaper_request_i          : in  t_pause_request ;
+     shaper_ports_i            : in  std_logic_vector(g_num_ports-1 downto 0);
+     pause_requests_i          : in  t_pause_request_array(g_num_ports-1 downto 0);
+     output_masks_o            : out t_classes_array(g_num_ports-1 downto 0)
+   );
+   end component;
 
   function f_sel2partialSel(sel       : std_logic_vector; partialSelWidth: integer) return std_logic_vector;
   function f_partialSel2sel(partialSel: std_logic_vector; selWidth       : integer) return std_logic_vector;

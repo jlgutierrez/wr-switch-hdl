@@ -93,4 +93,12 @@ package wrsw_shared_types_pkg is
     has_prio         : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0);
   end record;
 
+  type t_pause_request is record
+    req            : std_logic;
+    quanta         : std_logic_vector(15 downto 0);
+    classes        : std_logic_vector(7 downto 0); -- '1' for the classes which shall be PAUSED
+  end record;
+
+  type t_pause_request_array is array(integer range <>) of t_pause_request;  
+
 end wrsw_shared_types_pkg;

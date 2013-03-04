@@ -95,7 +95,21 @@ entity xswc_core is
 
     src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
     src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
+
+-------------------------------------------------------------------------------
+-- I/F with Traffich shaper
+-------------------------------------------------------------------------------     
     
+    shaper_request_i          : in  t_pause_request ;
+    shaper_ports_i            : in  std_logic_vector(g_num_ports-1 downto 0);
+    shaper_drop_at_hp_ena_i   : in  std_logic := '0';
+
+-------------------------------------------------------------------------------
+-- I/F with Tx PAUSE triggers (i.e. Endpoints, TRU)
+-------------------------------------------------------------------------------   
+
+    pause_requests_i          : in  t_pause_request_array(g_num_ports-1 downto 0);
+
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
@@ -277,8 +291,10 @@ architecture rtl of xswc_core is
    signal mmu_free_done         : std_logic_vector(g_num_ports-1 downto 0);   
    signal mmu2ppfm_free_last_usecnt : std_logic_vector(g_num_ports-1 downto 0);   
   
-   ---- end tmp      
-
+   -- output_traffic_shaper -> output_block
+   signal ots2ob_output_masks   : t_classes_array(g_num_ports-1 downto 0);
+ 
+   -- 
    type t_tap_ib_array is array(0 to g_num_ports-1) of std_logic_vector(49+62 downto 0);
    type t_tap_ob_array is array(0 to g_num_ports-1) of std_logic_vector(15 downto 0);
    signal tap_mpm : std_logic_vector(61 downto 0);
@@ -505,6 +521,12 @@ architecture rtl of xswc_core is
         ppfm_free_pgaddr_o       => ob_free_pgaddr((i + 1) * c_mpm_page_addr_width    -1 downto i * c_mpm_page_addr_width),
 
         -------------------------------------------------------------------------------
+        --: output traffic shaper (PAUSE + time-aware-shaper)
+        -------------------------------------------------------------------------------  
+        ots_output_mask_i         => ots2ob_output_masks(i),
+        ots_output_drop_at_rx_hp_i=> '0',
+
+        -------------------------------------------------------------------------------
         -- pWB : output (goes to the Endpoint)
         -------------------------------------------------------------------------------  
 
@@ -516,6 +538,17 @@ architecture rtl of xswc_core is
         
   end generate gen_blocks;
 
+  OUTPUT_TRAFFIC_SHAPER: swc_output_traffic_shaper
+    generic map (
+      g_num_ports                     => g_num_ports)
+    port map(
+      rst_n_i                         => rst_n_i,
+      clk_i                           => clk_i,
+      shaper_request_i                => shaper_request_i,
+      shaper_ports_i                  => shaper_ports_i,
+      pause_requests_i                => pause_requests_i,
+      output_masks_o                  => ots2ob_output_masks
+    );
 
   PCK_PAGES_FREEEING_MODULE: swc_multiport_pck_pg_free_module
     generic map( 

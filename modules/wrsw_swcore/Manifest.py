@@ -44,7 +44,11 @@ files = [
 "../wrsw_shared_types_pkg.vhd",
 "swc_ll_read_data_validation.vhd",
 "swc_swcore_pkg.vhd",
-"ram_bug/swc_rd_wr_ram.vhd"];
+"ram_bug/swc_rd_wr_ram.vhd",
+
+"swc_output_traffic_shaper.vhd"
+
+];
 
 #"buggy_ram.vhd",
 #"buggy_ram.ngc"]

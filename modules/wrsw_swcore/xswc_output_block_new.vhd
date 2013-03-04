@@ -116,6 +116,13 @@ entity xswc_output_block_new is
     ppfm_free_pgaddr_o : out std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
 
 -------------------------------------------------------------------------------
+--: output traffic shaper (PAUSE + time-aware-shaper)
+-------------------------------------------------------------------------------  
+    ots_output_mask_i : in  std_logic_vector(7 downto 0) := "00000000"; -- '1' bit indicate
+                                                          -- that queue shall be PAUSED
+    ots_output_drop_at_rx_hp_i : in std_logic := '0';  -- if '1' the currently transmitted non-HP frame
+                                             -- is dropped (stop transmision) if HP is scheduled
+-------------------------------------------------------------------------------
 -- pWB : output (goes to the Endpoint)
 -------------------------------------------------------------------------------  
 
@@ -146,6 +153,7 @@ architecture behavoural of xswc_output_block_new is
   signal not_full_array  : std_logic_vector(g_queue_num - 1 downto 0);
   signal full_array      : std_logic_vector(g_queue_num - 1 downto 0);
   signal not_empty_array : std_logic_vector(g_queue_num - 1 downto 0);
+  signal not_empty_and_shaped_array: std_logic_vector(g_queue_num - 1 downto 0);
   signal read_array      : std_logic_vector(g_queue_num - 1 downto 0);
   signal read            : std_logic_vector(g_queue_num - 1 downto 0);
   signal rd_array            : std_logic_vector(g_queue_num - 1 downto 0);
@@ -411,7 +419,7 @@ begin  --  behavoural
     port map (
       clk_i               => clk_i,
       rst_n_i             => rst_n_i,
-      not_empty_array_i   => not_empty_array, -- vector with '1' corresponding to non_empty queue
+      not_empty_array_i   => not_empty_and_shaped_array, -- vector with '1' corresponding to non_empty queue
       read_queue_index_o  => read_index,      -- decision which queue read now (unsigned)
       read_queue_onehot_o => read_array,      -- the above decision in vector form
       full_array_i        => full_array,      -- indicates which queue(s) is full (vector)
@@ -420,6 +428,7 @@ begin  --  behavoural
       drop_queue_onehot_o => drop_array       -- the above in vector form
       );
 
+  not_empty_and_shaped_array <= (not ots_output_mask_i) and not_empty_array;
   --------------------------------------------------------------------------------------------------
   --  generating control for each output queue
   --------------------------------------------------------------------------------------------------
@@ -439,7 +448,7 @@ begin  --  behavoural
         read_i      => read(i),           -- strobe to indicate we read  one entry (increment tail)
         not_full_o  => not_full_array(i), -- indicates we can add entries (tail < head-1
         not_empty_o => not_empty_array(i),-- tail != head
-        wr_en_o     => open,              --wr_en_array(i),
+        wr_en_o     => open,              -- wr_en_array(i),
         wr_addr_o   => wr_addr_array(i),  -- head (used to create addresse to which we write in RAM)
         rd_addr_o   => rd_addr_array(i)   -- tail (used to create addresse from which we read RAM) 
         );
@@ -724,7 +733,7 @@ begin  --  behavoural
               free_sent_pck_req      <= '1';
               free_sent_pck_addr <= pck_start_pgaddr;
 
-              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' ) then -- and src_i.stall = '0') then
+              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0'  and src_i.stall = '0') then -- stall bug
                 src_out_int.cyc  <= '1';
                 s_send_pck       <= S_DATA;
                 pck_start_pgaddr <= mpm_pg_addr;
@@ -737,7 +746,7 @@ begin  --  behavoural
             --===========================================================================================
           when S_RETRY =>
             --===========================================================================================        
-            if(s_prep_to_send = S_RETRY_READY ) then -- and src_i.stall = '0') then
+            if(s_prep_to_send = S_RETRY_READY and src_i.stall = '0') then -- stall bug
               src_out_int.cyc  <= '1';
               s_send_pck       <= S_DATA;
               pck_start_pgaddr <= mpm_pg_addr;
@@ -749,7 +758,7 @@ begin  --  behavoural
               free_sent_pck_req      <= '1';
               free_sent_pck_addr <= pck_start_pgaddr;
 
-              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0'  ) then --and src_i.stall = '0') then
+              if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0') then -- stall bug
                 src_out_int.cyc  <= '1';
                 s_send_pck       <= S_DATA;
                 pck_start_pgaddr <= mpm_pg_addr;

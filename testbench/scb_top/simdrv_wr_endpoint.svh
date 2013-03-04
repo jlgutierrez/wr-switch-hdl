@@ -132,9 +132,19 @@ class CSimDrv_WR_Endpoint;
  
       $display("VLAN cofig: qmode=%1d, fix_prio=%1d, prio_val=%1d, pvid=%1d, prio_map=%1d-%1d-%1d-%1d-%1d-%1d-%1d-%1d",
                 qmode,fix_prio, prio_val, pvid, prio_map[7],prio_map[6],prio_map[5],prio_map[4],
-                prio_map[3],prio_map[2],prio_map[1],prio_map[0],);
+                prio_map[3],prio_map[2],prio_map[1],prio_map[0]);
    endtask // automatic
 
+   task automatic pause_config(int txpause,int rxpause, int txpause_prio_mode, int rxpause_prio_mode);
+     uint64_t wval;
+     wval  = (txpause_prio_mode << `EP_FCR_TXPPAUSE_PRIO_MODE_OFFSET) & `EP_FCR_TXPPAUSE_PRIO_MODE | // Tx
+             (rxpause_prio_mode << `EP_FCR_RXPPAUSE_PRIO_MODE_OFFSET) & `EP_FCR_RXPPAUSE_PRIO_MODE | // Rx
+             (txpause           << `EP_FCR_TXPAUSE_OFFSET           ) & `EP_FCR_TXPAUSE            | // Tx
+             (rxpause           << `EP_FCR_RXPAUSE_OFFSET           ) & `EP_FCR_RXPAUSE;             // Rx
+     m_acc.write(m_base + `ADDR_EP_FCR, wval);
+     $display("PAUSE cofig: tx_en=%1d, rx_en=%1d, tx prio-based=%1d, rx prio-based=%1d",
+              txpause, rxpause, txpause_prio_mode, rxpause_prio_mode);     
+   endtask // automatic
 
 
 endclass // CSimDrv_WR_Endpoint
