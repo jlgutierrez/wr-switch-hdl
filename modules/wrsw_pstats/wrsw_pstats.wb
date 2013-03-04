@@ -263,91 +263,6 @@ peripheral {
     trigger = LEVEL_1;
   };
 
-
---  reg {
---    name = "IRQ reg 1";
---    description = "IRQ register for ports 0-3, where each bit signals that in corresponding word at least one counter is nearly overflowing";
---    prefix = "IRQ_R1";
---
---    field{
---      name = "port0 IRQ";
---      prefix = "PORT0";
---      size = 5;
---      type = SLV;
---      access_bus = READ_ONLY;
---      access_dev = WRITE_ONLY;
---    };
---    field{
---      name = "port1 IRQ";
---      prefix = "PORT1";
---      size = 5;
---      align = 8;
---      type = SLV;
---      access_bus = READ_ONLY;
---      access_dev = WRITE_ONLY;
---    };
---    field{
---      name = "port2 IRQ";
---      prefix = "PORT2";
---      size = 5;
---      align = 16;
---      type = SLV;
---      access_bus = READ_ONLY;
---      access_dev = WRITE_ONLY;
---    };
---    field{
---      name = "port3 IRQ";
---      prefix = "PORT3";
---      size = 5;
---      align = 24;
---      type = SLV;
---      access_bus = READ_ONLY;
---      access_dev = WRITE_ONLY;
---    };
---  };
---
---  reg {
---    name = "IRQ reg 2";
---    description = "IRQ register for ports 4-7, where each bit signals that in corresponding word at least one counter is nearly overflowing";
---    prefix = "IRQ_R2";
---
---    field{
---      name = "port4 IRQ";
---      prefix = "PORT4";
---      size = 5;
---      type = SLV;
---      access_bus = READ_ONLY;
---      access_dev = WRITE_ONLY;
---    };
---    field{
---      name = "port5 IRQ";
---      prefix = "PORT5";
---      size = 5;
---      align = 8;
---      type = SLV;
---      access_bus = READ_ONLY;
---      access_dev = WRITE_ONLY;
---    };
---    field{
---      name = "port6 IRQ";
---      prefix = "PORT6";
---      size = 5;
---      align = 16;
---      type = SLV;
---      access_bus = READ_ONLY;
---      access_dev = WRITE_ONLY;
---    };
---    field{
---      name = "port7 IRQ";
---      prefix = "PORT7";
---      size = 5;
---      align = 24;
---      type = SLV;
---      access_bus = READ_ONLY;
---      access_dev = WRITE_ONLY;
---    };
---  };
-
   reg {
     name = "Debug register";
     prefix = "DBG";
@@ -355,7 +270,7 @@ peripheral {
     field{
       name = "Events overflow";
       prefix = "EVT_OV";
-      size = 8;
+      size = 18;
       type = SLV;
       access_bus = READ_ONLY;
       access_dev = WRITE_ONLY;
