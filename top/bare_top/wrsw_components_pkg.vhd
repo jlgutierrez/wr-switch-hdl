@@ -180,6 +180,9 @@ package wrsw_components_pkg is
       pps_p_o             : out std_logic;
       pps_raw_i           : in  std_logic;
       sel_clk_sys_o       : out std_logic;
+      tm_utc_o            : out std_logic_vector(39 downto 0);
+      tm_cycles_o         : out std_logic_vector(27 downto 0);
+      tm_time_valid_o     : out std_logic;
       pll_status_i        : in  std_logic;
       pll_mosi_o          : out std_logic;
       pll_miso_i          : in  std_logic;
@@ -239,7 +242,12 @@ package wrsw_components_pkg is
   
       src_i          : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
       src_o          : out t_wrf_source_out_array(g_num_ports-1 downto 0);
-      
+    
+      shaper_request_i          : in  t_pause_request ;
+      shaper_ports_i            : in  std_logic_vector(g_num_ports-1 downto 0);
+      shaper_drop_at_hp_ena_i   : in  std_logic := '0';
+      pause_requests_i          : in  t_pause_request_array(g_num_ports-1 downto 0);      
+
       rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
       rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)
       );

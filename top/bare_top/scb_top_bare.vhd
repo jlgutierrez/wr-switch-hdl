@@ -13,6 +13,7 @@ use work.wrsw_txtsu_pkg.all;
 use work.wrsw_top_pkg.all;
 use work.wrsw_shared_types_pkg.all;
 use work.wrsw_tru_pkg.all;
+use work.wrsw_tatsu_pkg.all;
 
 library UNISIM;
 use UNISIM.vcomponents.all;
@@ -22,7 +23,8 @@ entity scb_top_bare is
     g_num_ports       : integer := 6;
     g_simulation      : boolean := false;
     g_without_network : boolean := false;
-    g_with_TRU        : boolean := false
+    g_with_TRU        : boolean := false;
+    g_with_TATSU      : boolean := false
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -128,7 +130,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 11;
+  constant c_NUM_WB_SLAVES : integer := 12;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
 
@@ -148,9 +150,11 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_MBL_I2C1     : integer := 8;
   constant c_SLAVE_SENSOR_I2C   : integer := 9;
   constant c_SLAVE_TRU          : integer := 10;
+  constant c_SLAVE_TATSU        : integer := 11;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
+      x"00058000",                      -- TATSU
       x"00057000",                      -- TRU
       x"00056000",                      -- Sensors-I2C
       x"00055000",                      -- MBL-I2C1
@@ -166,6 +170,7 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000ff000",
@@ -320,6 +325,19 @@ architecture rtl of scb_top_bare is
   signal tru2ep     : t_tru2ep_array(g_num_ports-1 downto 0);
   signal swc2tru    : std_logic_vector(g_num_ports-1 downto 0); -- for pausing
 
+  -----------------------------------------------------------------------------
+  -- Time-Aware Traffic Shaper
+  -----------------------------------------------------------------------------
+
+  signal tm_utc              : std_logic_vector(39 downto 0);
+  signal tm_cycles           : std_logic_vector(27 downto 0);
+  signal tm_time_valid       : std_logic;
+  signal shaper_ports_mask   : std_logic_vector(g_num_ports+1-1 downto 0);
+  signal shaper_request      : t_pause_request;
+  signal shaper_drop_at_hp_ena : std_logic;
+  signal   fc_rx_pause       : t_pause_request_array(g_num_ports+1-1 downto 0);
+  constant c_zero_pause      : t_pause_request :=('0',x"0000", x"00");
+
 begin
 
 
@@ -427,6 +445,11 @@ begin
       pps_ext_o   => pps_o,
 
       sel_clk_sys_o => sel_clk_sys,
+
+      tm_utc_o            => tm_utc, 
+      tm_cycles_o         => tm_cycles, 
+      tm_time_valid_o     => tm_time_valid, 
+
       pll_status_i  => '0',
       pll_mosi_o    => pll_mosi_o,
       pll_miso_i    => pll_miso_i,
@@ -468,8 +491,10 @@ begin
         rtu_rsp_ack_i       => rtu_rsp_ack(c_NUM_PORTS),
         wb_i                => cnx_master_out(c_SLAVE_NIC),
         wb_o                => cnx_master_in(c_SLAVE_NIC));
+  
+    fc_rx_pause(c_NUM_PORTS)       <= c_zero_pause; -- no pause for NIC
+    shaper_ports_mask(c_NUM_PORTS) <= '0';    
 
-    
     U_Endpoint_Fanout : xwb_crossbar
       generic map (
         g_num_masters => 1,
@@ -554,15 +579,19 @@ begin
           pfilter_pclass_o     => ep2tru(i).pfilter_pclass,
           pfilter_drop_o       => ep2tru(i).pfilter_drop,
           pfilter_done_o       => ep2tru(i).pfilter_done,
-          fc_pause_req_i       => tru2ep(i).fc_pause_req,
-          fc_pause_delay_i     => tru2ep(i).fc_pause_delay,
-          fc_pause_ready_o     => ep2tru(i).fc_pause_ready,
+          fc_tx_pause_req_i       => tru2ep(i).fc_pause_req,
+          fc_tx_pause_delay_i     => tru2ep(i).fc_pause_delay,
+          fc_tx_pause_ready_o     => ep2tru(i).fc_pause_ready,
           inject_req_i         => tru2ep(i).inject_req,
           inject_ready_o       => ep2tru(i).inject_ready,
           inject_packet_sel_i  => tru2ep(i).inject_packet_sel,
           inject_user_value_i  => tru2ep(i).inject_user_value,
           link_kill_i          => tru2ep(i).link_kill, --'0' , --link_kill(i), -- to change
           link_up_o            => ep2tru(i).status,
+          ------ PAUSE to SWcore  ------------
+          fc_rx_pause_start_p_o   => fc_rx_pause(i).req,  
+          fc_rx_pause_quanta_o    => fc_rx_pause(i).quanta,    
+          fc_rx_pause_prio_mask_o => fc_rx_pause(i).classes,    
           ----------------------------
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
@@ -631,10 +660,16 @@ begin
         snk_i => endpoint_src_out,
         snk_o => endpoint_src_in,
 
+        shaper_request_i          => shaper_request,
+        shaper_ports_i            => shaper_ports_mask,
+        shaper_drop_at_hp_ena_i   => shaper_drop_at_hp_ena,
+
+        pause_requests_i          => fc_rx_pause,
+
         rtu_rsp_i => rtu_rsp,
         rtu_ack_o => rtu_rsp_ack
         );
-
+  
     -- NIC sink
     --TRIG0 <= f_fabric_2_slv(endpoint_snk_in(1), endpoint_snk_out(1));
     ---- NIC source
@@ -709,6 +744,40 @@ begin
       tru_enabled                    <= '0';
       cnx_master_in(c_SLAVE_TRU).ack <= '1';
     end generate gen_no_TRU; 
+
+    gen_TATSU: if(g_with_TATSU = true) generate
+      U_TATSU:  xwrsw_tatsu
+        generic map(     
+          g_num_ports             => g_num_ports,
+          g_simulation            => g_simulation,
+          g_interface_mode        => PIPELINED,
+--           g_ref_clock_rate        => f_pick(g_simulation, 10000, 62500000),
+          g_address_granularity   => BYTE
+          )
+        port map(
+          clk_sys_i               => clk_sys,
+          clk_ref_i               => clk_ref_i,
+          rst_n_i                 => rst_n_sys,
+
+          shaper_request_o        => shaper_request,
+          shaper_ports_o          => shaper_ports_mask(g_num_ports-1 downto 0),
+          shaper_drop_at_hp_ena_o => shaper_drop_at_hp_ena,
+          tm_utc_i                => tm_utc,
+          tm_cycles_i             => tm_cycles,
+          tm_time_valid_i         => tm_time_valid,
+          wb_i                    => cnx_master_out(c_SLAVE_TATSU),
+          wb_o                    => cnx_master_in(c_SLAVE_TATSU)
+        );
+
+    end generate gen_TATSU;
+    
+    gen_no_TATSU: if(g_with_TATSU = false) generate
+      shaper_ports_mask(g_num_ports-1 downto 0) <=  (others =>'0');
+      shaper_request                            <= c_zero_pause;
+      shaper_drop_at_hp_ena                     <= '0';
+      cnx_master_in(c_SLAVE_TATSU).ack          <= '1';
+    end generate gen_no_TATSU;
+
 
   end generate gen_network_stuff;
 

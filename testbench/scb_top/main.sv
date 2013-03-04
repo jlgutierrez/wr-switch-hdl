@@ -5,6 +5,7 @@
 `include "simdrv_rtu.sv"
 `include "simdrv_wr_tru.svh"
 `include "simdrv_txtsu.svh"
+`include "simdrv_tatsu.svh"
 `include "endpoint_regs.v"
 `include "endpoint_mdio.v"
 `include "if_wb_master.svh"
@@ -58,6 +59,7 @@ module main;
    CRTUSimDriver rtu;
    CSimDrv_WR_TRU    tru;
    CSimDrv_TXTSU txtsu;
+   CSimDrv_TATSU tatsu;
    
    reg [g_num_ports-1:0] ep_ctrl;
    
@@ -76,6 +78,8 @@ module main;
    integer g_is_qvlan                         = 1;  // has vlan header
    integer g_pfilter_enabled                  = 0;
    integer g_limit_config_to_port_num         = g_num_ports;
+   integer g_pause_mode                       = 0; //config of endpoints' PAUSE stuff 
+                                                   //0:disabled | 1: standard PAUSE | 2: prio-based PAUSE
                                         // tx  ,rx ,opt (send from port tx to rx with option opt
    t_trans_path trans_paths[g_max_ports]      ='{'{0  ,17 , 0 }, // port 0: 
                                                  '{1  ,16 , 0 }, // port 1
@@ -189,6 +193,7 @@ module main;
                                                   7}  // every 4th frame send to port 4
                                                };
    integer g_LACP_scenario                  = 0;
+   integer g_traffic_shaper_scenario        = 0;
    int lacp_df_hp_id                        = 0;
    int lacp_df_br_id                        = 2;
    int lacp_df_un_id                        = 1;
@@ -885,7 +890,7 @@ module main;
 
  /** ***************************   test scenario 26  ************************************* **/ 
   /*
-   *8 
+   * problem with small frames and min InterFrame Gap: Linked-list is too slow 
    **/
  // /*
   initial begin
@@ -894,14 +899,65 @@ module main;
 //     g_tru_enable         = 1;
     g_active_port        = 0;
     g_enable_pck_gaps    = 0;
-    repeat_number        = 200;
-    tries_number         = 3;  
-//     g_force_payload_size = 800;
+    repeat_number        = 2000;
+    tries_number         = 1;  
+    g_force_payload_size = 64;
+    g_traffic_shaper_scenario = 1;
+//     mac_br               = 1;
                          // tx  ,rx ,opt
-    trans_paths[0]       = '{0  ,17 , 1 };
+    trans_paths[0]       = '{0  ,17 , 203 };
+    start_send_init_delay = '{0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340};
+
+//     mac_br = 1;
+  end
+ //*/
+
+ /** ***************************   test scenario 27  ************************************* **/ 
+  /*
+   * 
+   **/
+  /*
+  initial begin
+//     portUnderTest        = 18'b000000011111111111;
+    portUnderTest        = 18'b000000000000000001;
+//     g_tru_enable         = 1;
+    g_active_port        = 0;
+    g_enable_pck_gaps    = 0;
+    repeat_number        = 2000;
+    tries_number         = 1;  
+    g_force_payload_size = 500;
+//     mac_br               = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 204 };
 //     trans_paths[0]       = '{0  ,17 , 200 };
-    trans_paths[1]       = '{1  ,16 , 200 };
-    trans_paths[2]       = '{2  ,15 , 200 };
+
+    start_send_init_delay = '{0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340};
+
+//     mac_br = 1;
+  end
+ */
+ /** ***************************   test scenario 28  ************************************* **/ 
+  /*
+   * PAUSE tets
+   **/
+ // /*
+  initial begin
+//     portUnderTest        = 18'b000000011111111111;
+    portUnderTest        = 18'b000000000000000111;
+//     g_tru_enable         = 1;
+    g_active_port        = 0;
+    g_enable_pck_gaps    = 1;
+    repeat_number        = 200;
+    tries_number         = 1;  
+    g_force_payload_size = 0;
+    g_min_pck_gap        = 800; // cycles
+    g_max_pck_gap        = 800; // cycles  
+    g_pause_mode         = 2;
+//     mac_br               = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 900 };
+    trans_paths[1]       = '{1  ,16 , 901 };
+    trans_paths[2]       = '{2  ,15 , 1 };
     trans_paths[3]       = '{3  ,14 , 200 };
     trans_paths[4]       = '{4  ,13 , 200 };
     trans_paths[5]       = '{5  ,12 , 200 };
@@ -918,12 +974,11 @@ module main;
     trans_paths[16]      = '{16 ,1  , 200 };
     trans_paths[17]      = '{17 ,0  , 200 };
 
-    start_send_init_delay = '{0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340};
+//     start_send_init_delay = '{0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340};
 
 //     mac_br = 1;
   end
  //*/
-
    always #2.5ns clk_swc_mpm_core <=~clk_swc_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
    always #8ns clk_ref <= ~clk_ref;
@@ -973,7 +1028,7 @@ module main;
       else
         tmpl.src       = '{srcPort, 2,3,4,5,6};
 
-      if(opt==0 || opt == 200 || opt == 201)
+      if(opt==0 || opt == 200 || opt == 202 )
         tmpl.dst       = '{dstPort, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       else if(opt==1)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
@@ -981,7 +1036,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 || opt==10 || opt==201)
+      else if(opt==4 || opt==10 || opt==201 || opt == 203 || opt == 204)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -991,20 +1046,30 @@ module main;
         tmpl.dst       = '{'h04, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // in the middle of the range
       else if(opt==8)
         tmpl.dst       = '{'h01, 'h1b, 'h19, 'h00, 'h00, 'h00}; // PTP
-      else if(opt==9)
-        tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h01}; // link-limited
+      else if(opt==9 || opt==900 || opt == 901)
+        tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h01}; // PAUSE
       else
         tmpl.dst       = '{'h00, 'h00, 'h00, 'h00, 'h00, 'h00}; // link-limited
 
 
   
       tmpl.has_smac  = 1;
-      tmpl.is_q      = is_q;
+      if(opt == 204)
+        tmpl.pcp     = 3; //priority
+      
+      if(opt==900 || opt == 901)
+        tmpl.is_q      = 0;
+      else
+        tmpl.is_q      = is_q;
+
+
       if(opt==10)
         tmpl.vid     = 1;
       else
         tmpl.vid     = 0;
-      if(opt == 100 ||  opt == 101 ||  opt == 102)
+      if(opt==900 || opt == 901) 
+        tmpl.ethertype = 'h8808;  
+      else if(opt == 100 ||  opt == 101 ||  opt == 102)
         tmpl.ethertype = 'hbabe;
       else
         tmpl.ethertype = 'h88f7;
@@ -1013,9 +1078,9 @@ module main;
       gen.set_template(tmpl);
       if(g_force_payload_size < 64)
         begin
-        if(opt == 101 ||  opt == 102)
-          gen.set_size(63, 64);
-        else if(opt == 201)
+        if(opt == 101 ||  opt == 102 || opt == 900 || opt == 901)
+          gen.set_size(64, 65);
+        else if(opt == 201 || opt == 202 || opt == 203 || opt == 204)
           gen.set_size(63, 1001);
         else if(opt == 200)
           gen.set_size(1000, 1001);
@@ -1042,10 +1107,31 @@ module main;
                 pkt.payload[0] = 'hba;
                 pkt.payload[1] = 'hbe;
               end
+              else if(opt == 900) // "normal pause
+              begin
+                pkt.payload[0] = 'h00;
+                pkt.payload[1] = 'h01;
+                pkt.payload[2] = 'h00;
+                pkt.payload[3] = 'h01;                
+              end
+              else if(opt == 901) // "per-prio pause
+              begin
+                pkt.payload[0] = 'h01;
+                pkt.payload[1] = 'h01;
+                pkt.payload[2] = 'h00;
+                pkt.payload[3] = 'h01;                  
+                pkt.payload[4] = 'h00;
+                pkt.payload[5] = 'h0A;                  
+
+                //prio 7            
+                pkt.payload[16]= 'h01;
+                pkt.payload[17]= 'h01;
+              end
               
               src.send(pkt);
               arr[i]  = pkt;
-              repeat(60) @(posedge clk_sys);
+//               repeat(60) @(posedge clk_sys);
+              repeat(6) @(posedge clk_sys); //minimum interframe gap : 96 bits = 12 bytes = 6 words
               wait_cycles(pck_gap); 
            end
         end   // fork 1
@@ -1171,6 +1257,7 @@ module main;
                 join
                 n_dist_tries[dstID]++;
               repeat(60) @(posedge clk_sys);
+//               repeat(6) @(posedge clk_sys);
               wait_cycles(pck_gap); 
            end
         end   // fork 1
@@ -1270,7 +1357,10 @@ module main;
              ep.write_template(0, PAUSE_templ, 16);
              ep.write_template(1, BPDU_templ,  20);
            end
-
+           if(g_pause_mode == 1)
+             ep.pause_config( 1/*tx_en*/, 1/*rx_en*/, 0/*tx prio-based*/, 0/*rx prio-based*/);
+           else if(g_pause_mode == 2)
+             ep.pause_config( 1/*tx_en*/, 1/*rx_en*/, 1/*tx prio-based*/, 1/*rx prio-based*/);
            tmp.ep = ep;
            tmp.send = EthPacketSource'(DUT.to_port[i]);
            tmp.recv = EthPacketSink'(DUT.from_port[i]);
@@ -1490,7 +1580,11 @@ module main;
       
       cpu_acc.set_mode(PIPELINED);
       cpu_acc.write('h10304, (1<<3));
-
+      
+      // pps_gen for time code for Time-Aware Traffic Shaper
+      cpu_acc.write('h10500, (1<<1)); // enable pps_gen counter
+      cpu_acc.write('h1051c, (1<<2)); // tm_valid HIGH
+      
       
       init_ports(ports, cpu_acc);
       $display("InitNIC");
@@ -1588,6 +1682,49 @@ module main;
       tru = new(cpu_acc, 'h57000,g_num_ports,1);      
       init_tru(tru);
       
+      tatsu=new(cpu_acc, 'h58000);
+      fork
+        begin
+          if(g_traffic_shaper_scenario == 1)
+          begin
+            // initial settings
+            tatsu.set_tatsu(8 /*pause quanta*/, 1 /*tm_tai*/, 1000 /*tm_cycles*/, 1/*prio_mask*/, 
+                            3 /*port_mask   */,  100     /*repeat_cycles*/);
+            tatsu.print_status();
+             
+            // wait for  it to start 
+            wait_cycles(10000);
+            
+            // wrong settings - we should be at tai >=1, so tai=0 is wrong setting for sure
+            tatsu.set_tatsu(8 /*pause quanta*/, 0 /*tm_tai*/, 1000 /*tm_cycles*/, 1/*prio_mask*/, 
+                            3 /*port_mask   */,  100     /*repeat_cycles*/);
+            // check that it says error
+            tatsu.print_status();
+             
+            // set tm_valid LOW
+            cpu_acc.write('h1051c, (0<<2)); // tm_valid LOW
+            
+            // new settings 
+            wait_cycles(10);
+            tatsu.set_tatsu(8 /*pause quanta*/, 2 /*tm_tai*/, 1000 /*tm_cycles*/, 'b10000000/*prio_mask*/, 
+                            32'b1010100 /*port_mask   */,  100     /*repeat_cycles*/);
+            tatsu.print_status();
+             
+            wait_cycles(15000); // we should be already after the time specifid
+            // set tm_valid HIGH again
+            cpu_acc.write('h1051c, (1<<2)); // tm_valid HIGH
+            
+            wait_cycles(5000); 
+            // test re-sync
+            cpu_acc.write('h1051c, (0<<2)); // tm_valid HIGH
+            wait_cycles(15000); 
+            cpu_acc.write('h1051c, (1<<2)); // tm_valid HIGH
+            wait_cycles(500); 
+            cpu_acc.write('h1051c, (0<<2)); // tm_valid HIGH
+            wait_cycles(50000); 
+          end
+        end
+      join_none
       
       ////////////// sending packest on all the ports (16) according to the portUnderTest mask.///////
       fork

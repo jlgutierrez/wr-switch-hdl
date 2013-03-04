@@ -61,6 +61,11 @@ entity wrsw_rt_subsystem is
     sel_clk_sys_o : out std_logic;      -- system clock selection: 0 = startup
                                         -- clock, 1 = PLL clock
 
+    -- WR timebase
+    tm_utc_o        : out std_logic_vector(39 downto 0);
+    tm_cycles_o     : out std_logic_vector(27 downto 0);
+    tm_time_valid_o : out std_logic;
+
     -- AD9516 signals
     pll_status_i  : in  std_logic;
     pll_mosi_o    : out std_logic;
@@ -327,10 +332,9 @@ begin  -- rtl
       pps_csync_o     => pps_csync_o,
       pps_out_o       => pps_ext_o,
       pps_valid_o     => pps_valid_o,
-      tm_utc_o        => open,
-      tm_cycles_o     => open,
-      tm_time_valid_o => open);
-
+      tm_utc_o        => tm_utc_o,
+      tm_cycles_o     => tm_cycles_o,
+      tm_time_valid_o => tm_time_valid_o);
 
   cpu_irq_vec(0)           <= cnx_master_in(2).int;
   cpu_irq_vec(31 downto 1) <= (others => '0');
