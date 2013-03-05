@@ -133,7 +133,7 @@ architecture rtl of scb_top_bare is
   constant c_NUM_WB_SLAVES : integer := 12;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
-
+  constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
 
 -------------------------------------------------------------------------------
 -- Interconnect & memory layout
@@ -323,8 +323,7 @@ architecture rtl of scb_top_bare is
   signal rtu2tru    : t_rtu2tru;
   signal ep2tru     : t_ep2tru_array(g_num_ports-1 downto 0);
   signal tru2ep     : t_tru2ep_array(g_num_ports-1 downto 0);
-  signal swc2tru    : std_logic_vector(g_num_ports-1 downto 0); -- for pausing
-
+  signal swc2tru_req: t_global_pause_request; -- for pause
   -----------------------------------------------------------------------------
   -- Time-Aware Traffic Shaper
   -----------------------------------------------------------------------------
@@ -332,11 +331,12 @@ architecture rtl of scb_top_bare is
   signal tm_utc              : std_logic_vector(39 downto 0);
   signal tm_cycles           : std_logic_vector(27 downto 0);
   signal tm_time_valid       : std_logic;
-  signal shaper_ports_mask   : std_logic_vector(g_num_ports+1-1 downto 0);
-  signal shaper_request      : t_pause_request;
+  signal shaper_request      : t_global_pause_request;
   signal shaper_drop_at_hp_ena : std_logic;
   signal   fc_rx_pause       : t_pause_request_array(g_num_ports+1-1 downto 0);
-  constant c_zero_pause      : t_pause_request :=('0',x"0000", x"00");
+  constant c_zero_pause      : t_pause_request        :=('0',x"0000", x"00");
+  constant c_zero_gl_pause   : t_global_pause_request :=('0',x"0000", x"00",(others=>'0'));
+  signal global_pause        : t_global_pause_request_array(c_NUM_GL_PAUSE-1 downto 0);
 
 begin
 
@@ -492,9 +492,8 @@ begin
         wb_i                => cnx_master_out(c_SLAVE_NIC),
         wb_o                => cnx_master_in(c_SLAVE_NIC));
   
-    fc_rx_pause(c_NUM_PORTS)       <= c_zero_pause; -- no pause for NIC
-    shaper_ports_mask(c_NUM_PORTS) <= '0';    
-
+    fc_rx_pause(c_NUM_PORTS)       <= c_zero_pause; -- no pause for NIC  
+    
     U_Endpoint_Fanout : xwb_crossbar
       generic map (
         g_num_masters => 1,
@@ -649,7 +648,8 @@ begin
         g_mpm_ratio                       => 6, --f_swc_ratio,  --2
         g_mpm_fifo_size                   => 8,
         g_mpm_fetch_next_pg_in_advance    => false,
-        g_drop_outqueue_head_on_full      => true)
+        g_drop_outqueue_head_on_full      => true,
+        g_num_global_pause                => c_NUM_GL_PAUSE)
       port map (
         clk_i          => clk_sys,
         clk_mpm_core_i => clk_aux_i,
@@ -660,16 +660,22 @@ begin
         snk_i => endpoint_src_out,
         snk_o => endpoint_src_in,
 
-        shaper_request_i          => shaper_request,
-        shaper_ports_i            => shaper_ports_mask,
         shaper_drop_at_hp_ena_i   => shaper_drop_at_hp_ena,
-
-        pause_requests_i          => fc_rx_pause,
+        
+        -- pause stuff
+        global_pause_i            => global_pause,
+        perport_pause_i           => fc_rx_pause,
 
         rtu_rsp_i => rtu_rsp,
         rtu_ack_o => rtu_rsp_ack
         );
-  
+     
+    -- SWcore global pause nr=0 assigned to TRU
+    global_pause(0)          <= swc2tru_req;
+
+    -- SWcore global pause nr=1 assigned to TATSU
+    global_pause(1)          <= shaper_request; 
+    
     -- NIC sink
     --TRIG0 <= f_fabric_2_slv(endpoint_snk_in(1), endpoint_snk_out(1));
     ---- NIC source
@@ -733,14 +739,15 @@ begin
           rtu_i               => rtu2tru, 
           ep_i                => ep2tru,
           ep_o                => tru2ep,
-          swc_o               => swc2tru,
+          swc_block_oq_req_o  => swc2tru_req,
           enabled_o           => tru_enabled,
           wb_i                => cnx_master_out(c_SLAVE_TRU),
           wb_o                => cnx_master_in(c_SLAVE_TRU));
+
     end generate gen_TRU;    
 
     gen_no_TRU : if(g_with_TRU = false) generate
-      swc2tru                        <= (others =>'0');  
+      swc2tru_req                    <= c_zero_gl_pause;
       tru_enabled                    <= '0';
       cnx_master_in(c_SLAVE_TRU).ack <= '1';
     end generate gen_no_TRU; 
@@ -751,7 +758,6 @@ begin
           g_num_ports             => g_num_ports,
           g_simulation            => g_simulation,
           g_interface_mode        => PIPELINED,
---           g_ref_clock_rate        => f_pick(g_simulation, 10000, 62500000),
           g_address_granularity   => BYTE
           )
         port map(
@@ -760,7 +766,6 @@ begin
           rst_n_i                 => rst_n_sys,
 
           shaper_request_o        => shaper_request,
-          shaper_ports_o          => shaper_ports_mask(g_num_ports-1 downto 0),
           shaper_drop_at_hp_ena_o => shaper_drop_at_hp_ena,
           tm_utc_i                => tm_utc,
           tm_cycles_i             => tm_cycles,
@@ -772,12 +777,10 @@ begin
     end generate gen_TATSU;
     
     gen_no_TATSU: if(g_with_TATSU = false) generate
-      shaper_ports_mask(g_num_ports-1 downto 0) <=  (others =>'0');
-      shaper_request                            <= c_zero_pause;
+      shaper_request                            <= c_zero_gl_pause;
       shaper_drop_at_hp_ena                     <= '0';
       cnx_master_in(c_SLAVE_TATSU).ack          <= '1';
     end generate gen_no_TATSU;
-
 
   end generate gen_network_stuff;
 
@@ -787,8 +790,6 @@ begin
       phys_o(i).loopen <= '0';
     end generate gen_dummy_resets;
   end generate gen_no_network_stuff;
-
-
 
   U_Tx_TSU : xwrsw_tx_tsu
     generic map (

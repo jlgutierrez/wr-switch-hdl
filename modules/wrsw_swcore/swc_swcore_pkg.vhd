@@ -62,6 +62,8 @@ package swc_swcore_pkg is
   type t_slv_array is array(integer range <>, integer range <>) of std_logic;
 
   type t_classes_array is array(integer range <>) of std_logic_vector(7 downto 0);
+  
+  type t_ports_masks is array(integer range <>) of std_logic_vector(c_RTU_MAX_PORTS+1-1 downto 0);
   component swc_prio_encoder
     generic (
       g_num_inputs  : integer range 2 to 80;
@@ -621,7 +623,8 @@ component  swc_multiport_pck_pg_free_module is
       g_mpm_ratio                        : integer ;
       g_mpm_fifo_size                    : integer ;
       g_mpm_fetch_next_pg_in_advance     : boolean ;
-      g_drop_outqueue_head_on_full       : boolean
+      g_drop_outqueue_head_on_full       : boolean ;
+      g_num_global_pause                 : integer 
       );
    port (
       clk_i          : in std_logic;
@@ -708,13 +711,18 @@ component  swc_multiport_pck_pg_free_module is
 
    component swc_output_traffic_shaper is  
    generic (
-     g_num_ports      : natural := 32);
+     g_num_ports        : integer := 32;
+     g_num_global_pause : integer := 2);
    port (
      rst_n_i                   : in  std_logic;
      clk_i                     : in  std_logic;
-     shaper_request_i          : in  t_pause_request ;
-     shaper_ports_i            : in  std_logic_vector(g_num_ports-1 downto 0);
-     pause_requests_i          : in  t_pause_request_array(g_num_ports-1 downto 0);
+--      shaper_request_i          : in  t_pause_request ;
+--      shaper_ports_i            : in  std_logic_vector(g_num_ports-1 downto 0);    
+--      pause_requests_i          : in  t_pause_request_array(g_num_ports-1 downto 0);
+    
+     perport_pause_i           : in  t_pause_request_array(g_num_ports-1 downto 0);
+     global_pause_i            : in  t_global_pause_request_array(g_num_global_pause-1 downto 0);
+
      output_masks_o            : out t_classes_array(g_num_ports-1 downto 0)
    );
    end component;
@@ -731,6 +739,12 @@ component  swc_multiport_pck_pg_free_module is
                                                   queue_num     : integer) return std_logic_vector;
   function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector;
   function f_onehot_decode(x : std_logic_vector) return std_logic_vector;
+  function f_global_pause_mask(class_mask : t_classes_array;
+                               port_mask   : t_ports_masks;
+                               port_id     : integer;
+                               gl_pause_num: integer
+                              ) return std_logic_vector;  
+  
 end swc_swcore_pkg;
 
 package body swc_swcore_pkg is
@@ -853,5 +867,21 @@ package body swc_swcore_pkg is
     return tmp;
   end function f_onehot_decode;
 
+  function f_global_pause_mask(class_mask : t_classes_array;
+                               port_mask   : t_ports_masks;
+                               port_id     : integer;
+                               gl_pause_num: integer
+                              ) return std_logic_vector is
+    variable tmp : std_logic_vector(7 downto 0);
+  begin
+    tmp := (others => '0');
+
+    for i in 0 to gl_pause_num-1 loop
+      if (port_mask(i)(port_id) = '1' ) then
+        tmp := tmp or class_mask(i);
+      end if;
+    end loop;
+    return tmp;
+  end f_global_pause_mask;
 
 end swc_swcore_pkg;

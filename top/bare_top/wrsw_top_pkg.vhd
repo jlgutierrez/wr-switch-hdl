@@ -282,7 +282,8 @@ package wrsw_top_pkg is
       g_mpm_ratio                        : integer ;
       g_mpm_fifo_size                    : integer ;
       g_mpm_fetch_next_pg_in_advance     : boolean ;
-      g_drop_outqueue_head_on_full       : boolean
+      g_drop_outqueue_head_on_full       : boolean ;
+      g_num_global_pause                 : integer 
     );
    port (
       clk_i          : in std_logic;
@@ -295,10 +296,9 @@ package wrsw_top_pkg is
       src_i          : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
       src_o          : out t_wrf_source_out_array(g_num_ports-1 downto 0);
       
-      shaper_request_i          : in  t_pause_request ;
-      shaper_ports_i            : in  std_logic_vector(g_num_ports-1 downto 0);
+      global_pause_i            : in  t_global_pause_request_array(g_num_global_pause-1 downto 0);
+      perport_pause_i           : in  t_pause_request_array(g_num_ports-1 downto 0);      
       shaper_drop_at_hp_ena_i   : in  std_logic := '0';
-      pause_requests_i          : in  t_pause_request_array(g_num_ports-1 downto 0);
 
       rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
       rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)

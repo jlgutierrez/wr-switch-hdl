@@ -52,7 +52,8 @@ use work.wrsw_shared_types_pkg.all;
 entity swc_output_traffic_shaper is
   
   generic (
-    g_num_ports      : natural := 32
+    g_num_ports        : integer := 32;
+    g_num_global_pause : integer := 2
     );
 
   port (
@@ -60,20 +61,23 @@ entity swc_output_traffic_shaper is
     clk_i                     : in  std_logic;
     
     -------------------------------------------------------------------------------
-    -- Request from Time-Aware shaper, it indicates which classes shall be allowed
-    -- at output in the window ('1' in classes vector inducates the class is allowed). 
-    -- It also indicates on which ports this should be applied
+    -- per-port PAUSE request
+    -- * semi-priority-based - defines which priorities (output queues) to  block
+    -- * has the same pause time (quanta) for all priorities
+    -- * expected to come from Endpoints which parse PAUSE frames and provide info
     -------------------------------------------------------------------------------
-    shaper_request_i          : in  t_pause_request ;
-    shaper_ports_i            : in  std_logic_vector(g_num_ports-1 downto 0);
+    perport_pause_i          : in  t_pause_request_array(g_num_ports-1 downto 0);
 
     -------------------------------------------------------------------------------
-    -- PAUSE request (e.g. from TRU->transition but more modules can control it).
-    -- * it is per-port
-    -- * '1' on classes vector indicates which classes shall be blocked
+    -- global PAUSE request
+    -- * semi-priority-based - defines which priorities (output queues) to  block
+    -- * has the same pause time (quanta) for all priorities
+    -- * a single pause for a number of indicated ports: 
+    --   we say which priorities on which ports shall be blocked (globally)
+    -- * many modules can huck to this - it's an array of global PAUSEs
     -------------------------------------------------------------------------------
-    pause_requests_i          : in  t_pause_request_array(g_num_ports-1 downto 0);
-
+    global_pause_i           : in  t_global_pause_request_array(g_num_global_pause-1 downto 0);
+    
     -------------------------------------------------------------------------------
     -- Masks (per-port) which are used to block the output queues:
     -- * '1' indicates that a queue of class X shall be blocked
@@ -85,18 +89,19 @@ end swc_output_traffic_shaper;
 
 architecture syn of swc_output_traffic_shaper is
 
-  type t_pause_array is array(g_num_ports-1 downto 0) of unsigned(15 downto 0);
+  type t_pause_array is array(integer range <>) of unsigned(15 downto 0);
   
-  signal div512           : unsigned(4 downto 0);
-  signal advance_counter  : std_logic; 
+  signal div512            : unsigned(4 downto 0);
+  signal advance_counter   : std_logic; 
   
-  signal pause_counters   : t_pause_array;
-  signal pause_masks      : t_classes_array(g_num_ports-1 downto 0);
+  -- per-port pause
+  signal pp_pause_counters : t_pause_array(g_num_ports-1 downto 0);
+  signal pp_pause_classes  : t_classes_array(g_num_ports-1 downto 0);
 
-  signal shaper_counter   : unsigned(15 downto 0);
-  signal shaper_ports     : std_logic_vector(g_num_ports-1 downto 0);
-  signal shaper_mask      : std_logic_vector(7 downto 0);
-
+  -- global pause
+  signal gl_pause_counters : t_pause_array(g_num_global_pause-1 downto 0);
+  signal gl_pause_classes  : t_classes_array(g_num_global_pause-1 downto 0);
+  signal gl_pause_ports    : t_ports_masks(g_num_global_pause-1 downto 0);
 
 begin -- behavioral
 
@@ -120,62 +125,63 @@ begin -- behavioral
     end if;
   end process;
 
+  -- generating per-port PAUSE
   per_port_pause: for i in 0 to g_num_ports-1  generate
     -- per-port process to handle (class selectable) pause =
-    pause_proc : process (clk_i, rst_n_i)
+    pp_pause_proc : process (clk_i, rst_n_i)
     begin
       if rising_edge(clk_i) then
         if(rst_n_i = '0') then
-          pause_counters(i)  <= (others => '0');
-          pause_masks(i)     <= (others => '0');
+          pp_pause_counters(i)  <= (others => '0');
+          pp_pause_classes(i)     <= (others => '0');
         else 
-          if (pause_requests_i(i).req = '1') then
-            pause_counters(i)  <= unsigned(pause_requests_i(i).quanta);
-            pause_masks(i)     <= pause_requests_i(i).classes;
+          if (perport_pause_i(i).req = '1') then
+            pp_pause_counters(i)  <= unsigned(perport_pause_i(i).quanta);
+            pp_pause_classes(i)     <= perport_pause_i(i).classes;
           elsif (advance_counter = '1') then
-            if(pause_counters(i) = to_unsigned(0, pause_counters(i)'length)) then
-              pause_masks(i)   <= (others => '0');
+            if(pp_pause_counters(i) = to_unsigned(0, pp_pause_counters(i)'length)) then
+              pp_pause_classes(i)   <= (others => '0');
             else
-              pause_counters(i) <= pause_counters(i) - 1;
+              pp_pause_counters(i) <= pp_pause_counters(i) - 1;
             end if;  
           end if;  
         end if;
       end if;
     end process;
-  end generate PER_PORT_PAUSE;
+  end generate per_port_pause;
 
-  -- global pause for time-aware taffic shaping: 
-  -- * we say which class(es) are allowed for quanta-long window
-  -- * we say for which ports this window works
-  global_shaper : process (clk_i, rst_n_i)
-  begin  
-    if rising_edge(clk_i) then
-      if (rst_n_i = '0') then
-        shaper_mask    <= (others => '0');
-        shaper_ports   <= (others => '0');
-        shaper_counter <= (others => '0');
-      else
-        if(shaper_request_i.req = '1') then
-          shaper_counter <= unsigned(shaper_request_i.quanta);
-          shaper_mask    <= shaper_request_i.classes;
-          shaper_ports   <= shaper_ports_i;
-        elsif (advance_counter = '1') then
-          if(shaper_counter = to_unsigned(0, shaper_counter'length)) then
-            shaper_mask  <= (others => '0');
-            shaper_ports <= (others => '0');
-          else
-            shaper_counter <= shaper_counter - 1;
-          end if; 
+  -- generating a configurable (generic) number of global pauses
+  global_pause: for i in 0 to g_num_global_pause -1 generate
+    pp_pause_proc : process (clk_i, rst_n_i)
+    begin
+      if rising_edge(clk_i) then
+        if(rst_n_i = '0') then
+          gl_pause_counters(i)  <= (others => '0');
+          gl_pause_classes(i)     <= (others => '0');
+          gl_pause_ports(i)     <= (others => '0');
+        else 
+          if (global_pause_i(i).req = '1') then
+            gl_pause_counters(i)  <= unsigned(global_pause_i(i).quanta);
+            gl_pause_classes(i)   <= global_pause_i(i).classes;
+            gl_pause_ports(i)     <= global_pause_i(i).ports;
+          elsif (advance_counter = '1') then
+            if(gl_pause_counters(i) = to_unsigned(0, gl_pause_counters(i)'length)) then
+              gl_pause_classes(i) <= (others => '0');
+              gl_pause_ports(i)   <= (others => '0');
+            else
+              gl_pause_counters(i) <= gl_pause_counters(i) - 1;
+            end if;  
+          end if;  
         end if;
       end if;
-    end if;
-  end process; 
+    end process;  
+  end generate global_pause;
 
   -- generating final masks to be used on different swcore's ports to decide which
   -- queue shall be used for next forward
   gen_output_masks: for i in 0 to g_num_ports-1  generate
-    output_masks_o(i) <= (pause_masks(i) or (not shaper_mask)) when (shaper_ports(i) = '1') else
-                         pause_masks(i);
+    output_masks_o(i) <= pp_pause_classes(i) or 
+                         f_global_pause_mask(gl_pause_classes,gl_pause_ports, i, g_num_global_pause);
   end generate gen_output_masks;
 
 end syn;

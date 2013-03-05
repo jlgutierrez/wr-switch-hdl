@@ -75,7 +75,8 @@ entity xswc_core is
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
     g_mpm_fetch_next_pg_in_advance     : boolean ;
-    g_drop_outqueue_head_on_full       : boolean
+    g_drop_outqueue_head_on_full       : boolean ;
+    g_num_global_pause                 : integer := 2
     );
   port (
     clk_i          : in std_logic;
@@ -100,22 +101,22 @@ entity xswc_core is
 -- I/F with Traffich shaper
 -------------------------------------------------------------------------------     
     
-    shaper_request_i          : in  t_pause_request ;
-    shaper_ports_i            : in  std_logic_vector(g_num_ports-1 downto 0);
+    global_pause_i            : in  t_global_pause_request_array(g_num_global_pause-1 downto 0);
+    
     shaper_drop_at_hp_ena_i   : in  std_logic := '0';
 
 -------------------------------------------------------------------------------
--- I/F with Tx PAUSE triggers (i.e. Endpoints, TRU)
+-- I/F with Tx PAUSE triggers (i.e. Endpoints)
 -------------------------------------------------------------------------------   
 
-    pause_requests_i          : in  t_pause_request_array(g_num_ports-1 downto 0);
+    perport_pause_i           : in  t_pause_request_array(g_num_ports-1 downto 0);
 
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
     
-    rtu_rsp_i          : in t_rtu_response_array(g_num_ports  - 1 downto 0);
-    rtu_ack_o          : out std_logic_vector(g_num_ports  - 1 downto 0)
+    rtu_rsp_i                 : in t_rtu_response_array(g_num_ports  - 1 downto 0);
+    rtu_ack_o                 : out std_logic_vector(g_num_ports  - 1 downto 0)
 
     );
 end xswc_core;
@@ -540,13 +541,16 @@ architecture rtl of xswc_core is
 
   OUTPUT_TRAFFIC_SHAPER: swc_output_traffic_shaper
     generic map (
-      g_num_ports                     => g_num_ports)
+      g_num_ports                     => g_num_ports,
+      g_num_global_pause              => g_num_global_pause)
     port map(
       rst_n_i                         => rst_n_i,
       clk_i                           => clk_i,
-      shaper_request_i                => shaper_request_i,
-      shaper_ports_i                  => shaper_ports_i,
-      pause_requests_i                => pause_requests_i,
+--       shaper_request_i                => shaper_request_i,
+--       shaper_ports_i                  => shaper_ports_i,
+--       pause_requests_i                => pause_requests_i,
+      global_pause_i                  => global_pause_i,
+      perport_pause_i                 => perport_pause_i,                
       output_masks_o                  => ots2ob_output_masks
     );
 
