@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-02-02
+-- Last update: 2013-03-05
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -36,6 +36,7 @@
 -- Date        Version  Author   Description
 -- 2010-11-03  1.0      mlipinsk created
 -- 2012-02-02  2.0      mlipinsk generic-azed
+-- 2013-03-05  2.1      mlipinsk added hp, removed pck_size
 -------------------------------------------------------------------------------
 
 
@@ -51,7 +52,7 @@ entity swc_pck_transfer_arbiter is
   generic(
       g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
       g_prio_width         : integer ;--:= c_swc_prio_width;
-      g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
+--       g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
       g_num_ports          : integer  --:= c_swc_num_ports
   );
   port (
@@ -66,7 +67,8 @@ entity swc_pck_transfer_arbiter is
     ob_ack_i        : in  std_logic_vector(g_num_ports -1 downto 0);
     ob_pageaddr_o   : out std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
     ob_prio_o       : out std_logic_vector(g_num_ports * g_prio_width - 1 downto 0);
-    ob_pck_size_o   : out std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0);
+--     ob_pck_size_o   : out std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0);
+    ob_hp_o         : out std_logic_vector(g_num_ports -1 downto 0);
 
 -------------------------------------------------------------------------------
 -- I/F with Input Block
@@ -75,7 +77,8 @@ entity swc_pck_transfer_arbiter is
     ib_transfer_ack_o : out std_logic_vector(g_num_ports - 1 downto 0);
     ib_busy_o         : out std_logic_vector(g_num_ports - 1 downto 0);
 
-    ib_pck_size_i : in std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0);
+--     ib_pck_size_i : in std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0);
+    ib_hp_i          : in std_logic_vector(g_num_ports - 1 downto 0);
 
     ib_pageaddr_i : in std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
 
@@ -105,12 +108,12 @@ architecture syn of swc_pck_transfer_arbiter is
   subtype t_pageaddr is std_logic_vector(g_page_addr_width - 1 downto 0);
   subtype t_prio     is std_logic_vector(g_prio_width - 1 downto 0);
   subtype t_mask     is std_logic_vector(g_num_ports - 1 downto 0);
-  subtype t_pck_size is std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--   subtype t_pck_size is std_logic_vector(g_max_pck_size_width - 1 downto 0);
 
   type t_pageaddr_array is array (g_num_ports - 1 downto 0) of t_pageaddr;
   type t_prio_array     is array (g_num_ports - 1 downto 0) of t_prio;
   type t_mask_array     is array (g_num_ports - 1 downto 0) of t_mask;
-  type t_pck_size_array is array (g_num_ports - 1 downto 0) of t_pck_size;
+--   type t_pck_size_array is array (g_num_ports - 1 downto 0) of t_pck_size;
 
 ---------------------------------------------------------------------------
 -- signals outputed from Pck Transfer Input (PTI)
@@ -120,7 +123,8 @@ architecture syn of swc_pck_transfer_arbiter is
   signal pto_output_mask : t_mask_array;
   signal pto_read_mask   : t_mask_array;
   signal pto_prio        : t_prio_array;
-  signal pto_pck_size    : t_pck_size_array;
+  signal pto_hp          : std_logic_vector(g_num_ports - 1 downto 0);
+--   signal pto_pck_size    : t_pck_size_array;
 
 ---------------------------------------------------------------------------
 -- signals inputed to Pck Transfer Output (PTO) from Pck Transfer Input (TPI)
@@ -130,7 +134,8 @@ architecture syn of swc_pck_transfer_arbiter is
   signal pti_transfer_data_ack   : std_logic_vector(g_num_ports - 1 downto 0);
   signal pti_pageaddr            : t_pageaddr_array;
   signal pti_prio                : t_prio_array;
-  signal pti_pck_size            : t_pck_size_array;
+--   signal pti_pck_size            : t_pck_size_array;
+  signal pti_hp                  : std_logic_vector(g_num_ports - 1 downto 0);
   signal sync_sreg               : std_logic_vector(g_num_ports - 1 downto 0);
   signal sync_cntr               : integer range 0 to g_num_ports - 1;
   signal sync_cntr_ack           : integer range 0 to g_num_ports-1;
@@ -173,14 +178,16 @@ begin  --arch
 
   -- multiplex mask from input to output
   --multimux_out : process(sync_cntr,pto_output_mask,pto_pageaddr,pto_prio)
-  multimux_out : process(sync_cntr, pto_output_mask, pto_pageaddr, pto_prio, pto_pck_size)
+--   multimux_out : process(sync_cntr, pto_output_mask, pto_pageaddr, pto_prio, pto_pck_size)
+  multimux_out : process(sync_cntr, pto_output_mask, pto_pageaddr, pto_prio, pto_hp)
   begin
     
     for i in 0 to g_num_ports - 1 loop
       pti_transfer_data_valid(i) <= pto_output_mask(f_modulo_numports(sync_cntr + i))(i);
       pti_pageaddr (i)           <= pto_pageaddr   (f_modulo_numports(sync_cntr + i));
       pti_prio (i)               <= pto_prio       (f_modulo_numports(sync_cntr + i));
-      pti_pck_size (i)           <= pto_pck_size   (f_modulo_numports(sync_cntr + i));
+--       pti_pck_size (i)           <= pto_pck_size   (f_modulo_numports(sync_cntr + i));
+      pti_hp (i)                 <= pto_hp         (f_modulo_numports(sync_cntr + i));
     end loop;
     
   end process;
@@ -227,7 +234,7 @@ begin  --arch
       generic map(
         g_page_addr_width    => g_page_addr_width,
         g_prio_width         => g_prio_width,    
-        g_max_pck_size_width => g_max_pck_size_width,
+--         g_max_pck_size_width => g_max_pck_size_width,
         g_num_ports          => g_num_ports
       )
       port map (
@@ -238,12 +245,14 @@ begin  --arch
         pto_output_mask_o  => pto_output_mask (i),
         pto_read_mask_i    => pto_read_mask (i),
         pto_prio_o         => pto_prio (i),
-        pto_pck_size_o     => pto_pck_size (i),
+--         pto_pck_size_o     => pto_pck_size (i),
+        pto_hp_o           => pto_hp (i),
         ib_transfer_pck_i  => ib_transfer_pck_i (i),
         ib_pageaddr_i      => ib_pageaddr_i ((i + 1)*g_page_addr_width    - 1 downto i*g_page_addr_width),
         ib_mask_i          => ib_mask_i     ((i + 1)*g_num_ports          - 1 downto i*g_num_ports),
         ib_prio_i          => ib_prio_i     ((i + 1)*g_prio_width         - 1 downto i*g_prio_width),
-        ib_pck_size_i      => ib_pck_size_i ((i + 1)*g_max_pck_size_width - 1 downto i*g_max_pck_size_width),
+--         ib_pck_size_i      => ib_pck_size_i ((i + 1)*g_max_pck_size_width - 1 downto i*g_max_pck_size_width),
+        ib_hp_i            => ib_hp_i(i),
         ib_transfer_ack_o  => ib_transfer_ack_o (i),
         ib_busy_o          => ib_busy_o (i)
 
@@ -254,8 +263,8 @@ begin  --arch
     TRANSFER_OUTPUT : swc_pck_transfer_output
       generic map(
         g_page_addr_width    => g_page_addr_width,
-        g_prio_width         => g_prio_width,    
-        g_max_pck_size_width => g_max_pck_size_width
+        g_prio_width         => g_prio_width
+--         g_max_pck_size_width => g_max_pck_size_width
         )
       port map(
         clk_i                     => clk_i,
@@ -263,14 +272,15 @@ begin  --arch
         ob_transfer_data_valid_o  => ob_data_valid_o (i),
         ob_pageaddr_o             => ob_pageaddr_o ((i + 1)*g_page_addr_width    - 1 downto i*g_page_addr_width),
         ob_prio_o                 => ob_prio_o     ((i + 1)*g_prio_width         - 1 downto i*g_prio_width),
-        ob_pck_size_o             => ob_pck_size_o ((i + 1)*g_max_pck_size_width - 1 downto i*g_max_pck_size_width),
+--         ob_pck_size_o             => ob_pck_size_o ((i + 1)*g_max_pck_size_width - 1 downto i*g_max_pck_size_width),
+        ob_hp_o                   => ob_hp_o (i),
         ob_transfer_data_ack_i    => ob_ack_i (i),
         pti_transfer_data_valid_i => pti_transfer_data_valid(i),
         pti_transfer_data_ack_o   => pti_transfer_data_ack (i),
         pti_pageaddr_i            => pti_pageaddr (i),
         pti_prio_i                => pti_prio (i),
-        pti_pck_size_i            => pti_pck_size (i)
-
+        pti_hp_i                  => pti_hp (i)
+--         pti_pck_size_i            => pti_pck_size (i)
         );
   end generate gen_output;
   

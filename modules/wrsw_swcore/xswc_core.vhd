@@ -180,7 +180,8 @@ architecture rtl of xswc_core is
    signal ib_pageaddr_to_pta  : std_logic_vector(g_num_ports * c_mpm_page_addr_width - 1 downto 0);
    signal ib_mask             : std_logic_vector(g_num_ports * g_num_ports - 1 downto 0);
    signal ib_prio             : std_logic_vector(g_num_ports * c_prio_width - 1 downto 0);
-   signal ib_pck_size         : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
+--    signal ib_pck_size         : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
+   signal ib_hp               : std_logic_vector(g_num_ports  -1 downto 0);
    
    -- Pck Transfer Arbiter -> Input Block       
    signal pta_transfer_ack    : std_logic_vector(g_num_ports - 1 downto 0);  
@@ -193,9 +194,9 @@ architecture rtl of xswc_core is
    signal pta_data_valid             : std_logic_vector(g_num_ports -1 downto 0);
    signal pta_pageaddr               : std_logic_vector(g_num_ports * c_mpm_page_addr_width- 1 downto 0);
    signal pta_prio                   : std_logic_vector(g_num_ports * c_prio_width         - 1 downto 0);
-   signal pta_pck_size               : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
+--    signal pta_pck_size               : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
 
-   signal pta2ob_broadcast           : std_logic_vector(g_num_ports -1 downto 0);
+   signal pta2ob_hp                  : std_logic_vector(g_num_ports -1 downto 0);
    signal pta2ob_resource            : std_logic_vector(g_num_ports *c_res_mmu_resource_num_width -1 downto 0);
 
    -- Input Block -> Pck Transfer Arbiter
@@ -418,9 +419,9 @@ architecture rtl of xswc_core is
         -- I/F with Routing Table Unit (RTU)
         -------------------------------------------------------------------------------      
         rtu_rsp_ack_o            => rtu_ack_o(i),        
-	rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
+        rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
         rtu_dst_port_mask_i      => rtu_rsp_i(i).port_mask(g_num_ports  - 1 downto 0),
-        rtu_broadcast_i          => '0', -- TODO: add stuff to RTU
+        rtu_hp_i                 => '0', -- TODO: add stuff to RTU
         rtu_drop_i               => rtu_rsp_i(i).drop,
         rtu_prio_i               => rtu_rsp_i(i).prio(c_prio_width - 1 downto 0),
 
@@ -456,9 +457,9 @@ architecture rtl of xswc_core is
         pta_pageaddr_o           => ib_pageaddr_to_pta((i + 1) * c_mpm_page_addr_width-1 downto i * c_mpm_page_addr_width),
         pta_mask_o               => ib_mask           ((i + 1) * g_num_ports          -1 downto i * g_num_ports),
         pta_prio_o               => ib_prio           ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
-        pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
-        pta_resource_o           => open,
-        pta_broadcast_o          => open,
+--         pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
+--         pta_resource_o           => open,
+        pta_hp_o                 => ib_hp (i),
 
         tap_out_o => tap_ib(i)
         );
@@ -497,8 +498,8 @@ architecture rtl of xswc_core is
         pta_pageaddr_i           => pta_pageaddr((i + 1) * c_mpm_page_addr_width-1 downto i * c_mpm_page_addr_width),
         pta_prio_i               => pta_prio    ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
         
-        pta_broadcast_i          => pta2ob_broadcast(i),
-        pta_resource_i           => pta2ob_resource((i + 1) * c_res_mmu_resource_num_width -1 downto i * c_res_mmu_resource_num_width),
+        pta_hp_i                 => pta2ob_hp(i),
+--         pta_resource_i           => pta2ob_resource((i + 1) * c_res_mmu_resource_num_width -1 downto i * c_res_mmu_resource_num_width),
 --        pta_pck_size_i           => pta_pck_size((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
         pta_transfer_data_ack_o  => ob_ack(i),
         -------------------------------------------------------------------------------
@@ -736,7 +737,7 @@ architecture rtl of xswc_core is
     generic map(
       g_page_addr_width    => c_mpm_page_addr_width,
       g_prio_width         => c_prio_width,    
-      g_max_pck_size_width => c_max_pck_size_width,
+--       g_max_pck_size_width => c_max_pck_size_width,
       g_num_ports          => g_num_ports
       )
     port map(
@@ -749,7 +750,8 @@ architecture rtl of xswc_core is
       ob_ack_i                   => ob_ack,
       ob_pageaddr_o              => pta_pageaddr,
       ob_prio_o                  => pta_prio,
-      ob_pck_size_o              => pta_pck_size,
+--       ob_pck_size_o              => pta_pck_size,
+      ob_hp_o                    => pta2ob_hp,
       -------------------------------------------------------------------------------
       -- I/F with Input Block (IB)
       ------------------------------------------------------------------------------- 
@@ -759,7 +761,8 @@ architecture rtl of xswc_core is
       ib_pageaddr_i              => ib_pageaddr_to_pta,
       ib_mask_i                  => ib_mask,
       ib_prio_i                  => ib_prio,
-      ib_pck_size_i              => ib_pck_size
+--       ib_pck_size_i              => ib_pck_size
+      ib_hp_i                    => ib_hp
       );  
 
 

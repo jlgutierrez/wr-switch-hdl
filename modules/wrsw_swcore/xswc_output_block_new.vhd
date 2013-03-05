@@ -90,8 +90,8 @@ entity xswc_output_block_new is
     pta_transfer_data_valid_i : in  std_logic;
     pta_pageaddr_i            : in  std_logic_vector(g_mpm_page_addr_width    - 1 downto 0);
     pta_prio_i                : in  std_logic_vector(g_prio_num_width         - 1 downto 0);
-    pta_broadcast_i           : in  std_logic;
-    pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);
+    pta_hp_i                  : in  std_logic;
+--     pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);
     pta_transfer_data_ack_o   : out std_logic;
 
 -------------------------------------------------------------------------------
@@ -314,8 +314,8 @@ begin  --  behavoural
   
   -- here we map the RTU+resource info into output queues
   write_index     <= f_map_rtu_rsp_and_mmu_res_to_out_queue(pta_prio_i,
-                                                            pta_broadcast_i,
-                                                            pta_resource_i,
+                                                            pta_hp_i,
+                                                            x"000",
                                                             full_array,
                                                             g_queue_num);
 

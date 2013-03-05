@@ -246,7 +246,7 @@ package swc_swcore_pkg is
     rtu_rsp_valid_i     : in  std_logic;
     rtu_rsp_ack_o       : out std_logic;
     rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
-    rtu_broadcast_i     : in  std_logic;
+    rtu_hp_i            : in  std_logic;
     rtu_drop_i          : in  std_logic;
     rtu_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
 
@@ -268,9 +268,9 @@ package swc_swcore_pkg is
     pta_transfer_ack_i : in std_logic;
     pta_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
     pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
-    pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
-    pta_resource_o : out std_logic_vector(g_resource_num_width - 1 downto 0);
-    pta_broadcast_o : out std_logic;
+--     pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--     pta_resource_o : out std_logic_vector(g_resource_num_width - 1 downto 0);
+    pta_hp_o : out std_logic;
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
     tap_out_o : out std_logic_vector(49+62 downto 0)
@@ -327,7 +327,7 @@ package swc_swcore_pkg is
     generic(
       g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
       g_prio_width         : integer ;--:= c_swc_prio_width;
-      g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
+--       g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
       g_num_ports          : integer  --:= c_swc_num_ports
     );
     port (
@@ -339,13 +339,15 @@ package swc_swcore_pkg is
       pto_output_mask_o  : out  std_logic_vector(g_num_ports - 1 downto 0);
       pto_read_mask_i    : in  std_logic_vector(g_num_ports - 1 downto 0);
       pto_prio_o         : out  std_logic_vector(g_prio_width - 1 downto 0);
-      pto_pck_size_o     : out  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--       pto_pck_size_o     : out  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+      pto_hp_o           : out  std_logic;
       
       ib_transfer_pck_i  : in  std_logic;
       ib_pageaddr_i      : in  std_logic_vector(g_page_addr_width - 1 downto 0);
       ib_mask_i          : in  std_logic_vector(g_num_ports - 1 downto 0);
       ib_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
-      ib_pck_size_i      : in  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--       ib_pck_size_i      : in  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+      ib_hp_i            : in  std_logic;
       ib_transfer_ack_o  : out std_logic;
       ib_busy_o          : out std_logic
       
@@ -355,8 +357,8 @@ package swc_swcore_pkg is
   component swc_pck_transfer_output is
     generic(
       g_page_addr_width    : integer ;--:= g_page_addr_width;
-      g_prio_width         : integer ;--:= c_swc_prio_width;
-      g_max_pck_size_width : integer --:= c_swc_max_pck_size_width
+      g_prio_width         : integer --:= c_swc_prio_width;
+--       g_max_pck_size_width : integer --:= c_swc_max_pck_size_width
       );
     port (
       clk_i                    : in  std_logic;
@@ -365,14 +367,16 @@ package swc_swcore_pkg is
       ob_transfer_data_valid_o : out std_logic;
       ob_pageaddr_o            : out std_logic_vector(g_page_addr_width - 1 downto 0);
       ob_prio_o                : out std_logic_vector(g_prio_width - 1 downto 0);
-      ob_pck_size_o            : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--       ob_pck_size_o            : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+      ob_hp_o                  : out std_logic;
       ob_transfer_data_ack_i   : in  std_logic;
       
       pti_transfer_data_valid_i: in  std_logic;
       pti_transfer_data_ack_o  : out std_logic;
       pti_pageaddr_i           : in  std_logic_vector(g_page_addr_width - 1 downto 0);
       pti_prio_i               : in  std_logic_vector(g_prio_width - 1 downto 0);
-      pti_pck_size_i           : in  std_logic_vector(g_max_pck_size_width - 1 downto 0)
+--       pti_pck_size_i           : in  std_logic_vector(g_max_pck_size_width - 1 downto 0)
+      pti_hp_i                 : in  std_logic
       
       );
   end component;
@@ -381,7 +385,7 @@ package swc_swcore_pkg is
     generic(
       g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
       g_prio_width         : integer ;--:= c_swc_prio_width;
-      g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
+--       g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
       g_num_ports          : integer  --:= c_swc_num_ports
       );
     port (
@@ -392,7 +396,8 @@ package swc_swcore_pkg is
       ob_ack_i           : in  std_logic_vector(g_num_ports - 1 downto 0);
       ob_pageaddr_o      : out std_logic_vector(g_num_ports * g_page_addr_width    - 1 downto 0);
       ob_prio_o          : out std_logic_vector(g_num_ports * g_prio_width         - 1 downto 0);
-      ob_pck_size_o      : out std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0);
+--       ob_pck_size_o      : out std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0);
+      ob_hp_o            : out std_logic_vector(g_num_ports - 1 downto 0);
       
       ib_transfer_pck_i  : in  std_logic_vector(g_num_ports - 1 downto 0);
       ib_transfer_ack_o  : out std_logic_vector(g_num_ports - 1 downto 0);
@@ -400,7 +405,8 @@ package swc_swcore_pkg is
       ib_pageaddr_i      : in  std_logic_vector(g_num_ports * g_page_addr_width    - 1 downto 0);
       ib_mask_i          : in  std_logic_vector(g_num_ports * g_num_ports          - 1 downto 0);
       ib_prio_i          : in  std_logic_vector(g_num_ports * g_prio_width         - 1 downto 0);
-      ib_pck_size_i      : in  std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0)
+--       ib_pck_size_i      : in  std_logic_vector(g_num_ports * g_max_pck_size_width - 1 downto 0)
+      ib_hp_i            : in  std_logic_vector(g_num_ports - 1 downto 0)
       );  
   end component;
   
@@ -446,7 +452,7 @@ package swc_swcore_pkg is
       pta_transfer_data_valid_i : in   std_logic;
       pta_pageaddr_i            : in   std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
       pta_prio_i                : in  std_logic_vector(g_prio_num_width         - 1 downto 0);
-      pta_broadcast_i           : in  std_logic;
+      pta_hp_i           : in  std_logic;
       pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);      
       pta_transfer_data_ack_o   : out  std_logic;
       mpm_d_i        : in  std_logic_vector (g_mpm_data_width -1 downto 0);
@@ -493,8 +499,8 @@ package swc_swcore_pkg is
       pta_transfer_data_valid_i : in   std_logic;
       pta_pageaddr_i            : in   std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
       pta_prio_i                : in  std_logic_vector(g_prio_num_width         - 1 downto 0);
-      pta_broadcast_i           : in  std_logic;
-      pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);      
+      pta_hp_i           : in  std_logic;
+--       pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);      
       pta_transfer_data_ack_o   : out  std_logic;
       mpm_d_i        : in  std_logic_vector (g_mpm_data_width -1 downto 0);
       mpm_dvalid_i   : in  std_logic;

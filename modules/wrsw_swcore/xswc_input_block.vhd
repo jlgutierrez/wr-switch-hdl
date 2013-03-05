@@ -186,7 +186,7 @@ entity xswc_input_block is
     rtu_rsp_valid_i     : in  std_logic;
     rtu_rsp_ack_o       : out std_logic;
     rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
-    rtu_broadcast_i     : in  std_logic; 
+    rtu_hp_i            : in  std_logic; 
     rtu_drop_i          : in  std_logic;
     rtu_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
 
@@ -242,13 +242,13 @@ entity xswc_input_block is
     -- forwarded
     pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
 
-    pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--     pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
 
     -- information about resoruce allocation
-    pta_resource_o : out std_logic_vector(g_resource_num_width - 1 downto 0);
+--     pta_resource_o : out std_logic_vector(g_resource_num_width - 1 downto 0);
     
-    -- broadcast traffic
-    pta_broadcast_o : out std_logic;
+    -- htraffic
+    pta_hp_o : out std_logic;
 
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
@@ -355,7 +355,7 @@ architecture syn of xswc_input_block is
   signal current_prio      : std_logic_vector(g_prio_width - 1 downto 0);
   signal current_mask      : std_logic_vector(g_num_ports - 1 downto 0);
   signal current_res_info  : std_logic_vector(g_resource_num_width-1 downto 0);
-  signal current_broadcast : std_logic;
+  signal current_hp        : std_logic;
   signal current_usecnt    : std_logic_vector(g_usecount_width - 1 downto 0);
   signal current_drop      : std_logic;
 
@@ -369,7 +369,7 @@ architecture syn of xswc_input_block is
   signal pta_pageaddr     : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal pta_mask         : std_logic_vector(g_num_ports - 1 downto 0);
   signal pta_resource     : std_logic_vector(g_resource_num_width-1 downto 0);
-  signal pta_broadcast    : std_logic;
+  signal pta_hp           : std_logic;
   signal pta_prio         : std_logic_vector(g_prio_width - 1 downto 0);
 --   signal pta_pck_size              : std_logic_vector(g_max_pck_size_width - 1 downto 0);  
 
@@ -1383,7 +1383,7 @@ begin
       --========================================
       current_mask      <= (others => '0');
       current_res_info  <= (others => '0');
-      current_broadcast <= '0';
+      current_hp        <= '0';
       current_drop      <= '0';
       current_usecnt    <= (others => '0');
       current_prio      <= (others => '0');
@@ -1396,7 +1396,7 @@ begin
         -- make sure we're not forwarding packets to ourselves. 
         current_mask      <= rtu_dst_port_mask_i; -- and (not f_gen_mask(g_port_index, current_mask'length));
         current_res_info  <= res_info;
-        current_broadcast <= rtu_broadcast_i;
+        current_hp        <= rtu_hp_i         ;
         current_prio      <= rtu_prio_i;
         current_drop      <= rtu_drop_i;-- or res_info_almsot_full;
         current_usecnt    <= rtu_dst_port_usecnt;
@@ -1518,7 +1518,7 @@ begin
       pta_pageaddr     <= (others => '0');
       pta_mask         <= (others => '0');
       pta_resource     <= (others => '0');
-      pta_broadcast    <= '0';
+      pta_hp           <= '0';
       pta_prio         <= (others => '0');
       --========================================
     else
@@ -1555,7 +1555,7 @@ begin
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
                 pta_resource     <= current_res_info;
-                pta_broadcast    <= current_broadcast;
+                pta_hp           <= current_hp;
                 pta_prio         <= current_prio;
                 -- we take stright from allocated in 
                 -- advance because we are on SOF
@@ -1603,7 +1603,7 @@ begin
                 pta_pageaddr     <= current_pckstart_pageaddr;
                 pta_mask         <= current_mask;
                 pta_resource     <= current_res_info;
-                pta_broadcast    <= current_broadcast;                
+                pta_hp           <= current_hp;                
                 pta_prio         <= current_prio;
                 -- wait for the first page to be cleard, sync-ing transfer_pck and rcv_pck and ll_wrie
               else
@@ -1631,7 +1631,7 @@ begin
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
                 pta_resource     <= current_res_info;
-                pta_broadcast    <= current_broadcast;                
+                pta_hp           <= current_hp;                
                 pta_prio         <= current_prio;
                 -- take directly from allocation in advanc !!!
                 pta_pageaddr     <= pckstart_pageaddr;
@@ -1668,7 +1668,7 @@ begin
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
                 pta_resource     <= current_res_info;
-                pta_broadcast    <= current_broadcast;
+                pta_hp           <= current_hp;
                 pta_prio         <= current_prio;
                 pta_pageaddr     <= current_pckstart_pageaddr;
               else
@@ -1697,7 +1697,7 @@ begin
             pta_transfer_pck <= '1';
             pta_mask         <= current_mask;
             pta_resource     <= current_res_info;
-            pta_broadcast    <= current_broadcast;
+            pta_hp           <= current_hp;
             pta_prio         <= current_prio;
             pta_pageaddr     <= current_pckstart_pageaddr;
           end if;
@@ -2086,7 +2086,7 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 
   ---------------------------------------------
   -- mapping of RTU decision into resources
-  res_info             <= f_map_rtu_rsp_to_mmu_res(rtu_prio_i, rtu_broadcast_i, g_resource_num_width);
+  res_info             <= f_map_rtu_rsp_to_mmu_res(rtu_prio_i, rtu_hp_i         , g_resource_num_width);
   res_info_almsot_full <= mmu_res_almost_full_i(to_integer(unsigned(res_info)));
   res_info_full        <= mmu_res_full_i(to_integer(unsigned(res_info)));
   ---------------------------------------------
@@ -2160,10 +2160,10 @@ mpm_data_o    <= mpm_data;
 pta_transfer_pck_o <= pta_transfer_pck;
 pta_pageaddr_o     <= pta_pageaddr;
 pta_mask_o         <= pta_mask;         --current_mask;
-pta_resource_o     <= pta_resource;
-pta_broadcast_o    <= pta_broadcast;
+-- pta_resource_o     <= pta_resource;
+pta_hp_o           <= pta_hp;
 pta_prio_o         <= pta_prio;         --current_prio;
-pta_pck_size_o     <= (others => '0');  -- unused
+-- pta_pck_size_o     <= (others => '0');  -- unused
 
 -- pWB
 -- snk_dat_int <= snk_i.dat;

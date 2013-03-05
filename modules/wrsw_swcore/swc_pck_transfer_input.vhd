@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-02-02
+-- Last update: 2013-03-05
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -36,6 +36,7 @@
 -- Date        Version  Author   Description
 -- 2010-11-03  1.0      mlipinsk created
 -- 2012-02-02  2.0      mlipinsk generic-azed
+-- 2013-03-05  2.1      mlipinsk added hp, removed pck_size
 -------------------------------------------------------------------------------
 
 
@@ -51,7 +52,7 @@ entity swc_pck_transfer_input is
   generic(
      g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
      g_prio_width         : integer ;--:= c_swc_prio_width;
-     g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
+--      g_max_pck_size_width : integer ;--:= c_swc_max_pck_size_width    
      g_num_ports          : integer  --:= c_swc_num_ports
   );
   port (
@@ -72,7 +73,9 @@ entity swc_pck_transfer_input is
 
     pto_prio_o     : out  std_logic_vector(g_prio_width - 1 downto 0);
 
-    pto_pck_size_o : out  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--     pto_pck_size_o : out  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    
+    pto_hp_o       : out std_logic;
 
 -------------------------------------------------------------------------------
 -- I/F with Input Block (IB)
@@ -89,7 +92,9 @@ entity swc_pck_transfer_input is
 
     ib_prio_i     : in  std_logic_vector(g_prio_width - 1 downto 0);
     
-    ib_pck_size_i : in  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--     ib_pck_size_i : in  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    
+    ib_hp_i       : in  std_logic;
     
     ib_transfer_ack_o : out std_logic;
     
@@ -103,7 +108,8 @@ architecture syn of swc_pck_transfer_input is
     signal ib_transfer_ack: std_logic;
     signal ib_pageaddr    : std_logic_vector(g_page_addr_width - 1 downto 0);
     signal ib_prio        : std_logic_vector(g_prio_width - 1      downto 0);
-    signal ib_pck_size    : std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--     signal ib_pck_size    : std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    signal ib_hp          : std_logic;
     signal ib_mask        : std_logic_vector(g_num_ports - 1       downto 0);
     --signal pto_read_mask    : std_logic_vector(g_num_ports - 1       downto 0);
     signal pto_output_mask  : std_logic_vector(g_num_ports - 1       downto 0);
@@ -124,7 +130,8 @@ begin --arch
       --pto_read_mask         <= (others => '0');
       pto_output_mask       <= (others => '0');
       ib_prio               <= (others => '0');
-      ib_pck_size           <= (others => '0');
+--       ib_pck_size           <= (others => '0');
+      ib_hp                 <= '0';
       ib_pageaddr           <= (others => '0');
       ib_transfer_ack       <= '0';
       --===================================================
@@ -135,7 +142,8 @@ begin --arch
           ib_mask         <= ib_mask_i;
           ib_prio         <= ib_prio_i;
           ib_pageaddr     <= ib_pageaddr_i;
-          ib_pck_size     <= ib_pck_size_i;
+--           ib_pck_size     <= ib_pck_size_i;
+          ib_hp           <= ib_hp_i;
           
         end if;
         
@@ -177,7 +185,8 @@ begin --arch
  pto_transfer_pck_o <= '0'; 
  pto_pageaddr_o     <= ib_pageaddr;
  pto_prio_o         <= ib_prio;
- pto_pck_size_o     <= ib_pck_size;
+--  pto_pck_size_o     <= ib_pck_size;
+ pto_hp_o           <= ib_hp;
  ib_transfer_ack_o  <= ib_transfer_ack;
  
  ib_busy_o       <= '0' when (pto_output_mask = zeros) else '1';

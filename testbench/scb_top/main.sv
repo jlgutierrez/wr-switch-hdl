@@ -689,7 +689,7 @@ module main;
    *    the configuration is swapped and the frames start to be blocked)
    * 6. saend frames to port 2 which now works as active
    */
-///*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000000; // we send pcks (Markers) in other place
     g_tru_enable         = 1;    
@@ -714,7 +714,7 @@ module main;
     mc.logic2(25, 1, PFilterMicrocode::MOV, 0);
 
   end
-//*/
+*/
    /** ***************************   test scenario 22  ************************************* **/ 
   /*
    * Sending Pause the switch: a problem is that switch does not react to PAUSEs -- no 
@@ -913,26 +913,23 @@ module main;
 
  /** ***************************   test scenario 27  ************************************* **/ 
   /*
-   * 
+   * Sending heavily broadcast (stress-tests)
    **/
   /*
   initial begin
 //     portUnderTest        = 18'b000000011111111111;
     portUnderTest        = 18'b000000000000000001;
-//     g_tru_enable         = 1;
     g_active_port        = 0;
     g_enable_pck_gaps    = 0;
     repeat_number        = 2000;
     tries_number         = 1;  
     g_force_payload_size = 500;
-//     mac_br               = 1;
+
                          // tx  ,rx ,opt
     trans_paths[0]       = '{0  ,17 , 204 };
-//     trans_paths[0]       = '{0  ,17 , 200 };
 
     start_send_init_delay = '{0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340};
 
-//     mac_br = 1;
   end
  */
  /** ***************************   test scenario 28  ************************************* **/ 
@@ -985,6 +982,30 @@ module main;
 
   end
  */
+ /** ***************************   test scenario 30  ************************************* **/ 
+  /*
+   * testing simple RTU forwarding and stuff
+   **/
+  ///*
+  initial begin
+    portUnderTest        = 18'b010101010101010101;   
+    g_enable_pck_gaps    = 1;
+    repeat_number        = 200;
+    tries_number         = 1;  
+    g_force_payload_size = 700;
+    g_min_pck_gap        = 100; // cycles
+    g_max_pck_gap        = 100; // cycles  
+                         // tx  ,rx ,opt
+
+  end
+ //*/
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
+
    always #2.5ns clk_swc_mpm_core <=~clk_swc_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
    always #8ns clk_ref <= ~clk_ref;
