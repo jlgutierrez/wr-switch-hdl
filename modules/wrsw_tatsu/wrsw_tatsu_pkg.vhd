@@ -100,8 +100,7 @@ package wrsw_tatsu_pkg is
 
     rst_n_i                   : in std_logic;
 
-    shaper_request_o          : out t_pause_request ;
-    shaper_ports_o            : out std_logic_vector(g_num_ports-1 downto 0);
+    shaper_request_o          : out t_global_pause_request ;
     shaper_drop_at_hp_ena_o   : out std_logic;    
 
     tm_utc_i                  : in  std_logic_vector(39 downto 0);

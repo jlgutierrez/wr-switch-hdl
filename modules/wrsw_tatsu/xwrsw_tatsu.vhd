@@ -104,11 +104,8 @@ entity xwrsw_tatsu is
 
     -- pause request to SWcore's output queues in output_block of chosen ports
     -- (req, quanta, classes)
-    shaper_request_o          : out t_pause_request ;
-    
-    -- mask which indicates which ports shall be affected by the request
-    shaper_ports_o            : out std_logic_vector(g_num_ports-1 downto 0);
-    
+    shaper_request_o          : out t_global_pause_request ;
+       
     -- configuration which causes the the SWcore to drop currently transmitted
     -- frame if a frame in high queue is waiting for transmission (affects all ports)
     shaper_drop_at_hp_ena_o   : out std_logic;    
@@ -374,10 +371,11 @@ begin --rtl
     end if;
   end process;
 
-  shaper_request_o.req      <= shaper_req_sysclk;
-  shaper_request_o.quanta   <= window_quanta;
-  shaper_request_o.classes  <= prio_mask;
-  shaper_ports_o            <= port_mask;
+  shaper_request_o.req                              <= shaper_req_sysclk;
+  shaper_request_o.quanta                           <= window_quanta;
+  shaper_request_o.classes                          <= not prio_mask;
+  shaper_request_o.ports(g_num_ports-1 downto 0)    <= port_mask;
+  shaper_request_o.ports(shaper_request_o.ports'length-1 downto g_num_ports) <= (others=>'0');
   
   sync_req_refclk : gc_sync_ffs
     generic map (
