@@ -107,6 +107,7 @@ entity tru_trans_marker_trig is
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
     ports_req_strobe_i : in std_logic_vector(g_num_ports - 1 downto 0);
+    sw_o               : out t_trans2sw;
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
 end tru_trans_marker_trig;
@@ -131,14 +132,15 @@ architecture rtl of tru_trans_marker_trig is
   signal s_port_A_has_prio   : std_logic;
   signal s_port_B_has_prio   : std_logic;
 
-  signal s_port_A_prio_mask  : std_logic_vector(2**g_prio_width-1 downto 0);
-  signal s_port_B_prio_mask  : std_logic_vector(2**g_prio_width-1 downto 0);
+  signal s_port_prio_mask  : std_logic_vector(2**g_prio_width-1 downto 0);
 
   signal s_port_A_rtu_srobe  : std_logic;
   signal s_port_B_rtu_srobe  : std_logic;
   signal s_ep_ctr_A          : t_trans2ep;
   signal s_ep_ctr_B          : t_trans2ep;
   signal s_ep_zero           : t_trans2ep;
+  
+  signal s_sw_ctrl           : t_trans2sw;
 
 begin --rtl
    
@@ -150,8 +152,7 @@ begin --rtl
 
    -- generating mask with 1 at the priority for with we perform transition (configured value)
    G_PRIO_MASK: for i in 0 to 2**g_prio_width-1 generate
-      s_port_A_prio_mask(i) <= '1' when(i = to_integer(unsigned(config_i.tcr_trans_prio))) else '0';
-      s_port_B_prio_mask(i) <= '1' when(i = to_integer(unsigned(config_i.tcr_trans_prio))) else '0';
+      s_port_prio_mask(i) <= '1' when(i = to_integer(unsigned(config_i.tcr_trans_prio))) else '0';
    end generate G_PRIO_MASK;
    
    -- generating mask with 1 at the port for with we perform transition
@@ -160,6 +161,14 @@ begin --rtl
       s_port_B_mask(i) <= '1' when (i = to_integer(unsigned(config_i.tcr_trans_port_b_id)) and config_i.tcr_trans_port_a_valid ='1') else '0';
    end generate G_MASK;
   
+   -- preparing masks
+   s_sw_ctrl.blockPortsMask(g_num_ports-1 downto 0)      <= s_port_A_mask or s_port_B_mask;
+   s_sw_ctrl.blockQueuesMask(2**g_prio_width-1 downto 0) <= s_port_prio_mask;
+
+   -- filling in not-used bits
+   s_sw_ctrl.blockPortsMask(s_sw_ctrl.blockPortsMask'length -1 downto g_num_ports)      <= (others =>'0');
+   s_sw_ctrl.blockQueuesMask(s_sw_ctrl.blockQueuesMask'length-1 downto 2**g_prio_width) <= (others =>'0');
+   
   -- to make the code less messy
 --   s_port_A_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_a_id)));
 --   s_port_B_prio       <= rtu_i.priorities(to_integer(unsigned(config_i.tcr_trans_port_b_id)));
@@ -211,11 +220,12 @@ begin --rtl
 
         s_ep_ctr_A.pauseSend         <= '0';
         s_ep_ctr_A.pauseTime         <= (others => '0');
-        s_ep_ctr_A.outQueueBlockMask <= (others => '0');
         
         s_ep_ctr_B.pauseSend         <= '0';
         s_ep_ctr_B.pauseTime         <= (others => '0');
-        s_ep_ctr_B.outQueueBlockMask <= (others => '0');
+        
+        s_sw_ctrl.blockTime          <= (others => '0');
+        s_sw_ctrl.blockReq           <= '0';
 
       else
         
@@ -227,8 +237,8 @@ begin --rtl
              s_portA_frame_cnt            <= (others => '0');
              s_portB_frame_cnt            <= (others => '0');
              s_statTransActive            <= '0';              
-             s_ep_ctr_A.outQueueBlockMask <= (others => '0');            
-             s_ep_ctr_B.outQueueBlockMask <= (others => '0');
+             s_sw_ctrl.blockTime          <= (others => '0');
+             s_sw_ctrl.blockReq           <= '0';
             
              -- new transition is not started until the previous has been cleared/finished
              if(s_start_transition = '1' and s_statTransFinished ='0' and s_statTransActive = '0') then --
@@ -250,21 +260,24 @@ begin --rtl
               
               -- send HW-generated paus
               s_ep_ctr_B.pauseSend         <= '1';  
-              s_ep_ctr_B.pauseTime         <= config_i.tcr_trans_port_a_pause;
+              s_ep_ctr_B.pauseTime         <= config_i.tcr_trans_pause_time;
               
               -- block output queues (TODO: to be revised)
-              s_ep_ctr_A.outQueueBlockMask <= s_port_A_prio_mask;
-              s_ep_ctr_B.outQueueBlockMask <= s_port_B_prio_mask;
+              s_sw_ctrl.blockReq           <= '1';
+              s_sw_ctrl.blockTime          <= config_i.tcr_trans_block_time;
             end if;
           --====================================================================================
           when S_WAIT_PA_MARKER =>  -- wait for the marker on the "slower" port
           --====================================================================================
-            s_ep_ctr_B.pauseSend         <= '0';
+            s_ep_ctr_B.pauseSend           <= '0';
+            s_sw_ctrl.blockReq             <= '0';
 
             -- marker frame on port A deteded
             if((s_port_A_mask and rxFrameMask_i) = s_port_A_mask) then
-              s_tru_trans_state    <= S_WAIT_WITH_TRANS;
-              
+              s_tru_trans_state            <= S_WAIT_WITH_TRANS;
+              -- stop pause
+              s_sw_ctrl.blockReq           <= '1';
+              s_sw_ctrl.blockTime          <= (others => '0');              
             -- until marker frame on port A is not detected, count rx frames of a defined priority
             else
               if(s_port_B_rtu_srobe = '1') then
@@ -274,7 +287,7 @@ begin --rtl
           --====================================================================================
           when S_WAIT_WITH_TRANS =>  -- wait until the same number of frames is rx-ed on both ports
           --====================================================================================
-            
+            s_sw_ctrl.blockReq           <= '0';
             -- as soon as the number of frames received on port A equals the number of frames
             -- received on port B, transition
             -- "+ 1" => we change before the next packet - the things is that the strobe
@@ -303,8 +316,6 @@ begin --rtl
             s_portB_frame_cnt   <= (others => '0');
             s_statTransActive   <= '0';
             s_statTransFinished <= '1';               
-            s_ep_ctr_A.outQueueBlockMask <= (others => '0');            
-            s_ep_ctr_B.outQueueBlockMask <= (others => '0');
             
             tru_tab_bank_o       <= '0';
               
@@ -315,8 +326,6 @@ begin --rtl
             s_portB_frame_cnt            <= (others => '0');
             s_statTransActive            <= '0';
             s_statTransFinished          <= '0';               
-            s_ep_ctr_A.outQueueBlockMask <= (others => '0');            
-            s_ep_ctr_B.outQueueBlockMask <= (others => '0');
             s_tru_trans_state            <= S_IDLE;
 
         end case;      
@@ -332,7 +341,7 @@ begin --rtl
   
   statTransActive_o   <= s_statTransActive;
   statTransFinished_o <= s_statTransFinished;
-
+  sw_o                <= s_sw_ctrl;
   -- MUX of Port A/B control (outputs) to appropraite ports
   EP_OUT: for i in 0 to g_num_ports-1 generate
       ep_o(i)<= s_ep_ctr_A when (i = to_integer(unsigned(config_i.tcr_trans_port_a_id))) else

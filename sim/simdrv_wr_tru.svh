@@ -83,8 +83,12 @@ class CSimDrv_WR_TRU;
          (mode       << `TRU_TCGR_TRANS_MODE_OFFSET     ) & `TRU_TCGR_TRANS_MODE      |
          (rx_id      << `TRU_TCGR_TRANS_RX_ID_OFFSET    ) & `TRU_TCGR_TRANS_RX_ID     |
          (prio       << `TRU_TCGR_TRANS_PRIO_OFFSET     ) & `TRU_TCGR_TRANS_PRIO      |
-         (prio_mode  << `TRU_TCGR_TRANS_PRIO_MODE_OFFSET) & `TRU_TCGR_TRANS_PRIO_MODE |
-         (time_diff  << `TRU_TCGR_TRANS_TIME_DIFF_OFFSET) & `TRU_TCGR_TRANS_TIME_DIFF);
+         (prio_mode  << `TRU_TCGR_TRANS_PRIO_MODE_OFFSET) & `TRU_TCGR_TRANS_PRIO_MODE );
+
+
+      m_acc.write(m_base +`ADDR_TRU_TCPBR, 
+         (time_diff  << `TRU_TCPBR_TRANS_PAUSE_TIME_OFFSET) & `TRU_TCPBR_TRANS_PAUSE_TIME |
+         (time_diff  << `TRU_TCPBR_TRANS_BLOCK_TIME_OFFSET) & `TRU_TCPBR_TRANS_BLOCK_TIME );
         
       m_acc.write(m_base +`ADDR_TRU_TCPR,  
          (port_a_id  << `TRU_TCPR_TRANS_PORT_A_ID_OFFSET   ) & `TRU_TCPR_TRANS_PORT_A_ID    |

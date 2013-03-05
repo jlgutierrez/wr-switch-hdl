@@ -149,7 +149,7 @@ begin
     rtu_i               => s_rtu, 
     ep_i                => s_ep_in,
     ep_o                => s_ep_out,
-    swc_o               => swc_o,
+--     swc_o               => swc_o,
     
     wb_i                => wb_in,
     wb_o                => wb_out

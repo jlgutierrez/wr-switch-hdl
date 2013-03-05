@@ -83,6 +83,7 @@ entity tru_transition is
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
     ports_req_strobe_i : in std_logic_vector(g_num_ports - 1 downto 0);
+    sw_o               : out t_trans2sw;
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
 end tru_transition;
@@ -92,12 +93,14 @@ architecture rtl of tru_transition is
   constant c_trans_mode_num_max : integer := 16;
  
   type t_trans2tru_2array is array (c_trans_mode_num_max-1 downto 0) of t_trans2tru_array(g_num_ports - 1 downto 0);
+  type t_trans2sw_array   is array (c_trans_mode_num_max-1 downto 0) of t_trans2sw;
 
   signal s_tru_tab_bank       : std_logic_vector(c_trans_mode_num_max-1 downto 0);
   signal s_statTransActive    : std_logic_vector(c_trans_mode_num_max-1 downto 0);
   signal s_statTransFinished  : std_logic_vector(c_trans_mode_num_max-1 downto 0);
   signal s_ep_array           : t_trans2tru_2array;
   signal s_rst_n              : std_logic_vector(c_trans_mode_num_max-1 downto 0);
+  signal s_sw_array           : t_trans2sw_array;
   
   signal index         : integer range c_trans_mode_num_max-1 downto 0;
 begin --rtl
@@ -108,6 +111,7 @@ begin --rtl
   tru_tab_bank_o     <= s_tru_tab_bank(index);
   statTransFinished_o<= s_statTransFinished(index);
   ep_o               <= s_ep_array(index);
+  sw_o               <= s_sw_array(index);
   
   -- a big and nasty MUX between different modules
    
@@ -133,7 +137,7 @@ begin --rtl
     tru_tab_bank_o         => s_tru_tab_bank(0),
     statTransActive_o      => s_statTransActive(0),
     statTransFinished_o    => s_statTransFinished(0),
-    
+    sw_o                   => s_sw_array(0),
     ep_o                   => s_ep_array(0)
     );
 
@@ -155,6 +159,7 @@ begin --rtl
     tru_tab_bank_o         => s_tru_tab_bank(1),
     statTransActive_o      => s_statTransActive(1),
     statTransFinished_o    => s_statTransFinished(1),
+    sw_o                   => s_sw_array(1),
     ep_o                   => s_ep_array(1)
     );
 
@@ -176,6 +181,7 @@ begin --rtl
     tru_tab_bank_o         => s_tru_tab_bank(2),
     statTransActive_o      => s_statTransActive(2),
     statTransFinished_o    => s_statTransFinished(2),
+    sw_o                   => s_sw_array(2),
     ep_o                   => s_ep_array(2)
     );
 

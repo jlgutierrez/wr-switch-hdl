@@ -110,7 +110,7 @@ entity xwrsw_tru is
     
     ----------------------- I/F with SW core ------------------------------------
     -- multi-port access (bit per port)
-    swc_o              : out std_logic_vector(g_num_ports-1 downto 0); -- for pausing
+    swc_block_oq_req_o : out t_global_pause_request;
 
     -- info to other moduels that TRU is enabled
     enabled_o          : out std_logic;
@@ -165,6 +165,8 @@ architecture rtl of xwrsw_tru is
   signal s_ports_req_strobe   : std_logic_vector(g_num_ports-1 downto 0);
   signal s_req_s_hp           : std_logic;
   signal s_req_s_prio         : std_logic;
+  signal s_tru_ena            : std_logic;
+  signal s_swc_ctrl           : t_trans2sw;
 begin --rtl
 
   U_T_PORT: tru_port
@@ -245,6 +247,7 @@ begin --rtl
     rxFrameMask_i          => s_trans_rxFrameMask,
     rtu_i                  => rtu_i,
     ports_req_strobe_i     => s_ports_req_strobe, -- new shit
+    sw_o                   => s_swc_ctrl,
     ep_o                   => s_trans_ep_ctr
     );
   s_trans_rxFrameMask <= s_endpoints.rxFrameMask(to_integer(unsigned(s_config.tcr_trans_rx_id)))(g_num_ports-1 downto 0);
@@ -281,7 +284,7 @@ begin --rtl
               s_pinject_ctr(i).inject_user_value <= s_regs_fromwb.pidr_uval_o;          
             elsif(s_tx_rt_reconf_FRM(i) ='1') then
               s_pinject_ctr(i).inject_packet_sel <= s_config.rtrcr_rtr_rx(2 downto 0);
-              s_pinject_ctr(i).inject_user_value <=  x"babe";                    
+              s_pinject_ctr(i).inject_user_value <=  x"babe";      -- TODO - config              
             elsif(s_trans_ep_ctr(i).pauseSend = '1') then 
               s_pinject_ctr(i).inject_packet_sel <= "000";
               s_pinject_ctr(i).inject_user_value <= s_trans_ep_ctr(i).pauseTime;                    
@@ -422,11 +425,11 @@ begin --rtl
   s_config.tcr_trans_prio                <= s_regs_fromwb.tcgr_trans_prio_o         ;
   s_config.tcr_trans_prio_mode           <= s_regs_fromwb.tcgr_trans_prio_mode_o    ;
   s_config.tcr_trans_port_a_id           <= s_regs_fromwb.tcpr_trans_port_a_id_o    ;
-  s_config.tcr_trans_port_a_pause        <= s_regs_fromwb.tcgr_trans_time_diff_o    ;
   s_config.tcr_trans_port_a_valid        <= s_regs_fromwb.tcpr_trans_port_a_valid_o ;
   s_config.tcr_trans_port_b_id           <= s_regs_fromwb.tcpr_trans_port_b_id_o    ;
-  s_config.tcr_trans_port_b_pause        <= s_regs_fromwb.tcgr_trans_time_diff_o    ;
   s_config.tcr_trans_port_b_valid        <= s_regs_fromwb.tcpr_trans_port_b_valid_o ;
+  s_config.tcr_trans_pause_time          <= s_regs_fromwb.tcpbr_trans_pause_time_o  ;
+  s_config.tcr_trans_block_time          <= s_regs_fromwb.tcpbr_trans_block_time_o  ;
   s_config.rtrcr_rtr_ena                 <= s_regs_fromwb.rtrcr_rtr_ena_o           ;
   s_config.rtrcr_rtr_reset               <= s_regs_fromwb.rtrcr_rtr_reset_o         ;
   s_config.rtrcr_rtr_mode                <= s_regs_fromwb.rtrcr_rtr_mode_o          ;
@@ -442,10 +445,14 @@ begin --rtl
                                             s_regs_fromwb.ttr2_ports_egress_o (g_num_ports-1 downto 0) &  
                                             s_regs_fromwb.ttr1_ports_ingress_o(g_num_ports-1 downto 0) &
                                             s_regs_fromwb.ttr0_mask_valid_o                            ;
- -- TODO:
-  swc_o                <= (others =>'0');
-  enabled_o            <= s_regs_fromwb.gcr_g_ena_o  ;
-
+ -- TODO:  
+  swc_block_oq_req_o.ports   <= s_swc_ctrl.blockPortsMask  when (s_tru_ena = '1') else (others => '0');
+  swc_block_oq_req_o.req     <= s_swc_ctrl.blockReq        when (s_tru_ena = '1') else '0';
+  swc_block_oq_req_o.quanta  <= s_swc_ctrl.blockTime       when (s_tru_ena = '1') else (others => '0');
+  swc_block_oq_req_o.classes <= s_swc_ctrl.blockQueuesMask when (s_tru_ena = '1') else (others => '0');
+  
+  enabled_o                  <= s_regs_fromwb.gcr_g_ena_o  ;
+  s_tru_ena                  <= s_regs_fromwb.gcr_g_ena_o  ;
   --------------
   s_debug_port_sel <=  to_integer(unsigned(s_regs_fromwb.dps_pid_o));
 

@@ -74,7 +74,16 @@ package wrsw_tru_pkg is
     pauseSend             : std_logic;
     pauseTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
     outQueueBlockMask     : std_logic_vector(c_wrsw_max_queue_number-1 downto 0);
+    outQueueBlockReq      : std_logic;
   end record;
+  
+  type t_trans2sw is record
+    blockTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
+    blockQueuesMask       : std_logic_vector(c_wrsw_max_queue_number -1 downto 0);
+    blockPortsMask        : std_logic_vector(c_RTU_MAX_PORTS         -1 downto 0);
+    blockReq              : std_logic;
+  end record;
+  
   
   type t_tru2ep is record
 --     ctrlWr                : std_logic;
@@ -164,11 +173,13 @@ package wrsw_tru_pkg is
     tcr_trans_prio        : std_logic_vector(2 downto 0);  -- added
     tcr_trans_prio_mode   : std_logic;
     tcr_trans_port_a_id   : std_logic_vector(5 downto 0);
-    tcr_trans_port_a_pause: std_logic_vector(15 downto 0); -- added
+--     tcr_trans_port_a_pause: std_logic_vector(15 downto 0); -- added
     tcr_trans_port_a_valid: std_logic;
     tcr_trans_port_b_id   : std_logic_vector(5 downto 0);
-    tcr_trans_port_b_pause: std_logic_vector(15 downto 0); -- added
+--     tcr_trans_port_b_pause: std_logic_vector(15 downto 0); -- added
     tcr_trans_port_b_valid: std_logic;
+    tcr_trans_pause_time  : std_logic_vector(15 downto 0); -- added
+    tcr_trans_block_time  : std_logic_vector(15 downto 0); -- added
     -- real time reconfiguration config
     rtrcr_rtr_ena         : std_logic;
     rtrcr_rtr_reset       : std_logic;
@@ -379,7 +390,7 @@ package wrsw_tru_pkg is
     rtu_i              : in  t_rtu2tru;
     ep_i               : in  t_ep2tru_array(g_num_ports-1 downto 0);
     ep_o               : out t_tru2ep_array(g_num_ports-1 downto 0);
-    swc_o              : out std_logic_vector(g_num_ports-1 downto 0); -- for pausing
+    swc_block_oq_req_o : out t_global_pause_request;
     enabled_o          : out std_logic;
     wb_i : in  t_wishbone_slave_in;
     wb_o : out t_wishbone_slave_out  
@@ -404,6 +415,7 @@ package wrsw_tru_pkg is
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
     ports_req_strobe_i : in std_logic_vector(g_num_ports - 1 downto 0);
+    sw_o               : out t_trans2sw;
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
   end component;
@@ -426,6 +438,7 @@ package wrsw_tru_pkg is
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
     ports_req_strobe_i : in std_logic_vector(g_num_ports - 1 downto 0);
+    sw_o               : out t_trans2sw;
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
   end component;
@@ -447,6 +460,7 @@ package wrsw_tru_pkg is
     statTransFinished_o: out std_logic;
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
+    sw_o               : out t_trans2sw;
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
   end component;
@@ -468,6 +482,7 @@ package wrsw_tru_pkg is
     statTransFinished_o: out std_logic;
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
+    sw_o               : out t_trans2sw;
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
   end component;

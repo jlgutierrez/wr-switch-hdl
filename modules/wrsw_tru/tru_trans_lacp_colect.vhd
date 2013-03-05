@@ -74,6 +74,7 @@ entity tru_trans_lacp_colect is
     statTransFinished_o: out std_logic;
     rxFrameMask_i      : in std_logic_vector(g_num_ports - 1 downto 0);
     rtu_i              : in  t_rtu2tru;
+    sw_o               : out t_trans2sw;    
     ep_o               : out t_trans2tru_array(g_num_ports - 1 downto 0)
     );
 end tru_trans_lacp_colect;
@@ -81,7 +82,8 @@ end tru_trans_lacp_colect;
 architecture rtl of tru_trans_lacp_colect is
  
    signal s_ep          : t_trans2ep;
-
+   signal s_sw          : t_trans2sw;
+   
 begin --rtl
    
    -- TODO
@@ -91,10 +93,17 @@ begin --rtl
   tru_tab_bank_o         <= '0';
   s_ep.pauseSend         <= '0';
   s_ep.pauseTime         <= (others => '0');
-  s_ep.outQueueBlockMask <= (others => '0');  
+  s_ep.pauseSend         <= '0';
+  s_ep.pauseTime         <= (others => '0');
+  s_sw.blockTime         <= (others => '0');
+  s_sw.blockQueuesMask   <= (others => '0');
+  s_sw.blockPortsMask    <= (others => '0');
+  s_sw.blockReq          <= '0';
 
   EP_OUT: for i in 0 to g_num_ports-1 generate
       ep_o(i)<= s_ep;
   end generate EP_OUT;
+
+  sw_o                   <= s_sw;
 
 end rtl;
