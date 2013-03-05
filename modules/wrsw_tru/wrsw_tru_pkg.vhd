@@ -80,7 +80,7 @@ package wrsw_tru_pkg is
   type t_trans2sw is record
     blockTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
     blockQueuesMask       : std_logic_vector(c_wrsw_max_queue_number -1 downto 0);
-    blockPortsMask        : std_logic_vector(c_RTU_MAX_PORTS         -1 downto 0);
+    blockPortsMask        : std_logic_vector(c_SWC_MAX_PORTS         -1 downto 0);
     blockReq              : std_logic;
   end record;
   

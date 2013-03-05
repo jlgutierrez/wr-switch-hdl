@@ -102,9 +102,11 @@ architecture syn of swc_output_traffic_shaper is
   signal gl_pause_counters : t_pause_array(g_num_global_pause-1 downto 0);
   signal gl_pause_classes  : t_classes_array(g_num_global_pause-1 downto 0);
   signal gl_pause_ports    : t_ports_masks(g_num_global_pause-1 downto 0);
+  signal zeros             : std_logic_vector(15 downto 0);
 
 begin -- behavioral
 
+  zeros <= (others =>'0');
   -- process to generate "tic" every  "quanta" whic is equal to 512 bit times 
   -- (62.5MHz => 16ns cycle, each processing 16 bit word, 512/16 = 32 = 2^5.
   -- This tic is used by the rest of processes
@@ -136,8 +138,12 @@ begin -- behavioral
           pp_pause_classes(i)     <= (others => '0');
         else 
           if (perport_pause_i(i).req = '1') then
-            pp_pause_counters(i)  <= unsigned(perport_pause_i(i).quanta);
-            pp_pause_classes(i)     <= perport_pause_i(i).classes;
+            pp_pause_counters(i)    <= unsigned(perport_pause_i(i).quanta);
+            if(perport_pause_i(i).quanta = zeros) then -- resetting PAUSE
+              pp_pause_classes(i)     <= (others =>'0');
+            else
+              pp_pause_classes(i)     <= perport_pause_i(i).classes;
+            end if;
           elsif (advance_counter = '1') then
             if(pp_pause_counters(i) = to_unsigned(0, pp_pause_counters(i)'length)) then
               pp_pause_classes(i)   <= (others => '0');
@@ -152,18 +158,23 @@ begin -- behavioral
 
   -- generating a configurable (generic) number of global pauses
   global_pause: for i in 0 to g_num_global_pause -1 generate
-    pp_pause_proc : process (clk_i, rst_n_i)
+    gl_pause_proc : process (clk_i, rst_n_i)
     begin
       if rising_edge(clk_i) then
         if(rst_n_i = '0') then
           gl_pause_counters(i)  <= (others => '0');
-          gl_pause_classes(i)     <= (others => '0');
+          gl_pause_classes(i)   <= (others => '0');
           gl_pause_ports(i)     <= (others => '0');
         else 
           if (global_pause_i(i).req = '1') then
             gl_pause_counters(i)  <= unsigned(global_pause_i(i).quanta);
-            gl_pause_classes(i)   <= global_pause_i(i).classes;
-            gl_pause_ports(i)     <= global_pause_i(i).ports;
+            if(global_pause_i(i).quanta = zeros) then -- resetting PAUSE
+              gl_pause_classes(i)   <= (others => '0');
+              gl_pause_ports(i)     <= (others => '0');
+            else
+              gl_pause_classes(i)   <= global_pause_i(i).classes;
+              gl_pause_ports(i)     <= global_pause_i(i).ports;
+            end if;
           elsif (advance_counter = '1') then
             if(gl_pause_counters(i) = to_unsigned(0, gl_pause_counters(i)'length)) then
               gl_pause_classes(i) <= (others => '0');

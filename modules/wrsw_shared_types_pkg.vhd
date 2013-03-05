@@ -4,6 +4,7 @@ use ieee.STD_LOGIC_1164.all;
 package wrsw_shared_types_pkg is
 
   constant c_RTU_MAX_PORTS : integer := 32;
+  constant c_SWC_MAX_PORTS : integer := c_RTU_MAX_PORTS+1;
 
   type t_rtu_request is record
     valid    : std_logic;
@@ -103,7 +104,7 @@ package wrsw_shared_types_pkg is
     req            : std_logic;
     quanta         : std_logic_vector(15 downto 0);
     classes        : std_logic_vector(7 downto 0); -- '1' for the classes which shall be PAUSED
-    ports          : std_logic_vector(c_RTU_MAX_PORTS+1-1 downto 0);
+    ports          : std_logic_vector(c_SWC_MAX_PORTS-1 downto 0);
   end record;
 
   type t_pause_request_array        is array(integer range <>) of t_pause_request;  

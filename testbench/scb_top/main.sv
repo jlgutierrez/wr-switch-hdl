@@ -689,7 +689,7 @@ module main;
    *    the configuration is swapped and the frames start to be blocked)
    * 6. saend frames to port 2 which now works as active
    */
-/*
+///*
   initial begin
     portUnderTest        = 18'b000000000000000000; // we send pcks (Markers) in other place
     g_tru_enable         = 1;    
@@ -714,7 +714,7 @@ module main;
     mc.logic2(25, 1, PFilterMicrocode::MOV, 0);
 
   end
-*/
+//*/
    /** ***************************   test scenario 22  ************************************* **/ 
   /*
    * Sending Pause the switch: a problem is that switch does not react to PAUSEs -- no 
@@ -965,7 +965,7 @@ module main;
   /*
    * 
    **/
- // /*
+  /*
   initial begin
     portUnderTest        = 18'b000000000000000111;
     g_active_port        = 0;
@@ -984,7 +984,7 @@ module main;
     g_traffic_shaper_scenario = 2;
 
   end
- //*/
+ */
    always #2.5ns clk_swc_mpm_core <=~clk_swc_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
    always #8ns clk_ref <= ~clk_ref;
@@ -1557,7 +1557,7 @@ module main;
                                  20 /*time_diff*/, 0 /*port_a_id*/, 1 /*port_b_id*/);
       else if(tru_config_opt == 3)
         tru_drv.transition_config(0 /*mode */,     1 /*rx_id*/,     0 /*prio mode*/, 0 /*prio*/, 
-                                  20 /*time_diff*/,1 /*port_a_id*/, 2 /*port_b_id*/);
+                                  100 /*time_diff*/,1 /*port_a_id*/, 2 /*port_b_id*/);
       
       if(tru_config_opt == 4)
         begin 
