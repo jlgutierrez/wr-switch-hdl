@@ -739,8 +739,7 @@ component  swc_multiport_pck_pg_free_module is
                                     rtu_broadcast: std_logic; 
                                     res_num_width: integer)          return std_logic_vector;
   function f_map_rtu_rsp_and_mmu_res_to_out_queue(rtu_prio      : std_logic_vector; 
-                                                  rtu_broadcast : std_logic; 
-                                                  resource      : std_logic_vector;
+                                                  rtu_hp        : std_logic; 
                                                   queue_full    : std_logic_vector;
                                                   queue_num     : integer) return std_logic_vector;
   function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector;
@@ -829,8 +828,7 @@ package body swc_swcore_pkg is
   --
   --------------------------------------------------------------------------------------------------  
   function f_map_rtu_rsp_and_mmu_res_to_out_queue(rtu_prio      : std_logic_vector; 
-                                                  rtu_broadcast : std_logic; 
-                                                  resource      : std_logic_vector;
+                                                  rtu_hp        : std_logic; 
                                                   queue_full    : std_logic_vector;
                                                   queue_num     : integer) return std_logic_vector is
     variable tmp        : unsigned(integer(CEIL(LOG2(real(queue_num-1))))-1 downto 0);
