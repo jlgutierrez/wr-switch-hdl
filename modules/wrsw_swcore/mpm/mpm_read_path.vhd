@@ -191,8 +191,27 @@ architecture rtl of mpm_read_path is
   signal fbm_data_reg : std_logic_vector(c_fbm_data_width-1 downto 0);
 
   signal muxed : std_logic_vector(g_page_addr_width-1 downto 0);
-
+  
+  -- ML: signals to implement hack-ish abort by reseting read_path
+  -- * shorter reset signal for FIFOS
+  -- * longer reset signal for logic (i.e. U_Core_Block)
+  -- * abort which is prolonged, used as reset and connected to flush in U_IO_Block
+  signal fifos_rst_n_core        : std_logic_vector (g_num_ports-1 downto 0); -- ML-added
+  signal logic_rst_n_core        : std_logic_vector (g_num_ports-1 downto 0); -- ML-added
+  signal rport_abort_d           : std_logic_vector (g_num_ports-1 downto 0); -- ML-added
 begin  -- rtl
+
+  --ML: process to register abort (produce resets of differnt width)
+  p_abort_reset : process(clk_io_i)
+  begin
+    if rising_edge(clk_io_i) then
+      if(rst_n_io_i = '0') then
+        rport_abort_d  <= (others =>'0');
+      else
+        rport_abort_d  <= rport_abort_i;
+      end if;
+    end if;
+  end process;
 
 -- I/O structure serialization/deserialization
   gen_serialize_ios : for i in 0 to g_num_ports-1 generate
@@ -214,7 +233,6 @@ begin  -- rtl
     rport_pg_req_o(i) <= rport(i).pg_req;
 
   end generate gen_serialize_ios;
-
 
   -- The actual round-robin arbiter for muxing memory accesses.
   --p_mem_arbiter : process(clk_core_i)
@@ -267,7 +285,7 @@ begin  -- rtl
         g_width => c_line_size_width + c_fbm_addr_width,
         g_size  => 8)
       port map (
-        rst_n_a_i => rst_n_core_i,
+        rst_n_a_i => fifos_rst_n_core(i), --ML: abort by reset --rst_n_core_i,
         clk_wr_i  => clk_io_i,
         clk_rd_i  => clk_core_i,
         we_i      => io(i).pf_we,
@@ -284,7 +302,7 @@ begin  -- rtl
         g_size           => g_fifo_size,
         g_sideband_width => 0)
       port map (
-        rst_n_a_i => rst_n_core_i,
+        rst_n_a_i => fifos_rst_n_core(i), -- ML: abort by reset 
         clk_wr_i  => clk_core_i,
         clk_rd_i  => clk_io_i,
         we_i      => core(i).df_we,
@@ -296,8 +314,10 @@ begin  -- rtl
         full_o    => core(i).df_full,
         empty_o   => io(i).df_empty);
 
+    -- ML: producing reset triggerd by abort
+    fifos_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i));
+    logic_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i)) and (not rport_abort_d(i));
   end generate gen_fifos;
-
 
 -- The arbiter for accessing the linked list
   --p_ll_arbiter : process(clk_io_i)
@@ -342,9 +362,7 @@ begin  -- rtl
     end if;
   end process;
 
-
   gen_io_core_blocks : for i in 0 to g_num_ports-1 generate
-
 
     U_Core_Block: mpm_rpath_core_block
       generic map (
@@ -354,8 +372,8 @@ begin  -- rtl
         g_page_size       => g_page_size,
         g_ratio           => g_ratio)
       port map (
-        clk_core_i    => clk_core_i,
-        rst_n_core_i  => rst_n_core_i,
+        clk_core_i    => clk_core_i, 
+        rst_n_core_i  => logic_rst_n_core(i), --ML: abort by reset  --rst_n_core_i,
         fbm_req_o     => mem_req(i),
         fbm_grant_i   => mem_grant(i),
         fbm_addr_o    => core(i).fbm_addr,
@@ -407,5 +425,4 @@ begin  -- rtl
     core(i).pf_pg_lines <= core(i).pf_q(c_fbm_addr_width + c_line_size_width-1 downto c_fbm_addr_width);
   end generate gen_io_core_blocks;
   
-
 end rtl;
