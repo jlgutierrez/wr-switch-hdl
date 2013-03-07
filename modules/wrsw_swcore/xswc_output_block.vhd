@@ -345,7 +345,6 @@ begin  --  behavoural
   -- here we map the RTU+resource info into output queues
   write_index <= f_map_rtu_rsp_and_mmu_res_to_out_queue(pta_prio_i,
                                                      pta_broadcast_i,
-                                                     pta_resource_i,
                                                      full_array,
                                                      g_queue_num);
   
