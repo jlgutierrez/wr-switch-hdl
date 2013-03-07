@@ -986,7 +986,7 @@ module main;
   /*
    * testing simple RTU forwarding and stuff
    **/
-  ///*
+ /*
   initial begin
     portUnderTest        = 18'b010101010101010101;   
     g_enable_pck_gaps    = 1;
@@ -998,8 +998,27 @@ module main;
                          // tx  ,rx ,opt
 
   end
- //*/
+ */
+ /** ***************************   test scenario 31  ************************************* **/ 
+  /*
+   * output drop at HP - testing
+   **/
+  ///*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;   
+    g_enable_pck_gaps    = 0;
+    repeat_number        = 20;
+    tries_number         = 1;  
+    g_force_payload_size = 300;
+//     g_min_pck_gap        = 100; // cycles
+//     g_max_pck_gap        = 100; // cycles  
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 206 };
+    trans_paths[1]       = '{1  ,16 , 206 };
+    trans_paths[2]       = '{2  ,15 , 206 };
 
+  end
+ //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1063,7 +1082,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 || opt==10 || opt==201 || opt == 203 || opt == 204 || opt == 205)
+      else if(opt==4 || opt==10 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -1159,7 +1178,7 @@ module main;
                 pkt.payload[19]= 'h14;
               end
               
-              if(opt == 205)
+              if(opt == 205 || opt == 206)
                 pkt.pcp = i%8;
               src.send(pkt);
               arr[i]  = pkt;
@@ -1169,7 +1188,7 @@ module main;
            end
         end   // fork 1
         begin // fork 2
-        if(opt != 101 && opt != 201 && opt != 900 && opt != 901)
+        if(opt != 101 && opt != 201 && opt != 900 && opt != 901 && opt != 206)
           for(int j=0;j<n_tries;j++)
             begin
               sink.recv(pkt2);

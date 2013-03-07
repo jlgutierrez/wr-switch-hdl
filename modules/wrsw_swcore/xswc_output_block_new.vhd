@@ -277,10 +277,30 @@ architecture behavoural of xswc_output_block_new is
 
   signal cycle_frozen     : std_logic;
   signal cycle_frozen_cnt : unsigned(5 downto 0);
- 
+
+  signal current_tx_prio : std_logic_vector(g_queue_num - 1 downto 0);
+  
+  signal hp_prio_mask    : std_logic_vector(g_queue_num - 1 downto 0);
+  signal zero_prio_mask  : std_logic_vector(g_queue_num - 1 downto 0);
+  
+  signal hp_in_queuing   : std_logic;
+  signal non_hp_txing    : std_logic;
+  signal abord_tx_at_hp  : std_logic;
+  signal drop_at_hp      : std_logic;
+  
+  signal wrf_status_err  : t_wrf_status_reg;
   
 begin  --  behavoural
 
+  wrf_status_err.is_hp       <= '0';
+  wrf_status_err.has_smac    <= '0';
+  wrf_status_err.has_crc     <= '0';
+  wrf_status_err.error       <= '1';
+  wrf_status_err.tag_me      <= '0';
+  wrf_status_err.match_class <= (others =>'0');
+
+  zero_prio_mask   <= (others => '0');
+    
   --tap_out_o <= f_slv_resize(mpm_d_i & mpm_dvalid_i & mpm_dlast_i & mpm_dreq & mpm_pg_valid & mpm_pg_addr & ppfm_free_pgaddr & ppfm_free
   --  & f_prepstate_2_slv(s_prep_to_send) & f_sendstate_2_slv(s_send_pck) & cycle_frozen & std_logic_vector(ack_count) & pta_pageaddr_i & pta_transfer_data_ack & pta_transfer_data_valid_i, 80);
 
@@ -315,7 +335,6 @@ begin  --  behavoural
   -- here we map the RTU+resource info into output queues
   write_index     <= f_map_rtu_rsp_and_mmu_res_to_out_queue(pta_prio_i,
                                                             pta_hp_i,
-                                                            x"000",
                                                             full_array,
                                                             g_queue_num);
 
@@ -484,6 +503,55 @@ begin  --  behavoural
     end if;
   end process wr_ram;
 
+  -- learning which queues are HP 
+  -- this is defined in RTU config, based on the config
+  -- RTU provides info which packet is HP. In theory, more queues can be 
+  -- defined as HP 
+  p_learn_hp_mask: process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if rst_n_i = '0' then
+        hp_prio_mask <= (others => '0');
+      else
+        if(pta_transfer_data_valid_i = '1' and pta_hp_i = '1') then
+          hp_prio_mask <= write_array or hp_prio_mask;
+        end if;
+      end if;
+    end if;
+  end process;
+-- for testing: set HP vector
+--   hp_prio_mask(g_queue_num-2 downto 0) <= (others =>'0');
+--   hp_prio_mask(g_queue_num-1)            <= '1'; -- HP
+
+  -- remember info about currently processed prio of the frame. this is needed to
+  -- decide whether the currently tx-ed frame shall be dropped when HP frame is queued
+  p_track_tx_prio: process(clk_i, rst_n_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        current_tx_prio <= (others => '0');
+      else
+        if(rd_valid = '1') then
+          current_tx_prio <= read_array;
+        elsif((s_send_pck = S_EOF) and (s_prep_to_send = S_IDLE)) then
+          current_tx_prio <= (others => '0');
+        end if;
+      end if;
+    end if;
+  end process p_track_tx_prio;
+  
+  -- deciding whether to drop currently tx-ed frame
+  hp_in_queuing  <= '1' when ((read_array      and      hp_prio_mask)  /= zero_prio_mask) else '0';
+  non_hp_txing   <= '1' when ((current_tx_prio and (not hp_prio_mask)) /= zero_prio_mask) else '0';
+                             
+  abord_tx_at_hp <= non_hp_txing  and   -- we are currently sending frame which is not HP
+                    hp_in_queuing and   -- we have frame which is in HP output queue
+                    drop_at_hp    and   -- the configuration enable dropping at HP
+                    (not mpm_pg_req_i); -- we chack that we are not at the end of sending 
+                                        -- the non-HP frame. There is no sense in dropping
+                                        -- frame which is almost completely sent
+  
+  drop_at_hp      <= ots_output_drop_at_rx_hp_i;
   --==================================================================================================
   -- FSM to prepare next pck to be send
   --==================================================================================================
@@ -582,6 +650,9 @@ begin  --  behavoural
               -- don't need to remember the address -- 
               mpm_abort      <= '1';
               s_prep_to_send <= S_RETRY_PREPARE;
+            elsif(abord_tx_at_hp = '1' and mpm_pg_req_i = '0') then 
+              mpm_abort      <= '1';
+              s_prep_to_send <= S_IDLE;
             elsif(mpm_pg_req_i = '1') then 
                 s_prep_to_send <= S_IDLE;
             end if;
@@ -689,6 +760,12 @@ begin  --  behavoural
               src_out_int.stb <= '0';
               request_retry   <= '1';
               s_send_pck      <= S_RETRY;
+            elsif(abord_tx_at_hp = '1' and mpm_dlast_i = '0') then -- drop at HP in the outqueue
+              s_send_pck      <= S_FINISH_CYCLE;      -- we free page in EOF
+              src_out_int.adr <= c_WRF_STATUS;
+              src_out_int.dat <= f_marshall_wrf_status(wrf_status_err);
+              src_out_int.sel <= (others => '1'); 
+              src_out_int.stb <= '1';                           
             elsif(src_i.stall = '1' and mpm_dvalid_i = '1') then
               s_send_pck <= S_FLUSH_STALL;
             end if;
