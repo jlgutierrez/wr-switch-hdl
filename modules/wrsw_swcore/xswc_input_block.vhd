@@ -628,10 +628,10 @@ constant c_force_usecnt             : boolean := TRUE;
   signal res_info_full              : std_logic;
   
   signal dbg_dropped_on_res_full    : std_logic;
+
 begin  --arch
   
-  zeros <= (others => '0');
-
+  zeros                      <= (others => '0');
   --================================================================================================
   --------------------------------------------------------------------------------------------------
   -----------------------     Receiving the PCK and writting to MPM  -------------------------------
@@ -656,7 +656,7 @@ begin  --arch
 
   -- we store in FBM addr and data 
   in_pck_dat <= snk_adr_int & snk_dat_int;
-
+  
   -- detecting the end of the pck
   -- it is enough always, except special case when we receive eof during PAUSE state, 
   -- in this case,we come back to RCV_DATA and regenerate EOF (this is to make things simpler, 
@@ -851,9 +851,15 @@ begin  --arch
               mpm_dlast <= '1';
             end if;
 
+            if(in_pck_err = '1' and tp_drop = '0') then
+              -- write the error status to the memory (so it's properly sent -- with error)
+              -- and indicate that the error needs to be handled in the next cycle            
+              rp_in_pck_err   <= '1';
+              mpm_dvalid      <= '1';
+              mpm_data        <= in_pck_dat;                
             -- write to MPM data only if you know two consequtive WB writes, this is to detect EOF and
             -- set HIGH dlast at an appropriate time
-            if((in_pck_dvalid = '1' and in_pck_dvalid_d0 = '1') or finish_rcv_pck = '1') then
+            elsif((in_pck_dvalid = '1' and in_pck_dvalid_d0 = '1') or finish_rcv_pck = '1') then
               mpm_dvalid <= '1';
               mpm_data   <= in_pck_dat_d0;
 
@@ -871,7 +877,7 @@ begin  --arch
             end if;
 
             --- below deciding on the next state:
-            if(in_pck_err = '1') then
+            if(rp_in_pck_err = '1') then
 
               snk_stall_force_h <= '1';
               snk_stall_force_l <= '1';
