@@ -36,14 +36,14 @@ class CSimDrv_TATSU;
    task drop_at_HP_enable();
      uint64_t tmp;
      m_acc.read(m_base + `ADDR_TATSU_TCR, tmp, 4);
-     m_acc.write(m_base + `ADDR_TATSU_TSR0, tmp |  `TATSU_TCR_DROP_ENA);
+     m_acc.write(m_base + `ADDR_TATSU_TCR, tmp |  `TATSU_TCR_DROP_ENA);
      $display("TATSU: enable drop at HP"); 
    endtask;
 
    task drop_at_HP_disable();
      uint64_t tmp;
      m_acc.read(m_base + `ADDR_TATSU_TCR, tmp, 4);
-     m_acc.write(m_base + `ADDR_TATSU_TSR0, tmp &  ~(`TATSU_TCR_DROP_ENA));
+     m_acc.write(m_base + `ADDR_TATSU_TCR, tmp &  ~(`TATSU_TCR_DROP_ENA));
      $display("TATSU: disable drop at HP"); 
    endtask;
 

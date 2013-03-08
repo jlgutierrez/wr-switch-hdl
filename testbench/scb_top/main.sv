@@ -194,6 +194,8 @@ module main;
                                                };
    integer g_LACP_scenario                  = 0;
    integer g_traffic_shaper_scenario        = 0;
+   integer g_enable_WRtime                  = 0;
+   integer g_tatsu_config                   = 0;
    int lacp_df_hp_id                        = 0;
    int lacp_df_br_id                        = 2;
    int lacp_df_un_id                        = 1;
@@ -486,7 +488,7 @@ module main;
    * we kill port 1 (backup) (DOWN) and then revivie it (UP) and then kill port 0 (active)
    * the killing of port 1 happens during reception of frame... problem
    **/
-/*
+ /*
   initial begin
     portUnderTest        = 18'b000000000000000111;
     g_tru_enable         = 1;
@@ -949,7 +951,7 @@ module main;
     g_min_pck_gap        = 800; // cycles
     g_max_pck_gap        = 800; // cycles  
     g_pause_mode         = 2;
-    
+    g_enable_WRtime      = 1;
                          // tx  ,rx ,opt
     trans_paths[0]       = '{0  ,17 , 900 };
     trans_paths[1]       = '{1  ,16 , 901 };
@@ -979,6 +981,7 @@ module main;
     trans_paths[2]       = '{2  ,15 , 205 };
 
     g_traffic_shaper_scenario = 2;
+    g_enable_WRtime      = 1;
 
   end
  */
@@ -1003,13 +1006,15 @@ module main;
   /*
    * output drop at HP - testing
    **/
-  ///*
+// /*
   initial begin
     portUnderTest        = 18'b000000000000000111;   
     g_enable_pck_gaps    = 0;
     repeat_number        = 20;
     tries_number         = 1;  
     g_force_payload_size = 300;
+    g_tatsu_config       = 1;
+    mac_br               = 1;
 //     g_min_pck_gap        = 100; // cycles
 //     g_max_pck_gap        = 100; // cycles  
                          // tx  ,rx ,opt
@@ -1018,7 +1023,32 @@ module main;
     trans_paths[2]       = '{2  ,15 , 206 };
 
   end
- //*/
+//*/
+   /** ***************************   test scenario 32  ************************************* **/ 
+   /** ***************************     (problematic)   ************************************* **/ 
+  /*
+   * testing switch over for TRU->eRSTP
+   * we kill port 1 (backup) (DOWN) and then revivie it (UP) and then kill port 0 (active)
+   * the killing of port 1 happens during reception of frame... problem
+   **/
+ /*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps    = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap        = 300; // cycles
+    g_max_pck_gap        = 300; // cycles
+    g_failure_scenario   = 6;
+    g_active_port        = 0;
+    g_backup_port        = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+  end
+*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1634,9 +1664,11 @@ module main;
       cpu_acc.write('h10304, (1<<3));
       
       // pps_gen for time code for Time-Aware Traffic Shaper
-      cpu_acc.write('h10500, (1<<1)); // enable pps_gen counter
-      cpu_acc.write('h1051c, (1<<2)); // tm_valid HIGH
-      
+      if(g_enable_WRtime == 1)
+      begin
+        cpu_acc.write('h10500, (1<<1)); // enable pps_gen counter
+        cpu_acc.write('h1051c, (1<<2)); // tm_valid HIGH
+      end
       
       init_ports(ports, cpu_acc);
       $display("InitNIC");
@@ -1735,6 +1767,9 @@ module main;
       init_tru(tru);
       
       tatsu=new(cpu_acc, 'h58000);
+      if(g_tatsu_config == 1)
+        tatsu.drop_at_HP_enable();
+      
       fork
         begin
           if(g_traffic_shaper_scenario == 1)
@@ -1838,7 +1873,16 @@ module main;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> links 0 & 4 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
-           end           
+           end   
+           if(g_failure_scenario == 6)
+           begin 
+             wait_cycles(500);
+             ep_ctrl[0] = 'b0;
+             ep_ctrl[4] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> links 0 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+           end          
          end 
       join_none; //
 

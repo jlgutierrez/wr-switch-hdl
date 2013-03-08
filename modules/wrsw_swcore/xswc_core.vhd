@@ -421,7 +421,7 @@ architecture rtl of xswc_core is
         rtu_rsp_ack_o            => rtu_ack_o(i),        
         rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
         rtu_dst_port_mask_i      => rtu_rsp_i(i).port_mask(g_num_ports  - 1 downto 0),
-        rtu_hp_i                 => '0', -- TODO: add stuff to RTU
+        rtu_hp_i                 => rtu_rsp_i(i).hp, --'0', -- TODO: add stuff to RTU
         rtu_drop_i               => rtu_rsp_i(i).drop,
         rtu_prio_i               => rtu_rsp_i(i).prio(c_prio_width - 1 downto 0),
 
@@ -526,7 +526,7 @@ architecture rtl of xswc_core is
         --: output traffic shaper (PAUSE + time-aware-shaper)
         -------------------------------------------------------------------------------  
         ots_output_mask_i         => ots2ob_output_masks(i),
-        ots_output_drop_at_rx_hp_i=> '0',
+        ots_output_drop_at_rx_hp_i=> shaper_drop_at_hp_ena_i,
 
         -------------------------------------------------------------------------------
         -- pWB : output (goes to the Endpoint)

@@ -514,7 +514,12 @@ begin  --  behavoural
         hp_prio_mask <= (others => '0');
       else
         if(pta_transfer_data_valid_i = '1' and pta_hp_i = '1') then
-          hp_prio_mask <= write_array or hp_prio_mask;
+          hp_prio_mask <= hp_prio_mask or write_array ; -- add to mask
+        elsif(pta_transfer_data_valid_i = '1' and pta_hp_i = '0') then
+          if((hp_prio_mask and  write_array) /= zeros) then -- we recognzie nonHP queu as HP
+                                                              -- remove from hp_prio_mask
+            hp_prio_mask <= hp_prio_mask and (not write_array);
+          end if;
         end if;
       end if;
     end if;
