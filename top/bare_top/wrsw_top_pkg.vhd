@@ -334,6 +334,7 @@ package wrsw_top_pkg is
       g_handle_only_single_req_per_port : boolean                        := FALSE;
       g_prio_num                        : integer;
       g_num_ports                       : integer;
+      g_cpu_port_num                    : integer := -1;
       g_match_req_fifo_size             : integer := 32;        
       g_port_mask_bits                  : integer);
     port (

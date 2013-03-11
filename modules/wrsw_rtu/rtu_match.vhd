@@ -172,6 +172,9 @@ entity rtu_match is
     -- 1: packet is broadcast     
     rtu_pcr_b_unrec_i : in std_logic_vector(g_num_ports - 1 downto 0);
 
+    -- 
+    rtu_b_unrec_fw_cpu_i : in std_logic;
+    rtu_cpu_mask_i       : in std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
     -------------------------------------------------------------------------------
     -- HASH based on CRC
     -------------------------------------------------------------------------------   
@@ -331,15 +334,26 @@ architecture behavioral of rtu_match is
     return rv;
   end f_onehot_encode;
 
-
-
-  signal requesting_port : std_logic_vector(g_num_ports-1 downto 0);
-
-
+  signal requesting_port       : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_urec_broadcast_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);  
 -------------------------------------------------------------------------------------------------------------------------
 --| Address outs and flag generation and 
 -------------------------------------------------------------------------------------------------------------------------
 begin
+
+  -- mask used for broadcasting unrecognizd traffic. such a broadcast should avoid
+  -- sending frames to NIC (CPU) which is port number g_num_ports - this coused switch's CPU
+  -- to get almost stuck. however, normal broadcast has to be forwarded to NIC so that
+  -- ARP and other protocols could work on it
+  -- 
+--   UREC_MASK: for i in 0 to c_RTU_MAX_PORTS-1 generate
+--       s_urec_broadcast_mask(i) <= '1' when (i < g_num_ports) else '0';
+--   end generate;
+
+  -- if forward of unrecognized frames to CPU is disabled (LOW), then we use
+  -- the cpu_mask to forward everywhere but to CPU, otherwise we do on all ports
+  s_urec_broadcast_mask <= (not rtu_cpu_mask_i) when (rtu_b_unrec_fw_cpu_i = '0') else
+                           (others =>'1');
   -----------------------------------------------------------------------------------------------------------------------
   --| Hash calculation
   -----------------------------------------------------------------------------------------------------------------------
@@ -794,7 +808,8 @@ begin
                   if(s_src_dst_sel = '0') then
                     
                     
-                    s_src_entry_port_mask_src            <= (others => '1');  -- changed
+                    s_src_entry_port_mask_src            <= s_urec_broadcast_mask; --ML changed (mar2013) again, to avoid broadast to NIC, old:
+                                                                                   --(others => '1');  -- changed
                     s_src_entry_drop_unmatched_src_ports <= '0';
 
                     ----------------------------------------------------------------------------
@@ -802,7 +817,7 @@ begin
                     ----------------------------------------------------------------------------                      
                   else
                     
-                    s_dst_entry_port_mask_dst <= (others => '1');
+                    s_dst_entry_port_mask_dst <= s_urec_broadcast_mask; --ML changed (mar2013) to avoid broadcast to NIC, old:(others => '1');
                     s_dst_entry_is_bpdu       <= '0';  -- changed
                   end if;  -- if( s_src_dst_sel = '0') then            
 
@@ -875,7 +890,7 @@ begin
             ----------------------------------------------------------------------------     
             if(s_src_dst_sel = '0') then
               
-              s_src_entry_port_mask_src            <= (others => '1');
+              s_src_entry_port_mask_src            <= s_urec_broadcast_mask; --ML changed (mar2013) to avoid broadcast to NIC, old: (others => '1');
               s_src_entry_drop_unmatched_src_ports <= '0';
               ----------------------------------------------------------------------------
               --  DESTINATION MAC ENTRY SEARCH
@@ -891,7 +906,7 @@ begin
                 -- so we broardcast
                 
                 s_dst_entry_is_bpdu       <= '0';
-                s_dst_entry_port_mask_dst <= (others => '1');
+                s_dst_entry_port_mask_dst <= s_urec_broadcast_mask; --ML changed (mar2013) to avoid broadcast to NIC, old: (others => '1');
 
                 -------------------------------------------       
                 -- not broadcast unrecognized requests = drop
@@ -965,7 +980,7 @@ begin
                   ----------------------------------------------------------------------------     
                   if(s_src_dst_sel = '0') then
                     
-                    s_src_entry_port_mask_src            <= (others => '1');
+                    s_src_entry_port_mask_src            <= s_urec_broadcast_mask; --ML changed (mar2013) to avoid broadcast to NIC, old:(others => '1');
                     s_src_entry_drop_unmatched_src_ports <= '0';
                     ----------------------------------------------------------------------------
                     --  DESTINATION MAC ENTRY SEARCH
@@ -973,7 +988,7 @@ begin
                   else
                     
                     s_dst_entry_is_bpdu       <= '0';
-                    s_dst_entry_port_mask_dst <= (others => '1');
+                    s_dst_entry_port_mask_dst <= s_urec_broadcast_mask; --ML changed (mar2013) to avoid broadcast to NIC, old:(others => '1');
                     
                   end if;
 

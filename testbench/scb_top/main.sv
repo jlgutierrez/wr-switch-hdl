@@ -116,6 +116,8 @@ module main;
    bit mac_single                             = 0;
    bit mac_range                              = 0;
    bit mac_br                                 = 0;
+   bit hp_fw_cpu                              = 0;
+   bit unrec_fw_cpu                           = 0;
    
    // vlans
 //    int prio_map[8]                         = '{7, // Class of Service masked into prioTag 0
@@ -196,6 +198,7 @@ module main;
    integer g_traffic_shaper_scenario        = 0;
    integer g_enable_WRtime                  = 0;
    integer g_tatsu_config                   = 0;
+   integer g_fw_to_cpu_scenario             = 0;
    int lacp_df_hp_id                        = 0;
    int lacp_df_br_id                        = 2;
    int lacp_df_un_id                        = 1;
@@ -1006,7 +1009,7 @@ module main;
   /*
    * output drop at HP - testing
    **/
-// /*
+ /*
   initial begin
     portUnderTest        = 18'b000000000000000111;   
     g_enable_pck_gaps    = 0;
@@ -1023,13 +1026,12 @@ module main;
     trans_paths[2]       = '{2  ,15 , 206 };
 
   end
-//*/
+*/
    /** ***************************   test scenario 32  ************************************* **/ 
-   /** ***************************     (problematic)   ************************************* **/ 
   /*
    * testing switch over for TRU->eRSTP
-   * we kill port 1 (backup) (DOWN) and then revivie it (UP) and then kill port 0 (active)
-   * the killing of port 1 happens during reception of frame... problem
+   * we port 0 (active) in the middle of frame reception - the rx error should be handled 
+   * properly
    **/
  /*
   initial begin
@@ -1049,6 +1051,89 @@ module main;
     tries_number         = 1;
   end
 */
+   /** ***************************   test scenario 33  ************************************* **/ 
+  /*
+   * test WR Marker (HP+CPU forward)
+   * - forwarding of HP traffic to NIC is disabled, but marker is recognized as link-limited (nf)
+   *   so it is forwarded to CPU anyway (not as HP but as NF)
+   **/
+ /*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps    = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap        = 300; // cycles
+    g_max_pck_gap        = 300; // cycles
+    g_failure_scenario   = 6;
+    g_active_port        = 0;
+    g_backup_port        = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 11 };
+    trans_paths[1]       = '{1  ,16 , 11 };
+    trans_paths[2]       = '{2  ,15 , 11 };
+    repeat_number        = 30;
+    tries_number         = 1;
+    
+    mac_ll               = 1;
+    mac_single           = 1;
+    hp_fw_cpu            = 0; // 
+  end
+ */
+   /** ***************************   test scenario 34  ************************************* **/ 
+  /*
+   * HP traffic forwarding to NIC:
+   * - by default should not be forwarded: nic_fw =0
+   * - should be forwarded if nic_fw=1
+   *  
+   * we change the config of nic_fw in failure sceonario 7 (out of laziness here)
+   **/
+ /*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps    = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap        = 300; // cycles
+    g_max_pck_gap        = 300; // cycles
+    g_failure_scenario   = 7; // changes hp_fw_cpu to 1
+    g_active_port        = 0;
+    g_backup_port        = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+    
+    mac_ll               = 1;
+    mac_single           = 1;
+    mac_br               = 1;
+    hp_fw_cpu            = 0; // 
+  end
+ */
+   /** ***************************   test scenario 34  ************************************* **/ 
+  /*
+   * Learning - enable/disble forwarding of unrecognized broadcast to CPU
+   **/
+// /*
+  initial begin
+    portUnderTest        = 18'b000000000000000001;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps    = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap        = 300; // cycles
+    g_max_pck_gap        = 300; // cycles
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 12 };
+    repeat_number        = 30;
+    tries_number         = 1;
+    
+    mac_ll               = 1;
+    mac_single           = 1;
+    mac_br               = 1;
+    hp_fw_cpu            = 0; // 
+    unrec_fw_cpu         = 0;
+    g_fw_to_cpu_scenario = 1;
+  end
+// */
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1124,6 +1209,10 @@ module main;
         tmpl.dst       = '{'h01, 'h1b, 'h19, 'h00, 'h00, 'h00}; // PTP
       else if(opt==9 || opt==900 || opt == 901)
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h01}; // PAUSE
+      else if(opt==11)
+        tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h0F}; // Marker (fast forward + CPU forward)      
+      else if(opt==12)
+        tmpl.dst       = '{'h01, 'h23, 'h45, 'h67, 'h89, 'h0AB}; // Unknown MAC
       else
         tmpl.dst       = '{'h00, 'h00, 'h00, 'h00, 'h00, 'h00}; // link-limited
 
@@ -1749,14 +1838,17 @@ module main;
       ///////////////////////////   RTU extension settings:  ////////////////////////////////
       
       rtu.rx_add_ff_mac_single(0/*ID*/,1/*valid*/,'h1150cafebabe /*MAC*/);
-      rtu.rx_add_ff_mac_single(1/*ID*/,1/*valid*/,'h111111111111/*MAC*/);
-      rtu.rx_add_ff_mac_range (0/*ID*/,1/*valid*/,'h0050cafebabe/*MAC_lower*/,'h0850cafebabe/*MAC_upper*/);
+      rtu.rx_add_ff_mac_single(1/*ID*/,1/*valid*/,'h111111111111 /*MAC*/);
+      rtu.rx_add_ff_mac_single(2/*ID*/,1/*valid*/,'h0180C200000F /*MAC*/);
+      rtu.rx_add_ff_mac_range (0/*ID*/,1/*valid*/,'h0050cafebabe /*MAC_lower*/,'h0850cafebabe/*MAC_upper*/);
 //       rtu.rx_set_port_mirror  ('h00000002 /*mirror_src_mask*/,'h00000080 /*mirror_dst_mask*/,1/*rx*/,1/*tx*/);
       rtu.rx_set_port_mirror  (mirror_src_mask, mirror_dst_mask,mr_rx, mr_tx);
       rtu.rx_set_hp_prio_mask ('b10000001 /*hp prio mask*/); //HP traffic set to 7th priority
-      rtu.rx_set_cpu_port     ((1<<g_num_ports)/*mask: virtual port of CPU*/);
+//       rtu.rx_set_cpu_port     ((1<<g_num_ports)/*mask: virtual port of CPU*/);
+      rtu.rx_read_cpu_port();     
       rtu.rx_drop_on_fmatch_full();
       rtu.rx_feature_ctrl(mr, mac_ptp , mac_ll, mac_single, mac_range, mac_br);
+      rtu.rx_fw_to_CPU(hp_fw_cpu,unrec_fw_cpu);
       
       ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1769,6 +1861,16 @@ module main;
       tatsu=new(cpu_acc, 'h58000);
       if(g_tatsu_config == 1)
         tatsu.drop_at_HP_enable();
+      fork
+        begin
+          if(g_fw_to_cpu_scenario == 1)
+          begin
+            wait_cycles(1000);
+            unrec_fw_cpu         = 1; // 
+            rtu.rx_fw_to_CPU(hp_fw_cpu,unrec_fw_cpu);
+          end
+        end
+      join_none
       
       fork
         begin
@@ -1874,14 +1976,19 @@ module main;
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> links 0 & 4 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
            end   
-           if(g_failure_scenario == 6)
+           if(g_failure_scenario == 6 || g_failure_scenario == 7)
            begin 
              wait_cycles(500);
              ep_ctrl[0] = 'b0;
-             ep_ctrl[4] = 'b0;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> links 0 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
+             if(g_failure_scenario == 7)
+             begin
+               wait_cycles(500);
+               hp_fw_cpu = 1;
+               rtu.rx_fw_to_CPU(hp_fw_cpu,unrec_fw_cpu);
+             end
            end          
          end 
       join_none; //

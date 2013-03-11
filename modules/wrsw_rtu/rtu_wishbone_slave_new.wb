@@ -464,6 +464,7 @@ peripheral {
          access_bus = READ_WRITE;
          access_dev = READ_ONLY;
       };
+
       field {
          name = "Drop/Forward on FullMatch Full";
          description = "In case that a new Frame arrives on Ingress when the previous is still handed (FullMatch process, or SWcore):\
@@ -474,7 +475,6 @@ peripheral {
          access_bus = READ_WRITE;
          access_dev = READ_ONLY;
       };
-
       field {
          name = "HP Priorities Mask";
          description="Mask which defines which priorities of the Fast Forward traffic are considered High Priority (used also by SWcore)";
@@ -486,6 +486,27 @@ peripheral {
          access_dev = READ_ONLY;
       };
 
+      field {
+         name = "HP forward to CPU";
+         description = "Enables/disables forwarding of recognized HP frames to CPU (Network InterFace) - disabling forwarding can prevent flooding of switch CPU with unnecessary traffic, allowing forwarding can be enabled to snoop on network traffic). It uses HW-set (generic) mask which indicates port number of CPU - can be verified by reading\
+                 0: Disabled [default] - does not forward HP frames to CPU,\
+                 1: Enabled  - forwards HP frames to CPU.";
+         prefix = "HP_FW_CPU_ENA";
+         align = 8;
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "Urecognized forward to CPU";
+         description = "Allows to enable/disable forwarding of unrecognized frames (with unrecognized dstMAC) which are broadcast (when b_unrec enabled) CPU (Network InterFace) - disabled to prevent flooding of switch CPU with unnecessary traffic.It uses Link-Limited Frames Fast Forward Mask to know to which port CPU is connected.\
+                 0: Disabled [default] - does not forward unrecognized braodcast (b_unrec) frames to CPU,\
+                 1: Enabled  - forwards unrecognized braodcast (b_unrec) frames to CPU.";
+         prefix = "UREC_FW_CPU_ENA";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
    };
    reg {
       prefix = "RX_FF_MAC_R0";
@@ -552,16 +573,20 @@ peripheral {
       };
    };
    reg {
-      prefix = "RX_LLF";
-      name = "RTU Extension: Link-Limited Frames Fast Forward Mask";
+      prefix = "CPU_PORT";
+      name = "RTU Extension: CPU port mask (Link-Limited Frames Fast Forward Mask)";
       field {
-         name = "Fast Forward Mask";
-         description = "Determines to which ports (i.e virtual port to which CPU is connected) the frames with dstMAC set to the reserved address range are forwarded";
-         prefix = "FF_MASK";
+         name = " CPU/LL Mask";
+         description = " It is only for debugging purposes. The ID of the CPU port is set in HW using generic which produces the CPU/LL Mask.\
+             It is used for\
+             * forwarding of the Link-Limited traffic to CPU (if enabled by config) \
+             * enabling/disabling forwarding of HP traffic to CPU (HP_FW_CPU_ENA)\
+             * enabling/disabling forwarding of unrecognized broadcast to CPU (UREC_FW_CPU_ENA).";
+         prefix = "MASK";
          type = SLV;
          size = 32;
-         access_bus = READ_WRITE;
-         access_dev = READ_ONLY;
+         access_bus = READ_ONLY;
+         access_dev = WRITE_ONLY;
       };
    };
    reg {

@@ -171,11 +171,13 @@ architecture behavioral of rtu_port_new is
   signal rsp                         : t_rtu_response;
   signal rtu_idle                    : std_logic;
   signal forwarding_mask             : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
+  signal forwarding_mask_CPU_filtered: std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
   signal forwarding_and_mirror_mask  : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
   signal forwarding_without_mr_dst_mask : std_logic_vector(c_rtu_max_ports-1 downto 0);  --helper 
   signal drop                        : std_logic;
   signal prio                        : std_logic_vector(2 downto 0); 
   signal hp                          : std_logic;
+  signal nf                          : std_logic;
   signal port_state                  : t_rtu_port_rq_states;
   signal full_match_rsp_port         : std_logic_vector(g_num_ports-1 downto 0);
   signal full_match_rsp_prio         : std_logic_vector(c_wrsw_prio_width-1 downto 0);
@@ -534,7 +536,7 @@ begin
           --| prepare final mask based on :
           --| * fast 
           --| * (if available) full match
-          --| * (some config settings
+          --| * (some config settings)
           ------------------------------------------------------------------------------------------------------------             
           when S_FINAL_MASK =>
             
@@ -618,8 +620,14 @@ begin
     end if;
   end process port_fsm_state;
 
-  fast_and_full_mask  <= (fast_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) or full_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports)) &
-                         (fast_match.port_mask(g_num_ports-1 downto 0)              and full_match.port_mask(g_num_ports-1 downto  0));
+  -- we concatenate separately Switch's ports (g_num_ports-1 downto 0) and the rest (NIC) so that
+  -- frames go to NIC based on any of the decisions (fast or full match)
+--   fast_and_full_mask  <= (fast_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) or full_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports)) &
+--                          (fast_match.port_mask(g_num_ports-1 downto 0)              and full_match.port_mask(g_num_ports-1 downto  0));
+
+  -- the above solution migh not be the best - eventually, we don't really want so much traffic 
+  -- to go to NIC...(this is mainly to prevent the "unrecognized" traffic to be forwarded to NIC)
+  fast_and_full_mask  <= fast_match.port_mask and full_match.port_mask;
   -- forming final mask: 
   --                  1) full match available, full match says that we have non-forward traffic<
   --                     to such traffic we don't apply fast_match (TRU and stuff)
@@ -646,17 +654,29 @@ begin
                          fast_match.prio;
   -- forming final hp: decided by fast match, only 
   hp                  <= fast_match.hp;
+  
+  nf                  <= fast_match.nf;
 
+  -- to make sure that HP traffic is not disturbed due to the fact that it's fowarded to slow NIC... just not 
+  -- foward it there... (NIC should have it's own mechanism to prevent such situation, but precautions are not bad).
+  -- In case that some diagnostics is required, we can enable forwarding of HP traffic to NIC.
+  forwarding_mask_CPU_filtered   <= forwarding_mask when (rtu_str_config_i.hp_fw_cpu_ena = '1' and hp = '1') else
+                                    forwarding_mask when                                          (hp = '0') else
+                                    forwarding_mask when                                          (nf = '1') else
+                                    forwarding_mask and (not rtu_str_config_i.cpu_forward_mask);-- this is HP, not link-limited (nf) and
+                                                                                                -- forwarding of HP to NIC is disabled
+--                                     f_set_bit(forwarding_mask,'0',g_num_ports) ;  -- this is HP, not link-limited (nf) and
+--                                                                                   -- forwarding of HP to NIC is disabled
 
   -- forwarding mask without mirror destination port
   -- it prevents sending traffic to mirror port from ports which are not mirrored (e.g.: when 
   -- we handle braodcast). If mirroring is disabled but the mask is set, we don't apply the
   -- filtering.
-  forwarding_without_mr_dst_mask <=forwarding_mask when (rtu_str_config_i.mr_ena = '0') else 
-                                   forwarding_mask and (not rtu_str_config_i.mirror_port_dst);
+  forwarding_without_mr_dst_mask <=forwarding_mask_CPU_filtered when (rtu_str_config_i.mr_ena = '0') else 
+                                   forwarding_mask_CPU_filtered and (not rtu_str_config_i.mirror_port_dst);
 
   -- adding mirror port (dst) port to the mask
-  forwarding_and_mirror_mask <= forwarding_mask or rtu_str_config_i.mirror_port_dst;
+  forwarding_and_mirror_mask <= forwarding_mask_CPU_filtered or rtu_str_config_i.mirror_port_dst;
 
   -- decideing whe RTU can accept new request (if RTU port is not idle, and Endpoint has new 
   -- requests, it ignores incoming frame)

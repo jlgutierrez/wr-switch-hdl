@@ -63,10 +63,11 @@ class CRTUSimDriver;
    extern task rx_add_ff_mac_range(int mac_id, bit valid, bit[47:0] mac_lower, bit[47:0] mac_upper);
    extern task rx_set_port_mirror(bit[31:0] mirror_src_mask, bit[31:0] mirror_dst_mask, bit rx, bit tx);
    extern task rx_set_hp_prio_mask(bit[7:0] hp_prio_mask);
-   extern task rx_set_cpu_port(bit[31:0] llf_mask);
+   extern task rx_read_cpu_port();
    extern task rx_forward_on_fmatch_full();
    extern task rx_drop_on_fmatch_full();
    extern task rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_single, bit  mac_range, bit mac_br);
+   extern task rx_fw_to_CPU(bit hp, bit unrec);
    //   extern task run();
    extern protected task htab_write(int hash, int bucket, rtu_filtering_entry_t ent);
    extern protected task mfifo_write(int addr, int size, bit[31:0] data[]);
@@ -478,13 +479,11 @@ task CRTUSimDriver::rx_set_hp_prio_mask(bit[7:0] hp_prio_mask);
    $display("RTU eXtension: set hp priorities (for which priorities traffic is considered HP), mask=0x%x",hp_prio_mask );
 endtask // CRTUSimDriver
 
-task CRTUSimDriver::rx_set_cpu_port(bit[31:0] llf_mask);
+task CRTUSimDriver::rx_read_cpu_port();
    uint64_t mask;
 
-   mask = `RTU_RX_LLF_FF_MASK  & (llf_mask << `RTU_RX_LLF_FF_MASK_OFFSET);
-                
-   bus.write(base_addr + `ADDR_RTU_RX_LLF, mask);
-   $display("RTU eXtension: set port to which link-limited traffic is forwarded (from the pool of reserved MAC adresses), mask=0x%x",mask );
+   bus.read(base_addr + `ADDR_RTU_CPU_PORT, mask);
+   $display("RTU eXtension: CPU port (to which link-limited traffic is forwarded) mask=0x%x",mask );
 endtask // CRTUSimDriver
 
 task CRTUSimDriver::rx_forward_on_fmatch_full();
@@ -539,5 +538,23 @@ task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_sin
    else           $display("\t Single configured MACs fast forward      - disabled"); 
    if(mac_range ) $display("\t Range of configured MACs fast forward    - enabled"); 
    else           $display("\t Range of configured MACs fast forward    - disabled"); 
+   
+endtask // CRTUSimDriver
+
+task CRTUSimDriver::rx_fw_to_CPU(bit hp, bit unrec);
+   uint64_t mask;
+   bus.read(base_addr + `ADDR_RTU_RX_CTR, mask);
+   mask = 'hFFF0FFFF & mask; 
+   /*$display("RTU eXtension features debugging: 2: cleared mask: 0x%x",mask);*/         
+   mask =(((hp    << `RTU_RX_CTR_HP_FW_CPU_ENA_OFFSET)    & `RTU_RX_CTR_HP_FW_CPU_ENA)   |
+          ((unrec << `RTU_RX_CTR_UREC_FW_CPU_ENA_OFFSET)  & `RTU_RX_CTR_UREC_FW_CPU_ENA))|
+           mask;
+//    $display("RTU eXtension features debugging: 1: written mask: 0x%x",mask);
+   bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
+   $display("RTU eXtension features [forward to CPU]:");
+   if(hp        ) $display("\t Forward HP to CPU                        - enabled"); 
+   else           $display("\t Forward HP to CPU                        - disabled"); 
+   if(unrec     ) $display("\t Forward unrecognized broadcast to CPU    - enabled"); 
+   else           $display("\t Forward unrecognized broadcast to CPU    - disabled");
    
 endtask // CRTUSimDriver

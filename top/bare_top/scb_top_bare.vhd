@@ -697,6 +697,7 @@ begin
         g_interface_mode                  => PIPELINED,
         g_address_granularity             => BYTE,
         g_num_ports                       => g_num_ports,
+        g_cpu_port_num                    => g_num_ports, -- g_num_ports-nt port is connected to CPU
         g_port_mask_bits                  => g_num_ports+1,
         g_handle_only_single_req_per_port => true)
       port map (

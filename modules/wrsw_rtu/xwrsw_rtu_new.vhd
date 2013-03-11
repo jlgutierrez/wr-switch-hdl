@@ -138,6 +138,7 @@ entity xwrsw_rtu_new is
     g_handle_only_single_req_per_port : boolean                        := FALSE;
     g_prio_num                        : integer;
     g_num_ports                       : integer;
+    g_cpu_port_num                    : integer := -1;
     g_match_req_fifo_size             : integer                        := 32;    
     g_port_mask_bits                  : integer);
 
@@ -167,7 +168,7 @@ architecture behavioral of xwrsw_rtu_new is
   constant c_VLAN_TAB_ENTRY_WIDTH : integer := 46;
   constant c_match_req_fifo_size  : integer := g_match_req_fifo_size + g_num_ports;
   constant c_match_req_fifo_size_width : integer := integer(CEIL(LOG2(real(c_match_req_fifo_size ))));
-
+  
   -- PORT_N -> MATCH_FIFO_ACCESS (round robin access to FIFO)
   signal rq_fifo_wr_access                  : std_logic_vector(g_num_ports-1 downto 0);
   signal rq_fifo_write_sng                  : std_logic;
@@ -259,6 +260,7 @@ architecture behavioral of xwrsw_rtu_new is
 
   -- aux    
   signal rsp_fifo_read_all_zeros            : std_logic_vector(g_num_ports - 1 downto 0);
+  signal cpu_port_mask                      : std_logic_vector(c_rtu_max_ports - 1 downto 0);
 begin 
 
   zeros                    <= (others => '0');
@@ -266,6 +268,13 @@ begin
   irq_nempty               <= regs_fromwb.ufifo_wr_empty_o;
   req_full_o               <= not port_idle;
   
+  GEN_NO_CPU_MASK: if(g_cpu_port_num < 0) generate
+    cpu_port_mask            <= zeros;
+  end generate GEN_NO_CPU_MASK;
+  GEN_CPU_MASK: if(g_cpu_port_num >= 0) generate
+    cpu_port_mask            <= f_set_bit(zeros,'1',g_cpu_port_num);
+  end generate GEN_CPU_MASK;
+
   -- ??? (legacy)
 --   gen_term_unused : for i in g_num_ports to g_num_ports-1 generate
 --     rq_strobe_p(i) <= '0';
@@ -521,6 +530,8 @@ begin
       rtu_pcr_learn_en_i   => pcr_learn_en(g_num_ports - 1 downto 0),
       rtu_pcr_pass_bpdu_i  => pcr_pass_bpdu(g_num_ports - 1 downto 0),
       rtu_pcr_b_unrec_i    => pcr_b_unrec(g_num_ports - 1 downto 0),
+      rtu_b_unrec_fw_cpu_i => regs_fromwb.rx_ctr_urec_fw_cpu_ena_o,
+      rtu_cpu_mask_i       => cpu_port_mask,
       rtu_crc_poly_i       => rtu_gcr_poly_used  --x"1021"-- x"0589" -- x"8005" --x"1021" --x"8005", --
 --    rtu_rw_bank_i                                => s_vlan_bsel
       );
@@ -695,7 +706,7 @@ begin
   end process;
 
   rtu_special_traffic_config.hp_prio              <= regs_fromwb.rx_ctr_prio_mask_o;
-  rtu_special_traffic_config.bpd_forward_mask     <= regs_fromwb.rx_llf_ff_mask_o;
+  rtu_special_traffic_config.cpu_forward_mask     <= cpu_port_mask; --regs_fromwb.rx_llf_ff_mask_o;
   rtu_special_traffic_config.dop_on_fmatch_full   <= regs_fromwb.rx_ctr_at_fmatch_too_slow_o;
   rtu_special_traffic_config.ff_mac_br_ena        <= regs_fromwb.rx_ctr_ff_mac_br_o;
   rtu_special_traffic_config.ff_mac_range_ena     <= regs_fromwb.rx_ctr_ff_mac_range_o;
@@ -703,8 +714,9 @@ begin
   rtu_special_traffic_config.ff_mac_ll_ena        <= regs_fromwb.rx_ctr_ff_mac_ll_o;
   rtu_special_traffic_config.ff_mac_ptp_ena       <= regs_fromwb.rx_ctr_ff_mac_ptp_o;
   rtu_special_traffic_config.mr_ena               <= regs_fromwb.rx_ctr_mr_ena_o;
-
-
+  rtu_special_traffic_config.hp_fw_cpu_ena        <= regs_fromwb.rx_ctr_hp_fw_cpu_ena_o;
+  rtu_special_traffic_config.unrec_fw_cpu_ena     <= regs_fromwb.rx_ctr_urec_fw_cpu_ena_o;
+  regs_towb.cpu_port_mask_i                       <= cpu_port_mask;
   --------------------------------------------------------------------------------------------
   --| VLAN memories 
   --| * one used by Full Match

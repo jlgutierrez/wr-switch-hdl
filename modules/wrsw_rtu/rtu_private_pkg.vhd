@@ -138,6 +138,8 @@ package rtu_private_pkg is
     mr_ena             : std_logic;
     hp_prio            : std_logic_vector(7 downto 0);
     dop_on_fmatch_full : std_logic;
+    hp_fw_cpu_ena      : std_logic;
+    unrec_fw_cpu_ena   : std_logic;
     -- config
     single_macs        : t_mac_array(c_ff_single_macs_number-1 downto 0);
     single_macs_valid  : std_logic_vector(c_ff_single_macs_number-1 downto 0);
@@ -145,7 +147,7 @@ package rtu_private_pkg is
     macs_range_up      : std_logic_vector(47 downto 0);
     macs_range_down    : std_logic_vector(47 downto 0);
     macs_range_valid   : std_logic;
-    bpd_forward_mask   : std_logic_vector(c_rtu_max_ports-1 downto 0);
+    cpu_forward_mask   : std_logic_vector(c_rtu_max_ports-1 downto 0);
     mirror_port_src_tx : std_logic_vector(c_rtu_max_ports-1 downto 0);
     mirror_port_src_rx : std_logic_vector(c_rtu_max_ports-1 downto 0);
     mirror_port_dst    : std_logic_vector(c_rtu_max_ports-1 downto 0);
@@ -410,6 +412,8 @@ package rtu_private_pkg is
       rtu_pcr_learn_en_i   : in  std_logic_vector(g_num_ports - 1 downto 0);
       rtu_pcr_pass_bpdu_i  : in  std_logic_vector(g_num_ports - 1 downto 0);
       rtu_pcr_b_unrec_i    : in  std_logic_vector(g_num_ports - 1 downto 0);
+      rtu_b_unrec_fw_cpu_i : in std_logic;
+      rtu_cpu_mask_i       : in std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); 
       rtu_crc_poly_i       : in  std_logic_vector(c_wrsw_crc_width - 1 downto 0));
   end component;
 
@@ -594,8 +598,8 @@ package body rtu_private_pkg is
     variable egress_allowed_on_vlan : std_logic;
   begin
     ------- mask -----------
-    rsp.port_mask := (others =>'0');
-    rsp.port_mask(port_mask_width-1 downto 0) := vlan_entry.port_mask(port_mask_width-1 downto 0) and pcr_pass_all(port_mask_width-1 downto 0);
+--     rsp.port_mask := (others =>'0');
+--     rsp.port_mask(port_mask_width-1 downto 0) := vlan_entry.port_mask(port_mask_width-1 downto 0) and pcr_pass_all(port_mask_width-1 downto 0);
     
     ------- prio ----------
     if(vlan_entry.has_prio = '1') then -- regardless of vlan_entry.prio_override value
@@ -607,11 +611,17 @@ package body rtu_private_pkg is
     end if;
     
     ------ drop ----------
-
     if((rq_port_mask and vlan_entry.port_mask(rq_port_mask'length-1 downto 0)) /= rq_port_mask) then
-      rsp.drop   := '1';
+      rsp.drop      := '1';
+      rsp.port_mask := (others =>'0');
+    elsif(vlan_entry.drop = '1') then
+      rsp.drop      := '1';
+      rsp.port_mask := (others =>'0');      
     else
-      rsp.drop   := vlan_entry.drop;
+      rsp.drop   := '0';
+      rsp.port_mask := vlan_entry.port_mask and pcr_pass_all; -- broadcast also to NIC !!!!!!
+--       rsp.port_mask(port_mask_width-1 downto 0) := vlan_entry.port_mask(port_mask_width-1 downto 0) and 
+--                                                            pcr_pass_all(port_mask_width-1 downto 0);
     end if;
     
     ------ filled in later -----------

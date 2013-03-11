@@ -192,7 +192,6 @@ begin
                       -- the fast_match_mac_lookup function includes disabled/enabled future check
   traffic_ff       <= traffic_br or f_fast_match_mac_lookup(rtu_str_config_i, rtu_req_stage_0.dmac);
 
-
   traffic_hp       <= '1' when (traffic_ff='1' and rtu_req_stage_0.has_prio = '1' and 
                                 (rtu_str_config_i.hp_prio and rq_prio_mask) /= zeros(7 downto 0) ) else
                       '1' when  traffic_ff='1' and rtu_req_stage_0.has_prio = '0' and 
@@ -273,8 +272,12 @@ begin
         if(unsigned(pipeline_grant(1)) /= 0) then
           --================== FAST MATCH  =================================
           pipeline_match_rsp(0).valid      <= '1';
-          if(traffic_nf_d = '1') then
-            pipeline_match_rsp(0).port_mask<= rtu_str_config_i.bpd_forward_mask;
+          if(traffic_nf_d = '1' and traffic_ff_d = '1') then -- special markers
+            pipeline_match_rsp(0).port_mask<= rtu_str_config_i.cpu_forward_mask or 
+                                              rsp_fast_match.port_mask; -- for sure zeros when drop
+            pipeline_match_rsp(0).drop     <= '0';          
+          elsif(traffic_nf_d = '1') then -- only non-forward traffic
+            pipeline_match_rsp(0).port_mask<= rtu_str_config_i.cpu_forward_mask;
             pipeline_match_rsp(0).drop     <= '0';
           else
             pipeline_match_rsp(0).port_mask<= rsp_fast_match.port_mask;
@@ -301,7 +304,8 @@ begin
   end process;
   
   -- TRU request
-  tru_req_o.valid             <= pipeline_valid(1) and (not traffic_nf_d) and tru_enabled_i;
+--   tru_req_o.valid             <= pipeline_valid(1) and (not traffic_nf_d) and tru_enabled_i;
+  tru_req_o.valid             <= pipeline_valid(1) and tru_enabled_i;
   tru_req_o.smac              <= rtu_req_stage_1.smac;
   tru_req_o.dmac              <= rtu_req_stage_1.dmac;
   tru_req_o.fid               <= vtab_rd_entry_i.fid; -- directly from VLAN TABLE
