@@ -39,8 +39,10 @@ class CSimDrv_WR_Endpoint;
            uint64_t v = 0; 
 
            v = ((data[i] << 8) | data[i+1]) & 64'h0000FFFF;
+           if(i == 0)
+             v |= (1<<16); // start of template
            if(i == data.size() - 2)
-             v |= (1<<16);
+             v |= (1<<16); // end of template
 
            if(i == user_offset)
              v |= (1<<17);
@@ -135,15 +137,15 @@ class CSimDrv_WR_Endpoint;
                 prio_map[3],prio_map[2],prio_map[1],prio_map[0]);
    endtask // automatic
 
-   task automatic pause_config(int txpause,int rxpause, int txpause_prio_mode, int rxpause_prio_mode);
+   task automatic pause_config(int txpause_802_3,int rxpause_802_3, int txpause_802_1q, int rxpause_802_1q);
      uint64_t wval;
-     wval  = (txpause_prio_mode << `EP_FCR_TXPPAUSE_PRIO_MODE_OFFSET) & `EP_FCR_TXPPAUSE_PRIO_MODE | // Tx
-             (rxpause_prio_mode << `EP_FCR_RXPPAUSE_PRIO_MODE_OFFSET) & `EP_FCR_RXPPAUSE_PRIO_MODE | // Rx
-             (txpause           << `EP_FCR_TXPAUSE_OFFSET           ) & `EP_FCR_TXPAUSE            | // Tx
-             (rxpause           << `EP_FCR_RXPAUSE_OFFSET           ) & `EP_FCR_RXPAUSE;             // Rx
+     wval  = (txpause_802_1q << `EP_FCR_TXPAUSE_802_1Q_OFFSET) & `EP_FCR_TXPAUSE_802_1Q | // Tx
+             (rxpause_802_1q << `EP_FCR_RXPAUSE_802_1Q_OFFSET) & `EP_FCR_RXPAUSE_802_1Q | // Rx
+             (txpause_802_3  << `EP_FCR_TXPAUSE_802_3_OFFSET ) & `EP_FCR_TXPAUSE_802_3  | // Tx
+             (rxpause_802_3  << `EP_FCR_RXPAUSE_802_3_OFFSET ) & `EP_FCR_RXPAUSE_802_3;             // Rx
      m_acc.write(m_base + `ADDR_EP_FCR, wval);
-     $display("PAUSE cofig: tx_en=%1d, rx_en=%1d, tx prio-based=%1d, rx prio-based=%1d",
-              txpause, rxpause, txpause_prio_mode, rxpause_prio_mode);     
+     $display("PAUSE cofig: tx_802.3 en=%1d, rx_802.3 en=%1d, tx_801.2Q (prio-based)=%1d, rx_802.1Q (prio-based)=%1d",
+              txpause_802_3, rxpause_802_3, txpause_802_1q, rxpause_802_1q);     
    endtask // automatic
 
 
