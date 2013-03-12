@@ -943,7 +943,7 @@ module main;
    * - sending PAUSE frames 
    * - making some strange configuration of TATSU
    **/
-  /*
+ // /*
   initial begin
     portUnderTest        = 18'b000000000000000111;
     g_active_port        = 0;
@@ -962,7 +962,7 @@ module main;
 
     g_traffic_shaper_scenario = 1;
   end
- */
+ //*/
  /** ***************************   test scenario 29  ************************************* **/ 
   /*
    * 
@@ -1033,7 +1033,7 @@ module main;
    * we port 0 (active) in the middle of frame reception - the rx error should be handled 
    * properly
    **/
- /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000111;
     g_tru_enable         = 1;
@@ -1110,11 +1110,11 @@ module main;
     hp_fw_cpu            = 0; // 
   end
  */
-   /** ***************************   test scenario 34  ************************************* **/ 
+   /** ***************************   test scenario 35  ************************************* **/ 
   /*
    * Learning - enable/disble forwarding of unrecognized broadcast to CPU
    **/
-// /*
+ /*
   initial begin
     portUnderTest        = 18'b000000000000000001;
     g_tru_enable         = 1;
@@ -1133,7 +1133,32 @@ module main;
     unrec_fw_cpu         = 0;
     g_fw_to_cpu_scenario = 1;
   end
-// */
+ */
+   /** ***************************   test scenario 36  ************************************* **/ 
+  /*
+   * testing switch over with HW-frame generation 
+   * 
+   **/
+  /*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;
+    g_tru_enable         = 1;
+    g_enable_pck_gaps    = 1;   // 1=TRUE, 0=FALSE
+    g_min_pck_gap        = 300; // cycles
+    g_max_pck_gap        = 300; // cycles
+    g_failure_scenario   = 6;
+    g_active_port        = 0;
+    g_backup_port        = 1;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 4 };
+    trans_paths[1]       = '{1  ,16 , 4 };
+    trans_paths[2]       = '{2  ,15 , 4 };
+    repeat_number        = 30;
+    tries_number         = 1;
+    tru_config_opt       = 5;
+//     g_injection_templates_programmed = 1;
+  end
+*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1529,9 +1554,9 @@ module main;
              ep.write_template(1, BPDU_templ,  20);
            end
            if(g_pause_mode == 1)
-             ep.pause_config( 1/*tx_en*/, 1/*rx_en*/, 0/*tx prio-based*/, 0/*rx prio-based*/);
+             ep.pause_config( 1/*txpause_802_3*/, 1/*rxpause_802_3*/, 0/*txpause_802_1q*/, 0/*rxpause_802_1q*/);
            else if(g_pause_mode == 2)
-             ep.pause_config( 1/*tx_en*/, 1/*rx_en*/, 1/*tx prio-based*/, 1/*rx prio-based*/);
+             ep.pause_config( 1/*txpause_802_3*/, 1/*rxpause_802_3*/, 1/*txpause_802_1q*/, 1/*rxpause_802_1q*/);
            tmp.ep = ep;
            tmp.send = EthPacketSource'(DUT.to_port[i]);
            tmp.recv = EthPacketSink'(DUT.from_port[i]);
@@ -1688,6 +1713,16 @@ module main;
                                32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
                                32'h00000 /*ports_mask  */, 32'h00000 /* ports_egress */, 32'h00000 /* ports_ingress   */);  
         end
+        else if(tru_config_opt == 5)
+        begin
+        tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h0 /* mode */, 
+                               32'h3FFFF /*ports_mask  */, 32'b111000000010100001 /* ports_egress */,32'b111000000010100001 /* ports_ingress   */);
+
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0 /* mode */,
+                               32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
+        end
       else // default config == 0
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
@@ -1718,7 +1753,7 @@ module main;
         tru_drv.transition_config(0 /*mode */,     1 /*rx_id*/,     0 /*prio mode*/, 0 /*prio*/, 
                                   100 /*time_diff*/,1 /*port_a_id*/, 2 /*port_b_id*/);
       
-      if(tru_config_opt == 4)
+      if(tru_config_opt == 4 || tru_config_opt == 5)
         begin 
           tru_drv.rt_reconf_config(1 /*tx_frame_id*/, 1/*rx_frame_id*/, 1 /*mode*/);
           tru_drv.rt_reconf_enable();        

@@ -351,16 +351,18 @@ begin --rtl
           --==================================================================================
           when S_ERROR =>  -- something is wrong, the status bits should indicate what it is
           --==================================================================================
+
             if(valid_synced_refclk = '1') then
               tatsu_state         <= S_LOAD_NEW_CONFIG;
               status              <= c_stat_clear;
+            else
+              status.settings_err            <= '1';
+              status.settings_ok             <= '0'; 
+              start_tm_tai                   <= (others => '0');
+              start_tm_cycles                <= (others => '0');
+              shaper_req_refclk              <= '0';
             end if;
 
-            status.settings_err            <= '1';
-            status.settings_ok             <= '0'; 
-            start_tm_tai                   <= (others => '0');
-            start_tm_cycles                <= (others => '0');
-            shaper_req_refclk              <= '0';
           --==================================================================================
           when others =>  --
           --==================================================================================
