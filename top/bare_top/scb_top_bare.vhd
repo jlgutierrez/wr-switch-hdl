@@ -252,7 +252,7 @@ architecture rtl of scb_top_bare is
   signal txtsu_timestamps     : t_txtsu_timestamp_array(c_NUM_PORTS-1 downto 0);
   signal dummy                : std_logic_vector(31 downto 0);
 
-  signal rmon_events : std_logic_vector(c_NUM_PORTS*17-1 downto 0);  --15 is no. of cntrs per port
+  signal rmon_events : std_logic_vector(c_NUM_PORTS*12-1 downto 0);  --15 is no. of cntrs per port
 
   --TEMP
   signal dummy_events : std_logic_vector(c_NUM_PORTS*2-1 downto 0);
@@ -546,7 +546,7 @@ begin
           wb_i       => cnx_endpoint_out(i),
           wb_o       => cnx_endpoint_in(i),
 
-          rmon_events_o => rmon_events((i+1)*17-1 downto i*17),
+          rmon_events_o => rmon_events((i+1)*12-1 downto i*12),
 
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
@@ -557,7 +557,7 @@ begin
       clk_rx_vec(i) <= phys_i(i).rx_clk;
 
       --TEMP
-      dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*17-1 downto (i+1)*17-2);
+      dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*12-1 downto (i+1)*12-2);
     end generate gen_endpoints_and_phys;
 
     gen_terminate_unused_eps : for i in c_NUM_PORTS to c_MAX_PORTS-1 generate
@@ -750,7 +750,7 @@ begin
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE,
       g_nports => c_NUM_PORTS,
-      g_cnt_pp => 17,
+      g_cnt_pp => 12,
       g_cnt_pw => 4)
     port map(
       rst_n_i => rst_n_periph,
@@ -761,21 +761,6 @@ begin
       wb_i  => cnx_master_out(c_SLAVE_PSTATS),
       wb_o  => cnx_master_in(c_SLAVE_PSTATS));
 
-  TRIG0(0) <= cnx_master_out(c_SLAVE_PSTATS).cyc;
-  TRIG0(1) <= cnx_master_out(c_SLAVE_PSTATS).stb;
-  TRIG0(2) <= cnx_master_out(c_SLAVE_PSTATS).we;
-  TRIG0(5 downto 3) <= cnx_master_out(c_SLAVE_PSTATS).adr(2 downto 0);
-  TRIG1 <= cnx_master_out(c_SLAVE_PSTATS).dat;
-  TRIG2 <= cnx_master_in(c_SLAVE_PSTATS).dat;
-
-  TRIG3(1 downto 0) <= rmon_events(16 downto 15);
-  TRIG3(3 downto 2) <= rmon_events(33 downto 32);
-  TRIG3(5 downto 4) <= rmon_events(50 downto 49);
-  TRIG3(7 downto 6) <= rmon_events(67 downto 66);
-  TRIG3(9 downto 8) <= rmon_events(84 downto 83);
-  TRIG3(11 downto 10) <= rmon_events(101 downto 100);
-  TRIG3(13 downto 12) <= rmon_events(118 downto 117);
-  TRIG3(15 downto 14) <= rmon_events(135 downto 134);
 
   --TEMP
   U_DUMMY: dummy_rmon
