@@ -271,7 +271,7 @@ begin
   --  LAYER 1
   -------------------------------------------------------------
 
-  wb_regs_in.dbg_evt_ov_i <= evt_ov(g_nports-1 downto 0);
+  wb_regs_in.dbg_evt_ov_i(g_nports-1 downto 0) <= evt_ov(g_nports-1 downto 0);
   --connect rest of the evt_ov_i to '0' if synthesized for less than 18 ports
   GEN_NUSED_EVTOV: if g_nports < 18 generate
     wb_regs_in.dbg_evt_ov_i(17 downto g_nports) <= (others=>'0');
