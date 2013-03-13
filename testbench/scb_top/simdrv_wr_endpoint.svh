@@ -141,8 +141,8 @@ class CSimDrv_WR_Endpoint;
      uint64_t wval;
      wval  = (txpause_802_1q << `EP_FCR_TXPAUSE_802_1Q_OFFSET) & `EP_FCR_TXPAUSE_802_1Q | // Tx
              (rxpause_802_1q << `EP_FCR_RXPAUSE_802_1Q_OFFSET) & `EP_FCR_RXPAUSE_802_1Q | // Rx
-             (txpause_802_3  << `EP_FCR_TXPAUSE_802_3_OFFSET ) & `EP_FCR_TXPAUSE_802_3  | // Tx
-             (rxpause_802_3  << `EP_FCR_RXPAUSE_802_3_OFFSET ) & `EP_FCR_RXPAUSE_802_3;             // Rx
+             (txpause_802_3  << `EP_FCR_TXPAUSE_OFFSET )       & `EP_FCR_TXPAUSE  | // Tx
+             (rxpause_802_3  << `EP_FCR_RXPAUSE_OFFSET )       & `EP_FCR_RXPAUSE;             // Rx
      m_acc.write(m_base + `ADDR_EP_FCR, wval);
      $display("PAUSE cofig: tx_802.3 en=%1d, rx_802.3 en=%1d, tx_801.2Q (prio-based)=%1d, rx_802.1Q (prio-based)=%1d",
               txpause_802_3, rxpause_802_3, txpause_802_1q, rxpause_802_1q);     
