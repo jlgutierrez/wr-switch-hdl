@@ -130,7 +130,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 12;
+  constant c_NUM_WB_SLAVES : integer := 14;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
@@ -151,9 +151,13 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_SENSOR_I2C   : integer := 9;
   constant c_SLAVE_TRU          : integer := 10;
   constant c_SLAVE_TATSU        : integer := 11;
+  constant c_SLAVE_PSTATS       : integer := 12;
+  constant c_SLAVE_DUMMY        : integer := 13;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
+      x"00070000",                      -- Dummy counters
+      x"00059000",                      -- PStats counters
       x"00058000",                      -- TATSU
       x"00057000",                      -- TRU
       x"00056000",                      -- Sensors-I2C
@@ -170,6 +174,8 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000ff000",
@@ -254,6 +260,12 @@ architecture rtl of scb_top_bare is
   signal txtsu_timestamps     : t_txtsu_timestamp_array(c_NUM_PORTS-1 downto 0);
   signal dummy                : std_logic_vector(31 downto 0);
   signal tru_enabled          : std_logic;
+
+  signal rmon_events : std_logic_vector(c_NUM_PORTS*12-1 downto 0);  --15 is no. of cntrs per port
+
+  --TEMP
+  signal dummy_events : std_logic_vector(c_NUM_PORTS*2-1 downto 0);
+
   -----------------------------------------------------------------------------
   -- Component declarations
   -----------------------------------------------------------------------------
@@ -592,6 +604,9 @@ begin
           fc_rx_pause_quanta_o    => fc_rx_pause(i).quanta,    
           fc_rx_pause_prio_mask_o => fc_rx_pause(i).classes,    
           ----------------------------
+
+          rmon_events_o => rmon_events((i+1)*12-1 downto i*12),
+
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
 
@@ -609,6 +624,9 @@ begin
       ---------------------------
 
       clk_rx_vec(i) <= phys_i(i).rx_clk;
+
+      --TEMP
+      dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*12-1 downto (i+1)*12-2);
     end generate gen_endpoints_and_phys;
 
     gen_terminate_unused_eps : for i in c_NUM_PORTS to c_MAX_PORTS-1 generate
@@ -621,13 +639,13 @@ begin
     end generate gen_terminate_unused_eps;
 
 
-    gen_txtsu_debug: for i in 0 to c_NUM_PORTS-1 generate
-      TRIG0(i) <= txtsu_timestamps(i).stb;
-      trig1(i) <= txtsu_timestamps_ack(i);
-      trig2(0) <= vic_irqs(0);
-      trig2(1) <= vic_irqs(1);
-      trig2(2) <= vic_irqs(2);
-    end generate gen_txtsu_debug;
+    --gen_txtsu_debug: for i in 0 to c_NUM_PORTS-1 generate
+    --  TRIG0(i) <= txtsu_timestamps(i).stb;
+    --  trig1(i) <= txtsu_timestamps_ack(i);
+    --  trig2(0) <= vic_irqs(0);
+    --  trig2(1) <= vic_irqs(1);
+    --  trig2(2) <= vic_irqs(2);
+    --end generate gen_txtsu_debug;
 
     U_Swcore : xswc_core
       generic map (
@@ -881,6 +899,38 @@ begin
       sda_pad_o    => i2c_sda_o(2),
       sda_padoen_o => i2c_sda_oen_o(2));
 
+  U_PSTATS : xwrsw_pstats
+    generic map(
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE,
+      g_nports => c_NUM_PORTS,
+      g_cnt_pp => 12,
+      g_cnt_pw => 4)
+    port map(
+      rst_n_i => rst_n_periph,
+      clk_i   => clk_sys,
+  
+      events_i => rmon_events,
+  
+      wb_i  => cnx_master_out(c_SLAVE_PSTATS),
+      wb_o  => cnx_master_in(c_SLAVE_PSTATS));
+
+
+  --TEMP
+  U_DUMMY: dummy_rmon
+    generic map(
+      g_interface_mode => PIPELINED,
+      g_address_granularity => BYTE,
+      g_nports => c_NUM_PORTS,
+      g_cnt_pp => 2)
+    port map(
+      rst_n_i => rst_n_periph,
+      clk_i   => clk_sys,
+      events_i  => dummy_events,
+
+      wb_i  => cnx_master_out(c_SLAVE_DUMMY),
+      wb_o  => cnx_master_in(c_SLAVE_DUMMY));
+
   -----------------------------------------------------------------------------
   -- Interrupt assignment
   -----------------------------------------------------------------------------
@@ -888,7 +938,8 @@ begin
   vic_irqs(0)           <= cnx_master_in(c_SLAVE_NIC).int;
   vic_irqs(1)           <= cnx_master_in(c_SLAVE_TXTSU).int;
   vic_irqs(2)           <= cnx_master_in(c_SLAVE_RTU).int;
-  vic_irqs(31 downto 3) <= (others => '0');
+  vic_irqs(3)           <= cnx_master_in(c_SLAVE_PSTATS).int;
+  vic_irqs(31 downto 4) <= (others => '0');
 
 -------------------------------------------------------------------------------
 -- Various constant-driven I/Os

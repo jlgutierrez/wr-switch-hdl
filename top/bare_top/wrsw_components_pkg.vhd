@@ -276,6 +276,7 @@ package wrsw_components_pkg is
       wb_i       : in  t_wishbone_slave_in;
       wb_o       : out t_wishbone_slave_out);
   end component;
+
   component xwrsw_rtu_new
     generic (
       g_interface_mode                  : t_wishbone_interface_mode      := PIPELINED;
@@ -301,4 +302,39 @@ package wrsw_components_pkg is
       wb_o        : out t_wishbone_slave_out
       );
   end component;  
+
+  component xwrsw_pstats
+    generic(
+      g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity : t_wishbone_address_granularity := BYTE;
+      g_nports : integer := 2;
+      g_cnt_pp : integer := 16;
+      g_cnt_pw : integer := 4);
+    port(
+      rst_n_i : in std_logic;
+      clk_i   : in std_logic;
+  
+      events_i : in std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
+  
+      wb_i : in  t_wishbone_slave_in;
+      wb_o : out t_wishbone_slave_out );
+  end component;
+
+  --TEMP
+  component dummy_rmon
+    generic(
+      g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity : t_wishbone_address_granularity := BYTE;
+      g_nports  : integer := 8;
+      g_cnt_pp  : integer := 2);
+    port(
+      rst_n_i : in std_logic;
+      clk_i   : in std_logic;
+      events_i  : in std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
+  
+      wb_i : in  t_wishbone_slave_in;
+      wb_o : out t_wishbone_slave_out);
+  end component;
+
+ 
 end wrsw_components_pkg;
