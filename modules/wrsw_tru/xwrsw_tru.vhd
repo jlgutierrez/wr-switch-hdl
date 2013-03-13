@@ -259,8 +259,9 @@ begin --rtl
      s_endpoints.inject_ready(i)        <= s_endpoint_array(i).inject_ready;
   end generate G_ENDP_CONX;
   
-  s_endpoints.status(s_endpoints.status'length-1 downto g_num_ports) <= (others =>'0');
-  s_endpoints.stableUp(s_endpoints.stableUp'length-1 downto g_num_ports)  <= (others =>'0'); 
+  s_endpoints.status(s_endpoints.status'length-1 downto g_num_ports)             <= (others =>'0');
+  s_endpoints.stableUp(s_endpoints.stableUp'length-1 downto g_num_ports)         <= (others =>'0'); 
+  s_endpoints.inject_ready(s_endpoints.inject_ready'length-1 downto g_num_ports) <= (others =>'0'); 
   
   G_FRAME_MASK: for i in 0 to g_pclass_number-1 generate
      s_endpoints.rxFrameMask(i)    <= f_rxFrameMaskInv(s_endpoint_array,i,g_num_ports);

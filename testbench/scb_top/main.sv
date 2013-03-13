@@ -632,7 +632,7 @@ module main;
    * detecting different classes of incoming packets using pFilter
    * 
    **/
-/*
+///*
   initial begin
     portUnderTest        = 18'b000000000000010001;
     g_tru_enable         = 0;
@@ -675,7 +675,7 @@ module main;
     mc.logic2(27, 1, PFilterMicrocode::AND, 5);
     
   end
-*/   
+//*/   
    /** ***************************   test scenario 21   ********************** **/ 
    /** ***************************     (IMPORTANT)      ********************** **/ 
   /*
@@ -943,7 +943,7 @@ module main;
    * - sending PAUSE frames 
    * - making some strange configuration of TATSU
    **/
- // /*
+  /*
   initial begin
     portUnderTest        = 18'b000000000000000111;
     g_active_port        = 0;
@@ -962,7 +962,7 @@ module main;
 
     g_traffic_shaper_scenario = 1;
   end
- //*/
+ */
  /** ***************************   test scenario 29  ************************************* **/ 
   /*
    * 
