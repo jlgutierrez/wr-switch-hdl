@@ -191,6 +191,9 @@ begin --rtl
   s_ep_zero.pauseSend          <= '0';
   s_ep_zero.pauseTime          <= (others => '0');
   s_ep_zero.outQueueBlockMask  <= (others => '0');
+  s_ep_zero.outQueueBlockReq   <= '0';
+  s_ep_zero.hwframe_fwd        <= '0';
+  s_ep_zero.hwframe_blk        <= '0';
   
   -- this FSM tries to switch forwarding from port A to port B without loosing frames on a 
   -- defined priority. It waits for marker broadcasted from the topology root. 
@@ -218,14 +221,11 @@ begin --rtl
         s_statTransFinished <= '0';
         tru_tab_bank_o      <= '0';
 
-        s_ep_ctr_A.pauseSend         <= '0';
-        s_ep_ctr_A.pauseTime         <= (others => '0');
+        s_ep_ctr_A          <= s_ep_zero;
+        s_ep_ctr_B          <= s_ep_zero;
         
-        s_ep_ctr_B.pauseSend         <= '0';
-        s_ep_ctr_B.pauseTime         <= (others => '0');
-        
-        s_sw_ctrl.blockTime          <= (others => '0');
-        s_sw_ctrl.blockReq           <= '0';
+        s_sw_ctrl.blockTime <= (others => '0');
+        s_sw_ctrl.blockReq  <= '0';
 
       else
         
@@ -260,7 +260,7 @@ begin --rtl
               
               -- send HW-generated paus
               s_ep_ctr_B.pauseSend         <= '1';  
-              s_ep_ctr_B.pauseTime         <= config_i.tcr_trans_pause_time;
+--               s_ep_ctr_B.pauseTime         <= config_i.tcr_trans_pause_time;
               
               -- block output queues (TODO: to be revised)
               s_sw_ctrl.blockReq           <= '1';
@@ -277,7 +277,10 @@ begin --rtl
               s_tru_trans_state            <= S_WAIT_WITH_TRANS;
               -- stop pause
               s_sw_ctrl.blockReq           <= '1';
-              s_sw_ctrl.blockTime          <= (others => '0');              
+              s_sw_ctrl.blockTime          <= (others => '0');  
+              -- send Quick Forward/Block frames
+              s_ep_ctr_A.hwframe_blk       <= '1';
+              s_ep_ctr_B.hwframe_fwd       <= '1';            
             -- until marker frame on port A is not detected, count rx frames of a defined priority
             else
               if(s_port_B_rtu_srobe = '1') then
@@ -288,6 +291,9 @@ begin --rtl
           when S_WAIT_WITH_TRANS =>  -- wait until the same number of frames is rx-ed on both ports
           --====================================================================================
             s_sw_ctrl.blockReq           <= '0';
+            s_ep_ctr_A.hwframe_blk       <= '0';
+            s_ep_ctr_B.hwframe_fwd       <= '0';            
+
             -- as soon as the number of frames received on port A equals the number of frames
             -- received on port B, transition
             -- "+ 1" => we change before the next packet - the things is that the strobe

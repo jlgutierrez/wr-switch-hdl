@@ -632,7 +632,7 @@ module main;
    * detecting different classes of incoming packets using pFilter
    * 
    **/
-///*
+/*
   initial begin
     portUnderTest        = 18'b000000000000010001;
     g_tru_enable         = 0;
@@ -675,7 +675,7 @@ module main;
     mc.logic2(27, 1, PFilterMicrocode::AND, 5);
     
   end
-//*/   
+*/   
    /** ***************************   test scenario 21   ********************** **/ 
    /** ***************************     (IMPORTANT)      ********************** **/ 
   /*
@@ -1139,7 +1139,7 @@ module main;
    * testing switch over with HW-frame generation 
    * 
    **/
-  /*
+ /*
   initial begin
     portUnderTest        = 18'b000000000000000111;
     g_tru_enable         = 1;
@@ -1159,6 +1159,35 @@ module main;
 //     g_injection_templates_programmed = 1;
   end
 */
+   /** ***************************   test scenario 37  ************************************* **/ 
+  /*
+   * quick forward/block massage detection and action 
+   * 
+   **/
+ ///*
+  initial begin
+    portUnderTest        = 18'b000000000000000000;
+    g_tru_enable         = 1;
+    g_transition_scenario= 3;
+    g_active_port        = 0;
+    g_backup_port        = 1;
+    tru_config_opt       = 6;
+    g_pfilter_enabled    = 1;
+    g_injection_templates_programmed = 1;
+    
+    mc.nop();
+    mc.cmp(0, 'h0180, 'hffff, PFilterMicrocode::MOV, 1);
+    mc.cmp(1, 'hc200, 'hffff, PFilterMicrocode::AND, 1);
+    mc.cmp(2, 'h0000, 'hffff, PFilterMicrocode::AND, 1);
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(6, 'h2607, 'hffff, PFilterMicrocode::AND, 1);    
+    mc.logic2(25, 1, PFilterMicrocode::MOV, 0);    
+    mc.logic2(26, 1, PFilterMicrocode::MOV, 0);    
+    
+  end
+//*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1587,8 +1616,9 @@ module main;
    task automatic init_tru(input CSimDrv_WR_TRU tru_drv);
 
       $display(">>>>>>>>>>>>>>>>>>> TRU initialization  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-      tru_drv.pattern_config(1 /*replacement*/, 0 /*addition*/);
+      tru_drv.pattern_config(1 /*replacement*/, 0 /*addition*/, 0 /*subtraction*/);
       tru_drv.lacp_config(lacp_df_hp_id,lacp_df_br_id,lacp_df_un_id);
+      tru_drv.hw_frame_config(1/*tx_fwd_id*/, 1/*rx_fwd_id*/, 1/*tx_blk_id*/, 2 /*rx_blk_id*/);
 //       tru_drv.rt_reconf_config(4 /*tx_frame_id*/, 4/*rx_frame_id*/, 1 /*mode*/);
 //       tru_drv.rt_reconf_enable();
         
@@ -1692,7 +1722,7 @@ module main;
                                32'b1001_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0000_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */); 
 
 
-        tru_drv.pattern_config(3 /*replacement*/, 4 /*addition*/); // 3-> source is pclass
+        tru_drv.pattern_config(4 /*replacement*/, 5 /*addition*/, 0 /*subtraction*/); // 3-> source is pclass
         end
       else if(tru_config_opt == 3) 
         begin
@@ -1723,6 +1753,28 @@ module main;
                                32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0 /* mode */,
                                32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
         end
+        else if(tru_config_opt == 6)
+        begin
+        tru_drv.pattern_config(1 /*replacement*/, 2 /*addition*/, 3 /*subtraction*/); 
+        // basic config
+        tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h0 /* mode */, 
+                               32'h3FFFF /*ports_mask  */, 32'b111000000010100001 /* ports_egress */,32'b111000000010100001 /* ports_ingress   */);
+        // backup if link down
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0 /* mode */,
+                               32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
+        // quick forward
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
+                               32'b00000010 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h2 /* mode */,
+                               32'b00000010 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
+        // quick block
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
+                               32'b00000001 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h3 /* mode */,
+                               32'b00000001 /*ports_mask  */, 32'b00000001 /* ports_egress */,32'b00000001 /* ports_ingress   */);
+
+        end
+
       else // default config == 0
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
@@ -1756,8 +1808,15 @@ module main;
       if(tru_config_opt == 4 || tru_config_opt == 5)
         begin 
           tru_drv.rt_reconf_config(1 /*tx_frame_id*/, 1/*rx_frame_id*/, 1 /*mode*/);
+          tru_drv.hw_frame_config(1/*tx_fwd_id*/, 1/*rx_fwd_id*/, 1/*tx_blk_id*/, 2 /*rx_blk_id*/);
           tru_drv.rt_reconf_enable();        
         end       
+      if(tru_config_opt == 6)
+        begin 
+          tru_drv.rt_reconf_config(1 /*tx_frame_id*/, 1/*rx_frame_id*/, 1 /*mode*/);
+          tru_drv.hw_frame_config(1/*tx_fwd_id*/, 1/*rx_fwd_id*/, 1/*tx_blk_id*/, 2 /*rx_blk_id*/);
+          tru_drv.rt_reconf_enable();        
+        end 
 
       tru_drv.tru_swap_bank();  
       
@@ -2285,7 +2344,6 @@ module main;
              wait_cycles(10);
              tru.ep_debug_inject_packet(3,'h4321,0);
              wait_cycles(10);
-             
 
            end
            
@@ -2299,6 +2357,70 @@ module main;
              tx_special_pck(ports[3].send,PAUSE /*opt*/,14/*pause time*/);     
                     
            end
+           if(g_transition_scenario == 3)
+           begin 
+             // send normal stuff
+             fork
+               begin 
+                 tx_test(seed                         /* seed    */, 
+                         5                 /* n_tries */, 
+                         0                    /* is_q    */, 
+                         0                             /* unvid   */, 
+                         ports[0].send /* src     */, 
+                         ports[7].recv /* sink    */,  
+                         0             /* srcPort */ , 
+                         7             /* dstPort */, 
+                         4             /*option=4 */);             
+                 end 
+               begin 
+                 tx_test(seed                         /* seed    */, 
+                         5                 /* n_tries */, 
+                         0                    /* is_q    */, 
+                         0                             /* unvid   */, 
+                         ports[1].send /* src     */, 
+                         ports[5].recv /* sink    */,  
+                         0             /* srcPort */ , 
+                         5             /* dstPort */, 
+                         4             /*option=4 */);             
+               end 
+             join
+             fork
+               begin 
+                 $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> CLOSE / OPEN  port 0<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+                 tx_special_pck(ports[0].send,BPDU_0 /*opt*/);  
+               end
+               begin
+                 $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> CLOSE / OPEN  port 1<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+                 tx_special_pck(ports[1].send,BPDU_0 /*opt*/);  
+               end
+             join  
+             fork
+               begin 
+                 tx_test(seed                         /* seed    */, 
+                         5                 /* n_tries */, 
+                         0                    /* is_q    */, 
+                         0                             /* unvid   */, 
+                         ports[0].send /* src     */, 
+                         ports[7].recv /* sink    */,  
+                         0             /* srcPort */ , 
+                         7             /* dstPort */, 
+                         4             /*option=4 */);             
+                 end 
+               begin 
+                 tx_test(seed                         /* seed    */, 
+                         5                 /* n_tries */, 
+                         0                    /* is_q    */, 
+                         0                             /* unvid   */, 
+                         ports[1].send /* src     */, 
+                         ports[5].recv /* sink    */,  
+                         0             /* srcPort */ , 
+                         5             /* dstPort */, 
+                         4             /*option=4 */);             
+               end 
+             join
+                  
+           end
+
          end 
       join_none; //
 

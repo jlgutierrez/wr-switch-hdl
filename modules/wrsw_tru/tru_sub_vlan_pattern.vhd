@@ -93,8 +93,9 @@ architecture rtl of tru_sub_vlan_pattern is
 constant c_p_default     : std_logic_vector(g_patternID_width-1 downto 0) :=x"0"; -- default
 constant c_p_port_down   : std_logic_vector(g_patternID_width-1 downto 0) :=x"1"; -- port down 
 constant c_p_quick_fwd   : std_logic_vector(g_patternID_width-1 downto 0) :=x"2"; -- quick forward received frames 
-constant c_p_aggr_gr_id  : std_logic_vector(g_patternID_width-1 downto 0) :=x"3"; -- aggregation group id
-constant c_p_rx_port     : std_logic_vector(g_patternID_width-1 downto 0) :=x"4"; -- received port 
+constant c_p_quick_blk   : std_logic_vector(g_patternID_width-1 downto 0) :=x"3"; -- quick block received frames 
+constant c_p_aggr_gr_id  : std_logic_vector(g_patternID_width-1 downto 0) :=x"4"; -- aggregation group id
+constant c_p_rx_port     : std_logic_vector(g_patternID_width-1 downto 0) :=x"5"; -- received port 
 
 
 signal rxFrameNumber : integer range 0 to endpoints_i.rxFrameMaskReg'length-1;
@@ -111,8 +112,9 @@ begin --rtl
       (others=>'0')                                                            when (patternID_i = c_p_default)    else -- 0: defaut                 
       f_pattern_port_down (endpoints_i,g_pattern_width)                        when (patternID_i = c_p_port_down)  else -- 1: eRSTP
       f_pattern_quick_fwd (endpoints_i,config_i,g_pattern_width)               when (patternID_i = c_p_quick_fwd)  else -- 2: eRSTP:
-      f_pattern_aggr_gr_id(endpoints_i,tru_req_i, portID_i,config_i,g_pattern_width,g_num_ports)   when (patternID_i = c_p_aggr_gr_id) else -- 3: eLACP: 
-      f_pattern_rx_port   (tru_req_i, g_pattern_width)                         when (patternID_i = c_p_rx_port)    else -- 4: eLACP
+      f_pattern_quick_blk (endpoints_i,config_i,g_pattern_width)               when (patternID_i = c_p_quick_blk)  else -- 3: eRSTP:
+      f_pattern_aggr_gr_id(endpoints_i,tru_req_i, portID_i,config_i,g_pattern_width,g_num_ports)   when (patternID_i = c_p_aggr_gr_id) else -- 4: eLACP: 
+      f_pattern_rx_port   (tru_req_i, g_pattern_width)                         when (patternID_i = c_p_rx_port)    else -- 5: eLACP
       (others=>'0');
 
 end rtl;

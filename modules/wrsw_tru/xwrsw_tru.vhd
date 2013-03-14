@@ -167,6 +167,9 @@ architecture rtl of xwrsw_tru is
   signal s_req_s_prio         : std_logic;
   signal s_tru_ena            : std_logic;
   signal s_swc_ctrl           : t_trans2sw;
+  signal s_inject_sel         : t_inject_sel_array(g_num_ports-1 downto 0);
+  signal s_ep                 : t_tru2ep_array(g_num_ports-1 downto 0);
+  signal s_inject_ready_d     : std_logic_vector(g_num_ports-1 downto 0);
 begin --rtl
 
   U_T_PORT: tru_port
@@ -268,60 +271,98 @@ begin --rtl
      s_endpoints.rxFrameMaskReg(i) <= f_rxFrameMaskRegInv(s_endpoint_array,i,g_num_ports);
   end generate G_FRAME_MASK;
 
-  
   CTRL_PINJECT: process(clk_i, rst_n_i) -- this is not really optimal for resources... shit
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
         CLEAR: for i in 0 to g_num_ports-1 loop
-          s_pinject_ctr(i).inject_packet_sel <= (others=>'0');
-          s_pinject_ctr(i).inject_user_value <= (others=>'0');
+          s_inject_sel(i).dbg   <= '0';
+          s_inject_sel(i).fwd   <= '0';
+          s_inject_sel(i).blk   <= '0';
+          s_inject_sel(i).pause <= '0';
+          s_inject_ready_d(i)   <= '0';
         end loop;
       else
+        
+        -- below we register the info from different modules about hw-injection of frames.
+        -- This is needed as one injection can be done at a time and many injection request
+        -- can (theoretically) happen at the same time.
+        -- We remember each request and hw-inject framess with the following priority:
+        -- 1) dbg msg       - from WB
+        -- 2) quick forward - from R-T Re-config module or transition (if a request is 
+        --                    is made when other is being handled ... we don't care, since 
+        --                    the effect is achieved with the handled one
+        -- 3) quick block   - from transition
+        -- 4) pause         - from transition (it can be delayed since we count the received
+        --                    frames after we requested the PAUSE -- this is to accommodate
+        --                    the delay between requesting the PAUSE frame and the pause 
+        --                    stopping the traffic
+        -- The stored values of s_inject_sel are used to select the values of 
+        -- *inject_packet_sel* and *inject_user_value* to be fed into the module
+        
         REMEMBER: for i in 0 to g_num_ports-1 loop
-          if(ep_i(i).inject_ready = '1') then
-            if(s_pidr_inject(i) ='1') then
-              s_pinject_ctr(i).inject_packet_sel <= s_regs_fromwb.pidr_psel_o;
-              s_pinject_ctr(i).inject_user_value <= s_regs_fromwb.pidr_uval_o;          
-            elsif(s_tx_rt_reconf_FRM(i) ='1') then
-              s_pinject_ctr(i).inject_packet_sel <= s_config.rtrcr_rtr_rx(2 downto 0);
-              s_pinject_ctr(i).inject_user_value <=  x"babe";      -- TODO - config              
-            elsif(s_trans_ep_ctr(i).pauseSend = '1') then 
-              s_pinject_ctr(i).inject_packet_sel <= "000";
-              s_pinject_ctr(i).inject_user_value <= s_trans_ep_ctr(i).pauseTime;                    
-            end if;
+          if(s_pidr_inject(i) ='1' and s_inject_sel(i).dbg = '0') then
+            s_inject_sel(i).dbg   <= '1';
+          elsif(s_inject_ready_d(i) = '0' and ep_i(i).inject_ready = '1' and -- finished injection
+                s_inject_sel(i).dbg = '1') then
+            s_inject_sel(i).dbg   <= '0'; 
           end if;
+             
+          if((s_tx_rt_reconf_FRM(i) ='1' or s_trans_ep_ctr(i).hwframe_fwd = '1') and s_inject_sel(i).fwd = '0') then -- quick forward
+            s_inject_sel(i).fwd   <= '1';
+          elsif(s_inject_ready_d(i) = '0' and ep_i(i).inject_ready = '1' and -- finished injection
+                s_inject_sel(i).dbg = '0' and s_inject_sel(i).fwd  = '1') then
+            s_inject_sel(i).fwd   <= '0';
+          end if;
+
+          if(s_trans_ep_ctr(i).hwframe_blk ='1' and s_inject_sel(i).blk = '0') then -- quick block
+            s_inject_sel(i).blk   <='1';
+          elsif(s_inject_ready_d(i) = '0' and ep_i(i).inject_ready = '1' and -- finished injection
+                s_inject_sel(i).dbg = '0' and s_inject_sel(i).fwd  = '0' and s_inject_sel(i).blk ='1') then
+            s_inject_sel(i).blk   <='0';
+          end if;
+            
+          if(s_trans_ep_ctr(i).pauseSend = '1' and s_inject_sel(i).pause ='0') then
+            s_inject_sel(i).pause <='1';
+          elsif(s_inject_ready_d(i) = '0' and ep_i(i).inject_ready = '1' and -- finished injection
+                s_inject_sel(i).dbg = '0' and s_inject_sel(i).fwd  = '0' and  s_inject_sel(i).blk = '0' and 
+                s_inject_sel(i).pause = '1') then 
+            s_inject_sel(i).pause <='0';
+          end if;
+          
+          s_inject_ready_d(i) <= ep_i(i).inject_ready; -- detect end of injection 
         end loop;     
       end if;
     end if;
   end process;  
-
+  
+  -- the proper mux to feed into injection control of Endpoints
   G_EP_O: for i in 0 to g_num_ports-1 generate
      
-     ep_o(i).inject_req        <= '1' when (s_pidr_inject(i)            = '1') else        
-                                  '1' when (s_tx_rt_reconf_FRM(i)       = '1') else
-                                  '1' when (s_trans_ep_ctr(i).pauseSend = '1') else
+     s_ep(i).inject_packet_sel <= s_regs_fromwb.pidr_psel_o           when (s_inject_sel(i).dbg   ='1') else
+                                  s_config.hwframe_tx_fwd(2 downto 0) when (s_inject_sel(i).fwd   ='1') else 
+                                  s_config.hwframe_tx_blk(2 downto 0) when (s_inject_sel(i).blk   ='1') else
+                                  "000"                               when (s_inject_sel(i).pause ='1') else 
+                                  "000"; 
+
+     s_ep(i).inject_user_value <= s_regs_fromwb.pidr_uval_o              when (s_inject_sel(i).dbg   ='1') else 
+                                  x"00" & s_regs_fromwb.hwfc_tx_fwd_ub_o when (s_inject_sel(i).fwd   ='1') else 
+                                  x"00" & s_regs_fromwb.hwfc_tx_blk_ub_o when (s_inject_sel(i).blk   ='1') else                              
+                                  s_regs_fromwb.tcpbr_trans_pause_time_o when (s_inject_sel(i).pause ='1') else
+                                  x"0000";
+
+     s_ep(i).inject_req        <= '1' when (s_inject_sel(i).dbg   = '1' and ep_i(i).inject_ready = '1' and s_inject_ready_d(i) = '1') else        
+                                  '1' when (s_inject_sel(i).fwd   = '1' and ep_i(i).inject_ready = '1' and s_inject_ready_d(i) = '1') else
+                                  '1' when (s_inject_sel(i).blk   = '1' and ep_i(i).inject_ready = '1' and s_inject_ready_d(i) = '1') else
+                                  '1' when (s_inject_sel(i).pause = '1' and ep_i(i).inject_ready = '1' and s_inject_ready_d(i) = '1') else
                                   '0';
 
-     ----------- this is not really optimal for resources... shit
-     ep_o(i).inject_packet_sel <= s_pinject_ctr(i).inject_packet_sel;
-     ep_o(i).inject_user_value <= s_pinject_ctr(i).inject_user_value;
-
---      ep_o(i).inject_packet_sel <= s_regs_fromwb.pidr_psel_o         when s_pidr_inject(i)      ='1' else
---                                   s_config.rtrcr_rtr_rx(2 downto 0) when s_tx_rt_reconf_FRM(i) ='1' else
---                                   "000";
---      ep_o(i).inject_user_value <= s_regs_fromwb.pidr_uval_o         when s_pidr_inject(i)      ='1' else
---                                   x"babe"                           when s_tx_rt_reconf_FRM(i) ='1' else 
---                                   s_trans_ep_ctr(i).pauseTime;
-  
---      ep_o(i).tx_pck            <= '1' when (s_tx_rt_reconf_FRM(i) ='1') else '0';
---      G_TX_O: for j in 0 to g_pclass_number-1 generate
---         ep_o(i).tx_pck_class(j) <= s_tx_rt_reconf_FRM(i) 
---                                    when (j = to_integer(unsigned(s_config.rtrcr_rtr_rx))) else '0';
---      end generate G_TX_O;
+     ep_o(i).inject_packet_sel <= s_ep(i).inject_packet_sel ;
+     ep_o(i).inject_user_value <= s_ep(i).inject_user_value;
+     ep_o(i).inject_req        <= s_ep(i).inject_req ;
      ep_o(i).fc_pause_req      <= '0'; --s_trans_ep_ctr(i).pauseSend;
      ep_o(i).fc_pause_delay    <= (others => '0'); --s_trans_ep_ctr(i).pauseTime;
-     ep_o(i).outQueueBlockMask <= s_trans_ep_ctr(i).outQueueBlockMask;
+    
   end generate G_EP_O;
   
   G_TRU_TAB: for i in 0 to g_tru_subentry_num-1 generate
@@ -408,6 +449,7 @@ begin --rtl
   s_config.gcr_rx_frame_reset            <= s_regs_fromwb.gcr_rx_frame_reset_o      ;
   s_config.mcr_pattern_mode_rep          <= s_regs_fromwb.mcr_pattern_mode_rep_o    ;
   s_config.mcr_pattern_mode_add          <= s_regs_fromwb.mcr_pattern_mode_add_o    ;
+  s_config.mcr_pattern_mode_sub          <= s_regs_fromwb.mcr_pattern_mode_sub_o    ;
   s_config.lacr_agg_df_hp_id             <= s_regs_fromwb.lacr_agg_df_hp_id_o       ;
   s_config.lacr_agg_df_br_id             <= s_regs_fromwb.lacr_agg_df_br_id_o       ;
   s_config.lacr_agg_df_un_id             <= s_regs_fromwb.lacr_agg_df_un_id_o       ;
@@ -436,6 +478,11 @@ begin --rtl
   s_config.rtrcr_rtr_mode                <= s_regs_fromwb.rtrcr_rtr_mode_o          ;
   s_config.rtrcr_rtr_rx                  <= s_regs_fromwb.rtrcr_rtr_rx_o            ;
   s_config.rtrcr_rtr_tx                  <= s_regs_fromwb.rtrcr_rtr_tx_o            ;
+  
+  s_config.hwframe_rx_fwd                <= s_regs_fromwb.hwfc_rx_fwd_id_o          ;
+  s_config.hwframe_tx_fwd                <= s_regs_fromwb.hwfc_tx_fwd_id_o          ;
+  s_config.hwframe_rx_blk                <= s_regs_fromwb.hwfc_rx_blk_id_o          ;
+  s_config.hwframe_tx_blk                <= s_regs_fromwb.hwfc_tx_blk_id_o          ;
   
   s_tru_tab_wr_index                     <= to_integer(unsigned(s_regs_fromwb.ttr0_sub_fid_o));
   s_tru_wr_addr                          <= (not s_tru_tab_bank) & s_regs_fromwb.ttr0_fid_o;

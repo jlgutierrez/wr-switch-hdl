@@ -88,9 +88,11 @@ architecture rtl of tru_port is
   signal s_zeros             : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_patternRep        : std_logic_vector(g_pattern_width-1 downto 0);
   signal s_patternAdd        : std_logic_vector(g_pattern_width-1 downto 0);
+  signal s_patternSub        : std_logic_vector(g_pattern_width-1 downto 0);
   signal s_patternRep_d0     : std_logic_vector(g_pattern_width-1 downto 0);
   signal s_patternAdd_d0     : std_logic_vector(g_pattern_width-1 downto 0);
-
+  signal s_patternSub_d0     : std_logic_vector(g_pattern_width-1 downto 0);
+  
   signal s_resp_masks        : t_resp_masks;
   signal s_self_mask         : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_port_mask         : std_logic_vector(g_num_ports - 1 downto 0);
@@ -147,7 +149,26 @@ begin --rtl
     config_i           => config_i,
     pattern_o          => s_patternAdd
     );
+
   
+  -- generating pattern to be used in substraction matches
+  SUB_PATTERN: tru_sub_vlan_pattern
+  generic map(     
+     g_num_ports       => g_num_ports,
+     g_patternID_width => g_patternID_width,
+     g_pattern_width   => g_pattern_width
+    )
+  port map(
+    clk_i              => clk_i,
+    rst_n_i            => rst_n_i,
+    portID_i           => s_portID_vec,
+    patternID_i        => config_i.mcr_pattern_mode_sub,
+    tru_req_i          => tru_req_i,
+    endpoints_i        => endpoints_i,
+    config_i           => config_i,
+    pattern_o          => s_patternSub
+    );
+
   --  tracking changes of port configuration due to i.e. link down events (change of port status)
   --  and reacting appropriately (e.g.: sending HW-generated frames)
   RT_RECONFIG: tru_reconfig_rt_port_handler
@@ -176,6 +197,7 @@ begin --rtl
          s_self_mask          <= (others =>'0');
          s_patternRep_d0      <= (others =>'0');
          s_patternAdd_d0      <= (others =>'0');
+         s_patternSub_d0      <= (others =>'0');
          s_valid_d0           <= '0';
          s_valid_d1           <= '0';
          s_reqMask_d0         <= (others =>'0');
@@ -187,6 +209,7 @@ begin --rtl
          -- First stage (remembering/registering input signals)
          s_patternRep_d0         <= s_patternRep;
          s_patternAdd_d0         <= s_patternAdd;
+         s_patternSub_d0         <= s_patternSub;
          s_self_mask             <= tru_req_i.reqMask(g_num_ports-1 downto 0);
          s_valid_d0              <= tru_req_i.valid;
          s_reqMask_d0            <= tru_req_i.reqMask(g_num_ports-1 downto 0);
@@ -232,6 +255,7 @@ begin --rtl
   s_resp_masks   <= f_gen_mask_with_patterns(tru_tab_entry_i, 
                                              s_patternRep_d0, 
                                              s_patternAdd_d0,
+                                             s_patternSub_d0,
                                              g_tru_subentry_num);
   -- just to make the code a bit less messy
   s_ingress_mask <= s_resp_masks.ingress(g_num_ports-1 downto 0);

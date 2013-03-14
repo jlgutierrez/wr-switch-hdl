@@ -141,9 +141,12 @@ class CSimDrv_WR_TRU;
       end   
    endtask;
 
-   task pattern_config(int replacement,  int addition);
-      m_acc.write(m_base +`ADDR_TRU_MCR,  replacement << `TRU_MCR_PATTERN_MODE_REP_OFFSET  |
-                                          addition    << `TRU_MCR_PATTERN_MODE_ADD_OFFSET);  
+   task pattern_config(int replacement,  int addition, int subtraction);
+      m_acc.write(m_base +`ADDR_TRU_MCR,  
+         (subtraction << `TRU_MCR_PATTERN_MODE_SUB_OFFSET) & `TRU_MCR_PATTERN_MODE_SUB |
+         (addition    << `TRU_MCR_PATTERN_MODE_ADD_OFFSET) & `TRU_MCR_PATTERN_MODE_ADD |
+         (replacement << `TRU_MCR_PATTERN_MODE_REP_OFFSET) & `TRU_MCR_PATTERN_MODE_REP);  
+
       if(m_dbg) 
       begin 
         $display("TRU: Real Time transition source of patterns config:");
@@ -253,6 +256,27 @@ class CSimDrv_WR_TRU;
         $display("\tMode  : eRSTP (send HW-generated frames on port down, etc...)");
         if(mode > 1) 
         $display("\tMode  : undefined");
+      end 
+   endtask;
+
+   task hw_frame_config(int tx_fwd_id, int rx_fwd_id, int tx_blk_id, int rx_blk_id);
+      uint64_t tmp;
+      
+      m_acc.write(m_base +`ADDR_TRU_HWFC, 
+                    ('h96        << `TRU_HWFC_TX_BLK_UB_OFFSET) & `TRU_HWFC_TX_BLK_UB |
+                    ('h69        << `TRU_HWFC_TX_FWD_UB_OFFSET) & `TRU_HWFC_TX_FWD_UB |
+                    (tx_blk_id   << `TRU_HWFC_TX_BLK_ID_OFFSET) & `TRU_HWFC_TX_BLK_ID |
+                    (tx_fwd_id   << `TRU_HWFC_TX_FWD_ID_OFFSET) & `TRU_HWFC_TX_FWD_ID |
+                    (rx_blk_id   << `TRU_HWFC_RX_BLK_ID_OFFSET) & `TRU_HWFC_RX_BLK_ID |
+                    (rx_fwd_id   << `TRU_HWFC_RX_FWD_ID_OFFSET) & `TRU_HWFC_RX_FWD_ID );    
+      if(m_dbg)
+      begin 
+        $display("TRU: HW-generated/detected frame config]:");
+        $display("\tFrame forward: tx_fwd_id = %2d, rx_fwd_id = %2d tx_fwd_ub = x%2x", 
+                  tx_fwd_id, rx_fwd_id,  'h69);
+        $display("\tFrame block  : tx_blk_id = %2d, rx_blk_id = %2d tx_blk_ub = x%2x", 
+                  tx_blk_id, rx_blk_id,  'h96);
+
       end 
    endtask;
 

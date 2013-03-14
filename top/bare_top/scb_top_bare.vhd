@@ -590,9 +590,9 @@ begin
           pfilter_pclass_o     => ep2tru(i).pfilter_pclass,
           pfilter_drop_o       => ep2tru(i).pfilter_drop,
           pfilter_done_o       => ep2tru(i).pfilter_done,
-          fc_tx_pause_req_i       => tru2ep(i).fc_pause_req,
-          fc_tx_pause_delay_i     => tru2ep(i).fc_pause_delay,
-          fc_tx_pause_ready_o     => ep2tru(i).fc_pause_ready,
+          fc_tx_pause_req_i    => tru2ep(i).fc_pause_req,   -- we don't use it, use inject instead
+          fc_tx_pause_delay_i  => tru2ep(i).fc_pause_delay, -- we don't use it, use inject instead
+          fc_tx_pause_ready_o  => ep2tru(i).fc_pause_ready, -- we don't use it, use inject instead
           inject_req_i         => tru2ep(i).inject_req,
           inject_ready_o       => ep2tru(i).inject_ready,
           inject_packet_sel_i  => tru2ep(i).inject_packet_sel,

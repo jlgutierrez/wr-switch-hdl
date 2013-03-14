@@ -75,6 +75,8 @@ package wrsw_tru_pkg is
     pauseTime             : std_logic_vector(c_wrsw_pause_delay_width-1 downto 0);
     outQueueBlockMask     : std_logic_vector(c_wrsw_max_queue_number-1 downto 0);
     outQueueBlockReq      : std_logic;
+    hwframe_fwd           : std_logic;
+    hwframe_blk           : std_logic;
   end record;
   
   type t_trans2sw is record
@@ -93,11 +95,11 @@ package wrsw_tru_pkg is
     -- pause generation
 --     pauseSend             : std_logic;
 --     pauseTime             : std_logic_vector(15 downto 0);
-    outQueueBlockMask     : std_logic_vector(7 downto 0);
+--     outQueueBlockMask     : std_logic_vector(7 downto 0);
     -- new stuff
     link_kill             : std_logic;                      --ok
-    fc_pause_req          : std_logic;                      --ok
-    fc_pause_delay        : std_logic_vector(15 downto 0);  --ok
+    fc_pause_req          : std_logic;                      -- not really used, we use inject for PAUSE
+    fc_pause_delay        : std_logic_vector(15 downto 0);  -- not really used, we use inject for PAUSE
     inject_req            : std_logic;
     inject_packet_sel     : std_logic_vector(2 downto 0)  ;
     inject_user_value     : std_logic_vector(15 downto 0) ;
@@ -160,6 +162,7 @@ package wrsw_tru_pkg is
     -- pattern match config
     mcr_pattern_mode_rep  : std_logic_vector(3 downto 0);
     mcr_pattern_mode_add  : std_logic_vector(3 downto 0);
+    mcr_pattern_mode_sub  : std_logic_vector(3 downto 0);
     -- linc aggregation config
     lacr_agg_df_hp_id     : std_logic_vector(3 downto 0);
     lacr_agg_df_br_id     : std_logic_vector(3 downto 0);
@@ -184,6 +187,13 @@ package wrsw_tru_pkg is
     rtrcr_rtr_ena         : std_logic;
     rtrcr_rtr_reset       : std_logic;
     rtrcr_rtr_mode        : std_logic_vector(3 downto 0);
+
+    hwframe_rx_fwd        : std_logic_vector(3 downto 0);
+    hwframe_tx_fwd        : std_logic_vector(3 downto 0);
+    
+    hwframe_rx_blk        : std_logic_vector(3 downto 0);
+    hwframe_tx_blk        : std_logic_vector(3 downto 0);
+   
     rtrcr_rtr_rx          : std_logic_vector(3 downto 0);
     rtrcr_rtr_tx          : std_logic_vector(3 downto 0);
   end record;
@@ -194,6 +204,15 @@ package wrsw_tru_pkg is
     ingress               : std_logic_vector(c_RTU_MAX_PORTS-1  downto 0); 
   end record;
  
+  type t_inject_sel is record
+    dbg                   : std_logic;
+    fwd                   : std_logic;
+    blk                   : std_logic;
+    pause                 : std_logic;
+  end record;
+
+  type t_inject_sel_array    is array(integer range <>) of t_inject_sel;
+
   type t_tru_status is record
     transitionActive      : std_logic;
     transitionFinished    : std_logic;
@@ -233,7 +252,8 @@ package wrsw_tru_pkg is
   function f_pack_tru_subentry   (input_data: t_tru_tab_subentry; port_number: integer) 
            return std_logic_vector;
   function f_gen_mask_with_patterns(entry: t_tru_tab_entry; pattern_rep : std_logic_vector; 
-           pattern_add  : std_logic_vector; subentry_num : integer) 
+           pattern_add  : std_logic_vector; pattern_sub : std_logic_vector; 
+           subentry_num : integer) 
            return t_resp_masks;
 --   function f_pack_tru_endpoint (input_data: t_tru_endpoint; port_number: integer ) 
 --            return std_logic_vector;
@@ -261,6 +281,8 @@ package wrsw_tru_pkg is
   function f_pattern_port_down(endpoints_i: t_tru_endpoints;pattern_width_i: integer) 
            return std_logic_vector;
   function f_pattern_quick_fwd (endpoints_i: t_tru_endpoints; config_i: t_tru_config;pattern_width_i: integer)
+           return std_logic_vector;
+  function f_pattern_quick_blk (endpoints_i: t_tru_endpoints; config_i: t_tru_config;pattern_width_i: integer)
            return std_logic_vector;
   function f_pattern_aggr_gr_id(endpoints_i: t_tru_endpoints;tru_req_i : t_tru_request;portID_i: std_logic_vector;config_i: t_tru_config;pattern_width_i: integer; port_number_i   : integer)
            return std_logic_vector;
@@ -648,38 +670,47 @@ package body wrsw_tru_pkg is
         entry        : t_tru_tab_entry;
         pattern_rep  : std_logic_vector;
         pattern_add  : std_logic_vector;
+        pattern_sub  : std_logic_vector;
         subentry_num : integer
   ) return t_resp_masks is
   variable resp_masks          : t_resp_masks;
   variable pattern_replacement : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
   variable pattern_addition    : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
+  variable pattern_substraction: std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
   variable zeros               : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
   begin  
     resp_masks.egress  := (others=>'0');
     resp_masks.ingress := (others=>'0');
     
-    pattern_replacement(pattern_rep'length-1 downto 0)                := pattern_rep;
-    pattern_addition   (pattern_add'length-1 downto 0)                := pattern_add;
-    pattern_replacement(c_RTU_MAX_PORTS-1 downto pattern_rep'length)  := (others=>'0');
-    pattern_addition   (c_RTU_MAX_PORTS-1 downto pattern_add'length)  := (others=>'0');
-    
+    pattern_replacement (pattern_rep'length-1 downto 0)                := pattern_rep;
+    pattern_addition    (pattern_add'length-1 downto 0)                := pattern_add;
+    pattern_substraction(pattern_add'length-1 downto 0)                := pattern_add;
+    pattern_replacement (c_RTU_MAX_PORTS-1 downto pattern_rep'length)  := (others=>'0');
+    pattern_addition    (c_RTU_MAX_PORTS-1 downto pattern_add'length)  := (others=>'0');
+    pattern_substraction(c_RTU_MAX_PORTS-1 downto pattern_add'length)  := (others=>'0');
+
     for i in 0 to subentry_num-1 loop
       if(entry(i).valid = '1') then
         case entry(i).pattern_mode is
-          when "0000" => --std_logic_vector(to_unsigned(0,entry(i).pattern_mode'length)) => 
+          when "0000" => -- replace TRU-defined masked bits with the bits defined in the TRU
             if((pattern_replacement and entry(i).pattern_mask) = entry(i).pattern_match) then
               resp_masks.egress  := (resp_masks.egress  and (not entry(i).ports_mask)) or (entry(i).ports_egress  and entry(i).ports_mask);
               resp_masks.ingress := (resp_masks.ingress and (not entry(i).ports_mask)) or (entry(i).ports_ingress and entry(i).ports_mask);
             end if;
-          when "0001" => --std_logic_vector(to_unsigned(1,entry(i).pattern_mode'length)) =>
+          when "0001" => -- add bits defined in TRU for the TRU-defined masked bits 
             if ((pattern_addition and entry(i).pattern_mask) = entry(i).pattern_match) then
               resp_masks.egress  := resp_masks.egress  or (entry(i).ports_egress  and entry(i).ports_mask);
               resp_masks.ingress := resp_masks.ingress or (entry(i).ports_ingress and entry(i).ports_mask);
             end if;
-          when "0010" => --std_logic_vector(to_unsigned(2,entry(i).pattern_mode'length )) => 
+          when "0010" => --  add pattern for the bits defined in the TRU
             if ((pattern_addition and entry(i).pattern_mask and entry(i).pattern_match) /= zeros) then
               resp_masks.egress  := resp_masks.egress  or (entry(i).ports_egress  and entry(i).ports_mask and pattern_addition);
               resp_masks.ingress := resp_masks.ingress or (entry(i).ports_ingress and entry(i).ports_mask and pattern_addition);
+            end if;
+          when "0011" => -- substract pattern for the bits defined in TRU
+            if ((pattern_substraction and entry(i).pattern_mask and entry(i).pattern_match) /= zeros) then
+              resp_masks.egress  := resp_masks.egress  and not (entry(i).ports_egress  and entry(i).ports_mask and pattern_substraction);
+              resp_masks.ingress := resp_masks.ingress and not (entry(i).ports_ingress and entry(i).ports_mask and pattern_substraction);
             end if;
           when others =>
             resp_masks.egress  := resp_masks.egress; 
@@ -689,26 +720,6 @@ package body wrsw_tru_pkg is
           resp_masks.egress  := resp_masks.egress; 
           resp_masks.ingress := resp_masks.ingress ;
         end if;
-
-
---       if    (entry(i).pattern_mode = std_logic_vector(to_unsigned(0,entry(i).pattern_mode'length)) and  ((pattern_rep and entry(i).pattern_mask) = entry(i).pattern_match)) then
---         resp_masks.egress  := (resp_masks.egress  and not entry(i).ports_mask) or (entry(i).ports_egress  and entry(i).ports_mask);
---         resp_masks.ingress := (resp_masks.ingress and not entry(i).ports_mask) or (entry(i).ports_ingress and entry(i).ports_mask);
---       elsif((entry(i).pattern_mode = std_logic_vector(to_unsigned(1,entry(i).pattern_mode'length)) and (pattern_add and entry(i).pattern_mask) = entry(i).pattern_match)) then
---         resp_masks.egress  := resp_masks.egress  or (entry(i).ports_egress  and entry(i).ports_mask);
---         resp_masks.ingress := resp_masks.ingress or (entry(i).ports_ingress and entry(i).ports_mask);
---       elsif((entry(i).pattern_mode = std_logic_vector(to_unsigned(2,entry(i).pattern_mode'length ))) and (pattern_add and entry(i).pattern_mask and entry(i).pattern_match) /= zeros) then
---         resp_masks.egress  := resp_masks.egress  or (entry(i).ports_egress  and entry(i).ports_mask and pattern_add);
---         resp_masks.ingress := resp_masks.ingress or (entry(i).ports_ingress and entry(i).ports_mask and pattern_add);
---       end if;
-
---       if    ((pattern_rep and entry(i).pattern_mask) = entry(i).pattern_replace) then
---         resp_masks.egress  := (resp_masks.egress  and not entry(i).ports_mask) or (entry(i).ports_egress  and entry(i).ports_mask);
---         resp_masks.ingress := (resp_masks.ingress and not entry(i).ports_mask) or (entry(i).ports_ingress and entry(i).ports_mask);
---       elsif((pattern_add and entry(i).pattern_mask) = entry(i).pattern_add) then
---         resp_masks.egress  := resp_masks.egress  or (entry(i).ports_egress  and entry(i).ports_mask);
---         resp_masks.ingress := resp_masks.ingress or (entry(i).ports_ingress and entry(i).ports_mask);
---       end if;
 
     end loop;
     
@@ -775,9 +786,9 @@ package body wrsw_tru_pkg is
 --     entry(2+ c_wrsw_pclass_number)                                  := input_data.pauseSend;
 --     entry(2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width-1 downto 
 --           2+ c_wrsw_pclass_number+1)                                := input_data.pauseTime;
-    entry(2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width+
-             c_wrsw_max_queue_number-1 downto 
-          2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width)     := input_data.outQueueBlockMask;
+--     entry(2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width+
+--              c_wrsw_max_queue_number-1 downto 
+--           2+ c_wrsw_pclass_number+1+c_wrsw_pause_delay_width)     := input_data.outQueueBlockMask;
     return(entry);
   end function;
 
@@ -820,7 +831,20 @@ package body wrsw_tru_pkg is
   variable pattern_o     : std_logic_vector(pattern_width_i-1 downto 0);
   variable rxFrameNumber : integer range 0 to endpoints_i.rxFrameMaskReg'length-1;
   begin
-    rxFrameNumber := to_integer(unsigned(config_i.rtrcr_rtr_rx));
+    rxFrameNumber := to_integer(unsigned(config_i.hwframe_rx_fwd));
+    pattern_o     := endpoints_i.rxFrameMaskReg(rxFrameNumber)(pattern_width_i-1 downto 0);
+    return(pattern_o);
+  end function;
+
+  function f_pattern_quick_blk (
+       endpoints_i     : t_tru_endpoints;
+       config_i        : t_tru_config;    
+       pattern_width_i : integer
+    ) return std_logic_vector is
+  variable pattern_o     : std_logic_vector(pattern_width_i-1 downto 0);
+  variable rxFrameNumber : integer range 0 to endpoints_i.rxFrameMaskReg'length-1;
+  begin
+    rxFrameNumber := to_integer(unsigned(config_i.hwframe_rx_blk));
     pattern_o     := endpoints_i.rxFrameMaskReg(rxFrameNumber)(pattern_width_i-1 downto 0);
     return(pattern_o);
   end function;

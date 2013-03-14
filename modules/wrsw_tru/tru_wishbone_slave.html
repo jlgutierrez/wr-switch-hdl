@@ -44,16 +44,17 @@
 <span style="margin-left: 20px; ">3.8. <A href="#sect_3_8">Transition Control Port Register</a></span><br/>
 <span style="margin-left: 20px; ">3.9. <A href="#sect_3_9">Transition Status Register</a></span><br/>
 <span style="margin-left: 20px; ">3.10. <A href="#sect_3_10">Real Time Reconfiguration Control Register</a></span><br/>
-<span style="margin-left: 20px; ">3.11. <A href="#sect_3_11">TRU Table Register 0</a></span><br/>
-<span style="margin-left: 20px; ">3.12. <A href="#sect_3_12">TRU Table Register 1</a></span><br/>
-<span style="margin-left: 20px; ">3.13. <A href="#sect_3_13">TRU Table Register 2</a></span><br/>
-<span style="margin-left: 20px; ">3.14. <A href="#sect_3_14">TRU Table Register 3</a></span><br/>
-<span style="margin-left: 20px; ">3.15. <A href="#sect_3_15">TRU Table Register 4</a></span><br/>
-<span style="margin-left: 20px; ">3.16. <A href="#sect_3_16">TRU Table Register 5</a></span><br/>
-<span style="margin-left: 20px; ">3.17. <A href="#sect_3_17">Debug port select</a></span><br/>
-<span style="margin-left: 20px; ">3.18. <A href="#sect_3_18">Packet Injection Debug Register</a></span><br/>
-<span style="margin-left: 20px; ">3.19. <A href="#sect_3_19">Packet Filter Debug Register</a></span><br/>
-<span style="margin-left: 20px; ">3.20. <A href="#sect_3_20">RT Reconfig Debug Register</a></span><br/>
+<span style="margin-left: 20px; ">3.11. <A href="#sect_3_11">HW-frame gen/det config</a></span><br/>
+<span style="margin-left: 20px; ">3.12. <A href="#sect_3_12">TRU Table Register 0</a></span><br/>
+<span style="margin-left: 20px; ">3.13. <A href="#sect_3_13">TRU Table Register 1</a></span><br/>
+<span style="margin-left: 20px; ">3.14. <A href="#sect_3_14">TRU Table Register 2</a></span><br/>
+<span style="margin-left: 20px; ">3.15. <A href="#sect_3_15">TRU Table Register 3</a></span><br/>
+<span style="margin-left: 20px; ">3.16. <A href="#sect_3_16">TRU Table Register 4</a></span><br/>
+<span style="margin-left: 20px; ">3.17. <A href="#sect_3_17">TRU Table Register 5</a></span><br/>
+<span style="margin-left: 20px; ">3.18. <A href="#sect_3_18">Debug port select</a></span><br/>
+<span style="margin-left: 20px; ">3.19. <A href="#sect_3_19">Packet Injection Debug Register</a></span><br/>
+<span style="margin-left: 20px; ">3.20. <A href="#sect_3_20">Packet Filter Debug Register</a></span><br/>
+<span style="margin-left: 20px; ">3.21. <A href="#sect_3_21">RT Reconfig Debug Register</a></span><br/>
 <h3><a name="sect_1_0">1. Memory map summary</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
@@ -251,6 +252,23 @@ RTRCR
 REG
 </td>
 <td >
+<A href="#HWFC">HW-frame gen/det config</a>
+</td>
+<td  class="td_code">
+tru_hwfc
+</td>
+<td  class="td_code">
+HWFC
+</td>
+</tr>
+<tr class="tr_even">
+<td  class="td_code">
+0xb
+</td>
+<td >
+REG
+</td>
+<td >
 <A href="#TTR0">TRU Table Register 0</a>
 </td>
 <td  class="td_code">
@@ -260,9 +278,9 @@ tru_ttr0
 TTR0
 </td>
 </tr>
-<tr class="tr_even">
+<tr class="tr_odd">
 <td  class="td_code">
-0xb
+0xc
 </td>
 <td >
 REG
@@ -277,9 +295,9 @@ tru_ttr1
 TTR1
 </td>
 </tr>
-<tr class="tr_odd">
+<tr class="tr_even">
 <td  class="td_code">
-0xc
+0xd
 </td>
 <td >
 REG
@@ -294,9 +312,9 @@ tru_ttr2
 TTR2
 </td>
 </tr>
-<tr class="tr_even">
+<tr class="tr_odd">
 <td  class="td_code">
-0xd
+0xe
 </td>
 <td >
 REG
@@ -311,9 +329,9 @@ tru_ttr3
 TTR3
 </td>
 </tr>
-<tr class="tr_odd">
+<tr class="tr_even">
 <td  class="td_code">
-0xe
+0xf
 </td>
 <td >
 REG
@@ -328,9 +346,9 @@ tru_ttr4
 TTR4
 </td>
 </tr>
-<tr class="tr_even">
+<tr class="tr_odd">
 <td  class="td_code">
-0xf
+0x10
 </td>
 <td >
 REG
@@ -345,9 +363,9 @@ tru_ttr5
 TTR5
 </td>
 </tr>
-<tr class="tr_odd">
+<tr class="tr_even">
 <td  class="td_code">
-0x10
+0x11
 </td>
 <td >
 REG
@@ -362,9 +380,9 @@ tru_dps
 DPS
 </td>
 </tr>
-<tr class="tr_even">
+<tr class="tr_odd">
 <td  class="td_code">
-0x11
+0x12
 </td>
 <td >
 REG
@@ -379,9 +397,9 @@ tru_pidr
 PIDR
 </td>
 </tr>
-<tr class="tr_odd">
+<tr class="tr_even">
 <td  class="td_code">
-0x12
+0x13
 </td>
 <td >
 REG
@@ -396,9 +414,9 @@ tru_pfdr
 PFDR
 </td>
 </tr>
-<tr class="tr_even">
+<tr class="tr_odd">
 <td  class="td_code">
-0x13
+0x14
 </td>
 <td >
 REG
@@ -667,6 +685,23 @@ tru_mcr_pattern_mode_rep_o[3:0]
 </td>
 <td  class="td_pblock_right">
 tru_mcr_pattern_mode_add_o[3:0]
+</td>
+<td  class="td_arrow_right">
+&rArr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+tru_mcr_pattern_mode_sub_o[3:0]
 </td>
 <td  class="td_arrow_right">
 &rArr;
@@ -1245,6 +1280,142 @@ tru_rtrcr_rtr_rx_o[3:0]
 </td>
 <td  class="td_pblock_right">
 tru_rtrcr_rtr_tx_o[3:0]
+</td>
+<td  class="td_arrow_right">
+&rArr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+&nbsp;
+</td>
+<td  class="td_pblock_right">
+
+</td>
+<td  class="td_arrow_right">
+
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+<b>HW-frame gen/det config:</b>
+</td>
+<td  class="td_arrow_right">
+
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+tru_hwfc_rx_fwd_id_o[3:0]
+</td>
+<td  class="td_arrow_right">
+&rArr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+tru_hwfc_rx_blk_id_o[3:0]
+</td>
+<td  class="td_arrow_right">
+&rArr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+tru_hwfc_tx_fwd_id_o[3:0]
+</td>
+<td  class="td_arrow_right">
+&rArr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+tru_hwfc_tx_blk_id_o[3:0]
+</td>
+<td  class="td_arrow_right">
+&rArr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+tru_hwfc_tx_fwd_ub_o[7:0]
+</td>
+<td  class="td_arrow_right">
+&rArr;
+</td>
+</tr>
+<tr>
+<td  class="td_arrow_left">
+
+</td>
+<td  class="td_pblock_left">
+
+</td>
+<td  class="td_sym_center">
+
+</td>
+<td  class="td_pblock_right">
+tru_hwfc_tx_blk_ub_o[7:0]
 </td>
 <td  class="td_arrow_right">
 &rArr;
@@ -2844,17 +3015,17 @@ Defines matching pattern mode/configuration for quick port reconfiguration
 <td  class="td_unused">
 -
 </td>
-<td  class="td_unused">
--
+<td style="border: solid 1px black;" colspan=4  class="td_field">
+PATTERN_MODE_SUB[3:0]
 </td>
-<td  class="td_unused">
--
+<td >
+
 </td>
-<td  class="td_unused">
--
+<td >
+
 </td>
-<td  class="td_unused">
--
+<td >
+
 </td>
 </tr>
 </table>
@@ -2975,6 +3146,10 @@ PATTERN_MODE_REP
 PATTERN_MODE_ADD
 </b>[<i>read/write</i>]: Addition Pattern Mode
 <br>Selected Pattern Mode for port config addition
+<li><b>
+PATTERN_MODE_SUB
+</b>[<i>read/write</i>]: Substraction Pattern Mode
+<br>Selected Pattern Mode for port config substraction
 </ul>
 <a name="LACR"></a>
 <h3><a name="sect_3_5">3.5. Link Aggregation Control Register</a></h3>
@@ -4606,15 +4781,15 @@ RTR_TX
 </b>[<i>read/write</i>]: RTR Tx Frame ID
 <br> ID (bit number of the txFrameMask) of the HW-sent frame by endpoint<br>         (Quick Forward Request BPDUe)
 </ul>
-<a name="TTR0"></a>
-<h3><a name="sect_3_11">3.11. TRU Table Register 0</a></h3>
+<a name="HWFC"></a>
+<h3><a name="sect_3_11">3.11. HW-frame gen/det config</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
 <b>HW prefix: </b>
 </td>
 <td  class="td_code">
-tru_ttr0
+tru_hwfc
 </td>
 </tr>
 <tr>
@@ -4630,7 +4805,7 @@ tru_ttr0
 <b>C prefix: </b>
 </td>
 <td  class="td_code">
-TTR0
+HWFC
 </td>
 </tr>
 <tr>
@@ -4639,6 +4814,287 @@ TTR0
 </td>
 <td  class="td_code">
 0x28
+</td>
+</tr>
+</table>
+<p>
+Controls HW generation/detection of frames
+</p>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td  class="td_bit">
+31
+</td>
+<td  class="td_bit">
+30
+</td>
+<td  class="td_bit">
+29
+</td>
+<td  class="td_bit">
+28
+</td>
+<td  class="td_bit">
+27
+</td>
+<td  class="td_bit">
+26
+</td>
+<td  class="td_bit">
+25
+</td>
+<td  class="td_bit">
+24
+</td>
+</tr>
+<tr>
+<td style="border: solid 1px black;" colspan=8  class="td_field">
+TX_BLK_UB[7:0]
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+</tr>
+</table>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td  class="td_bit">
+23
+</td>
+<td  class="td_bit">
+22
+</td>
+<td  class="td_bit">
+21
+</td>
+<td  class="td_bit">
+20
+</td>
+<td  class="td_bit">
+19
+</td>
+<td  class="td_bit">
+18
+</td>
+<td  class="td_bit">
+17
+</td>
+<td  class="td_bit">
+16
+</td>
+</tr>
+<tr>
+<td style="border: solid 1px black;" colspan=8  class="td_field">
+TX_FWD_UB[7:0]
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+</tr>
+</table>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td  class="td_bit">
+15
+</td>
+<td  class="td_bit">
+14
+</td>
+<td  class="td_bit">
+13
+</td>
+<td  class="td_bit">
+12
+</td>
+<td  class="td_bit">
+11
+</td>
+<td  class="td_bit">
+10
+</td>
+<td  class="td_bit">
+9
+</td>
+<td  class="td_bit">
+8
+</td>
+</tr>
+<tr>
+<td style="border: solid 1px black;" colspan=4  class="td_field">
+TX_BLK_ID[3:0]
+</td>
+<td style="border: solid 1px black;" colspan=4  class="td_field">
+TX_FWD_ID[3:0]
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+</tr>
+</table>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td  class="td_bit">
+7
+</td>
+<td  class="td_bit">
+6
+</td>
+<td  class="td_bit">
+5
+</td>
+<td  class="td_bit">
+4
+</td>
+<td  class="td_bit">
+3
+</td>
+<td  class="td_bit">
+2
+</td>
+<td  class="td_bit">
+1
+</td>
+<td  class="td_bit">
+0
+</td>
+</tr>
+<tr>
+<td style="border: solid 1px black;" colspan=4  class="td_field">
+RX_BLK_ID[3:0]
+</td>
+<td style="border: solid 1px black;" colspan=4  class="td_field">
+RX_FWD_ID[3:0]
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+<td >
+
+</td>
+</tr>
+</table>
+<ul>
+<li><b>
+RX_FWD_ID
+</b>[<i>read/write</i>]: HW Frame Rx Forward ID
+<br> ID (bit number of the rxFrameMask) of the signal from the endpoint which <br>         is programmed to indicate reception of Quick Forward Request BPDUe
+<li><b>
+RX_BLK_ID
+</b>[<i>read/write</i>]: HW Frame Rx Block ID
+<br> ID (bit number of the rxFrameMask) of the signal from the endpoint which <br>         is programmed to indicate reception of Quick Block Request BPDUe
+<li><b>
+TX_FWD_ID
+</b>[<i>read/write</i>]: HW Frame Tx Forward ID
+<br> ID (bit number of the txFrameMask) of the HW-sent frame by endpoint<br>         (Quick Forward Request BPDUe)
+<li><b>
+TX_BLK_ID
+</b>[<i>read/write</i>]: HW Frame Tx Block ID
+<br> ID (bit number of the txFrameMask) of the HW-sent frame by endpoint<br>         (Quick Block Request BPDUe)
+<li><b>
+TX_FWD_UB
+</b>[<i>read/write</i>]: HW Frame Tx Forward User Byte
+<br> LOW byte of the 16-bit User Defined Value inserted into tnjected Template
+<li><b>
+TX_BLK_UB
+</b>[<i>read/write</i>]: HW Frame Tx Block User Byte
+<br> LOW byte of the 16-bit User Defined Value inserted into tnjected Template
+</ul>
+<a name="TTR0"></a>
+<h3><a name="sect_3_12">3.12. TRU Table Register 0</a></h3>
+<table cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td >
+<b>HW prefix: </b>
+</td>
+<td  class="td_code">
+tru_ttr0
+</td>
+</tr>
+<tr>
+<td >
+<b>HW address: </b>
+</td>
+<td  class="td_code">
+0xb
+</td>
+</tr>
+<tr>
+<td >
+<b>C prefix: </b>
+</td>
+<td  class="td_code">
+TTR0
+</td>
+</tr>
+<tr>
+<td >
+<b>C offset: </b>
+</td>
+<td  class="td_code">
+0x2c
 </td>
 </tr>
 </table>
@@ -4879,7 +5335,7 @@ PATRN_MODE
 </b>[<i>read/write</i>]: Pattern Mode
 </ul>
 <a name="TTR1"></a>
-<h3><a name="sect_3_12">3.12. TRU Table Register 1</a></h3>
+<h3><a name="sect_3_13">3.13. TRU Table Register 1</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -4894,7 +5350,7 @@ tru_ttr1
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0xb
+0xc
 </td>
 </tr>
 <tr>
@@ -4910,7 +5366,7 @@ TTR1
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x2c
+0x30
 </td>
 </tr>
 </table>
@@ -5136,7 +5592,7 @@ PORTS_INGRESS
 </b>[<i>read/write</i>]: Ingress Mask
 </ul>
 <a name="TTR2"></a>
-<h3><a name="sect_3_13">3.13. TRU Table Register 2</a></h3>
+<h3><a name="sect_3_14">3.14. TRU Table Register 2</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -5151,7 +5607,7 @@ tru_ttr2
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0xc
+0xd
 </td>
 </tr>
 <tr>
@@ -5167,7 +5623,7 @@ TTR2
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x30
+0x34
 </td>
 </tr>
 </table>
@@ -5393,7 +5849,7 @@ PORTS_EGRESS
 </b>[<i>read/write</i>]: Egress Mask
 </ul>
 <a name="TTR3"></a>
-<h3><a name="sect_3_14">3.14. TRU Table Register 3</a></h3>
+<h3><a name="sect_3_15">3.15. TRU Table Register 3</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -5408,7 +5864,7 @@ tru_ttr3
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0xd
+0xe
 </td>
 </tr>
 <tr>
@@ -5424,7 +5880,7 @@ TTR3
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x34
+0x38
 </td>
 </tr>
 </table>
@@ -5650,7 +6106,7 @@ PORTS_MASK
 </b>[<i>read/write</i>]: Egress Mask
 </ul>
 <a name="TTR4"></a>
-<h3><a name="sect_3_15">3.15. TRU Table Register 4</a></h3>
+<h3><a name="sect_3_16">3.16. TRU Table Register 4</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -5665,7 +6121,7 @@ tru_ttr4
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0xe
+0xf
 </td>
 </tr>
 <tr>
@@ -5681,7 +6137,7 @@ TTR4
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x38
+0x3c
 </td>
 </tr>
 </table>
@@ -5907,7 +6363,7 @@ PATRN_MATCH
 </b>[<i>read/write</i>]: Pattern Match
 </ul>
 <a name="TTR5"></a>
-<h3><a name="sect_3_16">3.16. TRU Table Register 5</a></h3>
+<h3><a name="sect_3_17">3.17. TRU Table Register 5</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -5922,7 +6378,7 @@ tru_ttr5
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0xf
+0x10
 </td>
 </tr>
 <tr>
@@ -5938,7 +6394,7 @@ TTR5
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x3c
+0x40
 </td>
 </tr>
 </table>
@@ -6164,7 +6620,7 @@ PATRN_MASK
 </b>[<i>read/write</i>]: Patern Mask
 </ul>
 <a name="DPS"></a>
-<h3><a name="sect_3_17">3.17. Debug port select</a></h3>
+<h3><a name="sect_3_18">3.18. Debug port select</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -6179,7 +6635,7 @@ tru_dps
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0x10
+0x11
 </td>
 </tr>
 <tr>
@@ -6195,7 +6651,7 @@ DPS
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x40
+0x44
 </td>
 </tr>
 </table>
@@ -6425,7 +6881,7 @@ PID
 <br>ID of the port to be debugged
 </ul>
 <a name="PIDR"></a>
-<h3><a name="sect_3_18">3.18. Packet Injection Debug Register</a></h3>
+<h3><a name="sect_3_19">3.19. Packet Injection Debug Register</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -6440,7 +6896,7 @@ tru_pidr
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0x11
+0x12
 </td>
 </tr>
 <tr>
@@ -6456,7 +6912,7 @@ PIDR
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x44
+0x48
 </td>
 </tr>
 </table>
@@ -6696,7 +7152,7 @@ IREADY
 </b>[<i>read-only</i>]: Injection Ready
 </ul>
 <a name="PFDR"></a>
-<h3><a name="sect_3_19">3.19. Packet Filter Debug Register</a></h3>
+<h3><a name="sect_3_20">3.20. Packet Filter Debug Register</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -6711,7 +7167,7 @@ tru_pfdr
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0x12
+0x13
 </td>
 </tr>
 <tr>
@@ -6727,7 +7183,7 @@ PFDR
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x48
+0x4c
 </td>
 </tr>
 </table>
@@ -6965,7 +7421,7 @@ CNT
 <br>Counts all detections (regardless of the class)
 </ul>
 <a name="PTRDR"></a>
-<h3><a name="sect_3_20">3.20. RT Reconfig Debug Register</a></h3>
+<h3><a name="sect_3_21">3.21. RT Reconfig Debug Register</a></h3>
 <table cellpadding=0 cellspacing=0 border=0>
 <tr>
 <td >
@@ -6980,7 +7436,7 @@ tru_ptrdr
 <b>HW address: </b>
 </td>
 <td  class="td_code">
-0x13
+0x14
 </td>
 </tr>
 <tr>
@@ -6996,7 +7452,7 @@ PTRDR
 <b>C offset: </b>
 </td>
 <td  class="td_code">
-0x4c
+0x50
 </td>
 </tr>
 </table>

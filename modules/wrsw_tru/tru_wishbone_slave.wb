@@ -118,6 +118,16 @@ peripheral {
          access_bus = READ_WRITE;
          access_dev = READ_ONLY;
       };
+      field {
+         name = "Substraction Pattern Mode";
+         prefix = "PATTERN_MODE_SUB";
+         description = "Selected Pattern Mode for port config substraction";
+         size = 4;
+         align= 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
    };
 
    reg {
@@ -483,6 +493,71 @@ peripheral {
          (Quick Forward Request BPDUe)";
          size = 4;
          align= 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+   };
+
+   reg {
+      name = "HW-frame gen/det config";
+      description = "Controls HW generation/detection of frames";
+      prefix = "HWFC";
+
+      field {
+         name = "HW Frame Rx Forward ID";
+         prefix = "RX_FWD_ID";
+         description = " ID (bit number of the rxFrameMask) of the signal from the endpoint which \
+         is programmed to indicate reception of Quick Forward Request BPDUe";
+         size = 4;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "HW Frame Rx Block ID";
+         prefix = "RX_BLK_ID";
+         description = " ID (bit number of the rxFrameMask) of the signal from the endpoint which \
+         is programmed to indicate reception of Quick Block Request BPDUe";
+         size = 4;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "HW Frame Tx Forward ID";
+         prefix = "TX_FWD_ID";
+         description = " ID (bit number of the txFrameMask) of the HW-sent frame by endpoint\
+         (Quick Forward Request BPDUe)";
+         size = 4;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "HW Frame Tx Block ID";
+         prefix = "TX_BLK_ID";
+         description = " ID (bit number of the txFrameMask) of the HW-sent frame by endpoint\
+         (Quick Block Request BPDUe)";
+         size = 4;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "HW Frame Tx Forward User Byte";
+         prefix = "TX_FWD_UB";
+         description = " LOW byte of the 16-bit User Defined Value inserted into tnjected Template";
+         size = 8;
+         type = SLV;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
+      field {
+         name = "HW Frame Tx Block User Byte";
+         prefix = "TX_BLK_UB";
+         description = " LOW byte of the 16-bit User Defined Value inserted into tnjected Template";
+         size = 8;
          type = SLV;
          access_bus = READ_WRITE;
          access_dev = READ_ONLY;
