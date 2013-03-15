@@ -2390,6 +2390,7 @@ module main;
                  tx_special_pck(ports[0].send,BPDU_0 /*opt*/);  
                end
                begin
+                 wait_cycles(20);
                  $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> CLOSE / OPEN  port 1<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
                  tx_special_pck(ports[1].send,BPDU_0 /*opt*/);  
                end

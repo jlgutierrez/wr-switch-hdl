@@ -120,6 +120,7 @@ package rtu_private_pkg is
     port_mask     : std_logic_vector(c_rtu_max_ports-1 downto 0);
   end record;
 
+ 
   constant c_ff_single_macs_number :	 integer := 4;
   constant c_ff_range_macs_number :	 integer := 1; -- not implemented
   
