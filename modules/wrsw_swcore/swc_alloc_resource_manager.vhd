@@ -123,7 +123,8 @@ entity swc_alloc_resource_manager is
     -- (g_resource_num + 1) since we need to have a number of "unknown source" pages
     g_resource_num           : integer := 3; -- this include 1 for unknown
     
-    g_resource_num_width     : integer := 2
+    g_resource_num_width     : integer := 2;
+    g_num_dbg_vector_width  : integer
     );
 
   port (
@@ -146,8 +147,8 @@ entity swc_alloc_resource_manager is
     rescnt_page_num_i             : in std_logic_vector(g_total_num_pages_width-1 downto 0);
     
     res_full_o                    : out std_logic_vector(g_resource_num- 1 downto 0);
-    res_almost_full_o             : out std_logic_vector(g_resource_num- 1 downto 0)
-    
+    res_almost_full_o             : out std_logic_vector(g_resource_num- 1 downto 0);
+    dbg_o                         : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0)
     );
 
 end swc_alloc_resource_manager;
@@ -280,5 +281,16 @@ begin
     res_full_o(i)          <= resources(i).full;
     res_almost_full_o(i)   <= resources(i).almost_full;
   end generate FULL_OUT;
+ 
+  -- debugging stuff
+  GEN_DEBUG: if ((g_total_num_pages_width*g_resource_num) <= g_num_dbg_vector_width) generate
+    DBG: for i in 0 to g_resource_num-1 generate
+      dbg_o((i+1)*g_total_num_pages_width-1 downto i*g_total_num_pages_width) <= std_logic_vector(resources(i).cnt);
+    end generate DBG;
+  end generate GEN_DEBUG;
+  GEN_NO_DEBUG: if ((g_total_num_pages_width*g_resource_num) > g_num_dbg_vector_width) generate
+      dbg_o <= (others =>'0');
+  end generate GEN_NO_DEBUG;
+
  
 end syn;

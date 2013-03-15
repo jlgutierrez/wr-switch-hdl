@@ -121,8 +121,8 @@ entity swc_page_allocator is
     g_special_res_num_pages : integer := 256;
     g_resource_num          : integer := 3;   -- this include: unknown, special and x* normal , so
                                               -- g_resource_num = 2+x
-    g_resource_num_width    : integer := 2
-    
+    g_resource_num_width    : integer := 2;
+    g_num_dbg_vector_width  : integer 
     );
 
   port (
@@ -204,8 +204,9 @@ entity swc_page_allocator is
     
 
     res_full_o                    : out std_logic_vector(g_resource_num      -1 downto 0);
-    res_almost_full_o             : out std_logic_vector(g_resource_num      -1 downto 0)
+    res_almost_full_o             : out std_logic_vector(g_resource_num      -1 downto 0);
 
+    dbg_o                         : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0)
     );
 
 end swc_page_allocator;
@@ -700,7 +701,8 @@ begin  -- syn
     g_total_num_pages_width  => g_page_addr_width,
     g_special_res_num_pages  => g_special_res_num_pages,
     g_resource_num           => g_resource_num,
-    g_resource_num_width     => g_resource_num_width
+    g_resource_num_width     => g_resource_num_width,
+    g_num_dbg_vector_width   => g_num_dbg_vector_width
     )
   port map (
     clk_i                    => clk_i,
@@ -711,7 +713,8 @@ begin  -- syn
     rescnt_set_i             => res_mgr_rescnt_set,
     rescnt_page_num_i        => rescnt_page_num_i,
     res_full_o               => res_full_o,
-    res_almost_full_o        => res_almost_full
+    res_almost_full_o        => res_almost_full,
+    dbg_o                    => dbg_o
     );
   
 end syn;

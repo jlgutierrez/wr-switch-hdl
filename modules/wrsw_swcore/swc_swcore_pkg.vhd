@@ -102,7 +102,8 @@ package swc_swcore_pkg is
       g_max_pck_size          : integer := 759; 
       g_special_res_num_pages : integer := 256;
       g_resource_num          : integer := 3;   
-      g_resource_num_width    : integer := 2
+      g_resource_num_width    : integer := 2;
+      g_num_dbg_vector_width  : integer 
 );
     port (
       clk_i              : in  std_logic;
@@ -125,7 +126,8 @@ package swc_swcore_pkg is
       rescnt_page_num_i      : in  std_logic_vector(g_page_addr_width -1 downto 0);
       set_usecnt_succeeded_o : out std_logic;
       res_full_o             : out std_logic_vector(g_resource_num    -1 downto 0);
-      res_almost_full_o      : out std_logic_vector(g_resource_num    -1 downto 0)            
+      res_almost_full_o      : out std_logic_vector(g_resource_num    -1 downto 0);
+      dbg_o                  : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0)            
       );
 
   end component;
@@ -289,7 +291,8 @@ package swc_swcore_pkg is
       g_page_size                        : integer ; 
       g_special_res_num_pages            : integer ;
       g_resource_num                     : integer ; -- this include 1 for unknown
-      g_resource_num_width               : integer        
+      g_resource_num_width               : integer ;
+      g_num_dbg_vector_width             : integer       
     );  
     port (
       rst_n_i             : in std_logic;
@@ -318,7 +321,8 @@ package swc_swcore_pkg is
       rescnt_page_num_i      : in  std_logic_vector(g_num_ports * g_page_addr_width-1 downto 0);
       set_usecnt_succeeded_o : out std_logic_vector(g_num_ports                    -1 downto 0);
       res_full_o             : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0);
-      res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0)    
+      res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num   -1 downto 0);
+      dbg_o                  : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0)
       );
   
   end component;
@@ -683,7 +687,8 @@ component  swc_multiport_pck_pg_free_module is
     g_total_num_pages_width : integer := 11;
     g_special_res_num_pages : integer := 248;
     g_resource_num          : integer := 3; -- this include 1 for unknown
-    g_resource_num_width    : integer := 2
+    g_resource_num_width    : integer := 2;
+    g_num_dbg_vector_width  : integer
     );
   port (
     clk_i                   : in std_logic;             -- clock & reset
@@ -694,7 +699,8 @@ component  swc_multiport_pck_pg_free_module is
     rescnt_set_i            : in std_logic;
     rescnt_page_num_i       : in std_logic_vector(g_total_num_pages_width-1 downto 0);
     res_full_o              : out std_logic_vector(g_resource_num- 1 downto 0);
-    res_almost_full_o       : out std_logic_vector(g_resource_num- 1 downto 0)
+    res_almost_full_o       : out std_logic_vector(g_resource_num- 1 downto 0);
+    dbg_o                   : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0)
     );  
   end component;
 

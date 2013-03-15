@@ -61,7 +61,8 @@ entity swc_multiport_page_allocator is
     g_page_size                        : integer ; 
     g_special_res_num_pages            : integer ;
     g_resource_num                     : integer ; -- this include 1 for unknown
-    g_resource_num_width               : integer    
+    g_resource_num_width               : integer ;
+    g_num_dbg_vector_width             : integer   
   );
   port (
     rst_n_i             : in std_logic;
@@ -111,7 +112,8 @@ entity swc_multiport_page_allocator is
     -- whole usecnt operation is abandoned
     set_usecnt_succeeded_o : out std_logic_vector(g_num_ports                     -1 downto 0);
     res_full_o             : out std_logic_vector(g_num_ports * g_resource_num    -1 downto 0);
-    res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num    -1 downto 0)    
+    res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num    -1 downto 0);
+    dbg_o                  : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0)   
     );
 
 end swc_multiport_page_allocator;
@@ -237,8 +239,8 @@ begin  -- syn
       g_max_pck_size          => g_max_pck_size,
       g_special_res_num_pages => g_special_res_num_pages,
       g_resource_num          => g_resource_num,
-      g_resource_num_width    => g_resource_num_width
-
+      g_resource_num_width    => g_resource_num_width,
+      g_num_dbg_vector_width  => g_num_dbg_vector_width
 )
     port map (
       clk_i                  => clk_i,
@@ -260,7 +262,8 @@ begin  -- syn
       free_resource_valid_i  => pg_free_resource_valid,
       rescnt_page_num_i      => pg_rescnt_page_num,
       res_full_o             => pg_res_full,
-      res_almost_full_o      => pg_res_almost_full
+      res_almost_full_o      => pg_res_almost_full,
+      dbg_o                  => dbg_o
       );
 
 

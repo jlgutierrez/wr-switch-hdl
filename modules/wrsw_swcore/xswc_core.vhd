@@ -76,7 +76,8 @@ entity xswc_core is
     g_mpm_fifo_size                    : integer ;
     g_mpm_fetch_next_pg_in_advance     : boolean ;
     g_drop_outqueue_head_on_full       : boolean ;
-    g_num_global_pause                 : integer := 2
+    g_num_global_pause                 : integer := 2;
+    g_num_dbg_vector_width             : integer := 8
     );
   port (
     clk_i          : in std_logic;
@@ -111,6 +112,12 @@ entity xswc_core is
 
     perport_pause_i           : in  t_pause_request_array(g_num_ports-1 downto 0);
 
+-------------------------------------------------------------------------------
+-- Debug vector
+-------------------------------------------------------------------------------      
+  
+   dbg_o                      : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0);
+   
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
@@ -647,7 +654,8 @@ architecture rtl of xswc_core is
       g_page_size               => g_mpm_page_size,
       g_special_res_num_pages   => c_res_mmu_special_res_num_pages,
       g_resource_num            => c_res_mmu_resource_num,
-      g_resource_num_width      => c_res_mmu_resource_num_width
+      g_resource_num_width      => c_res_mmu_resource_num_width,
+      g_num_dbg_vector_width    => g_num_dbg_vector_width
     )
     port map (
       rst_n_i                    => rst_n_i,   
@@ -685,8 +693,9 @@ architecture rtl of xswc_core is
       set_usecnt_succeeded_o     => mmu2ib_set_usecnt_succeeded, 
       
       res_full_o                 => mmu2ib_res_full,
-      res_almost_full_o          => mmu2ib_res_almost_full
+      res_almost_full_o          => mmu2ib_res_almost_full,
 
+      dbg_o                      => dbg_o
 --      tap_out_o => tap_alloc
       );
        
