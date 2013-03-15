@@ -261,7 +261,7 @@ architecture rtl of scb_top_bare is
   signal dummy                : std_logic_vector(31 downto 0);
   signal tru_enabled          : std_logic;
 
-  signal rmon_events : std_logic_vector(c_NUM_PORTS*12-1 downto 0);  --15 is no. of cntrs per port
+  signal rmon_events : std_logic_vector(c_NUM_PORTS*c_epevents_sz-1 downto 0);  --15 is no. of cntrs per port
 
   --TEMP
   signal dummy_events : std_logic_vector(c_NUM_PORTS*2-1 downto 0);
@@ -605,7 +605,7 @@ begin
           fc_rx_pause_prio_mask_o => fc_rx_pause(i).classes,    
           ----------------------------
 
-          rmon_events_o => rmon_events((i+1)*12-1 downto i*12),
+          rmon_events_o => rmon_events((i+1)*c_epevents_sz-1 downto i*c_epevents_sz),
 
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
@@ -626,7 +626,7 @@ begin
       clk_rx_vec(i) <= phys_i(i).rx_clk;
 
       --TEMP
-      dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*12-1 downto (i+1)*12-2);
+      dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*c_epevents_sz-1 downto (i+1)*c_epevents_sz-2);
     end generate gen_endpoints_and_phys;
 
     gen_terminate_unused_eps : for i in c_NUM_PORTS to c_MAX_PORTS-1 generate
@@ -904,7 +904,7 @@ begin
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE,
       g_nports => c_NUM_PORTS,
-      g_cnt_pp => 12,
+      g_cnt_pp => c_epevents_sz,
       g_cnt_pw => 4)
     port map(
       rst_n_i => rst_n_periph,
