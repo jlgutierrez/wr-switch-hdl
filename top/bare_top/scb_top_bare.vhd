@@ -134,7 +134,7 @@ architecture rtl of scb_top_bare is
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
-
+  constant c_RMON_RTU_PP   : integer := 8; -- number of RMON events per port
 -------------------------------------------------------------------------------
 -- Interconnect & memory layout
 -------------------------------------------------------------------------------  
@@ -717,7 +717,8 @@ begin
         g_num_ports                       => g_num_ports,
         g_cpu_port_num                    => g_num_ports, -- g_num_ports-nt port is connected to CPU
         g_port_mask_bits                  => g_num_ports+1,
-        g_handle_only_single_req_per_port => true)
+        g_handle_only_single_req_per_port => true,
+        g_rmon_events_bits_pp             => c_RMON_RTU_PP)
       port map (
         clk_sys_i  => clk_sys,
         rst_n_i    => rst_n_sys,--rst_n_periph,
@@ -731,6 +732,7 @@ begin
         rtu2tru_o  => rtu2tru,
         tru_enabled_i => tru_enabled,
         -------------------------------
+        rmon_events_o => open,
         wb_i       => cnx_master_out(c_SLAVE_RTU),
         wb_o       => cnx_master_in(c_SLAVE_RTU));
 

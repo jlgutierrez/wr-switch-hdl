@@ -140,7 +140,8 @@ entity xwrsw_rtu_new is
     g_num_ports                       : integer;
     g_cpu_port_num                    : integer := -1;
     g_match_req_fifo_size             : integer                        := 32;    
-    g_port_mask_bits                  : integer);
+    g_port_mask_bits                  : integer;
+    g_rmon_events_bits_pp             : integer := 8); -- rmon events num ber per port
 
   port (
     clk_sys_i   : in std_logic;
@@ -156,6 +157,7 @@ entity xwrsw_rtu_new is
     tru_resp_i  : in   t_tru_response;  
     rtu2tru_o   : out  t_rtu2tru;
     tru_enabled_i: in std_logic;
+    rmon_events_o : out std_logic_vector(g_num_ports*g_rmon_events_bits_pp-1 downto 0);
     wb_i        : in  t_wishbone_slave_in;
     wb_o        : out t_wishbone_slave_out
     );
@@ -261,6 +263,8 @@ architecture behavioral of xwrsw_rtu_new is
   -- aux    
   signal rsp_fifo_read_all_zeros            : std_logic_vector(g_num_ports - 1 downto 0);
   signal cpu_port_mask                      : std_logic_vector(c_rtu_max_ports - 1 downto 0);
+  
+  signal rsp                                : t_rtu_response_array(g_num_ports-1 downto 0);
 begin 
 
   zeros                    <= (others => '0');
@@ -320,7 +324,7 @@ begin
         rtu_idle_o               => port_idle(i), -- TODO: req_full_o ??/
         rtu_rq_i                 => req_i(i),
         rtu_rq_aboard_i          => '0', -- new stuff from SWcore
-        rtu_rsp_o                => rsp_o(i),
+        rtu_rsp_o                => rsp(i),
         rtu_rsp_ack_i            => rsp_ack_i(i),
         
         full_match_wr_req_o      => rq_fifo_wr_access(i),
@@ -360,6 +364,7 @@ begin
 --         rtu2tru_o.priorities(i)     <= f_pick(pcr_fix_prio(i) = '0', req_i(i).prio, pcr_prio_val(i));
         rtu2tru_o.has_prio(i)       <= '1' ;--req_i(i).has_prio;
    
+        rsp_o(i)                    <= rsp(i); -- for RMONs
   end generate;  -- end ports
 
   rtu2tru_o.pass_all             <= pcr_pass_all;
@@ -778,5 +783,16 @@ begin
             vlan_tab_rd_entry4fast_match.prio_override,
             vlan_tab_rd_entry4fast_match.prio,
             vlan_tab_rd_entry4fast_match.has_prio);
+
+  rmon_events_gen: for i in 0 to (g_num_ports - 1) generate
+    rmon_events_o((i+1)*g_rmon_events_bits_pp-1 downto i*g_rmon_events_bits_pp) <= 
+       std_logic(req_i(i).valid                                    ) & -- valid request 
+       std_logic(rsp(i).valid and rsp_ack_i(i)                     ) & -- valid respons
+       std_logic(rsp(i).valid and rsp_ack_i(i) and rsp(i).drop     ) & -- dropped
+       std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.hp) & -- FastMatch: high priority frames
+       std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.ff) & -- FastMatch: fast forward (as config)                   
+       std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.nf) & -- FastMatch: non-forward (as config)
+       "00";                                                           -- spare, to make the number nice ;-P  
+  end generate rmon_events_gen;
 
 end behavioral;

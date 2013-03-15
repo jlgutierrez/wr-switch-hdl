@@ -336,7 +336,8 @@ package wrsw_top_pkg is
       g_num_ports                       : integer;
       g_cpu_port_num                    : integer := -1;
       g_match_req_fifo_size             : integer := 32;        
-      g_port_mask_bits                  : integer);
+      g_port_mask_bits                  : integer;
+      g_rmon_events_bits_pp             : integer := 8);
     port (
       clk_sys_i   : in std_logic;
       rst_n_i     : in std_logic;
@@ -348,6 +349,7 @@ package wrsw_top_pkg is
       tru_resp_i  : in   t_tru_response;  
       rtu2tru_o   : out  t_rtu2tru;
       tru_enabled_i: in std_logic;
+      rmon_events_o : out std_logic_vector(g_num_ports*g_rmon_events_bits_pp-1 downto 0);
       wb_i        : in  t_wishbone_slave_in;
       wb_o        : out t_wishbone_slave_out
       );
