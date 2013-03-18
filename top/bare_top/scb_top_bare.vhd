@@ -137,6 +137,7 @@ architecture rtl of scb_top_bare is
   constant c_RTU_EVENTS    : integer := 8; -- number of RMON events per port
   constant c_DBG_V_SWCORE  : integer := (3*10); -- 3 resources, each has with of CNT of 10 bits
   constant c_ALL_EVENTS    : integer := c_RTU_EVENTS + c_epevents_sz;
+  constant c_DUMMY_RMON    : boolean := false; -- define TRUE to enable dummy_rmon module for debugging PSTAT
 --   constant c_epevents_sz   : integer := 15;
 -------------------------------------------------------------------------------
 -- Interconnect & memory layout
@@ -631,8 +632,6 @@ begin
 
       clk_rx_vec(i) <= phys_i(i).rx_clk;
 
-      --TEMP
-      dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*c_epevents_sz-1 downto (i+1)*c_epevents_sz-2);
     end generate gen_endpoints_and_phys;
 
     gen_terminate_unused_eps : for i in c_NUM_PORTS to c_MAX_PORTS-1 generate
@@ -932,21 +931,30 @@ begin
                 ep_events ((i+1)*c_epevents_sz-1 downto i*c_epevents_sz);
   end generate gen_events_assemble;
 
-  --TEMP
-  U_DUMMY: dummy_rmon
-    generic map(
-      g_interface_mode => PIPELINED,
-      g_address_granularity => BYTE,
-      g_nports => c_NUM_PORTS,
-      g_cnt_pp => 2)
-    port map(
-      rst_n_i => rst_n_periph,
-      clk_i   => clk_sys,
-      events_i  => dummy_events,
+  -- debugging for RMONS, not to be included into final release
+  gen_dummy_rmon: if(c_DUMMY_RMON = true) generate
+    U_DUMMY: dummy_rmon
+      generic map(
+        g_interface_mode => PIPELINED,
+        g_address_granularity => BYTE,
+        g_nports => c_NUM_PORTS,
+        g_cnt_pp => 2)
+      port map(
+        rst_n_i => rst_n_periph,
+        clk_i   => clk_sys,
+        events_i  => dummy_events,
+        wb_i  => cnx_master_out(c_SLAVE_DUMMY),
+        wb_o  => cnx_master_in(c_SLAVE_DUMMY));
 
-      wb_i  => cnx_master_out(c_SLAVE_DUMMY),
-      wb_o  => cnx_master_in(c_SLAVE_DUMMY));
+    gen_dummy_events_assemble : for i in 0 to c_NUM_PORTS-1 generate
+      dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*c_epevents_sz-1 downto (i+1)*c_epevents_sz-2);
+    end generate gen_dummy_events_assemble;   
 
+  end generate gen_dummy_rmon;
+    
+  gen_no_dummy_rmon: if(c_DUMMY_RMON = false) generate
+    cnx_master_in(c_SLAVE_DUMMY).ack <= '1';
+  end generate gen_no_dummy_rmon;
   -----------------------------------------------------------------------------
   -- Interrupt assignment
   -----------------------------------------------------------------------------
