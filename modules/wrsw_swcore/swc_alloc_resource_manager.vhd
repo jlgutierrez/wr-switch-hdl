@@ -290,6 +290,7 @@ begin
   end generate GEN_DEBUG;
   GEN_NO_DEBUG: if ((g_total_num_pages_width*g_resource_num) > g_num_dbg_vector_width) generate
       dbg_o <= (others =>'0');
+      assert true report "g_num_dbg_vector_width to small for the defined number debug bits";
   end generate GEN_NO_DEBUG;
 
  
