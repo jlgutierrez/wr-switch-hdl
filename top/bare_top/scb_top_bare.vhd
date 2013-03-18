@@ -134,7 +134,10 @@ architecture rtl of scb_top_bare is
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
-  constant c_RMON_RTU_PP   : integer := 8; -- number of RMON events per port
+  constant c_RTU_EVENTS    : integer := 8; -- number of RMON events per port
+  constant c_DBG_V_SWCORE  : integer := (3*10); -- 3 resources, each has with of CNT of 10 bits
+  constant c_ALL_EVENTS    : integer := c_RTU_EVENTS + c_epevents_sz;
+--   constant c_epevents_sz   : integer := 15;
 -------------------------------------------------------------------------------
 -- Interconnect & memory layout
 -------------------------------------------------------------------------------  
@@ -261,7 +264,10 @@ architecture rtl of scb_top_bare is
   signal dummy                : std_logic_vector(31 downto 0);
   signal tru_enabled          : std_logic;
 
-  signal rmon_events : std_logic_vector(c_NUM_PORTS*c_epevents_sz-1 downto 0);  --15 is no. of cntrs per port
+  -- PSTAT: RMON counters
+  signal rtu_events  : std_logic_vector(c_NUM_PORTS*c_RTU_EVENTS  -1 downto 0);  --
+  signal ep_events   : std_logic_vector(c_NUM_PORTS*c_epevents_sz -1 downto 0);  --
+  signal rmon_events : std_logic_vector(c_NUM_PORTS*c_ALL_EVENTS  -1 downto 0);  --
 
   --TEMP
   signal dummy_events : std_logic_vector(c_NUM_PORTS*2-1 downto 0);
@@ -605,7 +611,7 @@ begin
           fc_rx_pause_prio_mask_o => fc_rx_pause(i).classes,    
           ----------------------------
 
-          rmon_events_o => rmon_events((i+1)*c_epevents_sz-1 downto i*c_epevents_sz),
+          rmon_events_o => ep_events((i+1)*c_epevents_sz-1 downto i*c_epevents_sz),
 
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
@@ -718,7 +724,7 @@ begin
         g_cpu_port_num                    => g_num_ports, -- g_num_ports-nt port is connected to CPU
         g_port_mask_bits                  => g_num_ports+1,
         g_handle_only_single_req_per_port => true,
-        g_rmon_events_bits_pp             => c_RMON_RTU_PP)
+        g_rmon_events_bits_pp             => c_RTU_EVENTS)
       port map (
         clk_sys_i  => clk_sys,
         rst_n_i    => rst_n_sys,--rst_n_periph,
@@ -732,7 +738,7 @@ begin
         rtu2tru_o  => rtu2tru,
         tru_enabled_i => tru_enabled,
         -------------------------------
-        rmon_events_o => open,
+        rmon_events_o => rtu_events,
         wb_i       => cnx_master_out(c_SLAVE_RTU),
         wb_o       => cnx_master_in(c_SLAVE_RTU));
 
@@ -906,7 +912,7 @@ begin
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE,
       g_nports => c_NUM_PORTS,
-      g_cnt_pp => c_epevents_sz,
+      g_cnt_pp => c_ALL_EVENTS,
       g_cnt_pw => 4)
     port map(
       rst_n_i => rst_n_periph,
@@ -916,7 +922,12 @@ begin
   
       wb_i  => cnx_master_out(c_SLAVE_PSTATS),
       wb_o  => cnx_master_in(c_SLAVE_PSTATS));
-
+ 
+  gen_events_assemble : for i in 0 to c_NUM_PORTS-1 generate
+    rmon_events((i+1)*c_ALL_EVENTS-1 downto i*c_ALL_EVENTS) <= 
+                rtu_events((i+1)*c_RTU_EVENTS-1 downto i*c_RTU_EVENTS) &
+                ep_events ((i+1)*c_epevents_sz-1 downto i*c_epevents_sz);
+  end generate gen_events_assemble;
 
   --TEMP
   U_DUMMY: dummy_rmon
