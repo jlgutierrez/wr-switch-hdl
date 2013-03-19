@@ -73,7 +73,8 @@ entity swc_core is
     g_mpm_fifo_size                    : integer ;
     g_mpm_fetch_next_pg_in_advance     : boolean ;
     g_drop_outqueue_head_on_full       : boolean ;
-    g_num_global_pause                 : integer
+    g_num_global_pause                 : integer ;
+    g_num_dbg_vector_width             : integer
     );
   port (
     clk_i          : in std_logic;
@@ -108,7 +109,7 @@ entity swc_core is
     src_ack_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
     src_err_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
 
--------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
 
@@ -116,8 +117,29 @@ entity swc_core is
     rtu_rsp_ack_o       : out std_logic_vector(g_num_ports               - 1 downto 0);
     rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports * g_num_ports - 1 downto 0);
     rtu_drop_i          : in  std_logic_vector(g_num_ports               - 1 downto 0);
-    rtu_prio_i          : in  std_logic_vector(g_num_ports * integer(CEIL(LOG2(real(g_prio_num-1)))) - 1 downto 0)
+    rtu_prio_i          : in  std_logic_vector(g_num_ports * integer(CEIL(LOG2(real(g_prio_num-1)))) - 1 downto 0);
 
+------------------------------------------------------------------------------
+-- I/F global pause
+-------------------------------------------------------------------------------      
+    
+    gp_req_i            : in  std_logic_vector(g_num_global_pause        - 1 downto 0);
+    gp_quanta_i         : in  std_logic_vector(g_num_global_pause*16     - 1 downto 0);
+    gp_classes_i        : in  std_logic_vector(g_num_global_pause*8      - 1 downto 0);
+    gp_ports_i          : in  std_logic_vector(g_num_global_pause*g_num_ports- 1 downto 0);
+------------------------------------------------------------------------------
+-- I/F per port
+-------------------------------------------------------------------------------      
+    pp_req_i            : in  std_logic_vector(g_num_ports               - 1 downto 0);
+    pp_quanta_i         : in  std_logic_vector(g_num_ports*16            - 1 downto 0);
+    pp_classes_i        : in  std_logic_vector(g_num_ports*8             - 1 downto 0);
+
+------------------------------------------------------------------------------
+-- I/F misc
+-------------------------------------------------------------------------------      
+
+    dbg_o               : out std_logic_vector(g_num_dbg_vector_width  -1 downto 0);
+    shaper_drop_at_hp_ena_i : in std_logic
     );
 end swc_core;
 
@@ -129,8 +151,9 @@ architecture rtl of swc_core is
     signal src_i : t_wrf_source_in_array(g_num_ports-1 downto 0);
     signal src_o : t_wrf_source_out_array(g_num_ports-1 downto 0);
 
-    signal rtu_rsp_i     : t_rtu_response_array(g_num_ports  - 1 downto 0);
- 
+    signal rtu_rsp_i               : t_rtu_response_array(g_num_ports  - 1 downto 0);
+    signal global_pause_i          : t_global_pause_request_array(g_num_global_pause-1 downto 0);
+    signal perport_pause_i         : t_pause_request_array(g_num_ports-1 downto 0);
   begin --rtl
  
 
@@ -155,7 +178,8 @@ architecture rtl of swc_core is
       g_mpm_fifo_size                    => g_mpm_fifo_size,
       g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance,
       g_drop_outqueue_head_on_full       => g_drop_outqueue_head_on_full,
-      g_num_global_pause                 => g_num_global_pause
+      g_num_global_pause                 => g_num_global_pause,
+      g_num_dbg_vector_width             => g_num_dbg_vector_width
       )
     port map(
       clk_i          => clk_i,
@@ -167,7 +191,14 @@ architecture rtl of swc_core is
   
       src_i          => src_i,
       src_o          => src_o,
-      
+
+      shaper_drop_at_hp_ena_i   => shaper_drop_at_hp_ena_i,
+        
+      global_pause_i => global_pause_i,
+      perport_pause_i=> perport_pause_i,
+
+      dbg_o          => dbg_o,       
+
       rtu_rsp_i      => rtu_rsp_i,
       rtu_ack_o      => rtu_rsp_ack_o
       );
@@ -196,9 +227,23 @@ architecture rtl of swc_core is
       src_i(i).err                        <= src_err_i(i);
       
       rtu_rsp_i(i).valid                                                       <= rtu_rsp_valid_i(i);
-      rtu_rsp_i(i).port_mask(g_num_ports - 1 downto 0)                         <= rtu_dst_port_mask_i((i+1)*g_num_ports - 1downto i*g_num_ports);
+      rtu_rsp_i(i).port_mask(g_num_ports - 1 downto 0)                         <= rtu_dst_port_mask_i((i+1)*g_num_ports - 1 downto i*g_num_ports);
       rtu_rsp_i(i).drop                                                        <= rtu_drop_i(i);
       rtu_rsp_i(i).prio(integer(CEIL(LOG2(real(g_prio_num-1)))) - 1 downto 0) <= rtu_prio_i((i+1)*integer(CEIL(LOG2(real(g_prio_num-1)))) -1 downto i*integer(CEIL(LOG2(real(g_prio_num-1)))));
+ 
+      perport_pause_i(i).req     <= pp_req_i(i);
+      perport_pause_i(i).quanta  <= pp_quanta_i((i+1)*16-1 downto i*16);
+      perport_pause_i(i).classes <= pp_classes_i((i+1)*8-1 downto i*8);
+      
     end generate;
+   
+   vectorize_gp: for i in 0 to g_num_global_pause-1 generate
+     
+     global_pause_i(i).req                           <= gp_req_i(i);
+     global_pause_i(i).quanta                        <= gp_quanta_i((i+1)*16-1 downto i*16);
+     global_pause_i(i).classes                       <= gp_classes_i((i+1)*8-1 downto i*8);
+     global_pause_i(i).ports(g_num_ports-1 downto 0) <= gp_ports_i((i+1)*g_num_ports-1 downto i*g_num_ports);
+   
+   end generate;
    
 end rtl;

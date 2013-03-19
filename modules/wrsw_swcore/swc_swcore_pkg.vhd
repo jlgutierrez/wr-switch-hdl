@@ -634,7 +634,8 @@ component  swc_multiport_pck_pg_free_module is
       g_mpm_fifo_size                    : integer ;
       g_mpm_fetch_next_pg_in_advance     : boolean ;
       g_drop_outqueue_head_on_full       : boolean ;
-      g_num_global_pause                 : integer 
+      g_num_global_pause                 : integer ;
+      g_num_dbg_vector_width             : integer      
       );
    port (
       clk_i          : in std_logic;
@@ -646,10 +647,87 @@ component  swc_multiport_pck_pg_free_module is
   
       src_i          : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
       src_o          : out t_wrf_source_out_array(g_num_ports-1 downto 0);
-      
+
+      global_pause_i            : in  t_global_pause_request_array(g_num_global_pause-1 downto 0);
+      perport_pause_i           : in  t_pause_request_array(g_num_ports-1 downto 0);
+
       rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
-      rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)
+      rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0);
+   
+
+      dbg_o               : out std_logic_vector(g_num_dbg_vector_width  -1 downto 0);
+      shaper_drop_at_hp_ena_i : in std_logic
       );
+  end component;
+ 
+  component swc_core is
+  generic( 
+    g_prio_num                         : integer ;--:= c_swc_output_prio_num;
+    g_output_queue_num                 : integer ;
+    g_max_pck_size                     : integer ;--:= 2^c_swc_max_pck_size
+    g_max_oob_size                     : integer ;
+    g_num_ports                        : integer ;--:= c_swc_num_ports
+    g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
+    g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
+    g_output_block_per_queue_fifo_size : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+    -- new
+    g_wb_data_width                    : integer ;
+    g_wb_addr_width                    : integer ;
+    g_wb_sel_width                     : integer ;
+    g_wb_ob_ignore_ack                 : boolean ;
+    g_mpm_mem_size                     : integer ;
+    g_mpm_page_size                    : integer ;
+    g_mpm_ratio                        : integer ;
+    g_mpm_fifo_size                    : integer ;
+    g_mpm_fetch_next_pg_in_advance     : boolean ;
+    g_drop_outqueue_head_on_full       : boolean ;
+    g_num_global_pause                 : integer ;
+    g_num_dbg_vector_width             : integer
+    );
+  port (
+    clk_i          : in std_logic;
+    clk_mpm_core_i : in std_logic;
+    rst_n_i        : in std_logic;
+
+    snk_dat_i   : in  std_logic_vector(g_wb_data_width*g_num_ports-1 downto 0);
+    snk_adr_i   : in  std_logic_vector(g_wb_addr_width*g_num_ports-1 downto 0);
+    snk_sel_i   : in  std_logic_vector(g_wb_sel_width *g_num_ports-1 downto 0);
+    snk_cyc_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
+    snk_stb_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
+    snk_we_i    : in  std_logic_vector(                g_num_ports-1 downto 0);
+    snk_stall_o : out std_logic_vector(                g_num_ports-1 downto 0);
+    snk_ack_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+    snk_err_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+    snk_rty_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+   
+    src_dat_o   : out std_logic_vector(g_wb_data_width*g_num_ports-1  downto 0);
+    src_adr_o   : out std_logic_vector(g_wb_addr_width*g_num_ports-1 downto 0);
+    src_sel_o   : out std_logic_vector(g_wb_sel_width *g_num_ports-1 downto 0);
+    src_cyc_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+    src_stb_o   : out std_logic_vector(                g_num_ports-1 downto 0);
+    src_we_o    : out std_logic_vector(                g_num_ports-1 downto 0);
+    src_stall_i : in  std_logic_vector(                g_num_ports-1 downto 0);
+    src_ack_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
+    src_err_i   : in  std_logic_vector(                g_num_ports-1 downto 0);
+
+    rtu_rsp_valid_i     : in  std_logic_vector(g_num_ports               - 1 downto 0);
+    rtu_rsp_ack_o       : out std_logic_vector(g_num_ports               - 1 downto 0);
+    rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports * g_num_ports - 1 downto 0);
+    rtu_drop_i          : in  std_logic_vector(g_num_ports               - 1 downto 0);
+    rtu_prio_i          : in  std_logic_vector(g_num_ports * integer(CEIL(LOG2(real(g_prio_num-1)))) - 1 downto 0);
+
+    gp_req_i            : in  std_logic_vector(g_num_global_pause        - 1 downto 0);
+    gp_quanta_i         : in  std_logic_vector(g_num_global_pause*16     - 1 downto 0);
+    gp_classes_i        : in  std_logic_vector(g_num_global_pause*8      - 1 downto 0);
+    gp_ports_i          : in  std_logic_vector(g_num_global_pause*g_num_ports- 1 downto 0);
+
+    pp_req_i            : in  std_logic_vector(g_num_ports               - 1 downto 0);
+    pp_quanta_i         : in  std_logic_vector(g_num_ports*16            - 1 downto 0);
+    pp_classes_i        : in  std_logic_vector(g_num_ports*8             - 1 downto 0);
+
+    dbg_o               : out std_logic_vector(g_num_dbg_vector_width  -1 downto 0);
+    shaper_drop_at_hp_ena_i : in std_logic
+    );
   end component;
 
   component swc_ll_read_data_validation is
@@ -737,6 +815,30 @@ component  swc_multiport_pck_pg_free_module is
 
      output_masks_o            : out t_classes_array(g_num_ports-1 downto 0)
    );
+   end component;
+
+
+   component swc_core_vectorized_top is
+   generic( 
+     g_num_ports               : integer; 
+     g_in_bits                 : integer;
+     g_out_bits                : integer;
+     g_wb_data_width           : integer := 8;
+     g_wb_addr_width           : integer := 16;
+     g_wb_sel_width            : integer := 2;
+     g_prio_num                : integer := 2;
+     g_num_global_pause        : integer := 2;
+     g_prio_width              : integer -- : integer(CEIL(LOG2(real(g_prio_num-1))))    ;    
+    );
+   port (
+     clk_i          : in std_logic;
+     clk_mpm_core_i : in std_logic;
+     rst_n_i        : in std_logic; 
+
+     input_vector_i  : in std_logic_vector(g_in_bits   - 1 downto 0);
+     output_vector_o : out std_logic_vector(g_out_bits - 1 downto 0)
+
+    );
    end component;
 
   function f_sel2partialSel(sel       : std_logic_vector; partialSelWidth: integer) return std_logic_vector;
