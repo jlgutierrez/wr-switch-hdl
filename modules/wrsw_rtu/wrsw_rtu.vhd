@@ -315,6 +315,9 @@ architecture behavioral of wrsw_rtu is
 
   signal current_pcr : integer;
 
+  signal htab_port : std_logic_vector(g_num_ports - 1 downto 0);
+  signal htab_src_dst : std_logic;
+  
   function f_slice (
     x     : std_logic_vector;
     index : integer;
@@ -482,6 +485,8 @@ begin
       htab_fid_o   => htab_fid,
       htab_drdy_i  => htab_drdy,
       htab_entry_i => htab_entry,
+      htab_port_o    => htab_port,    -- ML (24/03/2013): aging bugfix
+      htab_src_dst_o => htab_src_dst, -- ML (24/03/2013): aging bugfix
 
       rtu_ufifo_wr_req_o   => regs_towb.ufifo_wr_req_i,
       rtu_ufifo_wr_full_i  => regs_fromwb.ufifo_wr_full_o,
@@ -519,6 +524,8 @@ begin
   mfifo_trigger <= regs_fromwb.gcr_mfifotrig_o and regs_fromwb.gcr_mfifotrig_load_o;
 
   U_Lookup : rtu_lookup_engine
+    generic map (
+      g_num_ports => g_num_ports)
     port map (
       clk_sys_i   => clk_sys_i,
       clk_match_i => clk_sys_i,
@@ -538,6 +545,8 @@ begin
       mac_i   => htab_mac,
       fid_i   => htab_fid,
       drdy_o  => htab_drdy,
+      port_i  => htab_port,      -- ML (24/03/2013): aging bugfix
+      src_dst_i => htab_src_dst, -- ML (24/03/2013): aging bugfix
       entry_o => htab_entry
       );
 

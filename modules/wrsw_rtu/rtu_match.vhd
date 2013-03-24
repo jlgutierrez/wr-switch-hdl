@@ -40,6 +40,7 @@
 -- Date        Version  Author          Description
 -- 2010-05-08  1.0      lipinskimm          Created
 -- 2010-05-22  1.1      lipinskimm          revised, developed further
+-- 2013-03-24  1.2      lipinskimm          aging bugfix
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
@@ -98,6 +99,8 @@ entity rtu_match is
     htab_fid_o   : out std_logic_vector(c_wrsw_fid_width - 1 downto 0);
     htab_drdy_i  : in  std_logic;
     htab_entry_i : in  t_rtu_htab_entry;
+    htab_port_o  : out std_logic_vector(g_num_ports-1 downto 0); -- ML (24/03/2013): aging bugfix
+    htab_src_dst_o:out std_logic;                                -- ML (24/03/2013): aging bugfix
 
     -------------------------------------------------------------------------------
     -- Unrecongized FIFO (operated by WB)
@@ -670,13 +673,20 @@ begin
 
                 -- update aging aram (in any case that entry was found,
                 -- even if dropped later, we update aging aram
-                s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
-                s_aram_main_wr     <= '1';
+                -- ML (24/03/2013): aging bugfix : update aging only for destination found
+                -- s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
+                -- s_aram_main_wr     <= '1';
 
                 ----------------------------------------------------------------------------
                 --  SOURCE MAC ENTRY SEARCH 
                 ----------------------------------------------------------------------------                      
                 if(s_src_dst_sel = '0') then
+
+                  -- ML (24/03/2013): aging bugfix : update aging only for destination found
+                  -- update aging aram (in any case that entry was found,
+                  -- even if dropped later, we update aging aram
+                  s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
+                  s_aram_main_wr     <= '1';
 
                   -------------------------------------------       
                   -- source MAC address is blocked? - 
@@ -1165,5 +1175,8 @@ begin
 
   rsp_fifo_output_o <= s_rsp_dst_port_mask & s_rsp_drop & s_rsp_prio & s_port_id;
 
+  htab_src_dst_o <= s_src_dst_sel; -- ML (24/03/2013): aging bugfix
+  htab_port_o    <= s_port_id;     -- ML (24/03/2013): aging bugfix
+  
 end architecture;
 

@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-05-22
--- Last update: 2012-06-28
+-- Last update: 2013-03-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -35,6 +35,7 @@
 -- Revisions  :
 -- Date        Version  Author          Description
 -- 2010-05-22  1.0      lipinskimm          Created
+-- 2013-03-24  1.1      lipinskimm          aging-related bugfix
 -------------------------------------------------------------------------------
 
 
@@ -49,6 +50,7 @@ use work.genram_pkg.all;
 
 entity rtu_lookup_engine is
   generic(
+    g_num_ports : integer;
     g_hash_size : integer := 11);
   port(
 
@@ -89,6 +91,14 @@ entity rtu_lookup_engine is
     fid_i   : in  std_logic_vector(c_wrsw_fid_width - 1 downto 0);
     -- indicates that the search has been finished (whether the entry was found or not)
     drdy_o  : out std_logic;
+
+    -- mask indicating the source of request (on which port the frame was received)
+    port_i : in std_logic_vector(g_num_ports -1 downto 0); -- ML (24/03/2013): aging bugfix
+    
+    -- indicates whetehr the sarch concenrs
+    -- 0: source MAC
+    -- 1: destination MAC
+    src_dst_i : in std_logic; -- ML (24/03/2013): aging bugfix
 
     -------------------------------------------------------------------------------
     -- read data
@@ -220,11 +230,22 @@ begin
           when NEXT_BUCKET =>
 
             -- got a match?
-            if(cur_entry.valid = '1' and cur_entry.fid = fid_i and cur_entry.mac = mac_i) then
+            -- ML (24/03/2013): aging bugfix --------------------------------------------------
+            if(cur_entry.valid = '1' and cur_entry.fid = fid_i and cur_entry.mac = mac_i and 
+               src_dst_i = '0' and -- this is source MAC => need to check that it's been received
+                                   -- on the correct port:
+               (cur_entry.port_mask_dst(g_num_ports-1 downto 0) and port_i) = port_i)  then
               drdy_o       <= '1';
               found_o      <= '1';
               entry_o      <= cur_entry;
               lookup_state <= OUTPUT_RESULT;
+            elsif(cur_entry.valid = '1' and cur_entry.fid = fid_i and cur_entry.mac = mac_i and 
+                  src_dst_i = '1')  then  -- this is destination MAC search, 
+              drdy_o       <= '1';
+              found_o      <= '1';
+              entry_o      <= cur_entry;
+              lookup_state <= OUTPUT_RESULT;
+            ------------------------------------------------------------------------------------
             elsif(bucket_entry = "00" or cur_entry.valid = '0') then
               drdy_o       <= '1';
               found_o      <= '0';
