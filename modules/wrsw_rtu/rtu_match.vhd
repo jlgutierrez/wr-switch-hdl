@@ -41,6 +41,7 @@
 -- 2010-05-08  1.0      lipinskimm          Created
 -- 2010-05-22  1.1      lipinskimm          revised, developed further
 -- 2013-03-24  1.2      lipinskimm          aging bugfix
+-- 2013-03-24  1.3      lipinskimm          no ureq for unrecognized destination MAC
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
@@ -816,7 +817,17 @@ begin
                   if((rtu_ufifo_wr_full_i = '0') and (s_rtu_pcr_learn_en = '1') and (s_rq_learned_reg = '0')) then
 
                     mstate             <= LEARN_SRC;
-                    s_rtu_ufifo_wr_req <= '1';
+                    -- ML 24/03/2013: urecognized request only for unrecognized source MAC
+                    if(s_src_dst_sel = '0') then 
+                      s_rtu_ufifo_wr_req <= '1';
+                    else
+                      -- ML 24/03/2013: we don't need to make unrecongized request 
+                      -- for destination unrecognized MAC - we have no idea 
+                      -- where to forward it anyway
+                      -- It is a big hackish solution to avoid too big changes (not the most
+                      -- optimal speed-wise)
+                      s_rtu_ufifo_wr_req <= '0';
+                    end if;
 
                     -------------------------------------------       
                     -- for some reasons we don't want to learn
