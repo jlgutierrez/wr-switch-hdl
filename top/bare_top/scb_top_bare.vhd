@@ -955,6 +955,7 @@ begin
   gen_no_dummy_rmon: if(c_DUMMY_RMON = false) generate
     cnx_master_in(c_SLAVE_DUMMY).ack <= '1';
   end generate gen_no_dummy_rmon;
+
   -----------------------------------------------------------------------------
   -- Interrupt assignment
   -----------------------------------------------------------------------------
