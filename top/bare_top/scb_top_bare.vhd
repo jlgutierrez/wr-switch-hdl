@@ -24,7 +24,8 @@ entity scb_top_bare is
     g_simulation      : boolean := false;
     g_without_network : boolean := false;
     g_with_TRU        : boolean := false;
-    g_with_TATSU      : boolean := false
+    g_with_TATSU      : boolean := false;
+    g_with_HWDU       : boolean := false
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -937,19 +938,28 @@ begin
   --=====================================--
   --               HWDU                  --
   --=====================================--
-  U_HWDU : xwrsw_hwdu
-    generic map(
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE,
-      g_nregs => 1)
-    port map(
-      rst_n_i => rst_n_periph,
-      clk_i   => clk_sys,
+  gen_HWDU: if(g_with_HWDU = true) generate
+    U_HWDU : xwrsw_hwdu
+      generic map(
+        g_interface_mode      => PIPELINED,
+        g_address_granularity => BYTE,
+        g_nregs => 1)
+      port map(
+        rst_n_i => rst_n_periph,
+        clk_i   => clk_sys,
 
-      dbg_regs_i  => (others=>'0'),
+        dbg_regs_i  => (others=>'0'),
 
-      wb_i  => cnx_master_out(c_SLAVE_HWDU),
-      wb_o  => cnx_master_in(c_SLAVE_HWDU));
+        wb_i  => cnx_master_out(c_SLAVE_HWDU),
+        wb_o  => cnx_master_in(c_SLAVE_HWDU));
+    end generate;
+    gen_no_HWDU: if(g_with_HWDU = false) generate
+      cnx_master_in(c_SLAVE_HWDU).ack   <= '1';
+      cnx_master_in(c_SLAVE_HWDU).dat   <= x"deadbeef";
+      cnx_master_in(c_SLAVE_HWDU).err   <= '0';
+      cnx_master_in(c_SLAVE_HWDU).stall <= '0';
+      cnx_master_in(c_SLAVE_HWDU).rty   <= '0';
+    end generate;
 
 
   -- debugging for RMONS, not to be included into final release

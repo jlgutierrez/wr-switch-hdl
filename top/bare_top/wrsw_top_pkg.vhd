@@ -220,7 +220,8 @@ package wrsw_top_pkg is
       g_simulation      : boolean;
       g_without_network : boolean;
       g_with_TRU        : boolean  := false;
-      g_with_TATSU      : boolean  := false);
+      g_with_TATSU      : boolean  := false;
+      g_with_HWDU       : boolean  := false);
     port (
       sys_rst_n_i         : in  std_logic;
       clk_startup_i       : in  std_logic;
