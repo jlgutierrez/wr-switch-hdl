@@ -130,7 +130,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 14;
+  constant c_NUM_WB_SLAVES : integer := 15;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
@@ -156,11 +156,13 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_TRU          : integer := 10;
   constant c_SLAVE_TATSU        : integer := 11;
   constant c_SLAVE_PSTATS       : integer := 12;
-  constant c_SLAVE_DUMMY        : integer := 13;
+  constant c_SLAVE_HWDU         : integer := 13;
+  constant c_SLAVE_DUMMY        : integer := 14;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
-      x"00070000",                      -- Dummy counters
+      x"00071000",                      -- Dummy counters
+      x"00070000",                      -- HWDU
       x"00059000",                      -- PStats counters
       x"00058000",                      -- TATSU
       x"00057000",                      -- TRU
@@ -178,6 +180,7 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000ff000",
@@ -930,6 +933,24 @@ begin
                 rtu_events((i+1)*c_RTU_EVENTS-1 downto i*c_RTU_EVENTS) &
                 ep_events ((i+1)*c_epevents_sz-1 downto i*c_epevents_sz);
   end generate gen_events_assemble;
+
+  --=====================================--
+  --               HWDU                  --
+  --=====================================--
+  U_HWDU : xwrsw_hwdu
+    generic map(
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE,
+      g_nregs => 1)
+    port map(
+      rst_n_i => rst_n_periph,
+      clk_i   => clk_sys,
+
+      dbg_regs_i  => (others=>'0'),
+
+      wb_i  => cnx_master_out(c_SLAVE_HWDU),
+      wb_o  => cnx_master_in(c_SLAVE_HWDU));
+
 
   -- debugging for RMONS, not to be included into final release
   gen_dummy_rmon: if(c_DUMMY_RMON = true) generate
