@@ -314,9 +314,18 @@ begin  -- rtl
         full_o    => core(i).df_full,
         empty_o   => io(i).df_empty);
 
-    -- ML: producing reset triggerd by abort
-    fifos_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i));
-    logic_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i)) and (not rport_abort_d(i));
+    -- ML: producing reset triggerd by abort 
+    -- both rst_n signals are used in mpm_async*fifo, inside this modules resets are asynch
+    -- (this is why we can use io_reset and io_signal)
+    p_reg_anded_reset: process(clk_io_i)
+    begin
+      if rising_edge(clk_io_i) then 
+        fifos_rst_n_core(i) <= rst_n_io_i and (not rport_abort_i(i));
+        logic_rst_n_core(i) <= rst_n_io_i and (not rport_abort_i(i)) and (not rport_abort_d(i));
+      end if;
+    end process;
+--     fifos_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i));
+--     logic_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i)) and (not rport_abort_d(i));
   end generate gen_fifos;
 
 -- The arbiter for accessing the linked list

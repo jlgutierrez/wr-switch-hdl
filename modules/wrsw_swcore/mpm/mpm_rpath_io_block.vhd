@@ -178,7 +178,7 @@ architecture behavioral of mpm_rpath_io_block is
   signal rport_abort_d : std_logic;
   signal long_rst_at_abort : std_logic;
   
-  constant wait_at_abort : integer := 2; -- keeps the long_rst_at_abort HIGH for
+  constant wait_at_abort : integer := 3; -- keeps the long_rst_at_abort HIGH for
                                          -- (2 + wait_at_abort) cycles
                                          -- the number (2) was derived experimentally (lowest 
                                          -- working)
