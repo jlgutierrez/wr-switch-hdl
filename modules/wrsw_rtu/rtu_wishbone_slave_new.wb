@@ -507,6 +507,16 @@ peripheral {
          access_bus = READ_WRITE;
          access_dev = READ_ONLY;
       };
+      field {
+         name = "Learn Destination MAC enable";
+         description = "Allows to enable/disable learning based on Destination MAC address (works only if learning is enabled on a port, i.e. LEARN_EN=1) .\
+                 0: Disabled [default] - frames with unrecognizd destinatin MAC do not trigger writes to UFIFO, i.e. ureq in software (unrecognized request),\
+                 1: Enabled  - frames with unrecognizd destinatin MAC trigger writes to UFIFO, i.e. ureq in software.";
+         prefix = "LEARN_DST_ENA";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
    };
    reg {
       prefix = "RX_FF_MAC_R0";
