@@ -7,6 +7,7 @@ modules = { "local" : [
 				"modules/wrsw_tru",
 				"modules/wrsw_tatsu",
 				"modules/wrsw_pstats",
+        "modules/wrsw_hwdu",
 				"platform/virtex6/chipscope",
 				"platform/xilinx"],
 				"git" : [ "git://ohwr.org/hdl-core-lib/wr-cores.git" ]
