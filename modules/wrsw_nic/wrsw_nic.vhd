@@ -65,7 +65,7 @@ entity wrsw_nic is
     wb_dat_o   : out std_logic_vector(c_wishbone_data_width-1 downto 0);
     wb_ack_o   : out std_logic;
     wb_stall_o : out std_logic;
-    wb_irq_o   : out std_logic
+    wb_int_o   : out std_logic
 
     );
 
@@ -155,6 +155,6 @@ begin
   wb_dat_o   <= wb_out.dat;
   wb_ack_o   <= wb_out.ack;
   wb_stall_o <= wb_out.stall;
-  wb_irq_o   <= wb_out.int;
+  wb_int_o   <= wb_out.int;
   
 end rtl;
