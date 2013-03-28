@@ -284,7 +284,7 @@ begin  -- rtl
   wb_out.err <= '0';
   wb_out.rty <= '0';
 
-  nic_reset_n <= rst_n_i and (not regs_fromwb.reset_wr_o);
+  nic_reset_n <= rst_n_i and (not regs_fromwb.cr_sw_rst_o);
 
   regs_towb <= regs_towb_tx or regs_towb_rx or regs_towb_main;
 
