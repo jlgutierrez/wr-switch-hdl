@@ -1059,7 +1059,10 @@ begin
               -- entry is not bpdu, drop  
               -------------------------------------------    
               if((s_rtu_pcr_pass_bpdu = '1') and (s_dst_entry_is_bpdu = '0') 
-                 --ML(12/04/2013): to make pass_bpdu work both for pass_all TRUE and FALSE
+                 --ML(12/04/2013): change to make sure that we drop non-bpdu frames
+                 --only when pass_all=FALSE (before, it was necessary to change to TRUE
+                 --both, pass_bpdu and pass_all, to enable normal (non-bpdu) traffic
+                 --on a port
                  and ((requesting_port and rtu_pcr_pass_all_i) = zeros)) then 
 
                 -- RETURN
