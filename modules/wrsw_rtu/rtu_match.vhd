@@ -40,6 +40,10 @@
 -- Date        Version  Author          Description
 -- 2010-05-08  1.0      lipinskimm          Created
 -- 2010-05-22  1.1      lipinskimm          revised, developed further
+-- 2013-03-24  1.2      mlipinsk            aging bugfix: don't update aram when DST_MAC found
+-- 2013-04-12  1.3      mlipinsk            1. no ureq for unrecognized destination MAC
+--                                          2. pass_bpdu overrides only pass_all = FALSE
+--                                          3. entering LEARN_SRC only for SRC_MAC search
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
@@ -98,6 +102,8 @@ entity rtu_match is
     htab_fid_o   : out std_logic_vector(c_wrsw_fid_width - 1 downto 0);
     htab_drdy_i  : in  std_logic;
     htab_entry_i : in  t_rtu_htab_entry;
+    htab_port_o  : out std_logic_vector(g_num_ports-1 downto 0); -- ML (24/03/2013): aging bugfix
+    htab_src_dst_o:out std_logic;                                -- ML (24/03/2013): aging bugfix
 
     -------------------------------------------------------------------------------
     -- Unrecongized FIFO (operated by WB)
@@ -334,12 +340,14 @@ architecture behavioral of rtu_match is
 
 
   signal requesting_port : std_logic_vector(g_num_ports-1 downto 0);
+  signal zeros : std_logic_vector(g_num_ports-1 downto 0);
 
-
+  signal s_urec_broadcast_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);-- ML (11/04/2013)
 -------------------------------------------------------------------------------------------------------------------------
 --| Address outs and flag generation and 
 -------------------------------------------------------------------------------------------------------------------------
 begin
+  zeros <= (others =>'0');
   -----------------------------------------------------------------------------------------------------------------------
   --| Hash calculation
   -----------------------------------------------------------------------------------------------------------------------
@@ -347,6 +355,10 @@ begin
   -- the sooner we have feed, the sooner the hash function (asynch) 
   -- will start calculating hash (which takes time)
   s_hash_input_fid <= vlan_tab_entry_i.fid;
+
+  -- ML (11/04/2013) : to prevent broadcasting of unrecognized frames to CPU
+  s_urec_broadcast_mask(g_num_ports-1     downto 0)           <= (others =>'1');
+  s_urec_broadcast_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) <= (others =>'0');
 
   --source hash calculate
   U_rtu_match_hash_src : rtu_crc
@@ -668,15 +680,20 @@ begin
               -------------------------------------------
               if(htab_found_i = '1') then
 
-                -- update aging aram (in any case that entry was found,
-                -- even if dropped later, we update aging aram
-                s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
-                s_aram_main_wr     <= '1';
+                -- ML (24/03/2013): aging bugfix : update aging only for source found
+                -- s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
+                -- s_aram_main_wr     <= '1';
 
                 ----------------------------------------------------------------------------
                 --  SOURCE MAC ENTRY SEARCH 
                 ----------------------------------------------------------------------------                      
                 if(s_src_dst_sel = '0') then
+
+                  -- ML (24/03/2013): aging bugfix : update aging only for source found
+                  -- update aging aram (in any case that entry was found,
+                  -- even if dropped later, we update aging aram
+                  s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
+                  s_aram_main_wr     <= '1';
 
                   -------------------------------------------       
                   -- source MAC address is blocked? - 
@@ -794,7 +811,8 @@ begin
                     ----------------------------------------------------------------------------                      
                   else
                     
-                    s_dst_entry_port_mask_dst <= (others => '1');
+--                     s_dst_entry_port_mask_dst <= (others => '1');
+                    s_dst_entry_port_mask_dst <= s_urec_broadcast_mask; -- ML(11/04/2013)
                     s_dst_entry_is_bpdu       <= '0';  -- changed
                   end if;  -- if( s_src_dst_sel = '0') then            
 
@@ -803,7 +821,11 @@ begin
                   -- learning fifo, and we have not yet
                   -- stored info about this request
                   -------------------------------------------
-                  if((rtu_ufifo_wr_full_i = '0') and (s_rtu_pcr_learn_en = '1') and (s_rq_learned_reg = '0')) then
+                  if((rtu_ufifo_wr_full_i = '0') and (s_rtu_pcr_learn_en = '1') and (s_rq_learned_reg = '0')
+                      -- ML 24/03/2013: we don't need to make unrecongized request 
+                      -- for destination unrecognized MAC - we have no idea 
+                      -- where to forward it anyway
+                     and s_src_dst_sel = '0') then
 
                     mstate             <= LEARN_SRC;
                     s_rtu_ufifo_wr_req <= '1';
@@ -882,7 +904,8 @@ begin
                 -- so we broardcast
                 
                 s_dst_entry_is_bpdu       <= '0';
-                s_dst_entry_port_mask_dst <= (others => '1');
+--                 s_dst_entry_port_mask_dst <= (others => '1');
+                s_dst_entry_port_mask_dst <= s_urec_broadcast_mask; -- ML(11/04/2013)
 
                 -------------------------------------------       
                 -- not broadcast unrecognized requests = drop
@@ -962,7 +985,9 @@ begin
                   else
                     
                     s_dst_entry_is_bpdu       <= '0';
-                    s_dst_entry_port_mask_dst <= (others => '1');
+--                     s_dst_entry_port_mask_dst <= (others => '1');
+                    s_dst_entry_port_mask_dst <= s_urec_broadcast_mask; -- ML(11/04/2013)
+                    
                     
                   end if;
 
@@ -1033,7 +1058,9 @@ begin
               --  if we are in pass_bpdu, and the dst
               -- entry is not bpdu, drop  
               -------------------------------------------    
-              if((s_rtu_pcr_pass_bpdu = '1') and (s_dst_entry_is_bpdu = '0')) then
+              if((s_rtu_pcr_pass_bpdu = '1') and (s_dst_entry_is_bpdu = '0') 
+                 --ML(12/04/2013): to make pass_bpdu work both for pass_all TRUE and FALSE
+                 and ((requesting_port and rtu_pcr_pass_all_i) = zeros)) then 
 
                 -- RETURN
                 s_rsp_drop          <= '1';
@@ -1165,5 +1192,8 @@ begin
 
   rsp_fifo_output_o <= s_rsp_dst_port_mask & s_rsp_drop & s_rsp_prio & s_port_id;
 
+  htab_src_dst_o <= s_src_dst_sel; -- ML (24/03/2013): aging bugfix
+  htab_port_o    <= s_port_id;     -- ML (24/03/2013): aging bugfix
+  
 end architecture;
 
