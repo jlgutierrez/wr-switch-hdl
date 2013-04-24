@@ -199,6 +199,7 @@ module main;
    integer g_enable_WRtime                  = 0;
    integer g_tatsu_config                   = 0;
    integer g_fw_to_cpu_scenario             = 0;
+   integer g_set_untagging                  = 0;
    int lacp_df_hp_id                        = 0;
    int lacp_df_br_id                        = 2;
    int lacp_df_un_id                        = 1;
@@ -1164,7 +1165,7 @@ module main;
    * quick forward/block massage detection and action 
    * 
    **/
- ///*
+ /*
   initial begin
     portUnderTest        = 18'b000000000000000000;
     g_tru_enable         = 1;
@@ -1187,7 +1188,28 @@ module main;
     mc.logic2(26, 1, PFilterMicrocode::MOV, 0);    
     
   end
+*/
+ /** ***************************   test scenario 38  ************************************* **/ 
+  /*
+   * tagging/untagging test
+   **/
+ //*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;   
+    
+    qmode                = 0;//access
+    pvid                 = 1;//tagging vlan
+    g_is_qvlan           = 0; //send VLAN-tagged frames
+    g_do_vlan_config     = 1; //enable vlan confgi
+    g_set_untagging      = 1; // set pre-defined untagging config (untag VIDs:0 - 10)
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 0 };
+    trans_paths[1]       = '{1  ,16 , 0 };
+    trans_paths[2]       = '{2  ,15 , 0 };
+
+  end
 //*/
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1562,7 +1584,7 @@ module main;
    
 
    task automatic init_ports(ref port_t p[$], ref CWishboneAccessor wb);
-      int i;
+      int i,j;
       
       for(i=0;i<g_num_ports;i++)
         begin
@@ -1586,6 +1608,12 @@ module main;
              ep.pause_config( 1/*txpause_802_3*/, 1/*rxpause_802_3*/, 0/*txpause_802_1q*/, 0/*rxpause_802_1q*/);
            else if(g_pause_mode == 2)
              ep.pause_config( 1/*txpause_802_3*/, 1/*rxpause_802_3*/, 1/*txpause_802_1q*/, 1/*rxpause_802_1q*/);
+           
+           if(g_set_untagging == 1)
+           begin
+             for(j=0;j<10; j++)
+               ep.vlan_egress_untag(j,1);
+           end
            tmp.ep = ep;
            tmp.send = EthPacketSource'(DUT.to_port[i]);
            tmp.recv = EthPacketSink'(DUT.from_port[i]);

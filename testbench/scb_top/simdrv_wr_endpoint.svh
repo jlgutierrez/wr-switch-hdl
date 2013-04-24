@@ -9,14 +9,30 @@ class CSimDrv_WR_Endpoint;
 
    protected CBusAccessor m_acc;
    protected uint64_t m_base;
+   protected uint16_t untag_tab[256];
    
    function new(CBusAccessor acc, uint64_t base);     
+      int i;
       m_acc   = acc;
       m_base  = base;
+//       for(i=0;i<10;i++)
+//         untag_tab[i]=0;
    endfunction // new
 
    task vlan_egress_untag(int vid, int untag);
-      m_acc.write(m_base + `ADDR_EP_VCR1, vid | ((untag ? 1: 0) << 12));
+      uint64_t wval=0;
+      if(untag>0)
+        untag_tab[(vid>>4)] = untag_tab[(vid>>4)] |  (1<<('h000F & vid));
+      else
+        untag_tab[(vid>>4)] = untag_tab[(vid>>4)] & ! (1<<('h000F & vid));
+      
+      wval = (untag_tab[(vid>>4)] << 10) | ('h000003FF & (vid>>4));
+      
+      $display("[vlan_egress_untag], write offset: %d, data: 0x%x (val=0x%x)", 
+      (vid>>4),untag_tab[(vid>>4)], wval);      
+      m_acc.write(m_base + `ADDR_EP_VCR1, wval);
+      
+   //   m_acc.write(m_base + `ADDR_EP_VCR1, vid | ((untag ? 1: 0) << 12));
    endtask // vlan_egress_untag
 
    task vcr1_buffer_write(int is_vlan, int addr, uint64_t data);
