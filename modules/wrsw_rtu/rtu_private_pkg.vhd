@@ -176,6 +176,7 @@ package rtu_private_pkg is
                                  rq_has_prio     : std_logic;
                                  rq_port_mask    : std_logic_vector;
                                  pcr_pass_all    : std_logic_vector;
+                                 pcr_drop_nonvlan_at_ingress: std_logic_vector;
                                  port_mask_width : integer) 
                                  return t_match_response;
   function f_set_bit(data     : std_logic_vector;
@@ -593,6 +594,7 @@ package body rtu_private_pkg is
                                  rq_has_prio     : std_logic;
                                  rq_port_mask    : std_logic_vector;
                                  pcr_pass_all    : std_logic_vector;
+                                 pcr_drop_nonvlan_at_ingress: std_logic_vector;
                                  port_mask_width : integer) 
                                  return t_match_response is
     variable rsp : t_match_response;
@@ -612,7 +614,8 @@ package body rtu_private_pkg is
     end if;
     
     ------ drop ----------
-    if((rq_port_mask and vlan_entry.port_mask(rq_port_mask'length-1 downto 0)) /= rq_port_mask) then
+    if(((rq_port_mask and pcr_drop_nonvlan_at_ingress(rq_port_mask'length-1 downto 0)) = rq_port_mask) and
+       ((rq_port_mask and vlan_entry.port_mask(rq_port_mask'length-1 downto 0))       /= rq_port_mask)) then
       rsp.drop      := '1';
       rsp.port_mask := (others =>'0');
     elsif(vlan_entry.drop = '1') then

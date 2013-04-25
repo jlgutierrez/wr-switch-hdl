@@ -130,6 +130,8 @@ architecture behavioral of rtu_fast_match is
   signal traffic_br_d           : std_logic; 
   signal traffic_hp_d           : std_logic; 
   
+  signal rtu_pcr_nonvlan_drop_at_ingress : std_logic_vector(c_rtu_max_ports -1 downto 0);
+  
   constant match_rsp_zero       : t_match_response := (
     valid     => '0',
     port_mask => (others => '0'),
@@ -142,7 +144,8 @@ begin
 
   zeros <= (others => '0');
   ones  <= (others => '1');
-
+  rtu_pcr_nonvlan_drop_at_ingress <= (others =>'0'); -- make it configurable from WB
+  
   -- round robin arbitration stuff (stolen from Toms module)
   gen_inputs : for i in 0 to g_num_ports-1 generate
     req_strobe(i) <= match_req_i(i) and not req(i);
@@ -209,6 +212,7 @@ begin
                                             rtu_req_stage_1.has_prio,
                                             pipeline_grant(1),
                                             rtu_pcr_pass_all_i,
+                                            rtu_pcr_nonvlan_drop_at_ingress,
                                             g_num_ports);
 
   --------------------------------------------------------------------------------------------
