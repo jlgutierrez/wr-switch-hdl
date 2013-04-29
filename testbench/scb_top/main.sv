@@ -2005,10 +2005,10 @@ module main;
       rtu.enable();
       $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
       ///TRU
-      tru = new(cpu_acc, 'h57000,g_num_ports,1);      
+      tru = new(cpu_acc, 'h58000,g_num_ports,1);      
       init_tru(tru);
       
-      tatsu=new(cpu_acc, 'h58000);
+      tatsu=new(cpu_acc, 'h59000);
       if(g_tatsu_config == 1)
         tatsu.drop_at_HP_enable();
       fork

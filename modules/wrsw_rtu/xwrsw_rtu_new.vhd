@@ -138,7 +138,7 @@ entity xwrsw_rtu_new is
     g_handle_only_single_req_per_port : boolean                        := FALSE;
     g_prio_num                        : integer;
     g_num_ports                       : integer;
-    g_cpu_port_num                    : integer := -1;
+    g_cpu_port_num                    : integer := -1; --TODO: get rid of this
     g_match_req_fifo_size             : integer                        := 32;    
     g_port_mask_bits                  : integer;
     g_rmon_events_bits_pp             : integer := 8); -- rmon events num ber per port
@@ -265,6 +265,8 @@ architecture behavioral of xwrsw_rtu_new is
   signal cpu_port_mask                      : std_logic_vector(c_rtu_max_ports - 1 downto 0);
   
   signal rsp                                : t_rtu_response_array(g_num_ports-1 downto 0);
+  signal htab_port : std_logic_vector(g_num_ports - 1 downto 0);
+  signal htab_src_dst : std_logic;
 begin 
 
   zeros                    <= (others => '0');
@@ -507,6 +509,8 @@ begin
       htab_fid_o           => htab_fid,
       htab_drdy_i          => htab_drdy,
       htab_entry_i         => htab_entry,
+      htab_port_o    => htab_port,    -- ML (24/03/2013): aging bugfix
+      htab_src_dst_o => htab_src_dst, -- ML (24/03/2013): aging bugfix
 
       rtu_ufifo_wr_req_o   => regs_towb.ufifo_wr_req_i,
       rtu_ufifo_wr_full_i  => regs_fromwb.ufifo_wr_full_o,
@@ -546,6 +550,8 @@ begin
   mfifo_trigger <= regs_fromwb.gcr_mfifotrig_o and regs_fromwb.gcr_mfifotrig_load_o;
 
   U_Lookup : rtu_lookup_engine
+    generic map (
+      g_num_ports => g_num_ports)
     port map (
       clk_sys_i   => clk_sys_i,
       clk_match_i => clk_sys_i,
@@ -565,6 +571,8 @@ begin
       mac_i   => htab_mac,
       fid_i   => htab_fid,
       drdy_o  => htab_drdy,
+      port_i  => htab_port,      -- ML (24/03/2013): aging bugfix
+      src_dst_i => htab_src_dst, -- ML (24/03/2013): aging bugfix      
       entry_o => htab_entry
       );
 

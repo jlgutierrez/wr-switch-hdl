@@ -364,7 +364,7 @@ begin
 
   -- ML (11/04/2013) : to prevent broadcasting of unrecognized frames to CPU
   s_urec_broadcast_mask(g_num_ports-1     downto 0)           <= (others =>'1');
-  s_urec_broadcast_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) <= (others =>'1') when (rtu_b_unrec_fw_cpu_i = '1') 
+  s_urec_broadcast_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) <= (others =>'1') when (rtu_b_unrec_fw_cpu_i = '1') else 
                                                                  (others =>'0');   
 
   zeros <= (others =>'0');
@@ -709,7 +709,7 @@ begin
                   -- ML (24/03/2013): aging bugfix : update aging only for source found
                   -- update aging aram (in any case that entry was found,
                   -- even if dropped later, we update aging aram
-                  s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
+                  s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(std_logic_vector'(s_aram_bitsel_msb & htab_entry_i.bucket_entry))), 32);
                   s_aram_main_wr     <= '1';
 
                   -------------------------------------------       
