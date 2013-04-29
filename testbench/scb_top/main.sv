@@ -23,7 +23,7 @@ module main;
    reg rst_n=0;
    parameter g_max_ports = 18;   
    parameter g_num_ports = 18;
-   parameter g_mvlan     = 3; //max simulation vlans
+   parameter g_mvlan     = 4; //max simulation vlans
    parameter g_max_dist_port_number = 4;
     typedef enum {
        PAUSE=0,
@@ -146,6 +146,7 @@ module main;
    int pvid                               = 0; 
                                              //      mask     , fid , prio,has_p,overr, drop   , vid, valid
    t_sim_vlan_entry sim_vlan_tab[g_mvlan] = '{'{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 },
                                               '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 100, 1'b1 },
                                               '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 200, 1'b1 }};
    integer tru_config_opt                 = 0;
@@ -1191,9 +1192,13 @@ module main;
 */
  /** ***************************   test scenario 38  ************************************* **/ 
   /*
-   * tagging/untagging test
+   * simple tagging/untagging test:
+   * 1) send untaggged frames
+   * 2) they get tagged at ingress port
+   * 3) they get forwarded for pvid VLAN id
+   * 4) they get untagged on egress
    **/
- //*
+ /*
   initial begin
     portUnderTest        = 18'b000000000000000111;   
     
@@ -1208,8 +1213,31 @@ module main;
     trans_paths[2]       = '{2  ,15 , 0 };
 
   end
-//*/
+/*/
+ /** ***************************   test scenario 39  ************************************* **/ 
+  /*
+   * tagging+untaggint + HP
+   **/
+ //*
+  initial begin
+    portUnderTest        = 18'b000000000000000001;   
+    
+    qmode                = 0;//access
+    pvid                 = 1;//tagging vlan
+    prio_val             = 7;//tag with prio 7 (7 is for HP)
+    g_is_qvlan           = 0; //send VLAN-tagged frames
+    g_do_vlan_config     = 1; //enable vlan confgi
+    g_set_untagging      = 1; // set pre-defined untagging config (untag VIDs:0 - 10)
+    
+    mac_br               = 1; // fast forward broadcast
+    
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 1 };
+//     trans_paths[1]       = '{1  ,16 , 0 };
+//     trans_paths[2]       = '{2  ,15 , 0 };
 
+  end
+//*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
