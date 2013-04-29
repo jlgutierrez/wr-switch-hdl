@@ -90,16 +90,16 @@ entity scb_top_bare is
     -------------------------------------------------------------------------------
 
     -- GTX clock fanout enable
-    clk_en_o  : out std_logic;
+    clk_en_o : out std_logic;
 
     -- GTX clock fanout source select
     clk_sel_o : out std_logic;
 
     -- DMTD clock divider selection (0 = 125 MHz, 1 = 62.5 MHz)
-    clk_dmtd_divsel_o: out std_logic;
+    clk_dmtd_divsel_o : out std_logic;
 
     -- UART source selection (FPGA/DBGU)
-    uart_sel_o: out std_logic;
+    uart_sel_o : out std_logic;
 
     ---------------------------------------------------------------------------
     -- GTX ports
@@ -125,13 +125,20 @@ entity scb_top_bare is
     i2c_scl_i     : in  std_logic_vector(2 downto 0) := "111";
     i2c_sda_oen_o : out std_logic_vector(2 downto 0);
     i2c_sda_o     : out std_logic_vector(2 downto 0);
-    i2c_sda_i     : in  std_logic_vector(2 downto 0) := "111"
+    i2c_sda_i     : in  std_logic_vector(2 downto 0) := "111";
+
+    ---------------------------------------------------------------------------
+    -- Mini-backplane PWM fans
+    ---------------------------------------------------------------------------
+
+    mb_fan1_pwm_o : out std_logic;
+    mb_fan2_pwm_o : out std_logic
     );
 end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 15;
+  constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
@@ -154,19 +161,21 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_MBL_I2C0     : integer := 7;
   constant c_SLAVE_MBL_I2C1     : integer := 8;
   constant c_SLAVE_SENSOR_I2C   : integer := 9;
-  constant c_SLAVE_TRU          : integer := 10;
-  constant c_SLAVE_TATSU        : integer := 11;
-  constant c_SLAVE_PSTATS       : integer := 12;
-  constant c_SLAVE_HWDU         : integer := 13;
-  constant c_SLAVE_DUMMY        : integer := 14;
+  constant c_SLAVE_PWM          : integer := 10;
+  constant c_SLAVE_TRU          : integer := 11;
+  constant c_SLAVE_TATSU        : integer := 12;
+  constant c_SLAVE_PSTATS       : integer := 13;
+  constant c_SLAVE_HWDU         : integer := 14;
+  constant c_SLAVE_DUMMY        : integer := 15;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
-      x"00071000",                      -- Dummy counters
-      x"00070000",                      -- HWDU
-      x"00059000",                      -- PStats counters
-      x"00058000",                      -- TATSU
-      x"00057000",                      -- TRU
+      x"00072000",                      -- Dummy counters
+      x"00071000",                      -- HWDU
+      x"00070000",                      -- PStats counters
+      x"00059000",                      -- TATSU
+      x"00058000",                      -- TRU
+      x"00057000",                      -- PWM Controller
       x"00056000",                      -- Sensors-I2C
       x"00055000",                      -- MBL-I2C1
       x"00054000",                      -- MBL-I2C0
@@ -181,6 +190,7 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000ff000",
@@ -647,14 +657,13 @@ begin
       --txtsu_timestamps(i).valid <= '0';
     end generate gen_terminate_unused_eps;
 
-
-    --gen_txtsu_debug: for i in 0 to c_NUM_PORTS-1 generate
-    --  TRIG0(i) <= txtsu_timestamps(i).stb;
-    --  trig1(i) <= txtsu_timestamps_ack(i);
-    --  trig2(0) <= vic_irqs(0);
-    --  trig2(1) <= vic_irqs(1);
-    --  trig2(2) <= vic_irqs(2);
-    --end generate gen_txtsu_debug;
+    gen_txtsu_debug : for i in 0 to c_NUM_PORTS-1 generate
+      TRIG0(i) <= txtsu_timestamps(i).stb;
+      trig1(i) <= txtsu_timestamps_ack(i);
+      trig2(0) <= vic_irqs(0);
+      trig2(1) <= vic_irqs(1);
+      trig2(2) <= vic_irqs(2);
+    end generate gen_txtsu_debug;
 
     U_Swcore : xswc_core
       generic map (
@@ -672,7 +681,7 @@ begin
         g_wb_ob_ignore_ack                => false,
         g_mpm_mem_size                    => 67584,
         g_mpm_page_size                   => 66,
-        g_mpm_ratio                       => 6, --f_swc_ratio,  --2
+        g_mpm_ratio                       => 6,  --f_swc_ratio,  --2
         g_mpm_fifo_size                   => 8,
         g_mpm_fetch_next_pg_in_advance    => false,
         g_drop_outqueue_head_on_full      => true,
@@ -859,7 +868,7 @@ begin
 
   uart_sel_o <= gpio_out(31);
 
-  
+
   gpio_o <= gpio_out;
 
   U_MiniBackplane_I2C0 : xwb_i2c_master
@@ -988,6 +997,23 @@ begin
   end generate gen_no_dummy_rmon;
 
   -----------------------------------------------------------------------------
+  -- PWM Controlle for mini-backplane fan drive
+  -----------------------------------------------------------------------------
+  
+  U_PWM_Controller : xwb_simple_pwm
+    generic map (
+      g_num_channels        => 2,
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE)
+    port map (
+      clk_sys_i => clk_sys,
+      rst_n_i   => rst_n_periph,
+      slave_i   => cnx_master_out(c_SLAVE_PWM),
+      slave_o   => cnx_master_in(c_SLAVE_PWM),
+      pwm_o(0)  => mb_fan1_pwm_o,
+      pwm_o(1)  => mb_fan2_pwm_o);
+
+  -----------------------------------------------------------------------------
   -- Interrupt assignment
   -----------------------------------------------------------------------------
   
@@ -1001,9 +1027,9 @@ begin
 -- Various constant-driven I/Os
 -------------------------------------------------------------------------------
 
-  clk_en_o  <= '0';
-  clk_sel_o <= '0';
+  clk_en_o          <= '0';
+  clk_sel_o         <= '0';
   clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
-  clk_sys_o <= clk_sys;
+  clk_sys_o         <= clk_sys;
   
 end rtl;

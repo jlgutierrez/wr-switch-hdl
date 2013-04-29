@@ -337,6 +337,7 @@ package rtu_private_pkg is
 
   component rtu_lookup_engine
     generic (
+      g_num_ports : integer;
       g_hash_size : integer := c_wrsw_hash_width);
     port (
       clk_match_i      : in  std_logic;
@@ -355,6 +356,8 @@ package rtu_private_pkg is
       mac_i            : in  std_logic_vector(c_wrsw_mac_addr_width -1 downto 0);
       fid_i            : in  std_logic_vector(c_wrsw_fid_width - 1 downto 0);
       drdy_o           : out std_logic;
+      port_i           : in std_logic_vector(g_num_ports -1 downto 0); -- ML (24/03/2013): aging bugfix
+      src_dst_i        : in std_logic;                                 -- ML (24/03/2013): aging bugfix
       entry_o          : out t_rtu_htab_entry);
   end component;
 
@@ -390,6 +393,8 @@ package rtu_private_pkg is
       htab_fid_o           : out std_logic_vector(c_wrsw_fid_width - 1 downto 0);
       htab_drdy_i          : in  std_logic;
       htab_entry_i         : in  t_rtu_htab_entry;
+      htab_port_o          : out std_logic_vector(g_num_ports-1 downto 0); -- ML (24/03/2013): aging bugfix
+      htab_src_dst_o       : out std_logic;                                -- ML (24/03/2013): aging bugfix
       rtu_ufifo_wr_req_o   : out std_logic;
       rtu_ufifo_wr_full_i  : in  std_logic;
       rtu_ufifo_wr_empty_i : in  std_logic;
