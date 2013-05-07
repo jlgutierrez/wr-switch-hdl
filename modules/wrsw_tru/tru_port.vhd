@@ -94,6 +94,7 @@ architecture rtl of tru_port is
   signal s_patternSub_d0     : std_logic_vector(g_pattern_width-1 downto 0);
   
   signal s_resp_masks        : t_resp_masks;
+  signal s_backup_masks      : t_resp_masks;
   signal s_self_mask         : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_port_mask         : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_valid_d0          : std_logic;
@@ -105,7 +106,7 @@ architecture rtl of tru_port is
   signal s_status_mask       : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_ingress_mask      : std_logic_vector(g_num_ports - 1 downto 0);
   signal s_egress_mask       : std_logic_vector(g_num_ports - 1 downto 0);
-
+  signal s_xor_mask      : std_logic_vector(g_num_ports - 1 downto 0);
 begin --rtl
    
   -- inputs
@@ -224,7 +225,8 @@ begin --rtl
             -- * status of ports (don't forward to ports which are down)
             -- * output from the TRU_TAB+patterns interpretation
             -- * reception port (don't forward to myself)
-            s_port_mask          <= s_status_mask and s_egress_mask and (not s_self_mask);
+            s_port_mask          <= s_status_mask and s_egress_mask and 
+                                    (not s_self_mask) and (not s_xor_mask);
             
             -- if ingress on the reception is allowed, and the reception port  is not meant
             -- to be down, don't drop
@@ -257,9 +259,16 @@ begin --rtl
                                              s_patternAdd_d0,
                                              s_patternSub_d0,
                                              g_tru_subentry_num);
+  s_backup_masks <= f_gen_mask_with_patterns(tru_tab_entry_i, 
+                                             s_self_mask, 
+                                             s_self_mask,
+                                             s_patternSub_d0,
+                                             g_tru_subentry_num);
+  
   -- just to make the code a bit less messy
   s_ingress_mask <= s_resp_masks.ingress(g_num_ports-1 downto 0);
   s_egress_mask  <= s_resp_masks.egress(g_num_ports-1 downto 0);
+  s_xor_mask     <= s_ingress_mask xor s_backup_masks.ingress(g_num_ports-1 downto 0);
 
   -- outputs
   tru_tab_addr_o(g_tru_addr_width-1 downto 0)  <= tru_req_i.fid(g_tru_addr_width-1 downto 0);
