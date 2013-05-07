@@ -795,13 +795,13 @@ begin
   events_gen: if(g_rmon_events_bits_pp = 8 ) generate
     rmon_events_gen: for i in 0 to (g_num_ports - 1) generate
       rmon_events_o((i+1)*g_rmon_events_bits_pp-1 downto i*g_rmon_events_bits_pp) <= 
-        std_logic(req_i(i).valid                                    ) & -- valid request 
-        std_logic(rsp(i).valid and rsp_ack_i(i)                     ) & -- valid respons
-        std_logic(rsp(i).valid and rsp_ack_i(i) and rsp(i).drop     ) & -- dropped
-        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.hp) & -- FastMatch: high priority frames
-        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.ff) & -- FastMatch: fast forward (as config)                   
+        "00"                                                          & -- spare, to make the number nice ;-P  
         std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.nf) & -- FastMatch: non-forward (as config)
-        "00";                                                  -- spare, to make the number nice ;-P  
+        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.ff) & -- FastMatch: fast forward (as config)                   
+        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.hp) & -- FastMatch: high priority frames
+        std_logic(rsp(i).valid and rsp_ack_i(i) and rsp(i).drop     ) & -- dropped
+        std_logic(rsp(i).valid and rsp_ack_i(i)                     ) & -- valid respons
+        std_logic(req_i(i).valid                                    ) ; -- valid request 
     end generate rmon_events_gen;
   end generate events_gen;
   no_events_gen: if(g_rmon_events_bits_pp /= 8 ) generate
