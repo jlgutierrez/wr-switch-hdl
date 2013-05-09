@@ -214,7 +214,7 @@ begin --rtl
        endpoint_o          => s_endpoint_array(i), 
        reset_rxFlag_i      => s_config.gcr_rx_frame_reset(i)
        );
-       ep_o(i).link_kill   <= not s_port_if_ctrl(i);
+       ep_o(i).link_kill   <= not s_port_if_ctrl(i) when (s_tru_ena = '1') else '0';
    end generate G_ENDP;
 
   -- generating strobe to count packets which enter switch after receiving MARKER/sending PAUSE
@@ -357,9 +357,9 @@ begin --rtl
                                   '1' when (s_inject_sel(i).pause = '1' and ep_i(i).inject_ready = '1' and s_inject_ready_d(i) = '1') else
                                   '0';
 
-     ep_o(i).inject_packet_sel <= s_ep(i).inject_packet_sel ;
-     ep_o(i).inject_user_value <= s_ep(i).inject_user_value;
-     ep_o(i).inject_req        <= s_ep(i).inject_req ;
+     ep_o(i).inject_packet_sel <= s_ep(i).inject_packet_sel   when (s_tru_ena = '1') else (others => '0');
+     ep_o(i).inject_user_value <= s_ep(i).inject_user_value   when (s_tru_ena = '1') else (others => '0');
+     ep_o(i).inject_req        <= s_ep(i).inject_req          when (s_tru_ena = '1') else '0';
      ep_o(i).fc_pause_req      <= '0'; --s_trans_ep_ctr(i).pauseSend;
      ep_o(i).fc_pause_delay    <= (others => '0'); --s_trans_ep_ctr(i).pauseTime;
     
