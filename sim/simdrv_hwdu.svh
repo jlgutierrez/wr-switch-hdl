@@ -17,7 +17,7 @@ class CSimDrv_HWDU;
       m_base        = base;
    endfunction // new
 
-   task set_tatsu(bit[15:0] addr);
+   task dump_mpm_page_utilization(bit[15:0] addr);
       
       uint64_t tmp;
       m_acc.write(m_base + `ADDR_HWDU_CR, 
