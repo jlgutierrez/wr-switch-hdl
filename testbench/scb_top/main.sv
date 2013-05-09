@@ -1326,21 +1326,21 @@ module main;
    * stress test: 18 ports with packets, no gap - page-allocation too slow...
    * 
    **/
-/*
+//*
   initial begin
     portUnderTest        = 18'b111111111111111111;
     repeat_number        = 30;
     tries_number         = 1;
     g_enable_pck_gaps    = 0;
-    g_force_payload_size = 64;
+    g_force_payload_size = 512;
   end
-/*/
+//*/
    /** ***************************   test scenario 45  ************************************* **/
   /*
    * test HP detection by prio - works
    * 
    **/
-///*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000001;
     trans_paths[0]       = '{0  ,1 , 207 }; //prio 3, broadcast
@@ -1351,7 +1351,51 @@ module main;
     g_enable_pck_gaps    = 0;
     g_force_payload_size = 64;
   end
-//*/
+*/
+   /** ***************************   test scenario 46  ************************************* **/
+  /*
+   * trying to simulate test setup in the lab to check whether 8 ports binary 09_05_13_00/5
+   * does not show RTUful events - 
+   * 
+   * found and fixed :)
+   * 
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000001;
+    trans_paths[0]       = '{0  ,1 ,7}; //fast forward with single entry 11...11
+    repeat_number        = 30;
+    tries_number         = 1;
+    mac_single           = 1;
+    mac_br               = 0;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 512;
+    hp_prio_mask         = 'b00000000;
+  end
+*/
+   /** ***************************   test scenario 47  ************************************* **/ 
+  /*
+   * testing switch over between ports 1,2 
+   * simulating thrashing of lost physic signal....
+   * 
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000110;
+    g_tru_enable         = 1;
+    g_failure_scenario   = 10;
+                         // tx  ,rx ,opt
+    trans_paths[1]       = '{1  ,6 , 4 };
+    trans_paths[2]       = '{2  ,7 , 4 };
+    repeat_number        = 30;
+    g_active_port        = 1;
+    g_backup_port        = 2;    
+    tries_number         = 1;
+    tru_config_opt       = 3;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 512;
+  end
+*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2137,7 +2181,7 @@ module main;
         tatsu.drop_at_HP_enable();
       
       hwdu=new(cpu_acc, 'h71000);
-      hwdu.set_tatsu(0);
+      hwdu.dump_mpm_page_utilization(1);
 
       fork
         begin
@@ -2313,7 +2357,7 @@ module main;
              wait_cycles(50);
              rtu.set_port_config(1, 1, 0, 1); // enable port 1
              wait_cycles(100);
-             hwdu.set_tatsu(0);
+             hwdu.dump_mpm_page_utilization(1);
              ep_ctrl[g_active_port] = 'b0;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
@@ -2347,8 +2391,27 @@ module main;
              wait_cycles(50);
              rtu.set_port_config(1, 1, 0, 1); // enable port 1
              wait_cycles(100);
-             hwdu.set_tatsu(0);
-           end       
+             hwdu.dump_mpm_page_utilization(1);
+           end  
+           if(g_failure_scenario == 10)
+           begin 
+             int thrash_cnt = 1;
+             wait_cycles(2030);
+             
+             for(thrash_cnt=1;thrash_cnt<40;thrash_cnt++)
+             begin
+               ep_ctrl[g_active_port] = 'b0;  
+               wait_cycles(thrash_cnt);
+               ep_ctrl[g_active_port] = 'b1;  
+               wait_cycles(thrash_cnt);
+             end
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(100);
+             hwdu.dump_mpm_page_utilization(1);
+
+           end        
          end 
       join_none; //
 
