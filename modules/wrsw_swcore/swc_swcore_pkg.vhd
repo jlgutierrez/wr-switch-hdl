@@ -275,6 +275,8 @@ package swc_swcore_pkg is
     pta_hp_o : out std_logic;
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
+    dbg_hwdu_o  : out std_logic_vector(15 downto 0);
+
     tap_out_o : out std_logic_vector(49+62 downto 0)
 
     );

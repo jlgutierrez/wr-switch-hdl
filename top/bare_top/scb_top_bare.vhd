@@ -4,7 +4,7 @@
 library ieee;
 use ieee.STD_LOGIC_1164.all;
 use ieee.numeric_std.all;
-
+use ieee.math_real.CEIL;
 use work.wishbone_pkg.all;
 use work.gencores_pkg.all;
 use work.wr_fabric_pkg.all;
@@ -139,14 +139,15 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"09_05_13_01"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"09_05_13_02"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
   constant c_RTU_EVENTS    : integer := 9; -- number of RMON events per port
-  constant c_DBG_V_SWCORE  : integer := (3*10); -- 3 resources, each has with of CNT of 10 bits
-  constant c_DBG_N_REGS    : integer := 2; -- 32-bits debug registers which go to HWDU
+  constant c_DBG_V_SWCORE  : integer := (3*10) + 2 +    -- 3 resources, each has with of CNT of 10 bits +2 to make it 32
+                                        (g_num_ports+1)*16; -- states of input blocks (including NIC)
+  constant c_DBG_N_REGS    : integer := 1 + integer(ceil(real(c_DBG_V_SWCORE)/real(32))); -- 32-bits debug registers which go to HWDU
   constant c_ALL_EVENTS    : integer := c_RTU_EVENTS + c_epevents_sz;
   constant c_DUMMY_RMON    : boolean := false; -- define TRUE to enable dummy_rmon module for debugging PSTAT
 --   constant c_epevents_sz   : integer := 15;
@@ -979,7 +980,7 @@ begin
         wb_o  => cnx_master_in(c_SLAVE_HWDU));
 
         dbg_n_regs(  32-1 downto 0)                 <= c_GW_VERSION;
-        dbg_n_regs(2*32-1 downto c_DBG_V_SWCORE+32) <= (others=>'0');
+--         dbg_n_regs(2*32-1 downto c_DBG_V_SWCORE+32) <= (others=>'0');
     end generate;
     gen_no_HWDU: if(g_with_HWDU = false) generate
       cnx_master_in(c_SLAVE_HWDU).ack   <= '1';

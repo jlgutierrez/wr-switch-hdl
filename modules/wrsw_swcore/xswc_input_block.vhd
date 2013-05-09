@@ -253,6 +253,8 @@ entity xswc_input_block is
 
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
+    dbg_hwdu_o  : out std_logic_vector(15 downto 0);
+
     tap_out_o: out std_logic_vector(49 + 62 downto 0)
 
     );
@@ -529,6 +531,11 @@ architecture syn of xswc_input_block is
   signal lw_pckstart_pg_clred : std_logic;
   signal pckstart_pg_clred    : std_logic;
 
+  signal alloc_FSM : std_logic_vector(2  downto 0);
+  signal trans_FSM : std_logic_vector(3  downto 0);
+  signal rcv_p_FSM : std_logic_vector(3  downto 0);
+  signal linkl_FSM : std_logic_vector(3  downto 0);
+  
   signal zeros    : std_logic_vector(g_num_ports - 1 downto 0);
   -------------------------------------------------------------------------------
   -- Function which calculates number of 1's in a vector
@@ -2107,6 +2114,41 @@ ll_next_addr_o                          <= ll_entry.next_page;
 ll_next_addr_valid_o                    <= ll_entry.next_page_valid;
 ll_wr_req_o                             <= ll_wr_req;
 
+alloc_FSM <= "000" when (s_page_alloc = S_IDLE) else
+             "001" when (s_page_alloc = S_PCKSTART_SET_USECNT) else
+             "010" when (s_page_alloc = S_PCKSTART_PAGE_REQ) else
+             "011" when (s_page_alloc = S_PCKINTER_PAGE_REQ) else
+             "100";
+trans_FSM <= x"0" when (s_transfer_pck = S_IDLE) else
+             x"1" when (s_transfer_pck = S_READY) else
+             x"2" when (s_transfer_pck = S_WAIT_RTU_VALID) else
+             x"3" when (s_transfer_pck = S_WAIT_SOF) else
+             x"4" when (s_transfer_pck = S_SET_USECNT) else
+             x"5" when (s_transfer_pck = S_WAIT_WITH_TRANSFER) else
+             x"6" when (s_transfer_pck = S_TOO_LONG_TRANSFER) else
+             x"7" when (s_transfer_pck = S_TRANSFER) else
+             x"8" when (s_transfer_pck = S_TRANSFERED) else
+             x"9" when (s_transfer_pck = S_DROP) else
+             x"A";
+
+rcv_p_FSM <= x"0" when (s_rcv_pck = S_IDLE) else
+             x"1" when (s_rcv_pck = S_READY) else
+             x"2" when (s_rcv_pck = S_PAUSE) else
+             x"3" when (s_rcv_pck = S_RCV_DATA) else
+             x"4" when (s_rcv_pck = S_DROP) else
+             x"5" when (s_rcv_pck = S_WAIT_FORCE_FREE) else
+             x"6" when (s_rcv_pck = S_INPUT_STUCK) else
+             x"7";
+
+linkl_FSM <= x"0" when (s_ll_write = S_IDLE) else
+             x"1" when (s_ll_write = S_READY_FOR_PGR_AND_DLAST) else
+             x"2" when (s_ll_write = S_READY_FOR_DLAST_ONLY) else
+             x"3" when (s_ll_write = S_WRITE) else
+             x"4" when (s_ll_write = S_EOF_ON_WR) else
+             x"5" when (s_ll_write = S_SOF_ON_WR) else
+             x"6";
+
+dbg_hwdu_o <= rtu_rsp_valid_i & alloc_FSM & trans_FSM & rcv_p_FSM & linkl_FSM;
 
 dbg_dropped_on_res_full <= pckstart_usecnt_req and mmu_set_usecnt_done_i and (not mmu_set_usecnt_succeeded_i);
 

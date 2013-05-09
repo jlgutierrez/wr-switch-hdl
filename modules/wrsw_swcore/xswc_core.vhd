@@ -150,6 +150,8 @@ architecture rtl of xswc_core is
    constant c_res_mmu_resource_num            : integer := 3;   -- (1) unknown; (2) special; (3) normal
    constant c_res_mmu_resource_num_width      : integer := 2;
    ----------------------------------------------
+   constant c_hwdu_input_block_width          : integer := 16;
+   constant c_hwdu_mmu_width                  : integer := 10*3;
 
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Memory Management Unit<<
@@ -346,6 +348,11 @@ architecture rtl of xswc_core is
    signal mmu2ib_res_full             : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
    signal mmu2ib_res_almost_full      : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
    signal mmu2ib_set_usecnt_succeeded : std_logic_vector(g_num_ports                                -1 downto 0);
+   
+   type t_hwdu_input_block_array is array(0 to g_num_ports-1) of std_logic_vector(c_hwdu_input_block_width-1 downto 0);
+  
+   signal hwdu_input_block            : t_hwdu_input_block_array;
+   signal hwdu_mmu                    : std_logic_vector(c_hwdu_mmu_width                           -1 downto 0);
   begin --rtl
    
   --chipscope_icon_1: chipscope_icon
@@ -467,7 +474,7 @@ architecture rtl of xswc_core is
 --         pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
 --         pta_resource_o           => open,
         pta_hp_o                 => ib_hp (i),
-
+        dbg_hwdu_o               => hwdu_input_block(i),
         tap_out_o => tap_ib(i)
         );
         
@@ -655,7 +662,7 @@ architecture rtl of xswc_core is
       g_special_res_num_pages   => c_res_mmu_special_res_num_pages,
       g_resource_num            => c_res_mmu_resource_num,
       g_resource_num_width      => c_res_mmu_resource_num_width,
-      g_num_dbg_vector_width    => g_num_dbg_vector_width
+      g_num_dbg_vector_width    => c_hwdu_mmu_width
     )
     port map (
       rst_n_i                    => rst_n_i,   
@@ -695,7 +702,7 @@ architecture rtl of xswc_core is
       res_full_o                 => mmu2ib_res_full,
       res_almost_full_o          => mmu2ib_res_almost_full,
 
-      dbg_o                      => dbg_o
+      dbg_o                      => hwdu_mmu
 --      tap_out_o => tap_alloc
       );
        
@@ -774,6 +781,10 @@ architecture rtl of xswc_core is
       ib_hp_i                    => ib_hp
       );  
 
+  dbg_o(31 downto 0) <= "00" & hwdu_mmu;
 
+  hwdu_gen: for i in 0 to (g_num_ports-1) generate
+    dbg_o((i+1)*c_hwdu_input_block_width+32-1 downto i*c_hwdu_input_block_width+32) <= hwdu_input_block(i);
+  end generate hwdu_gen;
 
 end rtl;
