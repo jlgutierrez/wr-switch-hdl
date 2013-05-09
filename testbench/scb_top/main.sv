@@ -6,6 +6,7 @@
 `include "simdrv_wr_tru.svh"
 `include "simdrv_txtsu.svh"
 `include "simdrv_tatsu.svh"
+`include "simdrv_hwdu.svh"
 `include "endpoint_regs.v"
 `include "endpoint_mdio.v"
 `include "if_wb_master.svh"
@@ -60,6 +61,7 @@ module main;
    CSimDrv_WR_TRU    tru;
    CSimDrv_TXTSU txtsu;
    CSimDrv_TATSU tatsu;
+   CSimDrv_HWDU hwdu;
    
    reg [g_num_ports-1:0] ep_ctrl;
    
@@ -108,6 +110,7 @@ module main;
 //    reg [31:0] vlan_port_mask                  = 32'hFFFFFFFF;
    reg [31:0] mirror_src_mask                 = 'h00000002;
    reg [31:0] mirror_dst_mask                 = 'h00000080;
+   reg [7 :0] hp_prio_mask                    ='b10000001;
    bit mr_rx                                  = 1;
    bit mr_tx                                  = 1;
    bit mr                                     = 0;
@@ -1089,7 +1092,7 @@ module main;
    *  
    * we change the config of nic_fw in failure sceonario 7 (out of laziness here)
    **/
- /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000111;
     g_tru_enable         = 1;
@@ -1111,7 +1114,7 @@ module main;
     mac_br               = 1;
     hp_fw_cpu            = 0; // 
   end
- */
+ /*/
    /** ***************************   test scenario 35  ************************************* **/ 
   /*
    * Learning - enable/disble forwarding of unrecognized broadcast to CPU
@@ -1218,7 +1221,7 @@ module main;
   /*
    * tagging+untaggint + HP
    **/
- //*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000001;   
     
@@ -1236,6 +1239,117 @@ module main;
 //     trans_paths[1]       = '{1  ,16 , 0 };
 //     trans_paths[2]       = '{2  ,15 , 0 };
 
+  end
+*/
+ /** ***************************   test scenario 40  ************************************* **/ 
+  /*
+   * Transparent TRU confgi
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000111;   
+    g_tru_enable         = 1; //enable TRU
+    tru_config_opt       = 7; //TRUE transparent
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 , 0 };
+    trans_paths[1]       = '{1  ,16 , 0 };
+    trans_paths[2]       = '{2  ,15 , 0 };
+
+  end
+*/
+   /** ***************************   test scenario 41  ************************************* **/ 
+  /*
+   * testing switch over between ports 1,2
+   * we broadcast  on ports  1 and 2. One of them is only active.
+   * after some time port 0 failes (failure_scenario 7) and we switch to the othter
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000110;
+    g_tru_enable         = 1;
+    g_failure_scenario   = 8;
+                         // tx  ,rx ,opt
+    trans_paths[1]       = '{1  ,6 , 4 };
+    trans_paths[2]       = '{2  ,7 , 4 };
+    repeat_number        = 30;
+    g_active_port        = 1;
+    g_backup_port        = 2;    
+    tries_number         = 1;
+    tru_config_opt       = 3;
+  end
+*/
+   /** ***************************   test scenario 42  ************************************* **/ 
+  /*
+   * testing switch over between ports 1,2
+   * we broadcast  on ports  1 and 2. One of them is only active.
+   * after some time port 0 failes (failure_scenario 7) and we switch to the othter
+   * 
+   * with much higher laod
+   * 
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000110;
+    g_tru_enable         = 1;
+    g_failure_scenario   = 9;
+                         // tx  ,rx ,opt
+    trans_paths[1]       = '{1  ,6 , 4 };
+    trans_paths[2]       = '{2  ,7 , 4 };
+    repeat_number        = 30;
+    g_active_port        = 1;
+    g_backup_port        = 2;    
+    tries_number         = 1;
+    tru_config_opt       = 3;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 512;
+  end
+*/
+
+   /** ***************************   test scenario 43  ************************************* **/
+   /** ***************************   (PROBLEMATIC)  ************************************* **/  
+  /*
+   * stress test: 18 ports with packets, no gap - page-allocation too slow...
+   * 
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b111111111111111111;
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 512;
+  end
+*/
+   /** ***************************   test scenario 44  ************************************* **/
+   /** ***************************   (PROBLEMATIC)  ************************************* **/  
+  /*
+   * stress test: 18 ports with packets, no gap - page-allocation too slow...
+   * 
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b111111111111111111;
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 64;
+  end
+/*/
+   /** ***************************   test scenario 45  ************************************* **/
+  /*
+   * test HP detection by prio - works
+   * 
+   **/
+///*
+  initial begin
+    portUnderTest        = 18'b000000000000000001;
+    trans_paths[0]       = '{0  ,1 , 207 }; //prio 3, broadcast
+    repeat_number        = 30;
+    tries_number         = 1;
+    mac_br               = 1;
+    hp_prio_mask         ='b01000010;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 64;
   end
 //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1301,7 +1415,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 || opt==10 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206)
+      else if(opt==4 || opt==10 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206 || opt == 207)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -1325,6 +1439,8 @@ module main;
       tmpl.has_smac  = 1;
       if(opt == 204)
         tmpl.pcp     = 3; //priority
+      else if(opt == 207)
+        tmpl.pcp     = 6; //priority
       
       if(opt==900 || opt == 901)
         tmpl.is_q      = 0;
@@ -1785,7 +1901,7 @@ module main;
         /* port 2 is backup for port 1*/
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
                                32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
-                               32'h3FFFF /*ports_mask  */, 32'b1000_0111 /* ports_egress */,32'b1000_0011 /* ports_ingress   */);
+                               32'h3FFFF /*ports_mask  */, 32'b1100_0111 /* ports_egress */,32'b1100_0011 /* ports_ingress   */);
 
         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
                                32'b00000110 /*pattern_mask*/, 32'b00000010 /* pattern_match*/,'h000 /* mode */, 
@@ -1829,6 +1945,13 @@ module main;
                                32'b00000001 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h3 /* mode */,
                                32'b00000001 /*ports_mask  */, 32'b00000001 /* ports_egress */,32'b00000001 /* ports_ingress   */);
 
+        end
+        else if(tru_config_opt == 7) // TRU transparent but is there
+        begin
+        // basic config
+        tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h0 /* mode */, 
+                               32'h3FFFF /*ports_mask  */, 32'h3FFFF /* ports_egress */, 32'h3FFFF /* ports_ingress   */);
         end
 
       else // default config == 0
@@ -1993,7 +2116,8 @@ module main;
       rtu.rx_add_ff_mac_range (0/*ID*/,1/*valid*/,'h0050cafebabe /*MAC_lower*/,'h0850cafebabe/*MAC_upper*/);
 //       rtu.rx_set_port_mirror  ('h00000002 /*mirror_src_mask*/,'h00000080 /*mirror_dst_mask*/,1/*rx*/,1/*tx*/);
       rtu.rx_set_port_mirror  (mirror_src_mask, mirror_dst_mask,mr_rx, mr_tx);
-      rtu.rx_set_hp_prio_mask ('b10000001 /*hp prio mask*/); //HP traffic set to 7th priority
+      rtu.rx_set_hp_prio_mask (hp_prio_mask /*hp prio mask*/);
+//       rtu.rx_set_hp_prio_mask ('b10000001 /*hp prio mask*/); //HP traffic set to 7th priority
 //       rtu.rx_set_cpu_port     ((1<<g_num_ports)/*mask: virtual port of CPU*/);
       rtu.rx_read_cpu_port();     
       rtu.rx_drop_on_fmatch_full();
@@ -2005,12 +2129,16 @@ module main;
       rtu.enable();
       $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
       ///TRU
-      tru = new(cpu_acc, 'h58000,g_num_ports,1);      
+      tru = new(cpu_acc, 'h58000,g_num_ports,1 /*enable debugging*/);      
       init_tru(tru);
       
       tatsu=new(cpu_acc, 'h59000);
       if(g_tatsu_config == 1)
         tatsu.drop_at_HP_enable();
+      
+      hwdu=new(cpu_acc, 'h71000);
+      hwdu.set_tatsu(0);
+
       fork
         begin
           if(g_fw_to_cpu_scenario == 1)
@@ -2102,7 +2230,7 @@ module main;
              wait_cycles(200);
              rtu.set_port_config(1, 0, 0, 1); // disable port 1
              wait_cycles(200);
-             ep_ctrl[g_backup_port] = 'b1;
+            ep_ctrl[g_backup_port] = 'b1;
              $display("");
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 1 up <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
@@ -2139,7 +2267,88 @@ module main;
                hp_fw_cpu = 1;
                rtu.rx_fw_to_CPU(hp_fw_cpu,unrec_fw_cpu);
              end
-           end          
+           end   
+           if(g_failure_scenario == 8)
+           begin 
+             wait_cycles(2010);
+             ep_ctrl[g_active_port] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(600);
+             /* port 1 is backup for port 2*/
+             tru.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
+                               32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,'h000 /* mode */, 
+                               32'h3FFFF /*ports_mask  */, 32'b1100_0111 /* ports_egress */,32'b1100_0101 /* ports_ingress   */);
+
+             tru.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b00000110 /*pattern_mask*/, 32'b00000100 /* pattern_match*/,'h000 /* mode */, 
+                               32'b00000110 /*ports_mask  */, 32'b00000110 /* ports_egress */,32'b00000010 /* ports_ingress   */); 
+             tru.tru_swap_bank();  
+             wait_cycles(600);
+             ep_ctrl[g_active_port] = 'b1;
+           end       
+           if(g_failure_scenario == 9)
+           begin 
+             wait_cycles(2030);
+             ep_ctrl[g_active_port] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(100);
+             rtu.set_port_config(1, 0, 0, 1); // disable port 1
+             wait_cycles(50);
+             ep_ctrl[g_active_port] = 'b1;
+             wait_cycles(50);
+             rtu.set_port_config(1, 1, 0, 1); // enable port 1
+             wait_cycles(100);
+             ep_ctrl[g_active_port] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(100);
+             rtu.set_port_config(1, 0, 0, 1); // disable port 1
+             wait_cycles(50);
+             ep_ctrl[g_active_port] = 'b1;
+             wait_cycles(50);
+             rtu.set_port_config(1, 1, 0, 1); // enable port 1
+             wait_cycles(100);
+             hwdu.set_tatsu(0);
+             ep_ctrl[g_active_port] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(100);
+             rtu.set_port_config(1, 0, 0, 1); // disable port 1
+             wait_cycles(50);
+             ep_ctrl[g_active_port] = 'b1;
+             wait_cycles(50);
+             rtu.set_port_config(1, 1, 0, 1); // enable port 1
+             wait_cycles(100);
+             ep_ctrl[g_active_port] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(100);
+             rtu.set_port_config(1, 0, 0, 1); // disable port 1
+             wait_cycles(50);
+             ep_ctrl[g_active_port] = 'b1;
+             wait_cycles(50);
+             rtu.set_port_config(1, 1, 0, 1); // enable port 1
+             wait_cycles(100);
+             ep_ctrl[g_active_port] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(100);
+             rtu.set_port_config(1, 0, 0, 1); // disable port 1
+             wait_cycles(50);
+             ep_ctrl[g_active_port] = 'b1;
+             wait_cycles(50);
+             rtu.set_port_config(1, 1, 0, 1); // enable port 1
+             wait_cycles(100);
+             hwdu.set_tatsu(0);
+           end       
          end 
       join_none; //
 
