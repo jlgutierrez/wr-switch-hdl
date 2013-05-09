@@ -175,6 +175,7 @@ package rtu_private_pkg is
                                  rq_prio         : std_logic_vector;
                                  rq_has_prio     : std_logic;
                                  rq_port_mask    : std_logic_vector;
+                                 traffic_br      : std_logic;
                                  pcr_pass_all    : std_logic_vector;
                                  pcr_drop_nonvlan_at_ingress: std_logic_vector;
                                  port_mask_width : integer) 
@@ -598,6 +599,7 @@ package body rtu_private_pkg is
                                  rq_prio         : std_logic_vector;
                                  rq_has_prio     : std_logic;
                                  rq_port_mask    : std_logic_vector;
+                                 traffic_br      : std_logic;
                                  pcr_pass_all    : std_logic_vector;
                                  pcr_drop_nonvlan_at_ingress: std_logic_vector;
                                  port_mask_width : integer) 
@@ -606,8 +608,7 @@ package body rtu_private_pkg is
     variable egress_allowed_on_vlan : std_logic;
   begin
     ------- mask -----------
---     rsp.port_mask := (others =>'0');
---     rsp.port_mask(port_mask_width-1 downto 0) := vlan_entry.port_mask(port_mask_width-1 downto 0) and pcr_pass_all(port_mask_width-1 downto 0);
+     rsp.port_mask := (others =>'0');
     
     ------- prio ----------
     if(vlan_entry.has_prio = '1') then -- regardless of vlan_entry.prio_override value
@@ -626,11 +627,13 @@ package body rtu_private_pkg is
     elsif(vlan_entry.drop = '1') then
       rsp.drop      := '1';
       rsp.port_mask := (others =>'0');      
+    elsif(traffic_br = '1') then
+      rsp.port_mask := vlan_entry.port_mask and pcr_pass_all; -- broadcast also to NIC !!!!!!
+      rsp.drop   := '0';
     else
       rsp.drop   := '0';
-      rsp.port_mask := vlan_entry.port_mask and pcr_pass_all; -- broadcast also to NIC !!!!!!
---       rsp.port_mask(port_mask_width-1 downto 0) := vlan_entry.port_mask(port_mask_width-1 downto 0) and 
---                                                            pcr_pass_all(port_mask_width-1 downto 0);
+      rsp.port_mask(port_mask_width-1 downto 0) := vlan_entry.port_mask(port_mask_width-1 downto 0) and 
+                                                   pcr_pass_all(port_mask_width-1 downto 0);
     end if;
     
     ------ filled in later -----------

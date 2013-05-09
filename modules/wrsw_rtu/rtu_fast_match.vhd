@@ -55,7 +55,8 @@
 -- Date        Version  Author          Description
 -- 2012-10-30  1.0      lipinskimm          Created
 -------------------------------------------------------------------------------
--- 
+-- known problems:
+-- * HP priority mask: reversed bit order
 -------------------------------------------------------------------------------
 
 
@@ -211,6 +212,7 @@ begin
                                             rtu_req_stage_1.prio,
                                             rtu_req_stage_1.has_prio,
                                             pipeline_grant(1),
+                                            traffic_br_d,
                                             rtu_pcr_pass_all_i,
                                             rtu_pcr_nonvlan_drop_at_ingress,
                                             g_num_ports);
@@ -333,6 +335,7 @@ begin
   match_rsp_data_o.prio       <= pipeline_match_rsp(0).prio      when (tru_enabled_i = '0') else
                                  pipeline_match_rsp(1).prio ;
   match_rsp_data_o.drop       <= pipeline_match_rsp(0).drop      when (tru_enabled_i = '0') else
+                                 pipeline_match_rsp(1).drop      when (pipeline_match_rsp(1).nf = '1') else -- if non-forward, dont drop even if TRU says so
                                  pipeline_match_rsp(1).drop or tru_rsp_i.drop;
   match_rsp_data_o.nf         <= pipeline_match_rsp(0).nf        when (tru_enabled_i = '0') else
                                  pipeline_match_rsp(1).nf;

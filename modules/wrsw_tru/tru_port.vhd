@@ -221,19 +221,21 @@ begin --rtl
     
          -- provide output mask if TRU is enabled, one clock after receiving request
          if(config_i.gcr_g_ena = '1' and s_valid_d0 = '1') then
-            -- output mask for forwarding takes into account:
-            -- * status of ports (don't forward to ports which are down)
-            -- * output from the TRU_TAB+patterns interpretation
-            -- * reception port (don't forward to myself)
-            s_port_mask          <= s_status_mask and s_egress_mask and 
-                                    (not s_self_mask) and (not s_xor_mask);
             
             -- if ingress on the reception is allowed, and the reception port  is not meant
             -- to be down, don't drop
             if((s_ingress_mask and s_status_mask and s_self_mask) = s_zeros) then
               s_drop             <= '1';
+              s_port_mask        <= (others=>'0');-- this is useful in rtu_port_new
             else
               s_drop             <= '0';
+              -- output mask for forwarding takes into account:
+              -- * status of ports (don't forward to ports which are down)
+              -- * output from the TRU_TAB+patterns interpretation
+              -- * reception port (don't forward to myself)
+              s_port_mask          <= s_status_mask and s_egress_mask and 
+                                      (not s_self_mask) and (not s_xor_mask);
+
             end if;
           
          -- if there is no new request in the pipe, zero response

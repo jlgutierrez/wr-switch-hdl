@@ -627,12 +627,13 @@ begin
 
   -- we concatenate separately Switch's ports (g_num_ports-1 downto 0) and the rest (NIC) so that
   -- frames go to NIC based on any of the decisions (fast or full match)
---   fast_and_full_mask  <= (fast_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) or full_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports)) &
---                          (fast_match.port_mask(g_num_ports-1 downto 0)              and full_match.port_mask(g_num_ports-1 downto  0));
+  fast_and_full_mask  <= (fast_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) or full_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports)) &
+                         (fast_match.port_mask(g_num_ports-1 downto 0)              and full_match.port_mask(g_num_ports-1 downto  0));
 
   -- the above solution migh not be the best - eventually, we don't really want so much traffic 
   -- to go to NIC...(this is mainly to prevent the "unrecognized" traffic to be forwarded to NIC)
-  fast_and_full_mask  <= fast_match.port_mask and full_match.port_mask;
+  -- fast_and_full_mask  <= fast_match.port_mask and full_match.port_mask;
+
   -- forming final mask: 
   --                  1) full match available, full match says that we have non-forward traffic<
   --                     to such traffic we don't apply fast_match (TRU and stuff)
@@ -665,7 +666,8 @@ begin
   -- to make sure that HP traffic is not disturbed due to the fact that it's fowarded to slow NIC... just not 
   -- foward it there... (NIC should have it's own mechanism to prevent such situation, but precautions are not bad).
   -- In case that some diagnostics is required, we can enable forwarding of HP traffic to NIC.
-  forwarding_mask_CPU_filtered   <= forwarding_mask when (rtu_str_config_i.hp_fw_cpu_ena = '1' and hp = '1') else
+  forwarding_mask_CPU_filtered   <= forwarding_mask or rtu_str_config_i.cpu_forward_mask 
+                                                    when (rtu_str_config_i.hp_fw_cpu_ena = '1' and hp = '1') else
                                     forwarding_mask when                                          (hp = '0') else
                                     forwarding_mask when                                          (nf = '1') else
                                     forwarding_mask and (not rtu_str_config_i.cpu_forward_mask);-- this is HP, not link-limited (nf) and

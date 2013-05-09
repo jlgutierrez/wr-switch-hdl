@@ -663,7 +663,7 @@ begin
   regs_towb.rx_ff_mac_r1_id_i    <= std_logic_vector(to_unsigned(c_ff_single_macs_number, 8));
   regs_towb.rx_ff_mac_r1_hi_id_i <= std_logic_vector(to_unsigned(c_ff_range_macs_number, 16));
 
-  regs_towb.gcr_rtu_version_i    <= x"5";
+  regs_towb.gcr_rtu_version_i    <= x"6";
 
   -- RTU Extension index-access configration regiters for Fast Forward MACs 
   p_rx_registers : process(clk_sys_i)
@@ -797,15 +797,15 @@ begin
   events_gen: if(g_rmon_events_bits_pp = 9 ) generate
     rmon_events_gen: for i in 0 to (g_num_ports - 1) generate
       rmon_events_o((i+1)*g_rmon_events_bits_pp-1 downto i*g_rmon_events_bits_pp) <= 
-        dbg_forwarded_to_port(i)                                      & 
-        std_logic(rsp_valid and rsp_data(rsp_data'length - 1 - g_num_ports+i)) & -- FullMatch: resp valid
-        fast_match_rsp_valid(i)                                       & -- FastMatch: resp valid
-        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.nf) & -- FastMatch: non-forward (as config)
-        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.ff) & -- FastMatch: fast forward (as config)                   
-        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.hp) & -- FastMatch: high priority frames
-        std_logic(rsp(i).valid and rsp_ack_i(i) and rsp(i).drop     ) & -- dropped
-        std_logic(rsp(i).valid and rsp_ack_i(i)                     ) & -- valid respons
-        std_logic(req_i(i).valid                                    ) ; -- valid request 
+        dbg_forwarded_to_port(i)                                      & -- 8: forwarded to port 
+        std_logic(rsp_valid and rsp_data(i))                          & -- 7: FullMatch: resp valid
+        fast_match_rsp_valid(i)                                       & -- 6: FastMatch: resp valid
+        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.nf) & -- 5: FastMatch: non-forward (as config)
+        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.ff) & -- 4: FastMatch: fast forward (as config)                   
+        std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.hp) & -- 3: FastMatch: high priority frames
+        std_logic(rsp(i).valid and rsp_ack_i(i) and rsp(i).drop     ) & -- 2: dropped
+        std_logic(rsp(i).valid and rsp_ack_i(i)                     ) & -- 1: valid respons
+        std_logic(req_i(i).valid                                    ) ; -- 0: valid request 
     end generate rmon_events_gen;
   end generate events_gen;
   no_events_gen: if(g_rmon_events_bits_pp /= 9 ) generate
