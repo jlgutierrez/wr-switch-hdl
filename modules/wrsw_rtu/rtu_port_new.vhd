@@ -84,7 +84,7 @@ entity rtu_port_new is
     -- 1 indicates that coresponding RTU port is idle and ready to accept requests
     rtu_idle_o               : out std_logic;
     rtu_rq_i                 : in  t_rtu_request;
-    rtu_rq_aboard_i          : in  std_logic;
+    rtu_rq_aboard_i          : in  std_logic;     -- not used yet
     rtu_rsp_o                : out t_rtu_response;
     rtu_rsp_ack_i            : in std_logic;
 
@@ -319,7 +319,7 @@ begin
   -- request to aboard full match
   full_match_aboard       <= (not full_match_valid) and    -- suppress when we have replay from full match
                             ((aboard_possible and fast_match_wr_req) or -- new request when full match busy
-                             (rtu_rq_aboard_i)); -- other externa, e.g. from swcore
+                             (rtu_rq_aboard_i)); -- other externa, e.g. from swcore, **not implemented yet
   --------------------------------------------------------------------------------------------
   -- register input request to make it available for both matches (full/fast)
   --------------------------------------------------------------------------------------------
@@ -460,7 +460,6 @@ begin
         ------------------------------------------------------------------------------------------------------------     
         port_state                <= S_IDLE;
         rsp                       <= c_rtu_rsp_zero;
---         fast_match                <= c_match_zero;
         delayed_full_match_wr_req <= '0';
         ------------------------------------------------------------------------------------------------------------     
       else
@@ -503,7 +502,10 @@ begin
                 end if;
               end if;
             elsif(rtu_rq_aboard_i = '1' and fast_match.valid = '0') then
-               -- TODO: this should not happen -> handle exeption              
+              -- TODO: this should not happen -> handle exeption  
+              port_state     <= S_FINAL_MASK;
+              rsp            <= c_rtu_rsp_drop;
+              delayed_full_match_wr_req <= '0';
             end if;
 
           ------------------------------------------------------------------------------------------------------------ 
@@ -605,7 +607,10 @@ begin
           ------------------------------------------------------------------------------------------------------------ 
           --| OTHER: 
           ------------------------------------------------------------------------------------------------------------                       
-          when others => null;
+          when others => 
+              port_state     <= S_IDLE;
+              rsp            <= c_rtu_rsp_zero;
+              delayed_full_match_wr_req <= '0';         
         ------------------------------------------------------------------------------------------------------------
         end case;
           if(rtu_rsp_ack_i = '1' and rsp.valid ='1') then            
