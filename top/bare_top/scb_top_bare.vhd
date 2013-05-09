@@ -25,7 +25,8 @@ entity scb_top_bare is
     g_without_network : boolean := false;
     g_with_TRU        : boolean := false;
     g_with_TATSU      : boolean := false;
-    g_with_HWDU       : boolean := false
+    g_with_HWDU       : boolean := false;
+    g_with_PSTATS     : boolean := true
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -138,12 +139,14 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"09_05_13_00"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
-  constant c_RTU_EVENTS    : integer := 8; -- number of RMON events per port
+  constant c_RTU_EVENTS    : integer := 9; -- number of RMON events per port
   constant c_DBG_V_SWCORE  : integer := (3*10); -- 3 resources, each has with of CNT of 10 bits
+  constant c_DBG_N_REGS    : integer := 2; -- 32-bits debug registers which go to HWDU
   constant c_ALL_EVENTS    : integer := c_RTU_EVENTS + c_epevents_sz;
   constant c_DUMMY_RMON    : boolean := false; -- define TRUE to enable dummy_rmon module for debugging PSTAT
 --   constant c_epevents_sz   : integer := 15;
@@ -371,6 +374,8 @@ architecture rtl of scb_top_bare is
   constant c_zero_gl_pause   : t_global_pause_request :=('0',x"0000", x"00",(others=>'0'));
   signal global_pause        : t_global_pause_request_array(c_NUM_GL_PAUSE-1 downto 0);
 
+  signal dbg_n_regs          : std_logic_vector(c_DBG_N_REGS*32 -1 downto 0);
+  
 begin
 
 
@@ -703,7 +708,7 @@ begin
         global_pause_i            => global_pause,
         perport_pause_i           => fc_rx_pause,
 
-        dbg_o     => open, 
+        dbg_o     => dbg_n_regs(32+c_DBG_V_SWCORE-1 downto 32), 
         
         rtu_rsp_i => rtu_rsp,
         rtu_ack_o => rtu_rsp_ack
@@ -922,22 +927,33 @@ begin
       sda_pad_o    => i2c_sda_o(2),
       sda_padoen_o => i2c_sda_oen_o(2));
 
-  U_PSTATS : xwrsw_pstats
-    generic map(
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE,
-      g_nports => c_NUM_PORTS,
-      g_cnt_pp => c_ALL_EVENTS,
-      g_cnt_pw => 4)
-    port map(
-      rst_n_i => rst_n_periph,
-      clk_i   => clk_sys,
+  --=====================================--
+  --               PSTATS                --
+  --=====================================--
+  gen_PSTATS: if(g_with_PSTATS = true) generate
+    U_PSTATS : xwrsw_pstats
+      generic map(
+        g_interface_mode      => PIPELINED,
+        g_address_granularity => BYTE,
+        g_nports => c_NUM_PORTS,
+        g_cnt_pp => c_ALL_EVENTS,
+        g_cnt_pw => 4)
+      port map(
+        rst_n_i => rst_n_periph,
+        clk_i   => clk_sys,
   
-      events_i => rmon_events,
+        events_i => rmon_events,
   
-      wb_i  => cnx_master_out(c_SLAVE_PSTATS),
-      wb_o  => cnx_master_in(c_SLAVE_PSTATS));
+        wb_i  => cnx_master_out(c_SLAVE_PSTATS),
+        wb_o  => cnx_master_in(c_SLAVE_PSTATS));
  
+  end generate;
+
+  gen_no_PSTATS: if(g_with_PSTATS = false) generate
+    cnx_master_in(c_SLAVE_PSTATS).ack <= '1';
+    cnx_master_in(c_SLAVE_PSTATS).int <= '0';
+  end generate;
+
   gen_events_assemble : for i in 0 to c_NUM_PORTS-1 generate
     rmon_events((i+1)*c_ALL_EVENTS-1 downto i*c_ALL_EVENTS) <= 
                 rtu_events((i+1)*c_RTU_EVENTS-1 downto i*c_RTU_EVENTS) &
@@ -952,19 +968,22 @@ begin
       generic map(
         g_interface_mode      => PIPELINED,
         g_address_granularity => BYTE,
-        g_nregs => 1)
+        g_nregs               => c_DBG_N_REGS)
       port map(
         rst_n_i => rst_n_periph,
         clk_i   => clk_sys,
 
-        dbg_regs_i  => (others=>'0'),
+        dbg_regs_i  => dbg_n_regs,
 
         wb_i  => cnx_master_out(c_SLAVE_HWDU),
         wb_o  => cnx_master_in(c_SLAVE_HWDU));
+
+        dbg_n_regs(  32-1 downto 0)              <= c_GW_VERSION;
+        dbg_n_regs(2*32-1 downto c_DBG_V_SWCORE) <= (others=>'0');
     end generate;
     gen_no_HWDU: if(g_with_HWDU = false) generate
       cnx_master_in(c_SLAVE_HWDU).ack   <= '1';
-      cnx_master_in(c_SLAVE_HWDU).dat   <= x"deadbeef";
+      cnx_master_in(c_SLAVE_HWDU).dat   <= c_GW_VERSION;--x"deadbeef";
       cnx_master_in(c_SLAVE_HWDU).err   <= '0';
       cnx_master_in(c_SLAVE_HWDU).stall <= '0';
       cnx_master_in(c_SLAVE_HWDU).rty   <= '0';
