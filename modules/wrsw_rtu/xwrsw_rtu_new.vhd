@@ -141,7 +141,7 @@ entity xwrsw_rtu_new is
     g_cpu_port_num                    : integer := -1; --TODO: get rid of this
     g_match_req_fifo_size             : integer                        := 32;    
     g_port_mask_bits                  : integer;
-    g_rmon_events_bits_pp             : integer := 8); -- rmon events num ber per port
+    g_rmon_events_bits_pp             : integer := 9); -- rmon events num ber per port
 
   port (
     clk_sys_i   : in std_logic;
@@ -267,6 +267,8 @@ architecture behavioral of xwrsw_rtu_new is
   signal rsp                                : t_rtu_response_array(g_num_ports-1 downto 0);
   signal htab_port : std_logic_vector(g_num_ports - 1 downto 0);
   signal htab_src_dst : std_logic;
+  
+  signal dbg_forwarded_to_port              : std_logic_vector(g_num_ports - 1 downto 0);
 begin 
 
   zeros                    <= (others => '0');
@@ -792,10 +794,12 @@ begin
             vlan_tab_rd_entry4fast_match.prio,
             vlan_tab_rd_entry4fast_match.has_prio);
 
-  events_gen: if(g_rmon_events_bits_pp = 8 ) generate
+  events_gen: if(g_rmon_events_bits_pp = 9 ) generate
     rmon_events_gen: for i in 0 to (g_num_ports - 1) generate
       rmon_events_o((i+1)*g_rmon_events_bits_pp-1 downto i*g_rmon_events_bits_pp) <= 
-        "00"                                                          & -- spare, to make the number nice ;-P  
+        dbg_forwarded_to_port(i)                                      & 
+        std_logic(rsp_valid and rsp_data(rsp_data'length - 1 - g_num_ports+i)) & -- FullMatch: resp valid
+        fast_match_rsp_valid(i)                                       & -- FastMatch: resp valid
         std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.nf) & -- FastMatch: non-forward (as config)
         std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.ff) & -- FastMatch: fast forward (as config)                   
         std_logic(fast_match_rsp_valid(i) and fast_match_rsp_data.hp) & -- FastMatch: high priority frames
@@ -804,8 +808,20 @@ begin
         std_logic(req_i(i).valid                                    ) ; -- valid request 
     end generate rmon_events_gen;
   end generate events_gen;
-  no_events_gen: if(g_rmon_events_bits_pp /= 8 ) generate
+  no_events_gen: if(g_rmon_events_bits_pp /= 9 ) generate
     rmon_events_o <= (others=>'0'); 
     assert true report "g_rmon_events_bits_pp not equal to the defined number of RMON event ";
   end generate no_events_gen;
+  
+  fw_gen : for i in 0 to (g_num_ports - 1) generate
+    egress_port_p: process(rsp, rsp_ack_i)
+    variable fw : std_logic;
+    begin
+      fw := '0';
+      L0: for j in 0 to (g_num_ports -1) loop
+        fw := fw or (rsp(j).valid and rsp(j).port_mask(i) and rsp_ack_i(j) and not rsp(j).drop);
+      end loop;
+      dbg_forwarded_to_port(i) <= fw;
+    end process;
+  end generate fw_gen;
 end behavioral;
