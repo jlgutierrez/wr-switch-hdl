@@ -978,8 +978,8 @@ begin
         wb_i  => cnx_master_out(c_SLAVE_HWDU),
         wb_o  => cnx_master_in(c_SLAVE_HWDU));
 
-        dbg_n_regs(  32-1 downto 0)              <= c_GW_VERSION;
-        dbg_n_regs(2*32-1 downto c_DBG_V_SWCORE) <= (others=>'0');
+        dbg_n_regs(  32-1 downto 0)                 <= c_GW_VERSION;
+        dbg_n_regs(2*32-1 downto c_DBG_V_SWCORE+32) <= (others=>'0');
     end generate;
     gen_no_HWDU: if(g_with_HWDU = false) generate
       cnx_master_in(c_SLAVE_HWDU).ack   <= '1';
