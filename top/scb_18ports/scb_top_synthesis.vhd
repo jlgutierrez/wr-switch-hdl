@@ -225,6 +225,13 @@ architecture Behavioral of scb_top_synthesis is
   signal i2c_sda_out : std_logic_vector(2 downto 0);
   signal i2c_sda_in : std_logic_vector(2 downto 0);
   signal i2c_scl_in : std_logic_vector(2 downto 0);
+
+  attribute buffer_type             : string;
+  attribute buffer_type of clk_dmtd : signal is "BUFG";
+  attribute buffer_type of clk_ref  : signal is "BUFG";
+  attribute buffer_type of clk_aux  : signal is "BUFG";
+  attribute buffer_type of clk_sys  : signal is "BUFG";
+
   component scb_top_bare
     generic (
       g_num_ports       : integer;
