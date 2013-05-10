@@ -262,8 +262,8 @@ begin --rtl
                                              s_patternSub_d0,
                                              g_tru_subentry_num);
   s_backup_masks <= f_gen_mask_with_patterns(tru_tab_entry_i, 
-                                             s_self_mask, 
-                                             s_self_mask,
+                                             std_logic_vector(s_self_mask or s_patternRep_d0), 
+                                             std_logic_vector(s_self_mask or s_patternAdd_d0),
                                              s_patternSub_d0,
                                              g_tru_subentry_num);
   

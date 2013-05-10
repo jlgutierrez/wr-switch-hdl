@@ -104,7 +104,8 @@ module main;
                                          //index: 1,2,3,4,5,6,7,8,9, ....
    integer start_send_init_delay[g_max_ports] = '{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
    //mask with ports we want to use, port number:  18 ...............0
-   reg [g_max_ports-1:0] portUnderTest        = 18'b111111111111111111; //  
+   reg [g_max_ports-1:0] portUnderTest        = 18'b111111111111111111; //
+   reg [g_max_ports-1:0] portRtuEnabled       = 18'b111111111111111111; //
    integer repeat_number                      = 20;
    integer tries_number                       = 3;
 //    reg [31:0] vlan_port_mask                  = 32'hFFFFFFFF;
@@ -1353,6 +1354,7 @@ module main;
   end
 */
    /** ***************************   test scenario 46  ************************************* **/
+   /** ***************************      (FIXED BUG)    ************************************* **/ 
   /*
    * trying to simulate test setup in the lab to check whether 8 ports binary 09_05_13_00/5
    * does not show RTUful events - 
@@ -1396,13 +1398,14 @@ module main;
     g_force_payload_size = 512;
   end
 */
-   /** ***************************   test scenario 42  ************************************* **/ 
+   /** ***************************   test scenario 48  ************************************* **/ 
+   /** ***************************      (FIXED BUG)    ************************************* **/ 
   /*
    * testing switch over between ports 1,2
-   * trying to simulate situation which happens in hw: stuck at S_WAIT_RTU_VALID,
+   * trying to simulate situation which happens in hw: stuck at S_WAIT_RTU_VALID,-> simulated and fixed
    * 
    **/
-//*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000110;
     g_tru_enable         = 1;
@@ -1410,6 +1413,31 @@ module main;
                          // tx  ,rx ,opt
     trans_paths[1]       = '{1  ,6 , 7 };
     trans_paths[2]       = '{2  ,7 , 7 };
+    repeat_number        = 30;
+    g_active_port        = 1;
+    g_backup_port        = 2;    
+    tries_number         = 1;
+    tru_config_opt       = 3;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 512;
+  end
+*/
+   /** ***************************   test scenario 49  ************************************* **/ 
+  /*
+   * testing switch over between ports 1,2 on the "upper switch" -> the one which is sending
+   * onto two ports 
+   * trying to simulate situation which happens in hw: the switch starts to drop frames forward
+   * to the rendundant link aggregation
+   * 
+   **/
+//*
+  initial begin
+    portUnderTest        = 18'b0000000000010000000;
+    portRtuEnabled       = 18'b0000000000010000110;
+    g_tru_enable         = 1;
+    g_failure_scenario   = 11;
+                         // tx  ,rx ,opt
+    trans_paths[7]       = '{7  ,2 , 7 };
     repeat_number        = 30;
     g_active_port        = 1;
     g_backup_port        = 2;    
@@ -2116,7 +2144,7 @@ module main;
       rtu.set_bus(cpu_acc, 'h60000);
       for (int dd=0;dd<g_num_ports;dd++)
         begin
-        rtu.set_port_config(dd, 1, 0, 1);
+        rtu.set_port_config(dd /*port ID*/, portRtuEnabled[dd] /*pass_all*/, 0 /*pass_bpdu*/, 1 /*learn_en*/);
       end
         
         //
@@ -2444,6 +2472,10 @@ module main;
              $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
              $display("");
              wait_cycles(100);
+             hwdu.dump_mpm_page_utilization(1);
+             wait_cycles(1000);
+             hwdu.dump_mpm_page_utilization(1);
+             wait_cycles(1000);
              hwdu.dump_mpm_page_utilization(1);
 
            end  
