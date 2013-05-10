@@ -64,6 +64,7 @@ module main;
    CSimDrv_HWDU hwdu;
    
    reg [g_num_ports-1:0] ep_ctrl;
+   reg [15:0]            ep_failure_type = 'h00;
    
    // prameters to create some gaps between pks (not work really well)
    // default settings
@@ -208,6 +209,7 @@ module main;
    int lacp_df_hp_id                        = 0;
    int lacp_df_br_id                        = 2;
    int lacp_df_un_id                        = 1;
+   
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -1423,6 +1425,7 @@ module main;
   end
 */
    /** ***************************   test scenario 49  ************************************* **/ 
+   /** ***************************      (FIXED BUG)    ************************************* **/ 
   /*
    * testing switch over between ports 1,2 on the "upper switch" -> the one which is sending
    * onto two ports 
@@ -1430,7 +1433,7 @@ module main;
    * to the rendundant link aggregation
    * 
    **/
-//*
+/*
   initial begin
     portUnderTest        = 18'b0000000000010000000;
     portRtuEnabled       = 18'b0000000000010000110;
@@ -1441,6 +1444,30 @@ module main;
     repeat_number        = 30;
     g_active_port        = 1;
     g_backup_port        = 2;    
+    tries_number         = 1;
+    tru_config_opt       = 3;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 512;
+  end
+*/
+   /** ***************************   test scenario 50  ************************************* **/ 
+  /*
+   * testing switch over between ports 1,2 
+   * simulating ungraceful loss of physic signal....
+   * 
+   **/
+//*
+  initial begin
+    portUnderTest        = 18'b000000000000000110;
+    g_tru_enable         = 1;
+    g_failure_scenario   = 11;
+                         // tx  ,rx ,opt
+    trans_paths[1]       = '{1  ,6 , 4 };
+    trans_paths[2]       = '{2  ,7 , 4 };
+    repeat_number        = 30;
+    g_active_port        = 1;
+    g_backup_port        = 2;    
+    ep_failure_type      = 'h01;
     tries_number         = 1;
     tru_config_opt       = 3;
     g_enable_pck_gaps    = 0;
@@ -1817,7 +1844,8 @@ module main;
               .rst_n_i(rst_n),
               .cpu_irq(cpu_irq),
               .clk_swc_mpm_core_i(clk_swc_mpm_core),
-              .ep_ctrl_i(ep_ctrl)
+              .ep_ctrl_i(ep_ctrl),
+              .ep_failure_type(ep_failure_type)
               );
 
    
@@ -2113,6 +2141,7 @@ module main;
       begin 
         ep_ctrl[gg] = 'b1; 
       end
+      
       repeat(200) @(posedge clk_sys);
 
       $display("Startup!");

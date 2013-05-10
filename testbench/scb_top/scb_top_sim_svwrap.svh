@@ -46,16 +46,19 @@ module scb_top_sim_svwrap
    rst_n_i,
    cpu_irq,
    clk_swc_mpm_core_i,
-   ep_ctrl_i
+   ep_ctrl_i,
+   ep_failure_type
    );
 
    parameter g_num_ports = 6;
    
-
+   reg [15:0] tx_data_invalid[g_num_ports];
+   reg [ 1:0] tx_k_invalid[g_num_ports];
    
    input clk_sys_i, clk_ref_i,rst_n_i,clk_swc_mpm_core_i;
    input bit[g_num_ports-1:0] ep_ctrl_i;
    output cpu_irq;
+   input [15:0] ep_failure_type;
 
    wire [g_num_ports-1:0] rbclk;
    
@@ -244,19 +247,20 @@ module scb_top_sim_svwrap
            end // for (i=0; i<g_num_ports; i++)
       endgenerate
 
-
    generate
       genvar j;
-
-
-      
+       
+     
       for(j=0;j<g_num_ports;j++) begin
          assign rbclk[j] = clk_ref_phys[j];
          
          ///////////////// nasty hack by Maciej /////////////////
          // causing sync error in the Switch 
-         assign td[18 * j + 15 : 18 * j]      = ep_ctrl_i[j] ? phys_out[j].tx_data :  'h00BC;
-         assign td[18 * j + 17 : 18 * j + 16] = ep_ctrl_i[j] ? phys_out[j].tx_k    : 2'b01;
+//          assign td[18 * j + 15 : 18 * j]      = ep_ctrl_i[j] ? phys_out[j].tx_data :  'h00BC;
+//          assign td[18 * j + 17 : 18 * j + 16] = ep_ctrl_i[j] ? phys_out[j].tx_k    : 2'b01;
+         assign td[18 * j + 15 : 18 * j]      = ep_ctrl_i[j] ? phys_out[j].tx_data : tx_data_invalid[j];
+         assign td[18 * j + 17 : 18 * j + 16] = ep_ctrl_i[j] ? phys_out[j].tx_k    : tx_k_invalid[j];
+         
          // causing transmission error in the driving simulation
          assign phys_in[j].tx_enc_err         = ~ep_ctrl_i[j];
          ///////////////////////////////////////////////////////
@@ -280,7 +284,34 @@ module scb_top_sim_svwrap
                                           phys_out[j].tx_data);
          end
          
-      end
+
+         always@(posedge clk_sys_i) begin
+            integer jj;
+            if(ep_ctrl_i[j] == 1) begin 
+              tx_data_invalid[j] = 'h00BC;
+              tx_k_invalid[j]    = 2'b01 ;  
+              jj = 0;               
+            end
+            else begin
+              if(ep_failure_type == 1) begin
+                $display("Link failure type: 1 [generate some random noise, starting with data='h00BC, k = 'b01]");
+                while(jj++<100) begin
+                  tx_data_invalid[j] = 'h00BC + jj;
+                  tx_k_invalid[j]    = 2'b01 & jj;
+                  @(posedge clk_sys_i);
+                end
+                tx_data_invalid[j] = 'h00BC;
+                tx_k_invalid[j]    = 2'b01 ;              
+              end
+              else begin //including 0
+                $display("Link failure type: 0 [simply off the link: data='h00BC, k = 'b01]");
+                tx_data_invalid[j] = 'h00BC;
+                tx_k_invalid[j]    = 2'b01 ;
+              end
+            end;
+         end 
+
+      end 
    endgenerate
 
    
