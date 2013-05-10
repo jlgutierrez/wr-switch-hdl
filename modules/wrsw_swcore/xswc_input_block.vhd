@@ -1530,8 +1530,12 @@ begin
         when S_WAIT_RTU_VALID =>
           --===========================================================================================
 
+          -- error coming from rcv_pck FSM, ignore transfer
+          if (rp_in_pck_error = '1') then
+              s_transfer_pck <= S_DROP;
+
           -- RTU decision received
-          if(rtu_rsp_ack = '1') then
+          elsif(rtu_rsp_ack = '1') then
 
             -- error coming from rcv_pck FSM or RTU decisio no drop, both cases, ignore transfer
             if (rp_in_pck_error = '1' or tp_drop = '1') then
@@ -1564,6 +1568,7 @@ begin
           --===========================================================================================
         when S_WAIT_SOF =>
           --===========================================================================================
+          
           if(in_pck_sof = '1') then
 
             -- don't need to set usecnt

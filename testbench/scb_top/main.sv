@@ -1326,7 +1326,7 @@ module main;
    * stress test: 18 ports with packets, no gap - page-allocation too slow...
    * 
    **/
-//*
+/*
   initial begin
     portUnderTest        = 18'b111111111111111111;
     repeat_number        = 30;
@@ -1334,7 +1334,7 @@ module main;
     g_enable_pck_gaps    = 0;
     g_force_payload_size = 512;
   end
-//*/
+*/
    /** ***************************   test scenario 45  ************************************* **/
   /*
    * test HP detection by prio - works
@@ -1396,6 +1396,29 @@ module main;
     g_force_payload_size = 512;
   end
 */
+   /** ***************************   test scenario 42  ************************************* **/ 
+  /*
+   * testing switch over between ports 1,2
+   * trying to simulate situation which happens in hw: stuck at S_WAIT_RTU_VALID,
+   * 
+   **/
+//*
+  initial begin
+    portUnderTest        = 18'b000000000000000110;
+    g_tru_enable         = 1;
+    g_failure_scenario   = 11;
+                         // tx  ,rx ,opt
+    trans_paths[1]       = '{1  ,6 , 7 };
+    trans_paths[2]       = '{2  ,7 , 7 };
+    repeat_number        = 30;
+    g_active_port        = 1;
+    g_backup_port        = 2;    
+    tries_number         = 1;
+    tru_config_opt       = 3;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 512;
+  end
+//*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2412,6 +2435,18 @@ module main;
              hwdu.dump_mpm_page_utilization(1);
 
            end        
+           if(g_failure_scenario == 11)
+           begin 
+             int thrash_cnt = 1;
+             wait_cycles(2015);
+             ep_ctrl[g_active_port] = 'b0;
+             $display("");
+             $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> link 0 down <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+             $display("");
+             wait_cycles(100);
+             hwdu.dump_mpm_page_utilization(1);
+
+           end  
          end 
       join_none; //
 
