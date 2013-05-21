@@ -747,6 +747,9 @@ begin
   U_PWM_Controller : xwb_simple_pwm
     generic map (
       g_num_channels        => 2,
+      g_default_period      => 255,
+      g_default_presc       => 30,
+      g_default_val         => 255,
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE)
     port map (
