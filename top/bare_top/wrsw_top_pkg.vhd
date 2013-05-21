@@ -83,7 +83,8 @@ package wrsw_top_pkg is
   component wr_gtx_phy_virtex6
     generic (
       g_simulation         : integer;
-      g_use_slave_tx_clock : integer);
+      g_use_slave_tx_clock : integer;
+      g_use_bufr           : boolean := false);
     port (
       clk_ref_i      : in  std_logic;
       clk_gtx_i      : in  std_logic;
