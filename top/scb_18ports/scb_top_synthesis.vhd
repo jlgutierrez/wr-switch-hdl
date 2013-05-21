@@ -512,12 +512,44 @@ begin
   clk_gtx(13 downto 10)  <= (others => clk_gtx4_7);
   clk_gtx(17 downto 14) <= (others => clk_gtx0_3);
 
-  gen_phys : for i in 0 to c_NUM_PHYS-1 generate
+  --generate first 4 GTXes with BUFR to reduce the number of global clocks
+  gen_phys_bufr : for i in 0 to 3 generate
 
     U_PHY : wr_gtx_phy_virtex6
       generic map (
         g_simulation         => f_bool2int(g_simulation),
-        g_use_slave_tx_clock => f_bool2int(i /= (i/4)*4))
+        g_use_slave_tx_clock => f_bool2int(i /= (i/4)*4),
+        g_use_bufr           => true)
+      port map (
+        clk_gtx_i => clk_gtx(i),
+        clk_ref_i => clk_ref,
+
+        tx_data_i      => to_phys(i).tx_data,
+        tx_k_i         => to_phys(i).tx_k,
+        tx_disparity_o => from_phys(i).tx_disparity,
+        tx_enc_err_o   => from_phys(i).tx_enc_err,
+        rx_rbclk_o     => from_phys(i).rx_clk,
+        rx_data_o      => from_phys(i).rx_data,
+        rx_k_o         => from_phys(i).rx_k,
+        rx_enc_err_o   => from_phys(i).rx_enc_err,
+        rx_bitslide_o  => from_phys(i).rx_bitslide,
+        rst_i          => to_phys(i).rst,
+        loopen_i       => to_phys(i).loopen,
+        pad_txn_o      => gtx_txn_o(i),
+        pad_txp_o      => gtx_txp_o(i),
+        pad_rxn_i      => gtx_rxn_i(i),
+        pad_rxp_i      => gtx_rxp_i(i));
+
+    from_phys(i).ref_clk <= clk_ref;
+  end generate gen_phys_bufr;
+
+  gen_phys : for i in 4 to c_NUM_PHYS-1 generate
+
+    U_PHY : wr_gtx_phy_virtex6
+      generic map (
+        g_simulation         => f_bool2int(g_simulation),
+        g_use_slave_tx_clock => f_bool2int(i /= (i/4)*4),
+        g_use_bufr           => false)
       port map (
         clk_gtx_i => clk_gtx(i),
         clk_ref_i => clk_ref,
