@@ -663,7 +663,7 @@ begin
   regs_towb.rx_ff_mac_r1_id_i    <= std_logic_vector(to_unsigned(c_ff_single_macs_number, 8));
   regs_towb.rx_ff_mac_r1_hi_id_i <= std_logic_vector(to_unsigned(c_ff_range_macs_number, 16));
 
-  regs_towb.gcr_rtu_version_i    <= x"7";
+  regs_towb.gcr_rtu_version_i    <= x"8";
 
   -- RTU Extension index-access configration regiters for Fast Forward MACs 
   p_rx_registers : process(clk_sys_i)

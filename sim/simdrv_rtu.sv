@@ -54,7 +54,7 @@ class CRTUSimDriver;
    extern task set_bus(CBusAccessor _bus, int _base_addr);
    extern task add_hash_entry(rtu_filtering_entry_t ent);
    extern task set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en, bit dbg = 0);
-   extern task add_static_rule(bit[7:0] dmac[], bit[31:0] dpm);
+   extern task add_static_rule(bit[7:0] dmac[], bit[31:0] dpm, bit[7:0] fid=0);
    extern task add_vlan_entry(int vlan_id, rtu_vlan_entry_t ent);
    extern task poll_ufifo();
    
@@ -337,14 +337,14 @@ function bit[15:0] CRTUSimDriver::mac_hash(bit[7:0] mac[], bit[7:0] fid);
 endfunction // mac_hash
 
 
-task CRTUSimDriver::add_static_rule(bit[7:0] dmac[], bit[31:0] dpm);
+task CRTUSimDriver::add_static_rule(bit[7:0] dmac[], bit[31:0] dpm,  bit[7:0] fid=0);
    rtu_filtering_entry_t ent;
 
    ent.mac 	      = dmac;
    ent.valid 	      = 1'b1;
 //   ent.end_of_bucket  = 1;
    ent.is_bpdu = 0;
-   ent.fid = 0;
+   ent.fid = fid;
    ent.port_mask_dst = dpm;   
    ent.port_mask_src = 32'hffffffff;
    ent.drop_when_source=0;

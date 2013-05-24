@@ -24,7 +24,7 @@ module main;
    reg rst_n=0;
    parameter g_max_ports = 18;   
    parameter g_num_ports = 18;
-   parameter g_mvlan     = 4; //max simulation vlans
+   parameter g_mvlan     = 10; //max simulation vlans
    parameter g_max_dist_port_number = 4;
     typedef enum {
        PAUSE=0,
@@ -150,10 +150,16 @@ module main;
    int prio_val                           = 0; 
    int pvid                               = 0; 
                                              //      mask     , fid , prio,has_p,overr, drop   , vid, valid
-   t_sim_vlan_entry sim_vlan_tab[g_mvlan] = '{'{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 },
-                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 },
-                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 100, 1'b1 },
-                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 200, 1'b1 }};
+   t_sim_vlan_entry sim_vlan_tab[g_mvlan] = '{'{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0, 1'b1 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1, 1'b0 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 2, 1'b0 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 3, 1'b0 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 4, 1'b0 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 5, 1'b0 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 6, 1'b0 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 7, 1'b0 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 8, 1'b0 },
+                                              '{'{32'hFFFFFFFF, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 9, 1'b0 }};
    integer tru_config_opt                 = 0;
    PFilterMicrocode mc                    = new;
    byte BPDU_templ[]                      ='{'h01,'h80,'hC2,'h00,'h00,'h00, //0 - 5: dst addr
@@ -1456,7 +1462,8 @@ module main;
    * simulating ungraceful loss of physic signal....
    * 
    **/
-//*
+/*
+
   initial begin
     portUnderTest        = 18'b000000000000000110;
     g_tru_enable         = 1;
@@ -1472,6 +1479,59 @@ module main;
     tru_config_opt       = 3;
     g_enable_pck_gaps    = 0;
     g_force_payload_size = 512;
+  end
+*/
+ /** ***************************   test scenario 51  ************************************* **/ 
+  /*
+   *  VLAN + FF bug
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000010000001;
+    
+    g_is_qvlan           = 1; //send VLAN-tagged frames
+    g_do_vlan_config     = 1; //enable vlan confgi
+    qmode                = 2;
+    mac_br               = 1; // fast forward broadcast
+    hp_prio_mask         = 8'b0;
+    sim_vlan_tab[1] = '{'{32'b11        , 8'h1, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 };
+    sim_vlan_tab[2] = '{'{32'b110       , 8'h2, 3'h0, 1'b0, 1'b0, 1'b0}, 2  , 1'b1 };
+    sim_vlan_tab[3] = '{'{32'b1100      , 8'h3, 3'h0, 1'b0, 1'b0, 1'b0}, 3  , 1'b1 };
+    sim_vlan_tab[4] = '{'{32'b11000     , 8'h4, 3'h0, 1'b0, 1'b0, 1'b0}, 4  , 1'b1 };
+    sim_vlan_tab[5] = '{'{32'b110000    , 8'h5, 3'h0, 1'b0, 1'b0, 1'b0}, 5  , 1'b1 };
+    sim_vlan_tab[6] = '{'{32'b1100000   , 8'h6, 3'h0, 1'b0, 1'b0, 1'b0}, 6  , 1'b1 };
+    sim_vlan_tab[7] = '{'{32'b11000000  , 8'h7, 3'h0, 1'b0, 1'b0, 1'b0}, 7  , 1'b1 };
+    sim_vlan_tab[8] = '{'{32'b110000000 , 8'h8, 3'h0, 1'b0, 1'b0, 1'b0}, 8  , 1'b1 };
+    sim_vlan_tab[9] = '{'{32'b1100000000, 8'h9, 3'h0, 1'b0, 1'b0, 1'b0}, 9  , 1'b1 };
+
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,2 , 13 }; // send braodcast to VLAN=3
+    trans_paths[7]       = '{7  ,0 , 10 };//send broadcast to VLAN=1
+//     trans_paths[2]       = '{2  ,15 , 0 };
+
+  end
+*/
+ /** ***************************   test scenario 51  ************************************* **/ 
+  /*
+   *  VLAN + FF bug
+   **/
+//*
+  initial begin
+    portUnderTest        = 18'b000000000010000000;
+    
+    g_is_qvlan           = 1; //send VLAN-tagged frames
+    g_do_vlan_config     = 1; //enable vlan confgi
+    qmode                = 2;
+//     mac_br               = 1; // fast forward broadcast
+    hp_prio_mask         = 8'b0;
+                       //      mask     , fid , prio,has_p,overr, drop   , vid, valid
+    sim_vlan_tab[0] = '{'{32'hF         , 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    sim_vlan_tab[1] = '{'{32'hF0        , 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 };
+                         // tx  ,rx ,opt
+    
+    trans_paths[7]       = '{7  ,4 , 10 };//send broadcast to VLAN=1
+//     trans_paths[0]       = '{2  ,15 , 0 };
+
   end
 //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1537,7 +1597,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 || opt==10 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206 || opt == 207)
+      else if(opt==4 || opt==10 || opt==13 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206 || opt == 207)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -1570,7 +1630,9 @@ module main;
         tmpl.is_q      = is_q;
 
 
-      if(opt==10)
+      if(opt==13)
+        tmpl.vid     = 3;
+      else if(opt==10)
         tmpl.vid     = 1;
       else
         tmpl.vid     = 0;
@@ -2181,6 +2243,10 @@ module main;
       
       rtu.add_static_rule('{'h01, 'h80, 'hc2, 'h00, 'h00, 'h00}, (1<<18));
       rtu.add_static_rule('{'h01, 'h80, 'hc2, 'h00, 'h00, 'h01}, (1<<18));
+      
+      rtu.add_static_rule('{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}, 'hFFFFFFFF /*mask*/, 0 /*FID*/);
+//       rtu.add_static_rule('{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}, 'hFFFFFFFF /*mask*/, 1 /*FID*/);
+//       rtu.add_static_rule('{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}, 'hFFFFFFFF /*mask*/, 2 /*FID*/);
       
       if(g_LACP_scenario == 2)
         begin
