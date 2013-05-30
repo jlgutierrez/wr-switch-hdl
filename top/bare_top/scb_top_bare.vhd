@@ -139,7 +139,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"24_05_13_00"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"25_05_13_00"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
@@ -530,6 +530,8 @@ begin
         rtu_rsp_ack_i       => rtu_rsp_ack(c_NUM_PORTS),
         wb_i                => cnx_master_out(c_SLAVE_NIC),
         wb_o                => cnx_master_in(c_SLAVE_NIC));
+  
+    rtu_rsp(c_NUM_PORTS).hp <= '0';
   
     fc_rx_pause(c_NUM_PORTS)       <= c_zero_pause; -- no pause for NIC  
     
