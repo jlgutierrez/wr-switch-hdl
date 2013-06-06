@@ -10,6 +10,7 @@ use work.gencores_pkg.all;
 use work.wr_fabric_pkg.all;
 use work.endpoint_pkg.all;
 use work.wrsw_txtsu_pkg.all;
+use work.hwinfo_pkg.all;
 use work.wrsw_top_pkg.all;
 use work.wrsw_shared_types_pkg.all;
 
@@ -135,7 +136,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_NUM_WB_SLAVES : integer := 11;
+  constant c_NUM_WB_SLAVES : integer := 12;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
 
@@ -155,9 +156,11 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_MBL_I2C1     : integer := 8;
   constant c_SLAVE_SENSOR_I2C   : integer := 9;
   constant c_SLAVE_PWM          : integer := 10;
+  constant c_SLAVE_HWIU         : integer := 11;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
+      x"00057800",                      -- HW Info Unit
       x"00057000",                      -- PWM Controller
       x"00056000",                      -- Sensors-I2C
       x"00055000",                      -- MBL-I2C1
@@ -172,7 +175,8 @@ architecture rtl of scb_top_bare is
       x"00000000");                     -- RT Subsys 
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
-    (x"000ff000",
+    (x"000ff800",
+     x"000ff800",
      x"000ff000",
      x"000ff000",
      x"000ff000",
@@ -777,5 +781,21 @@ begin
   clk_sel_o         <= '0';
   clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
   clk_sys_o         <= clk_sys;
+
+  -----------------------------------------------------------------------------
+  -- Hardware Info Unit providing firmware version for software
+  -----------------------------------------------------------------------------
+  U_HWIU: xwrsw_hwiu
+    generic map(
+      g_interface_mode => PIPELINED,
+      g_address_granularity => BYTE,
+      g_ver_major => 3,
+      g_ver_minor => 0,
+      g_build     => 0)
+    port map(
+      rst_n_i => rst_n_periph,
+      clk_i   => clk_sys,
+      wb_i    => cnx_master_out(c_SLAVE_HWIU),
+      wb_o    => cnx_master_in(c_SLAVE_HWIU));
   
 end rtl;

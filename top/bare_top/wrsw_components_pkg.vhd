@@ -4,6 +4,7 @@ use ieee.STD_LOGIC_1164.all;
 use work.wr_fabric_pkg.all;
 use work.wishbone_pkg.all;
 use work.wrsw_txtsu_pkg.all;
+use work.hwinfo_pkg.all;
 
 package wrsw_components_pkg is
 
@@ -259,6 +260,24 @@ package wrsw_components_pkg is
       rsp_ack_i  : in  std_logic_vector(g_num_ports-1 downto 0);
       wb_i       : in  t_wishbone_slave_in;
       wb_o       : out t_wishbone_slave_out);
+  end component;
+
+  component xwrsw_hwiu
+    generic (
+      g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity : t_wishbone_address_granularity := BYTE;
+      g_ndbg_regs           : integer                        := 1;
+      g_ver_major           : integer;
+      g_ver_minor           : integer;
+      g_build               : integer                        := 0);
+    port(
+      rst_n_i : in std_logic;
+      clk_i   : in std_logic;
+  
+      dbg_regs_i : in std_logic_vector(g_ndbg_regs*32-1 downto 0) := (others=>'0');
+  
+      wb_i : in  t_wishbone_slave_in;
+      wb_o : out t_wishbone_slave_out);
   end component;
   
 end wrsw_components_pkg;
