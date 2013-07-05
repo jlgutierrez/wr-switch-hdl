@@ -10,7 +10,8 @@ entity wrsw_nic is
   generic
     (
       g_interface_mode      : t_wishbone_interface_mode      := CLASSIC;
-      g_address_granularity : t_wishbone_address_granularity := WORD
+      g_address_granularity : t_wishbone_address_granularity := WORD;
+      g_src_cyc_on_stall    : boolean := false
       );
   port (
     clk_sys_i : in std_logic;
@@ -76,7 +77,8 @@ architecture rtl of wrsw_nic is
   component xwrsw_nic
     generic (
       g_interface_mode      : t_wishbone_interface_mode;
-      g_address_granularity : t_wishbone_address_granularity);
+      g_address_granularity : t_wishbone_address_granularity;
+      g_src_cyc_on_stall    : boolean);
     port (
       clk_sys_i           : in  std_logic;
       rst_n_i             : in  std_logic;
@@ -108,7 +110,8 @@ begin
   U_Wrapped_NIC : xwrsw_nic
     generic map (
       g_interface_mode      => g_interface_mode,
-      g_address_granularity => g_address_granularity)
+      g_address_granularity => g_address_granularity,
+      g_src_cyc_on_stall    => g_src_cyc_on_stall)
     port map (
       clk_sys_i           => clk_sys_i,
       rst_n_i             => rst_n_i,

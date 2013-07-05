@@ -32,6 +32,8 @@ use work.nic_wbgen2_pkg.all;
 
 
 entity nic_tx_fsm is
+  generic(
+        g_cyc_on_stall  : boolean := false);
 
   port (clk_sys_i : in  std_logic;
         rst_n_i   : in  std_logic;
@@ -112,7 +114,8 @@ architecture behavioral of nic_tx_fsm is
 
   component ep_rx_wb_master
     generic (
-      g_ignore_ack : boolean);
+      g_ignore_ack    : boolean;
+      g_cyc_on_stall  : boolean);
     port (
       clk_sys_i  : in  std_logic;
       rst_n_i    : in  std_logic;
@@ -177,7 +180,8 @@ begin  -- behavioral
 
   U_WB_Master : ep_rx_wb_master
     generic map(
-      g_ignore_ack => true)
+      g_ignore_ack    => true,
+      g_cyc_on_stall  => g_cyc_on_stall)
     port map (
       clk_sys_i  => clk_sys_i,
       rst_n_i    => rst_n_i,

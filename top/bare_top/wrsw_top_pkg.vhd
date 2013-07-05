@@ -141,7 +141,8 @@ package wrsw_top_pkg is
   component xwrsw_nic
     generic (
       g_interface_mode      : t_wishbone_interface_mode;
-      g_address_granularity : t_wishbone_address_granularity);
+      g_address_granularity : t_wishbone_address_granularity;
+      g_src_cyc_on_stall    : boolean := false);
     port (
       clk_sys_i           : in  std_logic;
       rst_n_i             : in  std_logic;

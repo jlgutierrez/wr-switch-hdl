@@ -16,7 +16,8 @@ entity xwrsw_nic is
   generic
     (
       g_interface_mode      : t_wishbone_interface_mode      := CLASSIC;
-      g_address_granularity : t_wishbone_address_granularity := WORD
+      g_address_granularity : t_wishbone_address_granularity := WORD;
+      g_src_cyc_on_stall    : boolean := false
     );
   port (
     clk_sys_i : in std_logic;
@@ -161,6 +162,8 @@ architecture rtl of xwrsw_nic is
   end component;
 
   component nic_tx_fsm
+    generic (
+      g_cyc_on_stall  : boolean);
     port (
       clk_sys_i               : in  std_logic;
       rst_n_i                 : in  std_logic;
@@ -490,6 +493,8 @@ begin  -- rtl
 
 
   U_TX_FSM : nic_tx_fsm
+    generic map(
+      g_cyc_on_stall => g_src_cyc_on_stall)
     port map (
       clk_sys_i => clk_sys_i,
       rst_n_i   => nic_reset_n,
