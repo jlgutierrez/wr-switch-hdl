@@ -17,7 +17,7 @@ entity xwrsw_nic is
     (
       g_interface_mode      : t_wishbone_interface_mode      := CLASSIC;
       g_address_granularity : t_wishbone_address_granularity := WORD
-      );
+    );
   port (
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
@@ -127,16 +127,17 @@ architecture rtl of xwrsw_nic is
   component nic_wishbone_slave
     port (
       rst_n_i          : in  std_logic;
-      wb_clk_i         : in  std_logic;
-      wb_addr_i        : in  std_logic_vector(6 downto 0);
-      wb_data_i        : in  std_logic_vector(31 downto 0);
-      wb_data_o        : out std_logic_vector(31 downto 0);
+      clk_sys_i        : in  std_logic;
+      wb_adr_i        : in  std_logic_vector(6 downto 0);
+      wb_dat_i        : in  std_logic_vector(31 downto 0);
+      wb_dat_o        : out std_logic_vector(31 downto 0);
       wb_cyc_i         : in  std_logic;
       wb_sel_i         : in  std_logic_vector(3 downto 0);
       wb_stb_i         : in  std_logic;
       wb_we_i          : in  std_logic;
       wb_ack_o         : out std_logic;
-      wb_irq_o         : out std_logic;
+      wb_stall_o       : out std_logic;
+      wb_int_o         : out std_logic;
       irq_rcomp_i      : in  std_logic;
       irq_rcomp_ack_o  : out std_logic;
       irq_tcomp_i      : in  std_logic;
@@ -290,16 +291,17 @@ begin  -- rtl
   U_WB_SLAVE : nic_wishbone_slave
     port map (
       rst_n_i   => rst_n_i,
-      wb_clk_i  => clk_sys_i,
-      wb_addr_i => wb_in.adr(6 downto 0),
-      wb_data_i => wb_in.dat,
-      wb_data_o => wb_rdata_slave,
+      clk_sys_i => clk_sys_i,
+      wb_adr_i => wb_in.adr(6 downto 0),
+      wb_dat_i => wb_in.dat,
+      wb_dat_o => wb_rdata_slave,
       wb_cyc_i  => wb_cyc_slave,
       wb_sel_i  => wb_in.sel,
       wb_stb_i  => wb_in.stb,
       wb_we_i   => wb_in.we,
       wb_ack_o  => wb_ack_slave,
-      wb_irq_o  => wb_out.int,
+      wb_stall_o => wb_out.stall,
+      wb_int_o  => wb_out.int,
 
 
       regs_o => regs_fromwb,
