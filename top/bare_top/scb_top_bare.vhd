@@ -790,7 +790,7 @@ begin
       g_interface_mode => PIPELINED,
       g_address_granularity => BYTE,
       g_ver_major => 3,
-      g_ver_minor => 0,
+      g_ver_minor => 3,
       g_build     => 0)
     port map(
       rst_n_i => rst_n_periph,
