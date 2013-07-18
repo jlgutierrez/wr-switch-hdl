@@ -791,7 +791,7 @@ begin
       g_address_granularity => BYTE,
       g_ver_major => 3,
       g_ver_minor => 3,
-      g_build     => 0)
+      g_build     => 1)
     port map(
       rst_n_i => rst_n_periph,
       clk_i   => clk_sys,
