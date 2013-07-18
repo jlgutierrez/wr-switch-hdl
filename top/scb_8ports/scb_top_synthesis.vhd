@@ -513,13 +513,44 @@ begin
   --clk_gtx(11 downto 8)  <= (others => clk_gtx8_11);
   --clk_gtx(14 downto 12) <= (others => clk_gtx12_15);
   --clk_gtx(17 downto 16) <= (others => clk_gtx16_19);
-
-  gen_phys : for i in 0 to c_NUM_PHYS-1 generate
+  --generate first 4 GTXes with BUFR to reduce the number of global clocks
+  gen_phys_bufr : for i in 0 to 3 generate
 
     U_PHY : wr_gtx_phy_virtex6
       generic map (
         g_simulation         => f_bool2int(g_simulation),
-        g_use_slave_tx_clock => f_bool2int(i /= (i/4)*4))
+        g_use_slave_tx_clock => f_bool2int(i /= (i/4)*4),
+        g_use_bufr           => true)
+      port map (
+        clk_gtx_i => clk_gtx(i),
+        clk_ref_i => clk_ref,
+
+        tx_data_i      => to_phys(i).tx_data,
+        tx_k_i         => to_phys(i).tx_k,
+        tx_disparity_o => from_phys(i).tx_disparity,
+        tx_enc_err_o   => from_phys(i).tx_enc_err,
+        rx_rbclk_o     => from_phys(i).rx_clk,
+        rx_data_o      => from_phys(i).rx_data,
+        rx_k_o         => from_phys(i).rx_k,
+        rx_enc_err_o   => from_phys(i).rx_enc_err,
+        rx_bitslide_o  => from_phys(i).rx_bitslide,
+        rst_i          => to_phys(i).rst,
+        loopen_i       => to_phys(i).loopen,
+        pad_txn_o      => gtx_txn_o(i),
+        pad_txp_o      => gtx_txp_o(i),
+        pad_rxn_i      => gtx_rxn_i(i),
+        pad_rxp_i      => gtx_rxp_i(i));
+
+    from_phys(i).ref_clk <= clk_ref;
+  end generate gen_phys_bufr;
+
+  gen_phys : for i in 4 to c_NUM_PHYS-1 generate
+
+    U_PHY : wr_gtx_phy_virtex6
+      generic map (
+        g_simulation         => f_bool2int(g_simulation),
+        g_use_slave_tx_clock => f_bool2int(i /= (i/4)*4),
+        g_use_bufr           => false)
       port map (
         clk_gtx_i => clk_gtx(i),
         clk_ref_i => clk_ref,
@@ -591,7 +622,7 @@ begin
       uart_rxd_i          => uart_rxd_i,
       clk_en_o            => clk_en_o,
       clk_sel_o           => clk_sel_o,
---      uart_sel_o          => uart_sel_o,
+--    uart_sel_o          => uart_sel_o,
       clk_dmtd_divsel_o   => clk_dmtd_divsel_o,
       gpio_i              => x"00000000",
       phys_o              => to_phys(c_NUM_PORTS-1 downto 0),
@@ -604,8 +635,8 @@ begin
       i2c_sda_oen_o   => i2c_sda_oen,
       i2c_sda_o       => i2c_sda_out,
       i2c_sda_i       => i2c_sda_in,
-      mb_fan1_pwm_o => mb_fan1_pwm_o,
-      mb_fan2_pwm_o => mb_fan2_pwm_o);
+      mb_fan1_pwm_o   => mb_fan1_pwm_o,
+      mb_fan2_pwm_o   => mb_fan2_pwm_o);
 
   i2c_scl_in(1 downto 0) <= mbl_scl_b(1 downto 0);
   i2c_sda_in(1 downto 0) <= mbl_sda_b(1 downto 0);
