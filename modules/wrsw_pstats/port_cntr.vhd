@@ -6,7 +6,7 @@
 -- Author     : Grzegorz Daniluk
 -- Company    : CERN BE-CO-HT
 -- Created    : 2012-12-20
--- Last update: 2013-03-03
+-- Last update: 2013-07-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -20,6 +20,7 @@
 -- Revisions  :
 -- Date        Version  Author          Description
 -- 2012-12-20  0.1      greg.d          Created
+-- 2013-07-24  0.2      greg.d          Optimized to save FPGA resources
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -48,11 +49,11 @@ entity port_cntr is
     ext_dat_o : out std_logic_vector(31 downto 0);
 
     --overflow events for 2nd layer
-    ov_cnt_o : out std_logic_vector(((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)*g_cnt_pw-1 downto 0);  --c_evt_range
+    ov_cnt_o : out std_logic_vector(((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)*g_cnt_pw-1 downto 0)  --c_evt_range
 
     --debug
-    dbg_evt_ov_o : out std_logic;
-    clr_flags_i  : in  std_logic := '0'
+    --dbg_evt_ov_o : out std_logic;
+    --clr_flags_i  : in  std_logic := '0'
   );
 end port_cntr;
 
@@ -128,20 +129,20 @@ begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
         events_reg   <= (others => '0');
-        dbg_evt_ov_o <= '0';
+        -- dbg_evt_ov_o <= '0';
       else
         --clear counted events and store new events to be counted
         events_reg(g_cnt_pp-1 downto 0) <= (events_reg(g_cnt_pp-1 downto 0) xor
           events_clr(g_cnt_pp-1 downto 0)) or events_i(g_cnt_pp-1 downto 0);
 
-        if(to_integer(unsigned((events_reg(g_cnt_pp-1 downto 0) xor events_clr(g_cnt_pp-1 downto 0))
-          and events_i(g_cnt_pp-1 downto 0))) /= 0) then
-            dbg_evt_ov_o <= '1';
-        end if;
+        -- if(to_integer(unsigned((events_reg(g_cnt_pp-1 downto 0) xor events_clr(g_cnt_pp-1 downto 0))
+        --   and events_i(g_cnt_pp-1 downto 0))) /= 0) then
+        --     dbg_evt_ov_o <= '1';
+        -- end if;
 
-        if(clr_flags_i = '1') then
-          dbg_evt_ov_o <= '0';
-        end if;
+        -- if(clr_flags_i = '1') then
+        --   dbg_evt_ov_o <= '0';
+        -- end if;
       end if;
     end if;
   end process;
@@ -153,42 +154,41 @@ begin
 
   events_presub <= events_reg((f_onehot_decode(events_grant)+1)*g_cnt_pw-1 downto f_onehot_decode(events_grant)*g_cnt_pw);
 
+	GEN_EVT_CLR: for i in 0 to c_rr_range-1 generate
+		events_clr((i+1)*g_cnt_pw-1 downto i*g_cnt_pw) <= events_presub when(cnt_state=WRITE and events_grant(i)='1') else
+																											(others=>'0');
+	end generate;
+
+  mem_adr <= f_onehot_decode(events_grant);
+
   process(clk_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        events_clr(g_cnt_pp-1 downto 0) <= (others => '0');
-        cnt_state                       <= SEL;
-        mem_adr                         <= 0;
-        mem_wr                          <= '0';
-        events_sub                      <= (others => '0');
-        events_preg                     <= (others => '0');
+        cnt_state   <= SEL;
+        mem_wr      <= '0';
+        events_sub  <= (others => '0');
+        events_preg <= (others => '0');
       else
 
 
         case(cnt_state) is
           when SEL =>
             --check each segment of events_i starting from the one pointed by round robin
-            events_clr <= (others => '0');
             mem_wr     <= '0';
 
             f_rr_arbitrate(events_ored, events_preg, events_grant);
             if(or_reduce(events_ored) = '1') then
               events_preg   <= events_grant;
-              mem_adr       <= f_onehot_decode(events_grant);
-              events_sub    <= events_presub;
-              events_clr((f_onehot_decode(events_grant)+1)*g_cnt_pw-1 downto f_onehot_decode(events_grant)*g_cnt_pw) <= events_presub;
 
               cnt_state <= WRITE;
             end if;
 
           when WRITE =>
-            events_clr <= (others => '0');
+            events_sub    <= events_presub;
             mem_wr     <= '1';
             cnt_state  <= SEL;
         end case;
-
-
       end if;
     end if;
   end process;
@@ -220,20 +220,16 @@ begin
         if(rst_n_i = '0') then
           cnt_ov(i) <= '0';
         else
-          cnt_ov(i) <= '0';
           if((unsigned(mem_dat_out((i+1)*c_cnt_width-1 downto i*c_cnt_width))+1 = 0) and mem_wr = '1' and events_sub(i) = '1') then
             cnt_ov(i) <= '1';
-          elsif(clr_flags_i = '1') then
-            cnt_ov(i) <= '0';
-          end if;
+					else
+          	cnt_ov(i) <= '0';
+					end if;
         end if;
       end if;
     end process;
 
   end generate;
-
-
-
 
   -----------------------------------------------
   --overflow events for 2nd layer counter
@@ -247,12 +243,11 @@ begin
       end if;
     end if;
   end process;
+
   --multiplexer driven from mem_adr delayed by 1 cycle
-  process(mem_adr_d1, cnt_ov)
-  begin
-        ov_cnt_o <= (others => '0');
-        ov_cnt_o((mem_adr_d1+1)*g_cnt_pw-1 downto g_cnt_pw*mem_adr_d1) <= cnt_ov;
-  end process;
+	GEN_CNT_OV: for I in 0 to c_rr_range-1 generate
+		ov_cnt_o((I+1)*g_cnt_pw-1 downto I*g_cnt_pw) <= cnt_ov when (mem_adr_d1 = I) else (others=>'0');
+	end generate;
 
 
 end behav;

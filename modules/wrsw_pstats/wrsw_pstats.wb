@@ -263,44 +263,44 @@ peripheral {
     trigger = LEVEL_1;
   };
 
-  reg {
-    name = "Debug register";
-    prefix = "DBG";
-
-    field{
-      name = "Events overflow";
-      prefix = "EVT_OV";
-      size = 18;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-
-    field{
-      name = "L2 Events overflow";
-      prefix = "L2_EVT_OV";
-      size = 1;
-      type = SLV;
-      access_bus = READ_ONLY;
-      access_dev = WRITE_ONLY;
-    };
-
-    field{
-      name = "L2 Clear flags";
-      prefix = "L2_CLR";
-      size = 1;
-      align = 30;
-      type = MONOSTABLE;
-    };
-
-    field{
-      name = "Clear flags";
-      prefix = "CLR";
-      size = 1;
-      align = 31;
-      type = MONOSTABLE;
-    };
-
-  };
+--  reg {
+--    name = "Debug register";
+--    prefix = "DBG";
+--
+--    field{
+--      name = "Events overflow";
+--      prefix = "EVT_OV";
+--      size = 18;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--
+--    field{
+--      name = "L2 Events overflow";
+--      prefix = "L2_EVT_OV";
+--      size = 1;
+--      type = SLV;
+--      access_bus = READ_ONLY;
+--      access_dev = WRITE_ONLY;
+--    };
+--
+--    field{
+--      name = "L2 Clear flags";
+--      prefix = "L2_CLR";
+--      size = 1;
+--      align = 30;
+--      type = MONOSTABLE;
+--    };
+--
+--    field{
+--      name = "Clear flags";
+--      prefix = "CLR";
+--      size = 1;
+--      align = 31;
+--      type = MONOSTABLE;
+--    };
+--
+--  };
 
 };
