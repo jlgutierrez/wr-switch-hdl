@@ -25,7 +25,7 @@ Disclaimer: this readme assumes that you know the basic UNIX commands.
 3. Download WR Switch HDL sources
   $ git clone --recursive git://ohwr.org/white-rabbit/wr-switch-hdl.git
   $ cd wr-switch-hdl
-  $ git checkout wr-switch-sw-v3.0
+  $ git checkout wr-switch-sw-v3.3
   $ git submodule update
 
 4. Build it
