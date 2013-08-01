@@ -201,7 +201,8 @@ begin
                       '1' when  traffic_ff='1' and rtu_req_stage_0.has_prio = '0' and 
                                 (rtu_str_config_i.hp_prio = ones(7 downto 0)) else
                       '0';
-
+  -- something is wrong here... HP works only for un-taggged traffic and if we set hp_prio to =0x1...
+  -- for any other value does not work... shit
   ----------------------------- stage: 1     -------------------------------------------------
   -- reading VLAN, we have FID 
   -- * we request TRU decision if necessary (forward traffic)
@@ -252,7 +253,8 @@ begin
           pipeline_grant(0) <= grant;
           pipeline_valid(0) <= '1';
         else
-          vtab_rd_addr_o    <= (others => 'X');
+--           vtab_rd_addr_o    <= (others => 'X'); -- remember address as at some point we read
+                                                   -- data from VID=0, i.e. drop
           pipeline_grant(0) <= (others => '0');
           pipeline_valid(0) <= '0';
         end if;
