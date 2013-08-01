@@ -158,7 +158,7 @@ begin --rtl
    -- generating mask with 1 at the port for with we perform transition
    G_MASK: for i in 0 to g_num_ports-1 generate
       s_port_A_mask(i) <= '1' when (i = to_integer(unsigned(config_i.tcr_trans_port_a_id)) and config_i.tcr_trans_port_a_valid ='1') else '0';
-      s_port_B_mask(i) <= '1' when (i = to_integer(unsigned(config_i.tcr_trans_port_b_id)) and config_i.tcr_trans_port_a_valid ='1') else '0';
+      s_port_B_mask(i) <= '1' when (i = to_integer(unsigned(config_i.tcr_trans_port_b_id)) and config_i.tcr_trans_port_b_valid ='1') else '0';
    end generate G_MASK;
   
    -- preparing masks
