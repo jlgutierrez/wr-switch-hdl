@@ -6,7 +6,7 @@
 -- Author     : Grzegorz Daniluk
 -- Company    : CERN BE-CO-HT
 -- Created    : 2013-02-27
--- Last update: 2013-03-04
+-- Last update: 2013-07-24
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -22,6 +22,7 @@
 -- Revisions  :
 -- Date        Version  Author          Description
 -- 2013-02-27  0.1      greg.d          Created
+-- 2013-07-24  0.2      greg.d          Optimized to save FPGA resources
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -50,11 +51,11 @@ entity irq_ram is
     ext_adr_i : in  std_logic_vector(f_log2_size(g_nports*((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw))-1 downto 0) := (others => '0');
     ext_we_i  : in  std_logic  := '0';
     ext_dat_i : in  std_logic_vector(31 downto 0) := (others => '0');
-    ext_dat_o : out std_logic_vector(31 downto 0);
+    ext_dat_o : out std_logic_vector(31 downto 0)
 
     --debug
-    dbg_evt_ov_o : out std_logic;
-    clr_flags_i  : in  std_logic := '0'
+    --dbg_evt_ov_o : out std_logic;
+    --clr_flags_i  : in  std_logic := '0'
   );
 end irq_ram;
 
@@ -140,19 +141,19 @@ begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
         events_reg   <= (others => '0');
-        dbg_evt_ov_o <= '0';
+        --dbg_evt_ov_o <= '0';
       else
         --clear counted events and store new events to be counted
         events_reg <= (events_reg xor events_clr) or events_aligned;
 
-        if(to_integer(unsigned((events_reg(g_cnt_pp-1 downto 0) xor events_clr(g_cnt_pp-1 downto 0))
-          and events_aligned(g_cnt_pp-1 downto 0))) /= 0) then
-            dbg_evt_ov_o <= '1';
-        end if;
+        --if(to_integer(unsigned((events_reg(g_cnt_pp-1 downto 0) xor events_clr(g_cnt_pp-1 downto 0))
+        --  and events_aligned(g_cnt_pp-1 downto 0))) /= 0) then
+        --    dbg_evt_ov_o <= '1';
+        --end if;
 
-        if(clr_flags_i = '1') then
-          dbg_evt_ov_o <= '0';
-        end if;
+        --if(clr_flags_i = '1') then
+        --  dbg_evt_ov_o <= '0';
+        --end if;
       end if;
     end if;
   end process;
@@ -164,32 +165,33 @@ begin
 
   events_presub <= events_reg((f_onehot_decode(events_grant)+1)*g_cnt_pw-1 downto f_onehot_decode(events_grant)*g_cnt_pw);
 
+	GEN_EVT_CLR: for i in 0 to c_rr_range-1 generate
+		events_clr((i+1)*g_cnt_pw-1 downto i*g_cnt_pw) <= events_presub when(cnt_state=WRITE and events_grant(i)='1') else
+																											(others=>'0');
+	end generate;
+
+  mem_adr <= f_onehot_decode(events_grant);
+
   process(clk_i)
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        events_clr  <= (others => '0');
         cnt_state   <= SEL;
-        mem_adr     <= 0;
         mem_wr      <= '0';
         events_sub  <= (others => '0');
-        wr_conflict <= '0';
         events_preg <= (others => '0');
+        wr_conflict <= '0';
       else
 
         case(cnt_state) is
           when SEL =>
             --check each segment of events_i starting from the one pointed by round robin
-            events_clr  <= (others => '0');
             mem_wr      <= '0';
             wr_conflict <= '0';
 
             f_rr_arbitrate(events_ored, events_preg, events_grant);
             if(or_reduce(events_ored) = '1') then
               events_preg   <= events_grant;
-              mem_adr       <= f_onehot_decode(events_grant);
-              events_sub    <= events_presub;
-              events_clr((f_onehot_decode(events_grant)+1)*g_cnt_pw-1 downto f_onehot_decode(events_grant)*g_cnt_pw) <= events_presub;
 
               if(f_onehot_decode(events_grant) = to_integer(unsigned(ext_adr_i)) and ext_cyc_i = '1' and ext_we_i = '0') then
                 wr_conflict <= '1';
@@ -198,7 +200,7 @@ begin
             end if;
 
           when WRITE =>
-            events_clr <= (others => '0');
+            events_sub    <= events_presub;
             if(std_logic_vector(to_unsigned(mem_adr, c_mem_adr_sz)) = ext_adr_i and ext_cyc_i = '1' and ext_we_i = '0') then
               mem_wr      <= '0';
               cnt_state   <= WRITE;
@@ -208,8 +210,6 @@ begin
               cnt_state <= SEL;
             end if;
         end case;
-
-
       end if;
     end if;
   end process;

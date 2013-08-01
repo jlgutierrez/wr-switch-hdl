@@ -293,14 +293,14 @@ NET "fpga_clk_aux_p_i" TNM_NET = fpga_clk_aux_p_i;
 TIMESPEC TS_fpga_clk_aux_p_i = PERIOD "fpga_clk_aux_p_i" 5 ns HIGH 50%;
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/03/19
 
-NET "gen_phys[0].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[0].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_0__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[0].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[1].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[1].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_1__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[1].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[2].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[2].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_2__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[2].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
-NET "gen_phys[3].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[3].U_PHY/rx_rec_clk_bufin;
-TIMESPEC TS_gen_phys_3__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[3].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+#NET "gen_phys[0].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[0].U_PHY/rx_rec_clk_bufin;
+#TIMESPEC TS_gen_phys_0__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[0].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+#NET "gen_phys[1].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[1].U_PHY/rx_rec_clk_bufin;
+#TIMESPEC TS_gen_phys_1__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[1].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+#NET "gen_phys[2].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[2].U_PHY/rx_rec_clk_bufin;
+#TIMESPEC TS_gen_phys_2__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[2].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
+#NET "gen_phys[3].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[3].U_PHY/rx_rec_clk_bufin;
+#TIMESPEC TS_gen_phys_3__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[3].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;
 
 #NET "gen_phys[4].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[4].U_PHY/rx_rec_clk_bufin;
 #TIMESPEC TS_gen_phys_4__U_PHY_rx_rec_clk_bufin = PERIOD "gen_phys[4].U_PHY/rx_rec_clk_bufin" 16 ns HIGH 50%;

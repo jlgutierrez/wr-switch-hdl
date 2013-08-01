@@ -130,9 +130,8 @@ architecture behav of wrsw_pstats is
       events_i  : in  std_logic_vector(g_cnt_pp-1 downto 0);
       ext_adr_i : in  std_logic_vector(f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)-1 downto 0);
       ext_dat_o : out std_logic_vector(31 downto 0);
-      ov_cnt_o  : out std_logic_vector(((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)*g_cnt_pw-1 downto 0);  --c_evt_range
-      dbg_evt_ov_o : out std_logic;
-      clr_flags_i  : in  std_logic);
+      ov_cnt_o  : out
+			std_logic_vector(((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw)*g_cnt_pw-1 downto 0));  --c_evt_range
   end component;
 
   component irq_ram
@@ -148,9 +147,7 @@ architecture behav of wrsw_pstats is
       ext_adr_i    : in  std_logic_vector(f_log2_size(g_nports*((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw))-1 downto 0) := (others => '0');
       ext_we_i     : in  std_logic := '0';
       ext_dat_i    : in  std_logic_vector(31 downto 0) := (others => '0');
-      ext_dat_o    : out std_logic_vector(31 downto 0);
-      dbg_evt_ov_o : out std_logic;
-      clr_flags_i  : in  std_logic := '0');
+      ext_dat_o    : out std_logic_vector(31 downto 0));
   end component;
 
   ----------------------------------------------------------
@@ -184,7 +181,7 @@ architecture behav of wrsw_pstats is
   signal rd_irq   : std_logic;
 
   signal irq    : std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
-  signal evt_ov : std_logic_vector(g_nports-1 downto 0);
+  --signal evt_ov : std_logic_vector(g_nports-1 downto 0);
 
   --Layer 2
   signal L2_events  : std_logic_vector(g_nports*c_L2_event_sz-1 downto 0);
@@ -271,11 +268,11 @@ begin
   --  LAYER 1
   -------------------------------------------------------------
 
-  wb_regs_in.dbg_evt_ov_i(g_nports-1 downto 0) <= evt_ov(g_nports-1 downto 0);
+  --wb_regs_in.dbg_evt_ov_i(g_nports-1 downto 0) <= evt_ov(g_nports-1 downto 0);
   --connect rest of the evt_ov_i to '0' if synthesized for less than 18 ports
-  GEN_NUSED_EVTOV: if g_nports < 18 generate
-    wb_regs_in.dbg_evt_ov_i(17 downto g_nports) <= (others=>'0');
-  end generate;
+  --GEN_NUSED_EVTOV: if g_nports < 18 generate
+  --  wb_regs_in.dbg_evt_ov_i(17 downto g_nports) <= (others=>'0');
+  --end generate;
 
   GEN_PCNT : for i in 0 to g_nports-1 generate
 
@@ -293,9 +290,9 @@ begin
         ext_adr_i => wb_regs_out.cr_addr_o(c_adr_mem_sz-1 downto 0),
         ext_dat_o => p_dat_out(i),
 
-        ov_cnt_o     => L2_events((i+1)*c_L2_event_sz-1 downto i*c_L2_event_sz),
-        dbg_evt_ov_o => evt_ov(i),
-        clr_flags_i  => wb_regs_out.dbg_clr_o);
+        ov_cnt_o     => L2_events((i+1)*c_L2_event_sz-1 downto i*c_L2_event_sz));
+        --dbg_evt_ov_o => evt_ov(i),
+        --clr_flags_i  => wb_regs_out.dbg_clr_o);
 
   end generate;
 
@@ -318,9 +315,9 @@ begin
       ext_adr_i => L2_adr,
       ext_dat_o => L2_dat_out,
 
-      ov_cnt_o     => L3_events,
-      dbg_evt_ov_o => wb_regs_in.dbg_l2_evt_ov_i,
-      clr_flags_i  => wb_regs_out.dbg_l2_clr_o);
+      ov_cnt_o     => L3_events);
+      --dbg_evt_ov_o => wb_regs_in.dbg_l2_evt_ov_i,
+      --clr_flags_i  => wb_regs_out.dbg_l2_clr_o);
 
   L2_adr <= std_logic_vector(to_unsigned(to_integer(unsigned(rd_port))*c_portirq_sz +
                         to_integer(unsigned(wb_regs_out.cr_addr_o(c_adr_mem_sz-1 downto 0))),
@@ -365,11 +362,7 @@ begin
       ext_adr_i => IRQ_adr,
       ext_we_i  => IRQ_we,
       ext_dat_i => (others => '0'),
-      ext_dat_o => IRQ_dat_out,
-
-      dbg_evt_ov_o => open,
-      clr_flags_i  => '0');
-
+      ext_dat_o => IRQ_dat_out);
 
   -------------------------------------------------------------
   -------------------------------------------------------------
