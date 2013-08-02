@@ -1615,10 +1615,33 @@ module main;
 /*/
    /** ***************************   test scenario 54  ************************************* **/ 
   /*
-   * simple LACP test - marker-based switch between link aggregation config
+   * simple LACP test - marker-based switch between link aggregation config:
+   * 1) send frames with first type of distribution function (aggregation between 4-7 and
+   *    12 &15 ports)
+   * 2) set new type of distribution function (aggregation between 4,5,7 and 12 % 15)
+   * 3) set transition config (rep for: "g_transition_scenario == 4") :
+   *      tru.transition_config(1 , 4 , 0 , 7 , 1000 ,6 , 7 );
+   *    - LACP-> marker (1)
+   *    - pfilter class on which to trigger it (4)
+   *    - mode of choice which priority should be affected (0)
+   *    - protect only high priority (7)
+   *    - block output queue for max 1000 quanta
+   *    - transition from port 6 to 7 
+   * 4) enable transition
+   *    - active TRU table bank will be swapped (new config-> new distributin function activated)
+   *    - output queue of port 7 will be blocked
+   *    - Marker Response will be awated at port 6 (pfilter, if detected at port 6, bit 4 of plcass
+   *      will be high
+   *    - await max 1000 quanta
+   * 5) Marker response frame received, output queue of port 7 unblocked
+   * 6) Voila, we have new distribution without loosing frames at prio 7
    * 
+   * for this to work, the CPU 
+   * @ the distributor switch should send Marker Request frame
+   * @ the collector switch should replay (when Marker Request is received) with Marker Response
+   * this might turn out to be slow....
    **/
-// /*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000000; // no frames this way
     g_tru_enable         = 1;
@@ -1670,8 +1693,110 @@ module main;
     mc.logic2(26, 4, PFilterMicrocode::AND, 1); // recognizing class 2 in correct frame
     mc.logic2(27, 5, PFilterMicrocode::AND, 1); // recognizing class 3 in correct frame
     mc.logic2(28, 8, PFilterMicrocode::AND, 6); // recognizing recognizing Marker Response Frame
+//     mc.logic2(28, 7, PFilterMicrocode::AND, 6); // recognizing recognizing Marker Response Frame
   end
-// */
+ 
+*/
+   /** ***************************   test scenario 55 (works) ************************************* **/ 
+  /*
+   * LACP test: using special "LACP mode" in the TRU table - solved the problem of sending
+   * a frame received on link aggregation back to the ports of the aggregation (special LACP mode)
+   * 
+   * TRU table configuraiton for LACP using special LACP-dedicated "mode". For this you need:
+   * 1) define "default" entry with "mode"=0x0 (here subentry_addr=0) which allows accepting 
+   *    frames all aggregation ports but does not allow forwarding ports to aggregation ports 
+   *    (ingres vs. egress)
+   * 2) define each link aggregation with "mode"=0x4 (group of ports which define link aggregation
+   *    - the ingress mask is used to recognize that frame comes from link aggregation, it is
+   *      not used to create final forwarding/accepting mask
+   *    - the egress mask is used to define through which port of the link aggregation 
+   *      the particular frame (of a given conversation/group identified by pattern_match) should use
+   *      
+   * see the place where confgi si done (grep for "tru_config_opt == 8")
+   **/
+///*
+  initial begin
+    g_min_pck_gap        = 50; // cycles
+    g_max_pck_gap        = 50; // cycles  
+    portUnderTest        = 18'b000000000000000100; // no frames this way
+    g_tru_enable         = 1;
+    tru_config_opt       = 8; //SEE description in the place where the config is done !!!!!!!
+                         // tx  ,rx ,opt
+    trans_paths[2]       = '{5  ,0 , 444 };// 
+    hp_prio_mask         = 'b10000000;
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_LACP_scenario      = 2;
+    mac_br               = 1;
+    g_pfilter_enabled    = 1;
+    repeat_number        = 20;
+                     //      mask     , fid , prio,has_p,overr, drop   , vid, valid
+    sim_vlan_tab[0] = '{'{32'h0000F0F1, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    
+    mc.nop();                                          
+    mc.cmp(0, 'hFFFF, 'hffff, PFilterMicrocode::MOV, 1); //setting bit 1 to HIGH if it 
+    mc.cmp(1, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1); // is righ kind of frame, i.e:
+    mc.cmp(2, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1); // 1. broadcast
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(8, 'hbabe, 'hffff, PFilterMicrocode::AND, 1); // 2. EtherType    
+    mc.cmp(9, 'h0000, 'hffff, PFilterMicrocode::MOV, 2); // veryfing info in the frame for aggregation ID
+    mc.cmp(9, 'h0001, 'hffff, PFilterMicrocode::MOV, 3); // veryfing info in the frame for aggregation ID   
+    mc.cmp(9, 'h0002, 'hffff, PFilterMicrocode::MOV, 4); // veryfing info in the frame for aggregation ID   
+    mc.cmp(9, 'h0003, 'hffff, PFilterMicrocode::MOV, 5); // veryfing info in the frame for aggregation ID   
+    mc.logic2(24, 2, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(25, 3, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(26, 4, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(27, 5, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+  end
+//*/
+   /** ***************************   test scenario 56 (problematic- ToDo) ************************** **/ 
+  /*
+   * LACP test: - trying different way of solving the problem of forwarding frames back
+   * to the link aggregation -> does not work -> need further debugging
+   **/
+/*
+  initial begin
+    g_min_pck_gap        = 50; // cycles
+    g_max_pck_gap        = 50; // cycles  
+    portUnderTest        = 18'b000000000000000100; // no frames this way
+    g_tru_enable         = 1;
+    tru_config_opt       = 9; //SEE description in the place where the config is done !!!!!!!
+                         // tx  ,rx ,opt
+    trans_paths[2]       = '{5  ,0 , 444 };// 
+    hp_prio_mask         = 'b10000000;
+    repeat_number        = 30;
+    tries_number         = 1;
+    g_LACP_scenario      = 2;
+    mac_br               = 1;
+    g_pfilter_enabled    = 1;
+    repeat_number        = 20;
+                     //      mask     , fid , prio,has_p,overr, drop   , vid, valid
+    sim_vlan_tab[0] = '{'{32'h0000F0F1, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0  , 1'b1 };
+    
+    mc.nop();                                          
+    mc.cmp(0, 'hFFFF, 'hffff, PFilterMicrocode::MOV, 1); //setting bit 1 to HIGH if it 
+    mc.cmp(1, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1); // is righ kind of frame, i.e:
+    mc.cmp(2, 'hFFFF, 'hffff, PFilterMicrocode::AND, 1); // 1. broadcast
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.nop();
+    mc.cmp(8, 'hbabe, 'hffff, PFilterMicrocode::AND, 1); // 2. EtherType    
+    mc.cmp(9, 'h0000, 'hffff, PFilterMicrocode::MOV, 2); // veryfing info in the frame for aggregation ID
+    mc.cmp(9, 'h0001, 'hffff, PFilterMicrocode::MOV, 3); // veryfing info in the frame for aggregation ID   
+    mc.cmp(9, 'h0002, 'hffff, PFilterMicrocode::MOV, 4); // veryfing info in the frame for aggregation ID   
+    mc.cmp(9, 'h0003, 'hffff, PFilterMicrocode::MOV, 5); // veryfing info in the frame for aggregation ID   
+    mc.logic2(24, 2, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(25, 3, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(26, 4, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+    mc.logic2(27, 5, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
+  end
+*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2237,43 +2362,6 @@ module main;
 //                                32'b1001_0000_1111_0000 /*pattern_mask*/, 32'b1001_0000_1111_0000 /* pattern_match*/,'h2 /* mode */, 
 //                                32'b1001_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0000_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */); 
 
-//         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  5  /* subentry_addr*/,
-//                                32'b0000_0000_1111_0000 /*pattern_mask*/, 32'b0000_0000_1111_0000 /* pattern_match*/,'h4 /* mode */, 
-//                                32'b0000_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_1111_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */);        
-// 
-//        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  6  /* subentry_addr*/,
-//                               32'b1001_0000_0000_0000 /*pattern_mask*/, 32'b1001_0000_0000_0000 /* pattern_match*/,'h4 /* mode */, 
-//                               32'b1001_0000_0000_0000 /*ports_mask  */, 32'b1001_0000_0000_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */);        
-
-        // collector: receiving frames  on the aggregation ports, forwarding to "normal" (others)
-//         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  5  /* subentry_addr*/,
-//                                32'b0000_0000_1111_0000 /*pattern_mask*/, 32'b0000_0000_1111_0000 /* pattern_match*/,'h4 /* mode */, 
-//                                32'b0000_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_1111_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */); 
-// 
-
-//         // collector: receiving frames  on the aggregation ports, forwarding to "normal" (others)
-//         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  5  /* subentry_addr*/,
-//                                32'b1001_0000_1111_0000 /*pattern_mask*/, 32'b1001_0000_0000_0000 /* pattern_match*/,'h2 /* mode */, 
-//                                32'b1001_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0000_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */); 
-//    
-//         // collector: receiving frames  on the aggregation ports, forwarding to "normal" (others)
-//         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  5  /* subentry_addr*/,
-//                                32'b1001_0000_1111_0000 /*pattern_mask*/, 32'b1001_0000_0000_0000 /* pattern_match*/,'h2 /* mode */, 
-//                                32'b1001_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0000_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */); 
-
-
-
-//         // first link aggreation 
-//         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  6  /* subentry_addr*/,
-//                                32'b0000_0000_1111_0000 /*pattern_mask*/, 32'b0000_0000_1111_0000 /* pattern_match*/,'h4 /* mode */, 
-//                                32'b0000_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_1111_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */); 
-// 
-//         // second link aggregation
-//         tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  7  /* subentry_addr*/,
-//                                32'b1001_0000_0000_0000 /*pattern_mask*/, 32'b1001_0000_0000_0000 /* pattern_match*/,'h4 /* mode */, 
-//                                32'b1001_0000_0000_0000 /*ports_mask  */, 32'b0000_0000_0000_0000 /* ports_egress */,32'b1001_0000_0000_0000 /* ports_ingress   */); 
-
-
         tru_drv.pattern_config(4 /*replacement : use distributioon funciton defined by aggr_df_id */, 
                                5 /*addition    : simple mask reflecting on which port frame was rx-ed*/, 
                                5 /*subtraction*/); 
@@ -2335,7 +2423,95 @@ module main;
                                32'h00000 /*pattern_mask*/, 32'h00000 /* pattern_match*/,   'h0 /* mode */, 
                                32'h3FFFF /*ports_mask  */, 32'h3FFFF /* ports_egress */, 32'h3FFFF /* ports_ingress   */);
         end
+      else if(tru_config_opt == 8) // LACP : using special LACP-dedicated
+        begin
+        
+        // TRU table configuraiton for LACP using special LACP-dedicated "mode". For this you need:
+        // 1) define "default" entry with "mode"=0x0 (here subentry_addr=0) which allows accepting 
+        //    frames all aggregation ports but does not allow forwarding ports to aggregation ports 
+        //    (ingres vs. egress)
+        // 2) define each link aggregation with "mode"=0x4 (group of ports which define link aggregation
+        //    - the ingress mask is used to recognize that frame comes from link aggregation, it is
+        //      not used to create final forwarding/accepting mask
+        //    - the egress mask is used to define through which port of the link aggregation 
+        //      the particular frame (of a given conversation/group identified by pattern_match) should use
+        
+        // default configuraion
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  0  /* subentry_addr*/,
+                               32'b0000_0000_0000_0000 /*pattern_mask*/,32'b0000_0000_0000_0000 /* pattern_match*/,'h0 /* mode */, 
+                               32'b1001_1111_1111_1111 /*ports_mask */, 32'b0000_1111_0000_1111 /* ports_egress */,32'b1001_1111_1111_1111 /* ports_ingress   */); 
 
+        // first link aggregation of ports 4-7
+        // received FEC msg of class 0 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_0001 /* pattern_match*/,'h4 /* mode */, 
+                               32'b0000_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0001_0000 /* ports_egress */,32'b0000_0000_1111_0000 /* ports_ingress   */);    
+        // received FEC msg of class 1
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_0010 /* pattern_match*/,'h4 /* mode */, 
+                               32'b0000_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0010_0000 /* ports_egress */,32'b0000_0000_1111_0000 /* ports_ingress   */); 
+        // received FEC msg of class 2 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_0100 /* pattern_match*/,'h4 /* mode */, 
+                               32'b0000_0000_1111_0000  /*ports_mask */, 32'b0000_0000_0100_0000 /* ports_egress */,32'b0000_0000_1111_0000 /* ports_ingress   */); 
+        // received FEC msg of class 3
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  4  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_1000 /* pattern_match*/,'h4 /* mode */, 
+                               32'b0000_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_1000_0000 /* ports_egress */,32'b0000_0000_1111_0000 /* ports_ingress   */);        
+
+        // second link aggregation of ports 12 & 15
+        // received FEC msg of class 0 & 1
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  5  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_0011 /* pattern_match*/,'h4 /* mode */, 
+                               32'b1001_0000_0000_0000 /*ports_mask  */, 32'b1000_0000_0000_0000 /* ports_egress */,32'b1001_0000_0000_0000 /* ports_ingress   */);    
+        // received FEC msg of class 2 & 3 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  6  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_1100 /* pattern_match*/,'h4 /* mode */, 
+                               32'b1001_0000_0000_0000  /*ports_mask */, 32'b0001_0000_0000_0000 /* ports_egress */,32'b1001_0000_0000_0000 /* ports_ingress   */); 
+
+        tru_drv.pattern_config(4 /*replacement : use distributioon funciton defined by aggr_df_id */, 
+                               5 /*addition    : simple mask reflecting on which port frame was rx-ed*/, 
+                               5 /*subtraction*/); 
+        end
+      else if(tru_config_opt == 9) // LACP -> problematic - does not work - to be debugged
+        begin
+        
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  0  /* subentry_addr*/,
+                               32'b0000_0000_0000_0000 /*pattern_mask*/,32'b0000_0000_0000_0000 /* pattern_match*/,'h0 /* mode */, 
+                               32'b1001_1111_1111_1111  /*ports_mask */, 32'b0000_1111_0000_1111  /* ports_egress */,32'b1001_1111_1111_1111 /* ports_ingress   */); 
+
+        // a bunch of link aggregation ports (ports 4 to 7 and 12&15)
+        // received FEC msg of class 0 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_0001 /* pattern_match*/,'h0 /* mode */, 
+                               32'b0001_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0001_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */);    
+        // received FEC msg of class 1
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  2  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_0010 /* pattern_match*/,'h0 /* mode */, 
+                               32'b0001_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_0010_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */); 
+        // received FEC msg of class 2 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  3  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_0100 /* pattern_match*/,'h0 /* mode */, 
+                               32'b1000_0000_1111_0000  /*ports_mask */, 32'b0000_0000_0100_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */); 
+        // received FEC msg of class 3
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  4  /* subentry_addr*/,
+                               32'b0000_0000_0000_1111 /*pattern_mask*/, 32'b0000_0000_0000_1000 /* pattern_match*/,'h0 /* mode */, 
+                               32'b1000_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_1000_0000 /* ports_egress */,32'b1001_0000_1111_0000 /* ports_ingress   */);        
+
+        // a bunch of link aggregation ports (ports 4 to 7 and 12&15)
+        // received FEC msg of class 0 & 1
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  5  /* subentry_addr*/,
+                               32'b0000_0000_1111_0000 /*pattern_mask*/, 32'b0000_0000_1111_0000 /* pattern_match*/,'h5 /* mode */, 
+                               32'b0000_0000_1111_0000 /*ports_mask  */, 32'b0000_0000_1111_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */);    
+        // received FEC msg of class 2 & 3 
+        tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  6  /* subentry_addr*/,
+                               32'b1001_0000_0000_0000 /*pattern_mask*/, 32'b1001_0000_0000_0000 /* pattern_match*/,'h5 /* mode */, 
+                               32'b1001_0000_0000_0000  /*ports_mask */, 32'b1001_0000_0000_0000 /* ports_egress */,32'b0000_0000_0000_0000 /* ports_ingress   */); 
+
+        tru_drv.pattern_config(4 /*replacement : use distributioon funciton defined by aggr_df_id */, 
+                               5 /*addition    : simple mask reflecting on which port frame was rx-ed*/, 
+                               5 /*subtraction*/); 
+        end
       else // default config == 0
         begin
         tru_drv.write_tru_tab(  1   /* valid     */,     0 /* entry_addr   */,    0 /* subentry_addr*/,
@@ -2346,6 +2522,8 @@ module main;
                                32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0 /* mode */,
                                32'b00000011 /*ports_mask  */, 32'b00000010 /* ports_egress */,32'b00000010 /* ports_ingress   */);
         end
+
+
 
 //       tru_drv.write_tru_tab(  1   /* valid     */,   0  /* entry_addr   */,  1  /* subentry_addr*/,
 //                              32'b00000011 /*pattern_mask*/, 32'b00000001 /* pattern_match*/,'h0  /* pattern_mode */,
