@@ -627,13 +627,13 @@ begin
 
   -- we concatenate separately Switch's ports (g_num_ports-1 downto 0) and the rest (NIC) so that
   -- frames go to NIC based on any of the decisions (fast or full match)
---   fast_and_full_mask  <= (fast_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) or full_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports)) &
---                          (fast_match.port_mask(g_num_ports-1 downto 0)              and full_match.port_mask(g_num_ports-1 downto  0));
+  fast_and_full_mask  <= (fast_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) or full_match.port_mask(c_RTU_MAX_PORTS-1 downto g_num_ports)) &
+                         (fast_match.port_mask(g_num_ports-1 downto 0)              and full_match.port_mask(g_num_ports-1 downto  0));
 
   -- TODO: HACK: FUCK
   -- stupid temporary hack, the problem is that FAST MATCH does not read (for some reason) masks of VIDs different then 0...
   -- this is only for the latency tests, later needs to be changee
-  fast_and_full_mask  <= full_match.port_mask;
+--   fast_and_full_mask  <= full_match.port_mask;
 
   -- the above solution migh not be the best - eventually, we don't really want so much traffic 
   -- to go to NIC...(this is mainly to prevent the "unrecognized" traffic to be forwarded to NIC)
