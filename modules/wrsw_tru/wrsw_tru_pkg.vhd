@@ -674,6 +674,7 @@ package body wrsw_tru_pkg is
         subentry_num : integer
   ) return t_resp_masks is
   variable resp_masks          : t_resp_masks;
+  variable resp_masks_tmp      : t_resp_masks;
   variable pattern_replacement : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
   variable pattern_addition    : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
   variable pattern_substraction: std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
@@ -681,6 +682,7 @@ package body wrsw_tru_pkg is
   begin  
     resp_masks.egress  := (others=>'0');
     resp_masks.ingress := (others=>'0');
+    zeros              := (others=>'0');
     
     pattern_replacement (pattern_rep'length-1 downto 0)                := pattern_rep;
     pattern_addition    (pattern_add'length-1 downto 0)                := pattern_add;
@@ -711,6 +713,17 @@ package body wrsw_tru_pkg is
             if ((pattern_substraction and entry(i).pattern_mask and entry(i).pattern_match) /= zeros) then
               resp_masks.egress  := resp_masks.egress  and not (entry(i).ports_egress  and entry(i).ports_mask and pattern_substraction);
               resp_masks.ingress := resp_masks.ingress and not (entry(i).ports_ingress and entry(i).ports_mask and pattern_substraction);
+            end if;
+          when "0100" => -- explicitely LACP stuff
+            if ((pattern_replacement  and entry(i).pattern_mask  and entry(i).pattern_match) /= zeros and 
+                (pattern_substraction and entry(i).ports_ingress and entry(i).ports_mask)     = zeros) then
+              resp_masks.egress  := (resp_masks.egress  and (not entry(i).ports_mask)) or (entry(i).ports_egress  and entry(i).ports_mask);
+              resp_masks.ingress := (resp_masks.ingress and (not entry(i).ports_mask)) or (entry(i).ports_ingress and entry(i).ports_mask);
+            end if;
+          when "0101" => -- substract mask for the bits defined in TRU -> does not seem to work
+            if ((pattern_substraction and entry(i).pattern_mask and entry(i).pattern_match)  /= zeros) then
+              resp_masks.egress  := resp_masks.egress  and not (entry(i).ports_egress  and entry(i).ports_mask);
+              resp_masks.ingress := resp_masks.ingress and not (entry(i).ports_ingress and entry(i).ports_mask);
             end if;
           when others =>
             resp_masks.egress  := resp_masks.egress; 
@@ -919,7 +932,7 @@ package body wrsw_tru_pkg is
     rxPort        := to_integer(unsigned(portID_i));
 
     case aggr_df_id is
-      when "0000" => -- class
+      when "0000" => -- filtered pclass
         pattern_o   := endpoints_i.rxFramePerPortMask(rxPort)(pattern_width_i-1 downto 0) ; 
       when "0001" => -- dmac
         case (dmac) is

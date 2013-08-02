@@ -234,7 +234,10 @@ begin --rtl
               -- * output from the TRU_TAB+patterns interpretation
               -- * reception port (don't forward to myself)
               s_port_mask          <= s_status_mask and s_egress_mask and 
-                                      (not s_self_mask) and (not s_xor_mask);
+                                      (not s_self_mask);-- and (not s_xor_mask); -- TODO (31/07/2013)
+                                                                                 -- add option somehow!!
+                                                        -- commented: works for LACP
+                                                        -- uncommented: works for RSTP/SPB
 
             end if;
           
