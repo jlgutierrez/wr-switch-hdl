@@ -517,6 +517,27 @@ peripheral {
          access_bus = READ_WRITE;
          access_dev = READ_ONLY;
       };
+      field {
+         name = "DBG: Force Fast Match only";
+         description = "Forces RTU to use only Fast Match for forwarding decisions (useful for debugging).\
+                 0: Disabled [default]\
+                 1: Enabled  (use when you know what you are doing, not in normal operation)";
+         prefix = "FORCE_FAST_MATCH_ENA";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+         align = 8;
+      };
+      field {
+         name = "DBG: Force Full Match only";
+         description = "Forces RTU to use only Full Match for forwarding decisions (useful for debugging).\
+                 0: Disabled [default]\
+                 1: Enabled  (use when you know what you are doing, not in normal operation)";
+         prefix = "FORCE_FULL_MATCH_ENA";
+         type = BIT;
+         access_bus = READ_WRITE;
+         access_dev = READ_ONLY;
+      };
    };
    reg {
       prefix = "RX_FF_MAC_R0";

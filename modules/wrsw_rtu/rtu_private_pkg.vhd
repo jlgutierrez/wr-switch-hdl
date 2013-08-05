@@ -152,7 +152,8 @@ package rtu_private_pkg is
     mirror_port_src_tx : std_logic_vector(c_rtu_max_ports-1 downto 0);
     mirror_port_src_rx : std_logic_vector(c_rtu_max_ports-1 downto 0);
     mirror_port_dst    : std_logic_vector(c_rtu_max_ports-1 downto 0);
-    
+    dbg_force_fast_match_only : std_logic;
+    dbg_force_full_match_only : std_logic;
   end record;
   type t_match_response is record
     valid     : std_logic; -- entry valid

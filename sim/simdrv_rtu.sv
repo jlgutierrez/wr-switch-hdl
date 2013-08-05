@@ -67,6 +67,7 @@ class CRTUSimDriver;
    extern task rx_forward_on_fmatch_full();
    extern task rx_drop_on_fmatch_full();
    extern task rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_single, bit  mac_range, bit mac_br);
+   extern task rx_feature_dbg(bit f_fast_match, bit f_full_match);
    extern task rx_fw_to_CPU(bit hp, bit unrec);
    //   extern task run();
    extern protected task htab_write(int hash, int bucket, rtu_filtering_entry_t ent);
@@ -505,17 +506,8 @@ endtask // CRTUSimDriver
 task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_single, bit  mac_range, bit mac_br);
    uint64_t mask;
    bus.read(base_addr + `ADDR_RTU_RX_CTR, mask);
-//    $display("RTU eXtension features debugging: 1: read mask: 0x%x",mask);
-//    mask = !(`RTU_RX_CTR_MR_ENA        |
-//             `RTU_RX_CTR_FF_MAC_PTP    |
-//             `RTU_RX_CTR_FF_MAC_LL     |
-//             `RTU_RX_CTR_FF_MAC_SINGLE |
-//             `RTU_RX_CTR_FF_MAC_RANGE  |
-//             `RTU_RX_CTR_FF_MAC_BR     |
-//             32'h00000000) &
-//              mask; 
+
    mask = 'hFFFFFFC0 & mask; 
-   /*$display("RTU eXtension features debugging: 2: cleared mask: 0x%x",mask);*/         
    mask =(((mr          << `RTU_RX_CTR_MR_ENA_OFFSET)        & `RTU_RX_CTR_MR_ENA)        |     
           ((mac_ptp     << `RTU_RX_CTR_FF_MAC_PTP_OFFSET)    & `RTU_RX_CTR_FF_MAC_PTP)    |  
           ((mac_ll      << `RTU_RX_CTR_FF_MAC_LL_OFFSET)     & `RTU_RX_CTR_FF_MAC_LL)     | 
@@ -523,7 +515,6 @@ task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_sin
           ((mac_range   << `RTU_RX_CTR_FF_MAC_RANGE_OFFSET)  & `RTU_RX_CTR_FF_MAC_RANGE)  |  
           ((mac_br      << `RTU_RX_CTR_FF_MAC_BR_OFFSET)     & `RTU_RX_CTR_FF_MAC_BR)   ) |
            mask;
-//    $display("RTU eXtension features debugging: 1: written mask: 0x%x",mask);
    bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
    $display("RTU eXtension features:");
    if(mr        ) $display("\t Port Mirroring                           - enabled"); 
@@ -540,6 +531,35 @@ task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_sin
    else           $display("\t Range of configured MACs fast forward    - disabled"); 
    
 endtask // CRTUSimDriver
+
+task CRTUSimDriver::rx_feature_dbg(bit f_fast_match, bit f_full_match);
+   uint64_t mask = 0;
+   bus.read(base_addr + `ADDR_RTU_RX_CTR, mask);
+   
+   if(f_fast_match & f_full_match)
+   begin
+     $display("RTU eXtension debugging features: FAILED (you want to sent all, cannot do that, use one feature at at time)"); 
+     return;
+   end
+   if(f_fast_match)
+     begin
+     mask = `RTU_RX_CTR_FORCE_FAST_MATCH_ENA | mask;
+     $display("RTU eXtension debugging features: set fast match only"); 
+     end
+   else if(f_full_match)
+     begin
+     mask = `RTU_RX_CTR_FORCE_FULL_MATCH_ENA | mask;
+     $display("RTU eXtension debugging features: set full match only"); 
+     end
+   else
+     begin
+     $display("RTU eXtension debugging features: FAILED (nothing to set)"); 
+     return;
+     end
+   
+   bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
+
+endtask 
 
 task CRTUSimDriver::rx_fw_to_CPU(bit hp, bit unrec);
    uint64_t mask;

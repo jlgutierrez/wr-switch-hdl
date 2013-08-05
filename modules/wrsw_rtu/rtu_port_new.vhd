@@ -187,7 +187,9 @@ architecture behavioral of rtu_port_new is
   signal aboard_possible      : std_logic;
   -- VHDL -- lovn' it
   signal zeros                       : std_logic_vector(47 downto 0);
-  
+  signal dbg_force_fast_match_only   : std_logic; 
+  signal dbg_force_full_match_only   : std_logic; 
+
   constant c_match_zero: t_match_response := (
     valid     => '0',
     port_mask => (others =>'0'),
@@ -211,11 +213,21 @@ architecture behavioral of rtu_port_new is
     drop      => '1',
     hp        => '0');
 
+  constant c_match_override: t_match_response := (
+    valid     => '1',
+    port_mask => (others =>'1'),
+    prio      => (others =>'0'),
+    drop      => '0',
+    nf        => '0',
+    ff        => '0',
+    hp        => '0');
+
 
 begin
 
-  zeros              <= (others => '0');
-
+  zeros                     <= (others => '0');
+  dbg_force_fast_match_only <= '1' when (rtu_str_config_i.dbg_force_fast_match_only = '1') else '0';
+  dbg_force_full_match_only <= '1' when (rtu_str_config_i.dbg_force_full_match_only = '1') else '0';
   
 --   port_pcr_pass_bpdu <= rtu_pcr_pass_bpdu_i(g_port_index);
 --   port_pcr_pass_all  <= rtu_pcr_pass_all_i(g_port_index);
@@ -485,11 +497,14 @@ begin
             if(fast_match_rd_valid = '1' and fast_match_wr_req_d = '1') then
               -- response the current fast_match request, registered
              -- fast_match            <= fast_match_rd_data_i;
-              if(fast_match_rd_data_i.nf   = '1'   or     -- non-forward (link-limited) e.g.: BPDU
-                 fast_match_rd_data_i.ff   = '1'   or     -- fast forward recongized
-                 fast_match_rd_data_i.drop = '1'   or     -- no point in further work (drop due to VLAN)
-                 full_match_aboard         = '1')  then   -- aboard because next frame received
-                -- if we recognizd special traffic or aboard request , we don't need full match
+              if(dbg_force_fast_match_only = '1') then
+                port_state          <= S_FINAL_MASK;             
+              elsif((dbg_force_full_match_only  = '0'   and
+                     (fast_match_rd_data_i.nf   = '1'   or     -- non-forward (link-limited) e.g.: BPDU
+                      fast_match_rd_data_i.ff   = '1'   or     -- fast forward recongized
+                      fast_match_rd_data_i.drop = '1')) or     -- no point in further work (drop due to VLAN)
+                      full_match_aboard         = '1') then   -- aboard because next frame received
+                      -- if we recognizd special traffic or aboard request , we don't need full match
                 port_state          <= S_FINAL_MASK;
               else
                 -- go for full match (can be abanoned any time)
@@ -640,9 +655,13 @@ begin
   -- fast_and_full_mask  <= fast_match.port_mask and full_match.port_mask;
 
   -- forming final mask: 
+  --                  d) for debugging: forcing to have only fast match
+  forwarding_mask     <= fast_match.port_mask when (dbg_force_fast_match_only = '1') else
+  --                  d) for debugging: forcing to have only full match
+                         full_match.port_mask when (dbg_force_full_match_only = '1') else
   --                  1) full match available, full match says that we have non-forward traffic<
   --                     to such traffic we don't apply fast_match (TRU and stuff)
-  forwarding_mask     <= full_match.port_mask when (full_match.valid = '1' and full_match.nf ='1') else
+                         full_match.port_mask when (full_match.valid = '1' and full_match.nf ='1') else
   --                  2) full match available and it's normal traffic, so we apply both asks
                          fast_and_full_mask when (full_match.valid = '1') else
   --                  3) we received aboard request and the setting indicates to drop ingressf rame in such case
@@ -651,22 +670,34 @@ begin
                          fast_match.port_mask;
 
   -- forming final drop:
+  --                  d) for debugging: forcing to have only fast match
+  drop                <= fast_match.drop when (dbg_force_fast_match_only = '1') else
+  --                  d) for debugging: forcing to have only full match
+                         full_match.drop when (dbg_force_full_match_only = '1') else
   --                  1) drop from one of two matches, don't drop if we have non-forward traffic
-  drop                <= (full_match.drop or fast_match.drop) and (not full_match.nf) when (full_match.valid    = '1') else
+                         (full_match.drop or fast_match.drop) and (not full_match.nf) when (full_match.valid    = '1') else
   --                  2) when aboarding and set to drop, 
                          '1'           when (full_match_aboard_d = '1' and rtu_str_config_i.dop_on_fmatch_full = '0' ) else
   --                  3) if only fast match available, is it
                          fast_match.drop;
   -- forming final prio:
+  --                  d) for debugging: forcing to have only fast match
+  prio                <= fast_match.prio when (dbg_force_fast_match_only = '1') else
+  --                  d) for debugging: forcing to have only full match
+                         full_match.prio when (dbg_force_full_match_only = '1') else
   --                  1) when full match available, use it
-  prio                <= full_match.prio when (full_match.valid = '1') else
+                         full_match.prio when (full_match.valid = '1') else
   --                  2) if aboard and set to drop, set it to zero
                          c_rtu_rsp_drop.prio when (full_match_aboard_d = '1' and rtu_str_config_i.dop_on_fmatch_full = '0' ) else
                          fast_match.prio;
   -- forming final hp: decided by fast match, only 
-  hp                  <= fast_match.hp;
+  hp                  <= fast_match.hp when (dbg_force_fast_match_only = '1') else
+                         full_match.hp when (dbg_force_full_match_only = '1') else
+                         fast_match.hp;
   
-  nf                  <= fast_match.nf;
+  nf                  <= fast_match.nf when (dbg_force_fast_match_only = '1') else
+                         full_match.nf when (dbg_force_full_match_only = '1') else
+                         fast_match.nf;
 
   -- to make sure that HP traffic is not disturbed due to the fact that it's fowarded to slow NIC... just not 
   -- foward it there... (NIC should have it's own mechanism to prevent such situation, but precautions are not bad).

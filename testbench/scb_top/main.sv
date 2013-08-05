@@ -124,6 +124,8 @@ module main;
    bit mac_br                                 = 0;
    bit hp_fw_cpu                              = 0;
    bit unrec_fw_cpu                           = 0;
+   bit rtu_dbg_f_fast_match                   = 0;
+   bit rtu_dbg_f_full_match                   = 0;
    
    // vlans
 //    int prio_map[8]                         = '{7, // Class of Service masked into prioTag 0
@@ -1714,7 +1716,7 @@ module main;
    *      
    * see the place where confgi si done (grep for "tru_config_opt == 8")
    **/
-///*
+/*
   initial begin
     g_min_pck_gap        = 50; // cycles
     g_max_pck_gap        = 50; // cycles  
@@ -1752,7 +1754,7 @@ module main;
     mc.logic2(26, 4, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
     mc.logic2(27, 5, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
   end
-//*/
+*/
    /** ***************************   test scenario 56 (problematic- ToDo) ************************** **/ 
   /*
    * LACP test: - trying different way of solving the problem of forwarding frames back
@@ -1797,6 +1799,26 @@ module main;
     mc.logic2(27, 5, PFilterMicrocode::AND, 1); // recognizing class 0 in correct frame
   end
 */
+ /** ***************************   test scenario 57  ************************************* **/ 
+  /*
+   * testing simple RTU forwarding and stuff
+   **/
+ ///*
+  initial begin
+    portUnderTest        = 18'b010101010101010101;   
+    g_enable_pck_gaps    = 1;
+    repeat_number        = 200;
+    tries_number         = 1;  
+    g_force_payload_size = 700;
+    g_min_pck_gap        = 100; // cycles
+    g_max_pck_gap        = 100; // cycles  
+    mac_single           = 1;
+    
+                         // tx  ,rx ,opt
+   rtu_dbg_f_fast_match                   = 0;
+   rtu_dbg_f_full_match                   = 1;
+  end
+ //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2690,6 +2712,7 @@ module main;
       rtu.rx_drop_on_fmatch_full();
       rtu.rx_feature_ctrl(mr, mac_ptp , mac_ll, mac_single, mac_range, mac_br);
       rtu.rx_fw_to_CPU(hp_fw_cpu,unrec_fw_cpu);
+      rtu.rx_feature_dbg(rtu_dbg_f_fast_match, rtu_dbg_f_full_match);
       
       ////////////////////////////////////////////////////////////////////////////////////////
 

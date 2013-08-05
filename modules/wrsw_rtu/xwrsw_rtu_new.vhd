@@ -732,6 +732,8 @@ begin
   rtu_special_traffic_config.hp_fw_cpu_ena        <= regs_fromwb.rx_ctr_hp_fw_cpu_ena_o;
   rtu_special_traffic_config.unrec_fw_cpu_ena     <= regs_fromwb.rx_ctr_urec_fw_cpu_ena_o;
   regs_towb.cpu_port_mask_i                       <= cpu_port_mask;
+  rtu_special_traffic_config.dbg_force_fast_match_only <= regs_fromwb.rx_ctr_force_fast_match_ena_o;
+  rtu_special_traffic_config.dbg_force_full_match_only <= regs_fromwb.rx_ctr_force_full_match_ena_o;
   --------------------------------------------------------------------------------------------
   --| VLAN memories 
   --| * one used by Full Match
