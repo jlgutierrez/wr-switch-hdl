@@ -304,7 +304,8 @@ begin
   fast_match_wr_req <= match_required and rtu_rq_i.valid;
   
   -- request full match (only if:
-  full_match_wr_req <= '1' when (fast_match_wr_req    = '1' and        -- fast match is required and
+  full_match_wr_req <= '0' when (dbg_force_fast_match_only = '1') else -- when debugging
+                       '1' when (fast_match_wr_req    = '1' and        -- fast match is required and
                                  full_match_wr_full_i = '0' and        -- full mtach is not stuck
                                  rq_rsp_cnt           =  0)       else -- we don't process already full mach for this port
                        '1' when (full_match_wr_req_d  = '1')      else -- registered request
@@ -380,7 +381,7 @@ begin
   p_ctr_fast_match: process(clk_i)
   begin
     if rising_edge(clk_i) then
-      if(rst_n_i = '0') then
+      if(rst_n_i = '0' or dbg_force_full_match_only = '1') then
           fast_match_wr_req_d <= '0';
           fast_match                <= c_match_zero;
       else    
@@ -494,16 +495,23 @@ begin
           ------------------------------------------------------------------------------------------------------------             
           when S_FAST_MATCH =>
             
-            if(fast_match_rd_valid = '1' and fast_match_wr_req_d = '1') then
+            if(dbg_force_full_match_only = '1') then
+              port_state          <= S_FULL_MATCH;
+              if(full_match_req_in_progress = '0' and full_match_wr_full_i = '0' and rq_rsp_cnt =  0) then 
+                -- if full_match was not requested at the very beginning (directly from input requests)
+                -- it means that at that time old full_request was handled, check whether we can do 
+                -- full request now, if yes, go for it
+                delayed_full_match_wr_req <= '1';
+              end if;            
+            elsif(fast_match_rd_valid = '1' and fast_match_wr_req_d = '1') then
               -- response the current fast_match request, registered
              -- fast_match            <= fast_match_rd_data_i;
               if(dbg_force_fast_match_only = '1') then
                 port_state          <= S_FINAL_MASK;             
-              elsif((dbg_force_full_match_only  = '0'   and
-                     (fast_match_rd_data_i.nf   = '1'   or     -- non-forward (link-limited) e.g.: BPDU
-                      fast_match_rd_data_i.ff   = '1'   or     -- fast forward recongized
-                      fast_match_rd_data_i.drop = '1')) or     -- no point in further work (drop due to VLAN)
-                      full_match_aboard         = '1') then   -- aboard because next frame received
+              elsif(fast_match_rd_data_i.nf   = '1' or     -- non-forward (link-limited) e.g.: BPDU
+                    fast_match_rd_data_i.ff   = '1' or     -- fast forward recongized
+                    fast_match_rd_data_i.drop = '1' or     -- no point in further work (drop due to VLAN)
+                    full_match_aboard         = '1') then   -- aboard because next frame received
                       -- if we recognizd special traffic or aboard request , we don't need full match
                 port_state          <= S_FINAL_MASK;
               else
@@ -732,7 +740,8 @@ begin
   rtu_rsp_o           <= rsp;
   full_match_wr_req_o <= full_match_wr_req and not full_match_wr_done_i;
   full_match_wr_data_o<= rq_fifo_d;
-  fast_match_wr_req_o <= fast_match_wr_req;
+  fast_match_wr_req_o <= '0'               when  (dbg_force_full_match_only = '1') else
+                         fast_match_wr_req;
   fast_match_wr_data_o<= rtu_req_d;   
 
 end architecture;  --wrsw_rtu_port
