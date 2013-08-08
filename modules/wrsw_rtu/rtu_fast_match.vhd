@@ -105,7 +105,7 @@ end rtu_fast_match;
 
 architecture behavioral of rtu_fast_match is
 
-  constant pipeline_depth       : integer := 4;
+  constant pipeline_depth       : integer := 5;
   type   t_std_vector_array is array(0 to pipeline_depth-1) of std_logic_vector(g_num_ports-1 downto 0);
   type   t_match_rsp_array is array(0 to 1) of t_match_response;
   signal req_strobe             : std_logic_vector(g_num_ports-1 downto 0);
@@ -119,6 +119,18 @@ architecture behavioral of rtu_fast_match is
   signal rtu_req_stage_g        : t_rtu_request;
   signal rtu_req_stage_0        : t_rtu_request;
   signal rtu_req_stage_1        : t_rtu_request;
+  signal rtu_req_stage_2        : t_rtu_request;
+
+  signal rtu_req_stage_0_d      : t_rtu_request;
+  signal rtu_req_stage_1_d      : t_rtu_request;
+  signal vtab_rd_entry_d        : t_rtu_vlan_tab_entry;
+ 
+  signal rtu_req_stage_0_prio_d     : std_logic_vector(2 downto 0);
+  signal rtu_req_stage_0_dmac_d     : std_logic_vector(47 downto 0);
+  signal rtu_req_stage_0_has_prio_d : std_logic;
+  signal rtu_req_stage_1_prio_d     : std_logic_vector(2 downto 0);
+  signal rtu_req_stage_1_has_prio_d : std_logic;
+
   signal rq_prio_mask           : std_logic_vector(7 downto 0);
   signal traffic_ptp            : std_logic; -- ptp traffic
   signal traffic_nf             : std_logic; -- non-forward (link-limited) traffic
@@ -141,6 +153,15 @@ architecture behavioral of rtu_fast_match is
     nf        => '0',
     ff        => '0',
     hp        => '0');
+    
+  constant vlan_tab_entry_zero : t_rtu_vlan_tab_entry := (
+    drop          => '0',
+    prio_override => '0',
+    prio          => (others =>'0'),
+    has_prio      => '0',
+    fid           => (others =>'0'),
+    port_mask     => (others =>'0'));
+
 begin
 
   zeros <= (others => '0');
@@ -172,6 +193,7 @@ begin
   rtu_req_stage_g  <= match_req_data_i(f_onehot_decode(grant));
   rtu_req_stage_0  <= match_req_data_i(f_onehot_decode(pipeline_grant(0)));
   rtu_req_stage_1  <= match_req_data_i(f_onehot_decode(pipeline_grant(1)));
+  rtu_req_stage_2  <= match_req_data_i(f_onehot_decode(pipeline_grant(2)));
  
   ----------------------------- stage: 0     -------------------------------------------------
   -- in this stage we have the following data registered:
@@ -179,26 +201,31 @@ begin
   -- We decide many things and register it for next stage
   -- * traffic kind, can we recognize the address ?
   --------------------------------------------------------------------------------------------  
-  rq_prio_mask     <= f_set_bit(zeros(7 downto 0),'1',to_integer(unsigned(rtu_req_stage_0.prio)));  
+
+--   rtu_req_stage_0_prio_d     <= rtu_req_stage_0.prio
+--   rtu_req_stage_0_dmac_d     <= rtu_req_stage_0.dmac
+--   rtu_req_stage_0_has_prio_d <= rtu_req_stage_0.has_prio   
+
+  rq_prio_mask     <= f_set_bit(zeros(7 downto 0),'1',to_integer(unsigned(rtu_req_stage_0_prio_d)));  
   traffic_ptp      <= '0' when (rtu_str_config_i.ff_mac_ptp_ena = '0') else -- stuff disabled
-                      '1' when (rtu_req_stage_0.dmac = x"011b19000000")     else -- the other is no-forward (link-limted)
+                      '1' when (rtu_req_stage_0_dmac_d = x"011b19000000")     else -- the other is no-forward (link-limted)
                       '0';
   traffic_nf       <= '0'         when (rtu_str_config_i.ff_mac_ll_ena  = '0' and 
                                         rtu_str_config_i.ff_mac_ptp_ena = '0')   else -- stuff disabled
                       traffic_ptp when (rtu_str_config_i.ff_mac_ll_ena  = '0' and 
                                         rtu_str_config_i.ff_mac_ptp_ena = '1')   else -- stuff disabled 
-                      f_mac_in_range(rtu_req_stage_0.dmac,c_bpd_range_lower,c_bpd_range_upper) or traffic_ptp;
+                      f_mac_in_range(rtu_req_stage_0_dmac_d,c_bpd_range_lower,c_bpd_range_upper) or traffic_ptp;
 
   traffic_br       <= '0' when (rtu_str_config_i.ff_mac_br_ena ='0')   else -- stuff disabled
-                      '1' when (rtu_req_stage_0.dmac = x"FFFFFFFFFFFF")     else
+                      '1' when (rtu_req_stage_0_dmac_d = x"FFFFFFFFFFFF")     else
                       '0';
                       
                       -- the fast_match_mac_lookup function includes disabled/enabled future check
-  traffic_ff       <= traffic_br or f_fast_match_mac_lookup(rtu_str_config_i, rtu_req_stage_0.dmac);
+  traffic_ff       <= traffic_br or f_fast_match_mac_lookup(rtu_str_config_i, rtu_req_stage_0_dmac_d);
 
-  traffic_hp       <= '1' when (traffic_ff='1' and rtu_req_stage_0.has_prio = '1' and 
+  traffic_hp       <= '1' when (traffic_ff='1' and rtu_req_stage_0_has_prio_d = '1' and 
                                 (rtu_str_config_i.hp_prio and rq_prio_mask) /= zeros(7 downto 0) ) else
-                      '1' when  traffic_ff='1' and rtu_req_stage_0.has_prio = '0' and 
+                      '1' when  traffic_ff='1' and rtu_req_stage_0_has_prio_d = '0' and 
                                 (rtu_str_config_i.hp_prio = ones(7 downto 0)) else
                       '0';
   -- something is wrong here... HP works only for un-taggged traffic and if we set hp_prio to =0x1...
@@ -208,11 +235,14 @@ begin
   -- * we request TRU decision if necessary (forward traffic)
   -- * we use the VLAN tab data to prepare fast match decision
   --------------------------------------------------------------------------------------------  
-  
-  rsp_fast_match   <= f_fast_match_response(vtab_rd_entry_i,
-                                            rtu_req_stage_1.prio,
-                                            rtu_req_stage_1.has_prio,
-                                            pipeline_grant(1),
+--   rtu_req_stage_1_prio_d     <= rtu_req_stage_1.prio,
+--   rtu_req_stage_1_has_prio_d <= rtu_req_stage_1.has_prio
+--   vtab_rd_entry_d            <= vtab_rd_entry_i;
+  rsp_fast_match   <= f_fast_match_response(vtab_rd_entry_d,
+                                            rtu_req_stage_1_prio_d,
+                                            rtu_req_stage_1_has_prio_d,
+--                                             pipeline_grant(1),
+                                            pipeline_grant(2),
                                             traffic_br_d,
                                             rtu_pcr_pass_all_i,
                                             rtu_pcr_nonvlan_drop_at_ingress,
@@ -238,8 +268,21 @@ begin
         traffic_nf_d            <= '0';
         traffic_ff_d            <= '0';
         traffic_hp_d            <= '0';
-        traffic_br_d            <= '0';        
+        traffic_br_d            <= '0';     
+
+        rtu_req_stage_0_prio_d     <= (others =>'0');
+        rtu_req_stage_0_dmac_d     <= (others =>'0');
+        rtu_req_stage_0_has_prio_d <= '0';
+
+        rtu_req_stage_1_prio_d     <= (others =>'0');
+        rtu_req_stage_1_has_prio_d <= '0';
+
+        vtab_rd_entry_d            <= vlan_tab_entry_zero;
+        
+        vtab_rd_addr_o             <= (others =>'0');
+
       else
+        
         
         -- round robin arbiter
         f_rr_arbitrate(req_masked , grant, grant);
@@ -253,7 +296,7 @@ begin
           pipeline_grant(0) <= grant;
           pipeline_valid(0) <= '1';
         else
---           vtab_rd_addr_o    <= (others => 'X'); -- remember address as at some point we read
+          --vtab_rd_addr_o    <= (others => '0'); -- remember address as at some point we read
                                                    -- data from VID=0, i.e. drop
           pipeline_grant(0) <= (others => '0');
           pipeline_valid(0) <= '0';
@@ -263,23 +306,49 @@ begin
         -- register for stage 1: VLAN entry in  
         --------------------------------------------------------------------------------------
         if(unsigned(pipeline_grant(0)) /= 0) then
-          traffic_nf_d      <= traffic_nf;
-          traffic_ff_d      <= traffic_ff ;
-          traffic_hp_d      <= traffic_hp;
-          traffic_br_d      <= traffic_br;
+          rtu_req_stage_0_prio_d     <= rtu_req_stage_0.prio;
+          rtu_req_stage_0_dmac_d     <= rtu_req_stage_0.dmac;
+          rtu_req_stage_0_has_prio_d <= rtu_req_stage_0.has_prio        ;
         else
-          traffic_nf_d      <= '0';
-          traffic_ff_d      <= '0';
-          traffic_hp_d      <= '0';
-          traffic_br_d      <= '0';
+          rtu_req_stage_0_prio_d     <= (others =>'0');
+          rtu_req_stage_0_dmac_d     <= (others =>'0');
+          rtu_req_stage_0_has_prio_d <= '0';
         end if;      
   
         --------------------------------------------------------------------------------------
-        -- register for stage 2: register fast forward decision
+        -- register for stage 2: register data for processing by fast forward match functin 
         --------------------------------------------------------------------------------------
         if(unsigned(pipeline_grant(1)) /= 0) then
           --================== FAST MATCH  =================================
+          -- moved
+          traffic_nf_d                     <= traffic_nf;
+          traffic_ff_d                     <= traffic_ff ;
+          traffic_hp_d                     <= traffic_hp;
+          traffic_br_d                     <= traffic_br;
+          -- new
+          rtu_req_stage_1_prio_d           <= rtu_req_stage_1.prio;
+          rtu_req_stage_1_has_prio_d       <= rtu_req_stage_1.has_prio;
+          
+          vtab_rd_entry_d                  <= vtab_rd_entry_i;
+        else
+          --moved
+          traffic_nf_d                      <= '0';
+          traffic_ff_d                      <= '0';
+          traffic_hp_d                      <= '0';
+          traffic_br_d                      <= '0';
+          -- new
+          rtu_req_stage_1_prio_d            <= (others =>'0');
+          rtu_req_stage_1_has_prio_d        <= '0';
+          vtab_rd_entry_d                   <= vlan_tab_entry_zero;
+        end if; 
+
+        --------------------------------------------------------------------------------------
+        -- register for stage 3: register fast forward decision
+        --------------------------------------------------------------------------------------
+        if(unsigned(pipeline_grant(2)) /= 0) then
+          --================== FAST MATCH  =================================
           pipeline_match_rsp(0).valid      <= '1';
+
           if(traffic_nf_d = '1' and traffic_ff_d = '1') then -- special markers
             pipeline_match_rsp(0).port_mask<= rtu_str_config_i.cpu_forward_mask or 
                                               rsp_fast_match.port_mask; -- for sure zeros when drop
@@ -313,16 +382,16 @@ begin
   
   -- TRU request
 --   tru_req_o.valid             <= pipeline_valid(1) and (not traffic_nf_d) and tru_enabled_i;
-  tru_req_o.valid             <= pipeline_valid(1) and tru_enabled_i;
-  tru_req_o.smac              <= rtu_req_stage_1.smac;
-  tru_req_o.dmac              <= rtu_req_stage_1.dmac;
-  tru_req_o.fid               <= vtab_rd_entry_i.fid; -- directly from VLAN TABLE
+  tru_req_o.valid             <= pipeline_valid(2) and tru_enabled_i;
+  tru_req_o.smac              <= rtu_req_stage_2.smac;
+  tru_req_o.dmac              <= rtu_req_stage_2.dmac;
+  tru_req_o.fid               <= vtab_rd_entry_d.fid; -- directly from VLAN TABLE
   tru_req_o.isHP              <= traffic_hp_d;
   tru_req_o.isBR              <= traffic_br_d;
-  tru_req_o.reqMask(g_num_ports-1 downto 0)                <= pipeline_grant(1); 
+  tru_req_o.reqMask(g_num_ports-1 downto 0)                <= pipeline_grant(2); 
   tru_req_o.reqMask(c_rtu_max_ports-1 downto g_num_ports)  <= (others => '0'); 
   -- this is more for testing then to be used
-  tru_req_o.prio              <= rtu_req_stage_1.prio when(rtu_req_stage_1.has_prio = '1') else (others=>'0');
+  tru_req_o.prio              <= rtu_req_stage_2.prio when(rtu_req_stage_2.has_prio = '1') else (others=>'0');
   
   -- fast match response
   -- 1) if TRU is disabled, we don't take TRU's decision in consideration and we can respond
@@ -345,7 +414,7 @@ begin
                                  pipeline_match_rsp(1).ff;
   match_rsp_data_o.hp         <= pipeline_match_rsp(0).hp        when (tru_enabled_i = '0') else
                                  pipeline_match_rsp(1).hp;
-  match_rsp_valid_o           <= pipeline_grant(2)               when (tru_enabled_i = '0') else
-                                 pipeline_grant(3);
+  match_rsp_valid_o           <= pipeline_grant(3)               when (tru_enabled_i = '0') else
+                                 pipeline_grant(4);
 end architecture;
 
