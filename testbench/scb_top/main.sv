@@ -1813,7 +1813,7 @@ module main;
   /*
    * testing forcing of full_match/fast_match -> for debugging
    **/
-/*
+///*
   initial begin
     portUnderTest        = 18'b010101010101010101;   
     g_enable_pck_gaps    = 1;
@@ -1825,15 +1825,15 @@ module main;
     mac_single           = 1;
     
                          // tx  ,rx ,opt
-   rtu_dbg_f_fast_match                   = 1;
+   rtu_dbg_f_fast_match                   = 0;
    rtu_dbg_f_full_match                   = 0;
   end
- */
+ //*/
  /** ***************************   test scenario 58  ************************************* **/ 
   /*
    * 
    **/
-///*
+/*
   initial begin
     portUnderTest        = 18'b111111111111111111;   
     g_enable_pck_gaps    = 1;
@@ -1889,9 +1889,10 @@ module main;
 
    rtu_dbg_f_fast_match                   = 0;
    rtu_dbg_f_full_match                   = 0;
-
+   tru_config_opt                         = 10;
+   g_tru_enable                           = 1;
   end
-
+*/
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2610,6 +2611,14 @@ module main;
         tru_drv.pattern_config(4 /*replacement : use distributioon funciton defined by aggr_df_id */, 
                                5 /*addition    : simple mask reflecting on which port frame was rx-ed*/, 
                                5 /*subtraction*/); 
+        end
+      else if(tru_config_opt == 10) // test VID bug
+        begin
+        int i =0;
+        for(i=0;i<18;i++)
+          tru_drv.write_tru_tab(  1   /* valid     */,   i  /* entry_addr   */,  0  /* subentry_addr*/,
+                                 32'h00000000 /*pattern_mask*/, 32'h00000000 /* pattern_match*/,'h0 /* mode */, 
+                                 32'hFFFFFFFF  /*ports_mask */, 32'hFFFFFFFF /* ports_egress */, 32'hFFFFFFFF /* ports_ingress*/); 
         end
       else // default config == 0
         begin
