@@ -133,6 +133,11 @@ architecture behavioral of rtu_fast_match is
   
   signal rtu_pcr_nonvlan_drop_at_ingress : std_logic_vector(c_rtu_max_ports -1 downto 0);
   
+  signal vtab_rd_addr           : std_logic_vector(c_wrsw_vid_width-1 downto 0);
+
+  signal CONTROL0                   : std_logic_vector(35 downto 0);
+  signal TRIG0, TRIG1, TRIG2, TRIG3 : std_logic_vector(31 downto 0);
+
   constant match_rsp_zero       : t_match_response := (
     valid     => '0',
     port_mask => (others => '0'),
@@ -141,6 +146,22 @@ architecture behavioral of rtu_fast_match is
     nf        => '0',
     ff        => '0',
     hp        => '0');
+
+  component chipscope_icon
+    port (
+      CONTROL0 : inout std_logic_vector(35 downto 0));
+  end component;
+
+  component chipscope_ila
+    port (
+      CONTROL : inout std_logic_vector(35 downto 0);
+      CLK     : in    std_logic;
+      TRIG0   : in    std_logic_vector(31 downto 0);
+      TRIG1   : in    std_logic_vector(31 downto 0);
+      TRIG2   : in    std_logic_vector(31 downto 0);
+      TRIG3   : in    std_logic_vector(31 downto 0));
+  end component;
+
 begin
 
   zeros <= (others => '0');
@@ -249,10 +270,11 @@ begin
         --------------------------------------------------------------------------------------
         if(unsigned(grant) /= 0) then
           -- VLAN access
-          vtab_rd_addr_o    <= rtu_req_stage_g.vid;
+          vtab_rd_addr      <= rtu_req_stage_g.vid;
           pipeline_grant(0) <= grant;
           pipeline_valid(0) <= '1';
         else
+          vtab_rd_addr     <= (others => '0');
 --           vtab_rd_addr_o    <= (others => 'X'); -- remember address as at some point we read
                                                    -- data from VID=0, i.e. drop
           pipeline_grant(0) <= (others => '0');
@@ -347,5 +369,34 @@ begin
                                  pipeline_match_rsp(1).hp;
   match_rsp_valid_o           <= pipeline_grant(2)               when (tru_enabled_i = '0') else
                                  pipeline_grant(3);
+
+  vtab_rd_addr_o              <= vtab_rd_addr;
+
+  CS_ICON : chipscope_icon
+   port map (
+    CONTROL0 => CONTROL0);
+  CS_ILA : chipscope_ila
+   port map (
+     CONTROL => CONTROL0,
+     CLK     => clk_i,
+     TRIG0   => TRIG0,
+     TRIG1   => TRIG1,
+     TRIG2   => TRIG2,
+     TRIG3   => TRIG3);
+ 
+  TRIG0(11     downto  0) <= vtab_rd_addr;
+  TRIG0(14    downto  12) <= vtab_rd_entry_i.prio;
+  TRIG0(17    downto  15) <= rsp_fast_match.prio;
+  TRIG0(              22) <= vtab_rd_entry_i.drop;
+  TRIG0(              23) <= rsp_fast_match.drop;
+  TRIG0(31    downto  24) <= vtab_rd_entry_i.fid;
+  TRIG1(15    downto   0) <= vtab_rd_entry_i.port_mask(15 downto  0);
+  TRIG1(31    downto  16) <= rsp_fast_match.port_mask(15 downto  0);
+  TRIG2(1*8-1 downto 0*8) <= pipeline_grant(0);
+  TRIG2(2*8-1 downto 1*8) <= pipeline_grant(1);
+  TRIG2(3*8-1 downto 2*8) <= pipeline_grant(2);
+  TRIG2(4*8-1 downto 3*8) <= pipeline_grant(3);
+  TRIG3(1*8-1 downto 0*8) <= pipeline_grant(4);
+  TRIG3(31    downto  16) <= vtab_rd_entry_d.port_mask(15 downto  0);
 end architecture;
 
