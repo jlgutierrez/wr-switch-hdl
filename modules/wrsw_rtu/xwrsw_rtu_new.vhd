@@ -269,6 +269,26 @@ architecture behavioral of xwrsw_rtu_new is
   signal htab_src_dst : std_logic;
   
   signal dbg_forwarded_to_port              : std_logic_vector(g_num_ports - 1 downto 0);
+
+  signal CONTROL0                   : std_logic_vector(35 downto 0);
+  signal TRIG0, TRIG1, TRIG2, TRIG3 : std_logic_vector(31 downto 0);
+
+  component chipscope_icon
+    port (
+      CONTROL0 : inout std_logic_vector(35 downto 0));
+  end component;
+
+  component chipscope_ila
+    port (
+      CONTROL : inout std_logic_vector(35 downto 0);
+      CLK     : in    std_logic;
+      TRIG0   : in    std_logic_vector(31 downto 0);
+      TRIG1   : in    std_logic_vector(31 downto 0);
+      TRIG2   : in    std_logic_vector(31 downto 0);
+      TRIG3   : in    std_logic_vector(31 downto 0));
+  end component;
+
+
 begin 
 
   zeros                    <= (others => '0');
@@ -362,7 +382,7 @@ begin
         -- NOTE: inside {fast,full}_match we also take into account the priority assigned to VLAN,
         --       this value is not taken into account in TRU !!       
         rtu2tru_o.request_valid(i)  <= req_i(i).valid;
-        rtu2tru_o.priorities(i)     <= f_pick(pcr_fix_prio(i) = '0', req_i(i).prio, pcr_prio_val(i)) when (pcr_fix_prio(i)='1' or req_i(i).has_prio='1') else
+        rtu2tru_o.priorities(i)     <= f_pick(pcr_fix_prio(i) = '1', pcr_prio_val(i), req_i(i).prio) when (pcr_fix_prio(i)='1' or req_i(i).has_prio='1') else
                                        (others=>'0');
 
 --         rtu2tru_o.priorities(i)     <= f_pick(pcr_fix_prio(i) = '0', req_i(i).prio, pcr_prio_val(i));
@@ -747,13 +767,19 @@ begin
       g_dual_clock       => false)
     port map (
       rst_n_i => rst_n_i,
+
       clka_i  => clk_sys_i,
-      clkb_i => '0',
-      bwea_i  => "111111",
+      bwea_i  => (others => '1'),
       wea_i   => regs_fromwb.vtr1_update_o,
       aa_i    => regs_fromwb.vtr1_vid_o,
       da_i    => vlan_tab_wr_data,
+      qa_o    => open,
+
+      clkb_i  => clk_sys_i, --'0',
+      bweb_i  => (others => '1'),
+      web_i   => '0',
       ab_i    => vlan_tab_rd_vid,
+      db_i    => (others => '0'),
       qb_o    => vlan_tab_rd_data4match);
 
   U_VLAN_Table_for_fast_match : generic_dpram
@@ -764,13 +790,18 @@ begin
       g_dual_clock       => false)
     port map (
       rst_n_i => rst_n_i,
+
       clka_i  => clk_sys_i,
-      clkb_i => '0',
-      bwea_i  => "111111",
+      bwea_i  => (others => '1'),
       wea_i   => regs_fromwb.vtr1_update_o,
       aa_i    => regs_fromwb.vtr1_vid_o,
       da_i    => vlan_tab_wr_data,
+      qa_o    => open,
+
+      clkb_i => clk_sys_i, --'0',
+      bweb_i  => (others => '1'),
       ab_i    => fast_match_vtab_addr,  -- address
+      db_i    => (others => '0'),
       qb_o    => fast_match_vtab_data); -- data
 
   vlan_tab_wr_data <= regs_fromwb.vtr2_port_mask_o
@@ -826,4 +857,57 @@ begin
       dbg_forwarded_to_port(i) <= fw;
     end process;
   end generate fw_gen;
+
+--   CS_ICON : chipscope_icon
+--    port map (
+--     CONTROL0 => CONTROL0);
+--   CS_ILA : chipscope_ila
+--    port map (
+--      CONTROL => CONTROL0,
+--      CLK     => clk_sys_i,
+--      TRIG0   => TRIG0,
+--      TRIG1   => TRIG1,
+--      TRIG2   => TRIG2,
+--      TRIG3   => TRIG3);
+-- 
+-- RAM
+--   TRIG0(11  downto   0)  <= regs_fromwb.vtr1_vid_o;
+--   TRIG0(23  downto  12)  <= fast_match_vtab_addr;
+--   TRIG0(            24)  <= regs_fromwb.vtr1_update_o;
+-- 
+--   TRIG1(31  downto   0)  <= vlan_tab_wr_data(31 downto 0);
+--   TRIG2(13  downto   0)  <= vlan_tab_wr_data(45 downto 32);
+--   TRIG2(27  downto  14)  <= fast_match_vtab_data(45 downto 32);
+--   TRIG3(31  downto   0)  <= fast_match_vtab_data(31 downto 0);
+
+----------------------- port ----------------------
+--   TRIG0(31     downto   0) <= fast_match_req_data(0).smac(31 downto 0);
+--   
+--   TRIG1(11     downto   0) <= fast_match_req_data(0).vid;
+--   TRIG1(14     downto  12) <= fast_match_req_data(0).prio;
+--   TRIG1(               15) <= fast_match_req_data(0).valid;
+--   TRIG1(               16) <= fast_match_req_data(0).has_vid;
+--   TRIG1(               17) <= fast_match_req_data(0).has_prio;
+--   TRIG1(               18) <= fast_match_req(0);
+-- 
+--   TRIG1(               19) <= fast_match_rsp_valid(0);
+--   TRIG1(               20) <= fast_match_rsp_data(0).valid;
+--   TRIG1(23     downto  21) <= fast_match_rsp_data(0).prio;
+--   TRIG1(31     downto  24) <= fast_match_rsp_data(0).port_mask(7 downto 0);
+-- 
+--   TRIG2(31     downto   0) <= fast_match_req_data(2).smac(31 downto 0);
+--   
+--   TRIG3(11     downto   0) <= fast_match_req_data(2).vid;
+--   TRIG3(14     downto  12) <= fast_match_req_data(2).prio;
+--   TRIG3(               15) <= fast_match_req_data(2).valid;
+--   TRIG3(               16) <= fast_match_req_data(2).has_vid;
+--   TRIG3(               17) <= fast_match_req_data(2).has_prio;
+--   TRIG3(               18) <= fast_match_req(2);
+-- 
+--   TRIG3(               19) <= fast_match_rsp_valid(2);
+--   TRIG3(               20) <= fast_match_rsp_data(2).valid;
+--   TRIG3(23     downto  21) <= fast_match_rsp_data(2).prio;
+--   TRIG3(31     downto  24) <= fast_match_rsp_data(2).port_mask(7 downto 0);
+
+
 end behavioral;
