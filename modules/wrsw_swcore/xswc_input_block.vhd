@@ -613,7 +613,8 @@ begin
 end function f_enum2nat;
 
 constant c_force_usecnt             : boolean := TRUE;
-
+  constant c_special_res            : std_logic_vector(7 downto 0) := x"01";
+  constant c_normal_res             : std_logic_vector(7 downto 0) := x"02"; 
 -- resource management
   signal mmu_resource_out           : std_logic_vector(g_resource_num_width-1 downto 0);
   signal mmu_rescnt_page_num        : std_logic_vector(g_page_addr_width-1 downto 0);
@@ -1154,7 +1155,7 @@ begin
             pckstart_usecnt_write  <= current_usecnt;
             pckstart_usecnt_prev   <= current_usecnt;
             ---------- source management  --------------
-            mmu_resource_out       <= res_info; 
+            mmu_resource_out       <= current_res_info; --res_info; 
             mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
             -------------------------------------------
             
@@ -1175,7 +1176,7 @@ begin
             pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
             ---------- source management  --------------
             if(res_info_valid = '1') then
-              mmu_resource_out        <= res_info;
+              mmu_resource_out        <= current_res_info;--res_info;
             else
               mmu_resource_out        <= (others => '0');            
             end if;
@@ -1208,7 +1209,7 @@ begin
               pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
               ---------- source management  --------------
               if(res_info_valid = '1') then
-                mmu_resource_out        <= res_info;
+                mmu_resource_out        <= current_res_info; --res_info;
               else
                 mmu_resource_out        <= (others => '0');            
               end if;
@@ -1242,7 +1243,7 @@ begin
               pckstart_usecnt_write  <= current_usecnt;
               pckstart_usecnt_prev   <= current_usecnt;
               ---------- source management  --------------
-              mmu_resource_out       <= res_info; 
+              mmu_resource_out       <= current_res_info; --res_info; 
               mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
               -------------------------------------------
               
@@ -1253,7 +1254,7 @@ begin
               pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
               ---------- source management  --------------
               if(res_info_valid = '1') then
-                mmu_resource_out        <= res_info;
+                mmu_resource_out        <= current_res_info; --res_info;
               else
                 mmu_resource_out        <= (others => '0');            
               end if;
@@ -1284,7 +1285,7 @@ begin
               pckstart_usecnt_write  <= current_usecnt;
               pckstart_usecnt_prev   <= current_usecnt;
               ---------- source management  --------------
-              mmu_resource_out       <= res_info; 
+              mmu_resource_out       <= current_res_info;--res_info; 
               mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
               -------------------------------------------
               
@@ -2006,7 +2007,11 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 
   ---------------------------------------------
   -- mapping of RTU decision into resources
-  res_info             <= f_map_rtu_rsp_to_mmu_res(rtu_prio_i, rtu_hp_i         , g_resource_num_width);
+--   res_info             <= f_map_rtu_rsp_to_mmu_res(rtu_prio_i, rtu_hp_i , g_resource_num_width);
+  
+  res_info             <= c_special_res(g_resource_num_width-1 downto 0) when rtu_hp_i = '1' else
+                          c_normal_res (g_resource_num_width-1 downto 0);
+
   res_info_almsot_full <= mmu_res_almost_full_i(to_integer(unsigned(res_info)));
   res_info_full        <= mmu_res_full_i(to_integer(unsigned(res_info)));
   ---------------------------------------------
