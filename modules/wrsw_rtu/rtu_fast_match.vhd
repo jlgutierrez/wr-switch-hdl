@@ -54,9 +54,13 @@
 -- Revisions  :
 -- Date        Version  Author          Description
 -- 2012-10-30  1.0      lipinskimm          Created
+-- 2012-08-20  1.1      lipinskimm          added chipscope (commented)
 -------------------------------------------------------------------------------
--- known problems:
--- * HP priority mask: reversed bit order
+-- Stuff debugged / that seems to be working:
+-- * HP, FF detection
+-- * Priorities
+-- * broadcast detection
+-- * single/range MAC
 -------------------------------------------------------------------------------
 
 
@@ -259,7 +263,8 @@ begin
         traffic_nf_d            <= '0';
         traffic_ff_d            <= '0';
         traffic_hp_d            <= '0';
-        traffic_br_d            <= '0';        
+        traffic_br_d            <= '0';   
+        vtab_rd_addr            <= (others => '0');     
       else
         
         -- round robin arbiter
@@ -275,8 +280,6 @@ begin
           pipeline_valid(0) <= '1';
         else
           vtab_rd_addr     <= (others => '0');
---           vtab_rd_addr_o    <= (others => 'X'); -- remember address as at some point we read
-                                                   -- data from VID=0, i.e. drop
           pipeline_grant(0) <= (others => '0');
           pipeline_valid(0) <= '0';
         end if;
@@ -372,31 +375,118 @@ begin
 
   vtab_rd_addr_o              <= vtab_rd_addr;
 
-  CS_ICON : chipscope_icon
-   port map (
-    CONTROL0 => CONTROL0);
-  CS_ILA : chipscope_ila
-   port map (
-     CONTROL => CONTROL0,
-     CLK     => clk_i,
-     TRIG0   => TRIG0,
-     TRIG1   => TRIG1,
-     TRIG2   => TRIG2,
-     TRIG3   => TRIG3);
+--   CS_ICON : chipscope_icon
+--    port map (
+--     CONTROL0 => CONTROL0);
+--   CS_ILA : chipscope_ila
+--    port map (
+--      CONTROL => CONTROL0,
+--      CLK     => clk_i,
+--      TRIG0   => TRIG0,
+--      TRIG1   => TRIG1,
+--      TRIG2   => TRIG2,
+--      TRIG3   => TRIG3);
  
-  TRIG0(11     downto  0) <= vtab_rd_addr;
-  TRIG0(14    downto  12) <= vtab_rd_entry_i.prio;
-  TRIG0(17    downto  15) <= rsp_fast_match.prio;
-  TRIG0(              22) <= vtab_rd_entry_i.drop;
-  TRIG0(              23) <= rsp_fast_match.drop;
-  TRIG0(31    downto  24) <= vtab_rd_entry_i.fid;
-  TRIG1(15    downto   0) <= vtab_rd_entry_i.port_mask(15 downto  0);
-  TRIG1(31    downto  16) <= rsp_fast_match.port_mask(15 downto  0);
-  TRIG2(1*8-1 downto 0*8) <= pipeline_grant(0);
-  TRIG2(2*8-1 downto 1*8) <= pipeline_grant(1);
-  TRIG2(3*8-1 downto 2*8) <= pipeline_grant(2);
-  TRIG2(4*8-1 downto 3*8) <= pipeline_grant(3);
-  TRIG3(1*8-1 downto 0*8) <= pipeline_grant(4);
-  TRIG3(31    downto  16) <= vtab_rd_entry_d.port_mask(15 downto  0);
+
+------------------debug_oldFFv4 ----------------------
+--   TRIG0(7     downto   0) <= match_req_i;
+--   TRIG0(19    downto   8) <= rtu_req_stage_g.vid;
+--   TRIG0(31    downto  20) <= vtab_rd_addr;
+--   
+--   TRIG1(7     downto   0) <= vtab_rd_entry_i.port_mask(7 downto  0);
+--   TRIG1(15    downto   8) <= rsp_fast_match.port_mask(7 downto  0);  
+--   TRIG1(18    downto  16) <= rtu_req_stage_g.prio; --vtab_rd_entry_d.port_mask(15 downto  0);
+--   TRIG1(21    downto  19) <= rtu_req_stage_0.prio;
+--   TRIG1(24    downto  22) <= rtu_req_stage_1.prio; 
+--   TRIG1(              25) <= rtu_req_stage_g.has_prio;
+--   TRIG1(              26) <= rtu_req_stage_0.has_prio;
+--   TRIG1(              27) <= rtu_req_stage_1.has_prio;
+-- --   TRIG1(              28) <= traffic_ptp;
+-- --   TRIG1(              29) <= traffic_br;
+--   TRIG1(              28) <= rtu_req_stage_g.valid;
+--   TRIG1(              29) <= rtu_req_stage_g.has_vid;  
+--   TRIG1(              30) <= traffic_ff;
+--   TRIG1(              31) <= traffic_hp;
+-- 
+--   TRIG2(1*8-1 downto 0*8) <= pipeline_grant(0);
+--   TRIG2(2*8-1 downto 1*8) <= pipeline_grant(1);
+--   TRIG2(3*8-1 downto 2*8) <= pipeline_grant(2);
+--   TRIG2(4*8-1 downto 3*8) <= pipeline_grant(3);
+-- 
+--   TRIG3(7     downto   0) <= grant;
+--   TRIG3(15    downto   8) <= rq_prio_mask;
+--   TRIG3(18    downto  16) <= vtab_rd_entry_i.prio;
+--   TRIG3(21    downto  19) <= rsp_fast_match.prio; 
+--   TRIG3(              22) <= vtab_rd_entry_i.drop;
+--   TRIG3(              23) <= rsp_fast_match.drop;
+--   TRIG3(31    downto  24) <= vtab_rd_entry_i.fid;  
+
+----------------- debug_oldFFv2 -------------------------
+--   TRIG0(11    downto   0) <= vtab_rd_addr;
+--   TRIG0(14    downto  12) <= vtab_rd_entry_i.prio;
+--   TRIG0(17    downto  15) <= rsp_fast_match.prio; 
+--   TRIG0(              22) <= vtab_rd_entry_i.drop;
+--   TRIG0(              23) <= rsp_fast_match.drop;
+--   TRIG0(31    downto  24) <= vtab_rd_entry_i.fid;
+--   TRIG1(15    downto   0) <= vtab_rd_entry_i.port_mask(15 downto  0);
+--   TRIG1(31    downto  16) <= rsp_fast_match.port_mask(15 downto  0);
+--   TRIG2(1*8-1 downto 0*8) <= pipeline_grant(0);
+--   TRIG2(2*8-1 downto 1*8) <= pipeline_grant(1);
+--   TRIG2(3*8-1 downto 2*8) <= pipeline_grant(2);
+--   TRIG2(4*8-1 downto 3*8) <= pipeline_grant(3);
+--   TRIG3(1*8-1 downto 0*8) <= rq_prio_mask;
+--   TRIG3(10    downto   8) <= rtu_req_stage_g.prio; --vtab_rd_entry_d.port_mask(15 downto  0);
+--   TRIG3(13    downto  11) <= rtu_req_stage_0.prio;
+--   TRIG3(16    downto  14) <= rtu_req_stage_1.prio; 
+--   TRIG3(              17) <= rtu_req_stage_g.has_prio;
+--   TRIG3(              18) <= rtu_req_stage_0.has_prio;
+--   TRIG3(              19) <= rtu_req_stage_1.has_prio;
+--   TRIG3(              20) <= traffic_ptp;
+-- --   TRIG3(              21) <= traffic_nf;
+--   TRIG3(              21) <= traffic_br;
+--   TRIG3(              22) <= traffic_ff;
+--   TRIG3(              23) <= traffic_hp;
+--   TRIG3(31    downto  24) <= match_req_i;
+
+------------------debug_oldFFv5 ----------------------
+--   TRIG0(7     downto   0) <= match_req_i;
+--   TRIG0(19    downto   8) <= rtu_req_stage_g.vid;
+--   TRIG0(31    downto  20) <= vtab_rd_addr;
+--   
+--   TRIG1(7     downto   0) <= vtab_rd_entry_i.port_mask(7 downto  0);
+--   TRIG1(15    downto   8) <= rsp_fast_match.port_mask(7 downto  0);  
+--   TRIG1(18    downto  16) <= rtu_req_stage_g.prio; --vtab_rd_entry_d.port_mask(15 downto  0);
+--   TRIG1(21    downto  19) <= rtu_req_stage_0.prio;
+--   TRIG1(24    downto  22) <= rtu_req_stage_1.prio; 
+--   TRIG1(              25) <= rtu_req_stage_g.has_prio;
+--   TRIG1(              26) <= rtu_req_stage_0.has_prio;
+--   TRIG1(              27) <= rtu_req_stage_1.has_prio;
+--   TRIG1(              28) <= rtu_req_stage_g.valid;
+--   TRIG1(              29) <= rtu_req_stage_g.has_vid;  
+--   TRIG1(              30) <= traffic_ff;
+--   TRIG1(              31) <= traffic_hp;
+-- 
+--   TRIG2(11    downto   0) <= match_req_data_i(0).vid;
+--   TRIG2(14    downto  12) <= match_req_data_i(0).prio;
+--   TRIG2(              15) <= match_req_data_i(0).valid;
+--   TRIG2(              16) <= match_req_data_i(0).has_vid;
+--   TRIG2(              17) <= match_req_data_i(0).has_prio;
+--   TRIG2(              18) <= match_req_i(0);
+--   TRIG2(27     downto 19) <= match_req_data_i(0).smac(8 downto 0);
+-- 
+--   TRIG2(              28) <= pipeline_grant(0)(0);
+--   TRIG2(              29) <= pipeline_grant(1)(0);
+--   TRIG2(              30) <= pipeline_grant(2)(0);
+--   TRIG2(              31) <= pipeline_grant(3)(0); 
+-- 
+--   TRIG3(7     downto   0) <= grant;
+--   TRIG3(15    downto   8) <= rq_prio_mask;
+--   TRIG3(18    downto  16) <= vtab_rd_entry_i.prio;
+--   TRIG3(21    downto  19) <= rsp_fast_match.prio; 
+--   TRIG3(              22) <= vtab_rd_entry_i.drop;
+--   TRIG3(              23) <= rsp_fast_match.drop;
+--   TRIG3(31    downto  24) <= vtab_rd_entry_i.fid; 
+
+
 end architecture;
 
