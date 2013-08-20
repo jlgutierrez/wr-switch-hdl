@@ -1813,7 +1813,7 @@ module main;
   /*
    * testing forcing of full_match/fast_match -> for debugging
    **/
-///*
+/*
   initial begin
     portUnderTest        = 18'b010101010101010101;   
     g_enable_pck_gaps    = 1;
@@ -1828,7 +1828,7 @@ module main;
    rtu_dbg_f_fast_match                   = 0;
    rtu_dbg_f_full_match                   = 0;
   end
- //*/
+ */
  /** ***************************   test scenario 58  ************************************* **/ 
   /*
    * 
@@ -1893,7 +1893,86 @@ module main;
    g_tru_enable                           = 1;
   end
 */
+ /** ***************************   test scenario 59  ************************************* **/ 
+  /*
+   * bug fith FastMatch+prio
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b000000000000000001;   
+    g_enable_pck_gaps    = 1;
+    repeat_number        = 200;
+    tries_number         = 1;  
+    g_force_payload_size = 700;
+    g_min_pck_gap        = 100; // cycles
+    g_max_pck_gap        = 100; // cycles  
+    mac_br               = 1;
+    hp_prio_mask         = 'b01001010;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 ,205};
+  end
+ */
+ /** ***************************   test scenario 60  ************************************* **/ 
+  /*
+   * 
+   **/
+///*
+  initial begin
+    portUnderTest        = 18'b111111111111111111;   
+    g_enable_pck_gaps    = 1;
+    repeat_number        = 200;
+    tries_number         = 1;  
+    g_force_payload_size = 64;
+    g_min_pck_gap        = 100; // cycles
+    g_max_pck_gap        = 100; // cycles  
+    mac_single           = 1;
+    vid_init_for_inc     = 1;
+    g_is_qvlan           = 1;
+    
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 ,667};
+    trans_paths[1]       = '{1  ,16 ,667};
+    trans_paths[2]       = '{2  ,15 ,667};  
+    trans_paths[3]       = '{3  ,14 ,667};
+    trans_paths[4]       = '{4  ,13 ,667};
+    trans_paths[5]       = '{5  ,12 ,667};  
+    trans_paths[6]       = '{6  ,11 ,667};
+    trans_paths[7]       = '{7  ,10 ,667};
+    trans_paths[8]       = '{8  ,9  ,667};  
+    trans_paths[9]       = '{9  ,8  ,667};
+    trans_paths[10]      = '{10 ,7  ,667};
+    trans_paths[11]      = '{11 ,6  ,667};  
+    trans_paths[12]      = '{12 ,5  ,667};
+    trans_paths[13]      = '{13 ,4  ,667};
+    trans_paths[14]      = '{14 ,3  ,667};  
+    trans_paths[15]      = '{15 ,2  ,667};
+    trans_paths[16]      = '{16 ,1  ,667};
+    trans_paths[17]      = '{17 ,0  ,667};  
 
+                     //              mask        , fid , prio,has_p,overr, drop , vid, valid
+    sim_vlan_tab[0]  = '{'{32'h000000000000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b1}, 0  , 1'b1 };
+    sim_vlan_tab[1]  = '{'{32'b100000000000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1  , 1'b1 };
+    sim_vlan_tab[2]  = '{'{32'b010000000000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 2  , 1'b1 };
+    sim_vlan_tab[3]  = '{'{32'b001000000000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 3  , 1'b1 };
+    sim_vlan_tab[4]  = '{'{32'b000100000000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 4  , 1'b1 };
+    sim_vlan_tab[5]  = '{'{32'b000010000000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 5  , 1'b1 };
+    sim_vlan_tab[6]  = '{'{32'b000001000000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 6  , 1'b1 };
+    sim_vlan_tab[7]  = '{'{32'b000000100000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 7  , 1'b1 };
+    sim_vlan_tab[8]  = '{'{32'b000000010000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 8  , 1'b1 };
+    sim_vlan_tab[9]  = '{'{32'b000000001000000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 9  , 1'b1 };
+    sim_vlan_tab[10] = '{'{32'b000000000100000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 10 , 1'b1 };
+    sim_vlan_tab[11] = '{'{32'b000000000010000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 11 , 1'b1 };
+    sim_vlan_tab[12] = '{'{32'b000000000001000000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 12 , 1'b1 };
+    sim_vlan_tab[13] = '{'{32'b000000000000100000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 13 , 1'b1 };
+    sim_vlan_tab[14] = '{'{32'b000000000000010000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 14 , 1'b1 };
+    sim_vlan_tab[15] = '{'{32'b000000000000001000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 15 , 1'b1 };
+    sim_vlan_tab[16] = '{'{32'b000000000000000100, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 16 , 1'b1 };
+    sim_vlan_tab[17] = '{'{32'b000000000000000010, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 17 , 1'b1 };
+    sim_vlan_tab[18] = '{'{32'b000000000000000001, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 18 , 1'b1 };
+
+   
+  end
+//*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1941,7 +2020,7 @@ module main;
   
       tmpl           = new;
 
-      if(opt == 0 || opt == 200 || opt == 201 || opt == 666)
+      if(opt == 0 || opt == 200 || opt == 201 || opt == 666 || opt == 667)
         tmpl.src       = '{srcPort, 2,3,4,5,6};
       else if(opt == 101 | opt == 102)
         tmpl.src       = '{0,0,0,0,0,0};
@@ -1958,7 +2037,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 || opt==10 || opt==13 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206 || opt == 207 || opt == 444 || opt==666)
+      else if(opt==4 || opt==10 || opt==13 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206 || opt == 207 || opt == 444 || opt==666|| opt==667)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -2024,8 +2103,10 @@ module main;
       
       fork
         begin // fork 1
+           integer vid_cnt=0;
         for(int i=0;i<n_tries;i++)
            begin
+              
               pkt  = gen.gen();
               pkt.oob = TX_FID;
               $display("|=> TX: port = %2d, pck_i = %4d (opt=%1d, pck_gap=%3d, size=%2d)" , srcPort, i,opt,pck_gap,  pkt.payload.size);
@@ -2072,6 +2153,8 @@ module main;
                 
               if(opt == 666)
                 pkt.vid = vid_init_for_inc+srcPort;
+              else if(opt== 667)
+                pkt.vid = (vid_init_for_inc+srcPort+i)%18;
               src.send(pkt);
               arr[i]  = pkt;
 //               repeat(60) @(posedge clk_sys);
@@ -2080,7 +2163,7 @@ module main;
            end
         end   // fork 1
         begin // fork 2
-        if(opt != 101 && opt != 201 && opt != 900 && opt != 901 && opt != 206 && opt != 666)
+        if(opt != 101 && opt != 201 && opt != 900 && opt != 901 && opt != 206 && opt != 666 && opt != 667)
           for(int j=0;j<n_tries;j++)
             begin
               sink.recv(pkt2);
