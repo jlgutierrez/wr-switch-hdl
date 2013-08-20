@@ -339,8 +339,8 @@ begin
   -- this gets registered for furthe processing (full/fast match)
 --   rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '0', rtu_req_d.prio, rtu_pcr_prio_val_i);
 --   rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_req_d.has_prio);
-  rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '0', rtu_rq_i.prio, rtu_pcr_prio_val_i);
-  rq_has_prio        <= (rtu_pcr_fix_prio_i or rtu_rq_i.has_prio);
+  rq_prio            <= f_pick(rtu_pcr_fix_prio_i = '1', rtu_pcr_prio_val_i, rtu_rq_i.prio);
+  rq_has_prio        <= '1' when (rtu_pcr_fix_prio_i = '1' or rtu_rq_i.has_prio = '1') else '0';
   
 --   -- NOTE: inside {fast,full}_match we also take into account the priority assigned to VLAN,
 --   --       this value is not taken into account in TRU !!
@@ -361,7 +361,10 @@ begin
         rtu_req_d.prio      <= (others =>'0');
         rtu_req_d.has_prio  <= '0';
       else    
-        if(fast_match_wr_req = '1') then
+--         if(fast_match_wr_req   = '1') then 
+
+        if(fast_match_wr_req   = '1'  and    -- request -> in principal single-cycle strope but...
+           fast_match_wr_req_d = '0') then -- .. just in case we make sure we remember the stuff once
           rtu_req_d.valid     <= rtu_rq_i.valid;
           rtu_req_d.smac      <= rtu_rq_i.smac;
           rtu_req_d.dmac      <= rtu_rq_i.dmac;
