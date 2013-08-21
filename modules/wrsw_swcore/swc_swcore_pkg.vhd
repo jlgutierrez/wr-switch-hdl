@@ -845,9 +845,9 @@ component  swc_multiport_pck_pg_free_module is
 
   function f_sel2partialSel(sel       : std_logic_vector; partialSelWidth: integer) return std_logic_vector;
   function f_partialSel2sel(partialSel: std_logic_vector; selWidth       : integer) return std_logic_vector;
-  function f_map_rtu_rsp_to_mmu_res(rtu_prio     : std_logic_vector; 
-                                    rtu_broadcast: std_logic; 
-                                    res_num_width: integer)          return std_logic_vector;
+--   function f_map_rtu_rsp_to_mmu_res(rtu_prio     : std_logic_vector; 
+--                                     rtu_broadcast: std_logic; 
+--                                     res_num_width: integer)          return std_logic_vector;
   function f_map_rtu_rsp_and_mmu_res_to_out_queue(rtu_prio      : std_logic_vector; 
                                                   rtu_hp        : std_logic; 
                                                   queue_full    : std_logic_vector;
@@ -902,23 +902,25 @@ package body swc_swcore_pkg is
   -- else                                   we assign "normal  resource" (number 2)
   --
   --------------------------------------------------------------------------------------------------  
-  function f_map_rtu_rsp_to_mmu_res(rtu_prio     : std_logic_vector; 
-                                    rtu_broadcast: std_logic; 
-                                    res_num_width: integer)          return std_logic_vector is
-    variable tmp  : std_logic_vector(7 downto 0); -- assuming max resource number of 8 (far over-estimated)
-    variable ones : std_logic_vector(rtu_prio'length - 1 downto 0);
-  begin
-    ones := (others => '1');
-    ---------- the mapping as you please ------------------
-    if(rtu_prio = ones and rtu_broadcast = '0') then -- todo: change when RTU changed
-      tmp := x"01";
-    else
-      tmp := x"02";
-    end if;
-    -------------------------------------------------------
-    
-    return tmp(res_num_width-1 downto 0);-- adjust the vector width
-  end function;
+  -- ML (20 Aug 2013): the HP mapping configurable in RTU and propagated with decision (rtu_rsp)
+  --                   to SWcore
+--   function f_map_rtu_rsp_to_mmu_res(rtu_prio     : std_logic_vector; 
+--                                     rtu_broadcast: std_logic; 
+--                                     res_num_width: integer)          return std_logic_vector is
+--     variable tmp  : std_logic_vector(7 downto 0); -- assuming max resource number of 8 (far over-estimated)
+--     variable ones : std_logic_vector(rtu_prio'length - 1 downto 0);
+--   begin
+--     ones := (others => '1');
+--     ---------- the mapping as you please ------------------
+--     if(rtu_prio = ones and rtu_broadcast = '0') then -- todo: change when RTU changed
+--       tmp := x"01";
+--     else
+--       tmp := x"02";
+--     end if;
+--     -------------------------------------------------------
+--     
+--     return tmp(res_num_width-1 downto 0);-- adjust the vector width
+--   end function;
 
   --------------------------------------------------------------------------------------------------  
   -- Mapping of RTU decision and resources and output queues availability into output queue
