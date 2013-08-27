@@ -1916,7 +1916,7 @@ module main;
   /*
    * 
    **/
-///*
+/*
   initial begin
     portUnderTest        = 18'b111111111111111111;   
     g_enable_pck_gaps    = 1;
@@ -1972,7 +1972,31 @@ module main;
 
    
   end
-//*/
+*/
+ /** ***************************   test scenario 61  ************************************* **/ 
+  /*
+   * test 100% load
+   **/
+///*
+  initial begin
+    portUnderTest        = 18'b100000000000000001;   
+//     portUnderTest        = 18'b111111111111111111;   
+    g_enable_pck_gaps    = 0;
+    repeat_number        = 500000;
+    tries_number         = 1;  
+//     g_force_payload_size = 270; // translates into 288 bytes - size of the entire frame as in 
+//                                 // spirent
+    g_force_payload_size = 110; // translates into 128 bytes - size of the entire frame as in 
+//                                 // spirent
+
+//     g_force_payload_size = 230; 
+//     g_force_payload_size = 1000; 
+
+    g_is_qvlan           = 0;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,17 ,0};
+  end
+ //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2099,7 +2123,7 @@ module main;
           gen.set_size(63, 257);
         end
       else
-        gen.set_size(g_force_payload_size, g_force_payload_size+1);
+        gen.set_size(g_force_payload_size, g_force_payload_size+1); // setting the precise size below
       
       fork
         begin // fork 1
@@ -2108,8 +2132,12 @@ module main;
            begin
               
               pkt  = gen.gen();
+
+              if(g_force_payload_size >= 64)
+                pkt.set_size(g_force_payload_size);
+
               pkt.oob = TX_FID;
-              $display("|=> TX: port = %2d, pck_i = %4d (opt=%1d, pck_gap=%3d, size=%2d)" , srcPort, i,opt,pck_gap,  pkt.payload.size);
+              $display("|=> TX: port = %2d, pck_i = %4d (opt=%1d, pck_gap=%3d, size=%2d, n=%d)" , srcPort, i,opt,pck_gap,  pkt.payload.size, i);
               if(opt == 100)
               begin
                 pkt.payload[14] = 'h00;
@@ -2158,8 +2186,9 @@ module main;
               src.send(pkt);
               arr[i]  = pkt;
 //               repeat(60) @(posedge clk_sys);
-              repeat(6) @(posedge clk_sys); //minimum interframe gap : 96 bits = 12 bytes = 6 words
-              wait_cycles(pck_gap); 
+//              repeat(6) @(posedge clk_sys); //minimum interframe gap : 96 bits = 12 bytes = 6 words
+//               repeat(2) @(posedge clk_sys); //it seems that in reality it's less
+//               wait_cycles(pck_gap); 
            end
         end   // fork 1
         begin // fork 2
@@ -2286,7 +2315,7 @@ module main;
                 n_dist_tries[dstID]++;
               repeat(60) @(posedge clk_sys);
 //               repeat(6) @(posedge clk_sys);
-              wait_cycles(pck_gap); 
+//               wait_cycles(pck_gap); 
            end
         end   // fork 1
 //         begin // fork 2
