@@ -411,7 +411,10 @@ begin  -- behavioral
               ll_addr_o      <= rport_pg_addr_i;
               page_state     <= NEXT_LINK;
               fetch_first    <= '1';
-            elsif(words_xmitted >= last_pg_start_ptr) then -- ML: to delay req -- only during last page
+--          ML:  start pre-fetching well in advance even if the payload is more-or-less equal to 
+--               page-size-multiple (always starts in the middle of pre-last page)
+            elsif(words_xmitted + to_unsigned(g_page_size/2, words_total'length) >= last_pg_start_ptr and
+                  pre_fetch = '0' ) then  --ML not to start prefatching next page one already done so
               rport_pg_req <= '1';
             end if;
 
@@ -476,11 +479,11 @@ begin  -- behavioral
 
           when WAIT_LAST_ACK =>
             if(fetch_ack = '1') then
-              if(words_xmitted >= last_pg_start_ptr) then -- ML: to delay req -- only during last page
-                rport_pg_req <= '1';
-              else
-                rport_pg_req <= '0';
-              end if;
+--               if(words_xmitted >= last_pg_start_ptr) then -- ML: to delay req -- only during last page
+--                 rport_pg_req <= '1';
+--               else
+--                 rport_pg_req <= '0';
+--               end if;
               
               fetch_first    <= '0';
               fvalid_int     <= '0';
