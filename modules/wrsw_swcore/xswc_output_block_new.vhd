@@ -290,6 +290,7 @@ architecture behavoural of xswc_output_block_new is
   
   signal wrf_status_err  : t_wrf_status_reg;
   
+  signal page_set_in_advance: std_logic; 
 begin  --  behavoural
 
   wrf_status_err.is_hp       <= '0';
@@ -723,6 +724,7 @@ begin  --  behavoural
         tmp_adr             <= (others => '0');
         tmp_dat             <= (others => '0');
         tmp_sel             <= (others => '0');
+        page_set_in_advance <= '0';
         --========================================
       else
         -- default values
@@ -783,6 +785,12 @@ begin  --  behavoural
               tmp_dat <= mpm2wb_dat_int;
               tmp_sel <= mpm2wb_sel_int;
             end if;
+            
+            if(s_prep_to_send = S_NEWPCK_PAGE_SET_IN_ADVANCE) then
+              page_set_in_advance <= '1';
+            else
+              page_set_in_advance <= '0';
+            end if;
             --===========================================================================================
           when S_FLUSH_STALL =>
             --===========================================================================================        
@@ -804,10 +812,15 @@ begin  --  behavoural
               src_out_int.stb <= '0';
             end if;
 
-            if(((ack_count = 0) or g_wb_ob_ignore_ack) and src_out_int.stb = '0') then
+            -- making the CYCLE signal to go faster down... optimizing (hopefully not breaking)
+            if(g_wb_ob_ignore_ack and src_out_int.stb = '0') then
+              src_out_int.cyc <= '0';
+              s_send_pck      <= S_EOF;  -- we free page in EOF
+            elsif(ack_count = 1 and src_i.ack = '1' and not (src_out_int.stb = '1' and src_i.stall = '0')) then
               src_out_int.cyc <= '0';
               s_send_pck      <= S_EOF;  -- we free page in EOF
             end if;
+
             --===========================================================================================
           when S_EOF =>
             --===========================================================================================        
@@ -902,7 +915,10 @@ begin  --  behavoural
   end process free;
 
   -------------- MPM ---------------------
-  mpm_dreq       <= not src_i.stall when (s_send_pck = S_DATA or s_send_pck = S_FLUSH_STALL) else '0';
+  mpm_dreq       <= not src_i.stall when (s_send_pck = S_DATA or s_send_pck = S_FLUSH_STALL) else
+                    '1'             when ((s_send_pck = S_EOF or s_send_pck = S_IDLE) and 
+                                          page_set_in_advance = '1')                         else 
+                    '0';
   mpm_dreq_o     <= mpm_dreq;
   mpm_abort_o    <= mpm_abort;
   mpm_pg_addr_o  <= mpm_pg_addr;
