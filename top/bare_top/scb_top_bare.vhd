@@ -139,7 +139,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"19_08_13_06"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"27_08_13_03"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
@@ -378,6 +378,12 @@ architecture rtl of scb_top_bare is
 
   signal dbg_n_regs          : std_logic_vector(c_DBG_N_REGS*32 -1 downto 0);
   
+  type t_ep_dbg_data_array   is array(integer range <>) of std_logic_vector(15 downto 0);
+  type t_ep_dbg_k_array      is array(integer range <>) of std_logic_vector(1 downto 0);
+
+  signal ep_dbg_data_array   : t_ep_dbg_data_array(g_num_ports-1 downto 0);
+  signal ep_dbg_k_array      : t_ep_dbg_k_array(g_num_ports-1 downto 0);
+  
 begin
 
 
@@ -583,8 +589,8 @@ begin
           phy_loopen_o       => phys_o(i).loopen,
           phy_enable_o       => phys_o(i).enable,
           phy_ref_clk_i      => phys_i(i).ref_clk,
-          phy_tx_data_o      => phys_o(i).tx_data,
-          phy_tx_k_o         => phys_o(i).tx_k,
+          phy_tx_data_o      => ep_dbg_data_array(i), -- phys_o(i).tx_data, --
+          phy_tx_k_o         => ep_dbg_k_array(i),    -- phys_o(i).tx_k,    -- 
           phy_tx_disparity_i => phys_i(i).tx_disparity,
           phy_tx_enc_err_i   => phys_i(i).tx_enc_err,
           phy_rx_data_i      => phys_i(i).rx_data,
@@ -640,6 +646,9 @@ begin
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i));
 
+          phys_o(i).tx_data <= ep_dbg_data_array(i);
+          phys_o(i).tx_k    <= ep_dbg_k_array(i);
+
       txtsu_timestamps(i).port_id(5) <= '0';
       
       ------- TEMP ---------
@@ -666,13 +675,13 @@ begin
       --txtsu_timestamps(i).valid <= '0';
     end generate gen_terminate_unused_eps;
 
-    gen_txtsu_debug : for i in 0 to c_NUM_PORTS-1 generate
-      TRIG0(i) <= txtsu_timestamps(i).stb;
-      trig1(i) <= txtsu_timestamps_ack(i);
-      trig2(0) <= vic_irqs(0);
-      trig2(1) <= vic_irqs(1);
-      trig2(2) <= vic_irqs(2);
-    end generate gen_txtsu_debug;
+--     gen_txtsu_debug : for i in 0 to c_NUM_PORTS-1 generate
+--       TRIG0(i) <= txtsu_timestamps(i).stb;
+--       trig1(i) <= txtsu_timestamps_ack(i);
+--       trig2(0) <= vic_irqs(0);
+--       trig2(1) <= vic_irqs(1);
+--       trig2(2) <= vic_irqs(2);
+--     end generate gen_txtsu_debug;
 
     U_Swcore : xswc_core
       generic map (
@@ -1056,4 +1065,36 @@ begin
   clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
   clk_sys_o         <= clk_sys;
   
+  CS_ICON : chipscope_icon
+   port map (
+    CONTROL0 => CONTROL0);
+  CS_ILA : chipscope_ila
+   port map (
+     CONTROL => CONTROL0,
+     CLK     => phys_i(0).rx_clk,
+     TRIG0   => TRIG0,
+     TRIG1   => TRIG1,
+     TRIG2   => TRIG2,
+     TRIG3   => TRIG3);
+
+  TRIG0(15    downto   0) <= phys_i(0).rx_data;
+  TRIG0(17    downto  16) <= phys_i(0).rx_k;
+  TRIG0(              18) <= phys_i(0).rx_enc_err;
+  TRIG0(23    downto  19) <= phys_i(0).rx_bitslide;
+
+  TRIG1(15    downto   0) <= phys_i(7).rx_data;
+  TRIG1(17    downto  16) <= phys_i(7).rx_k;
+  TRIG1(              18) <= phys_i(7).rx_enc_err;
+  TRIG1(23    downto  19) <= phys_i(7).rx_bitslide;
+
+  TRIG2(15    downto   0) <= ep_dbg_data_array(0);
+  TRIG2(17    downto  16) <= ep_dbg_k_array(0);
+  TRIG2(              18) <= phys_i(0).tx_enc_err;
+  TRIG2(              19) <= phys_i(0).tx_disparity;
+
+  TRIG3(15    downto   0) <= ep_dbg_data_array(7);
+  TRIG3(17    downto  16) <= ep_dbg_k_array(7);
+  TRIG3(              18) <= phys_i(7).tx_enc_err;
+  TRIG3(              19) <= phys_i(7).tx_disparity;
+
 end rtl;
