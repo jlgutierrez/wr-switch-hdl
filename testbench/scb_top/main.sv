@@ -1989,12 +1989,20 @@ module main;
     g_force_payload_size = 110; // translates into 128 bytes - size of the entire frame as in 
 //                                 // spirent
 
+//     g_force_payload_size = 242; // translates into 256 bytes in spirent -> this exactly 2 pages
 //     g_force_payload_size = 230; 
-//     g_force_payload_size = 1000; 
+//     g_force_payload_size = 1000;
+
+//     g_force_payload_size = 46;  
+    g_force_payload_size = 218;   // tranlates into 326 bytes in spirent -> with this we sa the problem
+
 
     g_is_qvlan           = 0;
-                         // tx  ,rx ,opt
     trans_paths[0]       = '{0  ,17 ,0};
+    trans_paths[17]      = '{17  ,0 ,0};
+                         // tx  ,rx ,opt
+//     trans_paths[0]       = '{0  ,17 ,1000};
+//     trans_paths[17]      = '{17  ,0 ,1000};
   end
  //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2044,7 +2052,7 @@ module main;
   
       tmpl           = new;
 
-      if(opt == 0 || opt == 200 || opt == 201 || opt == 666 || opt == 667)
+      if(opt == 0 || opt == 200 || opt == 201 || opt == 666 || opt == 667 || opt == 1000)
         tmpl.src       = '{srcPort, 2,3,4,5,6};
       else if(opt == 101 | opt == 102)
         tmpl.src       = '{0,0,0,0,0,0};
@@ -2053,7 +2061,7 @@ module main;
       else
         tmpl.src       = '{srcPort, 2,3,4,5,6};
 
-      if(opt==0 || opt == 200 || opt == 202 )
+      if(opt==0 || opt == 200 || opt == 202 || opt == 1000 )
         tmpl.dst       = '{dstPort, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       else if(opt==1)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
@@ -2111,7 +2119,7 @@ module main;
   // 
       gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
       gen.set_template(tmpl);
-      if(g_force_payload_size < 64)
+      if(g_force_payload_size < 42)
         begin
         if(opt == 101 ||  opt == 102 || opt == 900 || opt == 901)
           gen.set_size(64, 65);
@@ -2133,8 +2141,11 @@ module main;
               
               pkt  = gen.gen();
 
-              if(g_force_payload_size >= 64)
-                pkt.set_size(g_force_payload_size);
+              if(g_force_payload_size >= 42) // min size of frame is 64, 
+                if(opt == 1000)
+                  pkt.set_size(g_force_payload_size + i%2);
+                else
+                  pkt.set_size(g_force_payload_size);
 
               pkt.oob = TX_FID;
               $display("|=> TX: port = %2d, pck_i = %4d (opt=%1d, pck_gap=%3d, size=%2d, n=%d)" , srcPort, i,opt,pck_gap,  pkt.payload.size, i);
