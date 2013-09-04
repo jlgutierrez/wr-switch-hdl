@@ -144,7 +144,7 @@ architecture rtl of wrsw_rt_subsystem is
 -- 0x10300 - 0x10400: GPIO
 -- 0x10400 - 0x10500: Timer
 
-  constant c_NUM_GPIO_PINS : integer := 32;
+  constant c_NUM_GPIO_PINS : integer := 4;
   constant c_NUM_WB_SLAVES : integer := 7;
 
   constant c_SLAVE_DPRAM   : integer := 0;
@@ -349,7 +349,7 @@ begin  -- rtl
     generic map (
       g_interface_mode         => PIPELINED,
       g_address_granularity    => BYTE,
-      g_num_pins               => 32,
+      g_num_pins               => c_NUM_GPIO_PINS,
       g_with_builtin_tristates => false)
     port map (
       clk_sys_i  => clk_sys_i,

@@ -152,6 +152,7 @@ architecture rtl of scb_top_bare is
   constant c_TRU_EVENTS    : integer := 1;
   constant c_ALL_EVENTS    : integer := c_TRU_EVENTS + c_RTU_EVENTS + c_epevents_sz;
   constant c_DUMMY_RMON    : boolean := false; -- define TRUE to enable dummy_rmon module for debugging PSTAT
+  constant c_NUM_GPIO_PINS : integer := 1;
 --   constant c_epevents_sz   : integer := 15;
 -------------------------------------------------------------------------------
 -- Interconnect & memory layout
@@ -282,7 +283,6 @@ architecture rtl of scb_top_bare is
 
   signal txtsu_timestamps_ack : std_logic_vector(c_NUM_PORTS-1 downto 0);
   signal txtsu_timestamps     : t_txtsu_timestamp_array(c_NUM_PORTS-1 downto 0);
-  signal dummy                : std_logic_vector(31 downto 0);
   signal tru_enabled          : std_logic;
 
   -- PSTAT: RMON counters
@@ -358,7 +358,9 @@ architecture rtl of scb_top_bare is
       TRIG3   : in    std_logic_vector(31 downto 0));
   end component;
 
-  signal gpio_out : std_logic_vector(31 downto 0);
+  signal gpio_out : std_logic_vector(c_NUM_GPIO_PINS-1 downto 0);
+  signal gpio_in  : std_logic_vector(c_NUM_GPIO_PINS-1 downto 0);
+  signal dummy    : std_logic_vector(c_NUM_GPIO_PINS-1 downto 0);
 
   -----------------------------------------------------------------------------
   -- TRU stuff
@@ -897,7 +899,7 @@ begin
     generic map (
       g_interface_mode         => PIPELINED,
       g_address_granularity    => BYTE,
-      g_num_pins               => 32,
+      g_num_pins               => c_NUM_GPIO_PINS,
       g_with_builtin_tristates => false)
     port map (
       clk_sys_i  => clk_sys,
@@ -906,12 +908,13 @@ begin
       slave_o    => cnx_master_in(c_SLAVE_GPIO),
       gpio_b     => dummy,
       gpio_out_o => gpio_out,
-      gpio_in_i  => gpio_i);
+      gpio_in_i  => gpio_in);
 
-  uart_sel_o <= gpio_out(31);
+  uart_sel_o <= gpio_out(0);
 
 
-  gpio_o <= gpio_out;
+  gpio_o(0) <= gpio_out(0);
+  gpio_in(0) <= gpio_i(0);
 
   U_MiniBackplane_I2C0 : xwb_i2c_master
     generic map (
