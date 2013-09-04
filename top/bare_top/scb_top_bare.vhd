@@ -590,7 +590,9 @@ begin
           g_with_rtu            => true,
           g_with_leds           => true,
           g_with_dmtd           => false,
-          g_with_packet_injection => true)
+          g_with_packet_injection => true,
+          g_use_new_rxcrc       => true,
+          g_use_new_txcrc       => true)
         port map (
           clk_ref_i  => clk_ref_i,
           clk_sys_i  => clk_sys,
