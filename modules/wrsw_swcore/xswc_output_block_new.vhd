@@ -916,8 +916,9 @@ begin  --  behavoural
 
   -------------- MPM ---------------------
   mpm_dreq       <= not src_i.stall when (s_send_pck = S_DATA or s_send_pck = S_FLUSH_STALL) else
-                    '1'             when ((s_send_pck = S_EOF or s_send_pck = S_IDLE) and 
-                                          page_set_in_advance = '1')                         else 
+--commented out caused it triggered recursive pre-fetching
+--                     '1'             when ((s_send_pck = S_EOF or s_send_pck = S_IDLE) and 
+--                                           page_set_in_advance = '1')                         else 
                     '0';
   mpm_dreq_o     <= mpm_dreq;
   mpm_abort_o    <= mpm_abort;

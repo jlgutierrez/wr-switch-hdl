@@ -928,7 +928,7 @@ begin  --arch
               
             elsif(in_pck_eof = '1') then
               
-              snk_stall_force_h <= '1';
+              snk_stall_force_h <= '0';
               snk_stall_force_l <= '1';
               s_rcv_pck         <= S_IDLE;
 
@@ -2055,6 +2055,7 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 rtu_dst_port_usecnt <= std_logic_vector(to_unsigned(cnt(rtu_dst_port_mask_i), g_usecount_width));
 
 -- generating output STALL: fifo_full or stall_after_err or stall_when_stuck;
+-- snk_stall_int <= ((not mpm_dreq_i) or snk_stall_force_h or in_pck_eof) and snk_stall_force_l;
 snk_stall_int <= ((not mpm_dreq_i) or snk_stall_force_h) and snk_stall_force_l;
 
 snk_o.stall <= snk_stall_int;
