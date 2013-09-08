@@ -291,6 +291,12 @@ architecture behavoural of xswc_output_block_new is
   signal wrf_status_err  : t_wrf_status_reg;
   
   signal page_set_in_advance: std_logic; 
+  
+  signal ifg_count : unsigned(3 downto 0);
+  signal cyc_d0    : std_logic;
+
+  constant tx_interframe_gap: unsigned(3 downto 0) := x"2";
+
 begin  --  behavoural
 
   wrf_status_err.is_hp       <= '0';
@@ -738,7 +744,7 @@ begin  --  behavoural
           when S_IDLE =>
           --===========================================================================================   
 
-            if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0') then
+            if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0' and ifg_count = x"0") then
               src_out_int.cyc  <= '1';
               s_send_pck       <= S_DATA;
               pck_start_pgaddr <= mpm_pg_addr;
@@ -869,6 +875,27 @@ begin  --  behavoural
       end if;
     end if;
   end process p_send_pck_fsm;
+  
+  p_count_ifg : process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+         cyc_d0     <= '0';
+         ifg_count  <= (others =>'0');
+      else
+        cyc_d0 <= src_out_int.cyc;
+        
+        if(src_out_int.cyc = '1' and cyc_d0 = '0') then
+          ifg_count  <= tx_interframe_gap;
+        elsif(src_out_int.cyc = '1' and src_out_int.sel = "10") then
+          ifg_count  <= tx_interframe_gap - x"1";
+        elsif(s_send_pck = S_IDLE and ifg_count > x"0") then
+          ifg_count <= ifg_count - x"1";
+        end if;
+      end if;
+    end if;
+  end process p_count_ifg;
+
 
   p_count_acks : process(clk_i)
   begin
