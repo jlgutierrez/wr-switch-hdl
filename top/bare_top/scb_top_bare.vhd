@@ -916,56 +916,28 @@ begin
   gpio_o(0) <= gpio_out(0);
   gpio_in(0) <= gpio_i(0);
 
-  U_MiniBackplane_I2C0 : xwb_i2c_master
+  U_MiniBackplane_I2C : xwb_i2c_master
     generic map (
       g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE)
+      g_address_granularity => BYTE,
+      g_num_interfaces      => 3)
     port map (
       clk_sys_i    => clk_sys,
       rst_n_i      => rst_n_periph,
       slave_i      => cnx_master_out(c_SLAVE_MBL_I2C0),
       slave_o      => cnx_master_in(c_SLAVE_MBL_I2C0),
       desc_o       => open,
-      scl_pad_i    => i2c_scl_i(0),
-      scl_pad_o    => i2c_scl_o(0),
-      scl_padoen_o => i2c_scl_oen_o(0),
-      sda_pad_i    => i2c_sda_i(0),
-      sda_pad_o    => i2c_sda_o(0),
-      sda_padoen_o => i2c_sda_oen_o(0));
+      scl_pad_i    => i2c_scl_i,
+      scl_pad_o    => i2c_scl_o,
+      scl_padoen_o => i2c_scl_oen_o,
+      sda_pad_i    => i2c_sda_i,
+      sda_pad_o    => i2c_sda_o,
+      sda_padoen_o => i2c_sda_oen_o);
 
-  U_MiniBackplane_I2C1 : xwb_i2c_master
-    generic map (
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE)
-    port map (
-      clk_sys_i    => clk_sys,
-      rst_n_i      => rst_n_periph,
-      slave_i      => cnx_master_out(c_SLAVE_MBL_I2C1),
-      slave_o      => cnx_master_in(c_SLAVE_MBL_I2C1),
-      desc_o       => open,
-      scl_pad_i    => i2c_scl_i(1),
-      scl_pad_o    => i2c_scl_o(1),
-      scl_padoen_o => i2c_scl_oen_o(1),
-      sda_pad_i    => i2c_sda_i(1),
-      sda_pad_o    => i2c_sda_o(1),
-      sda_padoen_o => i2c_sda_oen_o(1));
-
-  U_Sensors_I2C : xwb_i2c_master
-    generic map (
-      g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE)
-    port map (
-      clk_sys_i    => clk_sys,
-      rst_n_i      => rst_n_periph,
-      slave_i      => cnx_master_out(c_SLAVE_SENSOR_I2C),
-      slave_o      => cnx_master_in(c_SLAVE_SENSOR_I2C),
-      desc_o       => open,
-      scl_pad_i    => i2c_scl_i(2),
-      scl_pad_o    => i2c_scl_o(2),
-      scl_padoen_o => i2c_scl_oen_o(2),
-      sda_pad_i    => i2c_sda_i(2),
-      sda_pad_o    => i2c_sda_o(2),
-      sda_padoen_o => i2c_sda_oen_o(2));
+  cnx_master_in(c_SLAVE_MBL_I2C1).ack <= '1';
+  cnx_master_in(c_SLAVE_MBL_I2C1).int <= '0';
+  cnx_master_in(c_SLAVE_SENSOR_I2C).ack <= '1';
+  cnx_master_in(c_SLAVE_SENSOR_I2C).int <= '0';
 
   --=====================================--
   --               PSTATS                --
