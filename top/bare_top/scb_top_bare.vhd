@@ -140,7 +140,7 @@ end scb_top_bare;
 architecture rtl of scb_top_bare is
 
   constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"04_02_14_00"; --DD_MM_YY_VV
-  constant c_NUM_WB_SLAVES : integer := 16;
+  constant c_NUM_WB_SLAVES : integer := 13;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
@@ -166,27 +166,23 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_TXTSU        : integer := 4;
   constant c_SLAVE_RTU          : integer := 5;
   constant c_SLAVE_GPIO         : integer := 6;
-  constant c_SLAVE_MBL_I2C0     : integer := 7;
-  constant c_SLAVE_MBL_I2C1     : integer := 8;
-  constant c_SLAVE_SENSOR_I2C   : integer := 9;
-  constant c_SLAVE_PWM          : integer := 10;
-  constant c_SLAVE_TRU          : integer := 11;
-  constant c_SLAVE_TATSU        : integer := 12;
-  constant c_SLAVE_PSTATS       : integer := 13;
-  constant c_SLAVE_HWDU         : integer := 14;
-  constant c_SLAVE_DUMMY        : integer := 15;
+  constant c_SLAVE_I2C          : integer := 7;
+  constant c_SLAVE_PWM          : integer := 8;
+  constant c_SLAVE_TRU          : integer := 9;
+  constant c_SLAVE_TATSU        : integer := 10;
+  constant c_SLAVE_PSTATS       : integer := 11;
+  constant c_SLAVE_HWDU         : integer := 12;
+  --constant c_SLAVE_DUMMY        : integer := 13;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
-      x"00072000",                      -- Dummy counters
-      x"00071000",                      -- HWDU
-      x"00070000",                      -- PStats counters
-      x"00059000",                      -- TATSU
-      x"00058000",                      -- TRU
-      x"00057000",                      -- PWM Controller
-      x"00056000",                      -- Sensors-I2C
-      x"00055000",                      -- MBL-I2C1
-      x"00054000",                      -- MBL-I2C0
+      --x"00070000",                      -- Dummy counters
+      x"00059000",                      -- HWDU
+      x"00058000",                      -- PStats counters
+      x"00057000",                      -- TATSU
+      x"00056000",                      -- TRU
+      x"00055000",                      -- PWM Controller
+      x"00054000",                      -- I2C (0, 1, Sensors)
       x"00053000",                      -- GPIO
       x"00060000",                      -- RTU
       x"00051000",                      -- TXTsu
@@ -197,9 +193,7 @@ architecture rtl of scb_top_bare is
       x"00000000");                     -- RT Subsys 
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
-    (x"000ff000",
-     x"000ff000",
-     x"000ff000",
+    (--x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000ff000",
@@ -925,8 +919,8 @@ begin
     port map (
       clk_sys_i    => clk_sys,
       rst_n_i      => rst_n_periph,
-      slave_i      => cnx_master_out(c_SLAVE_MBL_I2C0),
-      slave_o      => cnx_master_in(c_SLAVE_MBL_I2C0),
+      slave_i      => cnx_master_out(c_SLAVE_I2C),
+      slave_o      => cnx_master_in(c_SLAVE_I2C),
       desc_o       => open,
       scl_pad_i    => i2c_scl_i,
       scl_pad_o    => i2c_scl_o,
@@ -934,11 +928,6 @@ begin
       sda_pad_i    => i2c_sda_i,
       sda_pad_o    => i2c_sda_o,
       sda_padoen_o => i2c_sda_oen_o);
-
-  cnx_master_in(c_SLAVE_MBL_I2C1).ack <= '1';
-  cnx_master_in(c_SLAVE_MBL_I2C1).int <= '0';
-  cnx_master_in(c_SLAVE_SENSOR_I2C).ack <= '1';
-  cnx_master_in(c_SLAVE_SENSOR_I2C).int <= '0';
 
   --=====================================--
   --               PSTATS                --
@@ -1006,29 +995,29 @@ begin
 
 
   -- debugging for RMONS, not to be included into final release
-  gen_dummy_rmon: if(c_DUMMY_RMON = true) generate
-    U_DUMMY: dummy_rmon
-      generic map(
-        g_interface_mode => PIPELINED,
-        g_address_granularity => BYTE,
-        g_nports => c_NUM_PORTS,
-        g_cnt_pp => 2)
-      port map(
-        rst_n_i => rst_n_periph,
-        clk_i   => clk_sys,
-        events_i  => dummy_events,
-        wb_i  => cnx_master_out(c_SLAVE_DUMMY),
-        wb_o  => cnx_master_in(c_SLAVE_DUMMY));
+  --gen_dummy_rmon: if(c_DUMMY_RMON = true) generate
+  --  U_DUMMY: dummy_rmon
+  --    generic map(
+  --      g_interface_mode => PIPELINED,
+  --      g_address_granularity => BYTE,
+  --      g_nports => c_NUM_PORTS,
+  --      g_cnt_pp => 2)
+  --    port map(
+  --      rst_n_i => rst_n_periph,
+  --      clk_i   => clk_sys,
+  --      events_i  => dummy_events,
+  --      wb_i  => cnx_master_out(c_SLAVE_DUMMY),
+  --      wb_o  => cnx_master_in(c_SLAVE_DUMMY));
 
-    gen_dummy_events_assemble : for i in 0 to c_NUM_PORTS-1 generate
-      dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*c_epevents_sz-1 downto (i+1)*c_epevents_sz-2);
-    end generate gen_dummy_events_assemble;   
+  --  gen_dummy_events_assemble : for i in 0 to c_NUM_PORTS-1 generate
+  --    dummy_events((i+1)*2-1 downto i*2) <= rmon_events((i+1)*c_epevents_sz-1 downto (i+1)*c_epevents_sz-2);
+  --  end generate gen_dummy_events_assemble;   
 
-  end generate gen_dummy_rmon;
-    
-  gen_no_dummy_rmon: if(c_DUMMY_RMON = false) generate
-    cnx_master_in(c_SLAVE_DUMMY).ack <= '1';
-  end generate gen_no_dummy_rmon;
+  --end generate gen_dummy_rmon;
+  --  
+  --gen_no_dummy_rmon: if(c_DUMMY_RMON = false) generate
+  --  cnx_master_in(c_SLAVE_DUMMY).ack <= '1';
+  --end generate gen_no_dummy_rmon;
 
   -----------------------------------------------------------------------------
   -- PWM Controlle for mini-backplane fan drive
