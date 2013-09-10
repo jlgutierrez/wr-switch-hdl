@@ -1026,6 +1026,7 @@ begin
   U_PWM_Controller : xwb_simple_pwm
     generic map (
       g_num_channels        => 2,
+      g_regs_size           => 8,
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE)
     port map (
