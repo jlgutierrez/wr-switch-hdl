@@ -332,7 +332,10 @@ begin  -- rtl
   U_SPI_Master : xwb_spi
     generic map (
       g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE)
+      g_address_granularity => BYTE,
+      g_divider_len         => 8,
+      g_max_char_len        => 24,
+      g_num_slaves          => 1)
     port map (
       clk_sys_i            => clk_sys_i,
       rst_n_i              => rst_n_i,
@@ -340,7 +343,6 @@ begin  -- rtl
       slave_o              => cnx_master_in(c_SLAVE_SPI),
       desc_o               => open,
       pad_cs_o(0)          => pll_cs_n_o,
-      pad_cs_o(7 downto 1) => dummy(7 downto 1),
       pad_sclk_o           => pll_sck_o,
       pad_mosi_o           => pll_mosi_o,
       pad_miso_i           => pll_miso_i);
