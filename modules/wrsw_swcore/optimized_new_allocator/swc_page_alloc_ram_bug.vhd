@@ -173,6 +173,7 @@ architecture syn of swc_page_allocator_new is
   signal free_blocks     : unsigned(g_page_addr_width downto 0);
   signal usecnt_not_zero : std_logic;
   signal real_nomem_d0   : std_logic;
+  signal real_nomem_d1   : std_logic;
   
   type t_alloc_req is record
     alloc              : std_logic;
@@ -232,7 +233,16 @@ begin  -- syn
 
   -- increaze pointer to next address -> it stores next freee page, we use the currently read
   -- and increase for next usage
-  q_read_p0  <= '1' when (alloc_req_d0.alloc = '1') else '0';-- and (real_nomem_d0 = '0') else '0'; -- TODO: real_nomem
+  -- The core accepts requsts which occure at the fist cycle of nomem HIGH -> this is because
+  -- we cannot stop once granted access based on the request in the previous cycle:
+  -- CLK       : _|-|_|-|_|-|_|-|_|-|_|-|_|-|_|-|_|-|_|-|
+  -- alloc_in  : _|----|_____    <= this request needs to be handled because granted access below
+  -- grant     : ______|-|___    <= this grant needs to be handled
+  -- nomem     : ______|-------
+  -- nomem_d0  : _______|-------
+  -- alloc_d0  " _______|-|____  <= this need to be handled
+  -- nomem_d1  : ________|-------
+  q_read_p0  <= '1' when (alloc_req_d0.alloc = '1') and (real_nomem_d1 = '0') else '0'; 
   
   -- address of page stored in the memory (queue)
   q_input_addr_p1 <= std_logic_vector(wr_ptr_p1) when initializing = '1' else alloc_req_d1.pgaddr;
@@ -293,11 +303,14 @@ begin  -- syn
         rd_ptr_p0        <= (others => '0');
         wr_ptr_p1        <= (others => '0');
         real_nomem       <= '0';
+        real_nomem_d0    <= '0';
+        real_nomem_d1    <= '0';
         free_pages       <= to_unsigned(g_num_pages-1, free_pages'length);
         q_read_d1        <= '0';
       else
         q_read_d1        <= q_read_p0;
         real_nomem_d0    <= real_nomem;
+        real_nomem_d1    <= real_nomem_d0;
 
         if(initializing = '1') then
           if(wr_ptr_p1 = g_num_pages-1) then
@@ -318,10 +331,12 @@ begin  -- syn
           
           -- counting the usage of pages
           if(q_write_p1 = '1' and q_read_p0 = '0') then
-            real_nomem <= '0';
+            if(free_pages = 3) then
+              real_nomem <= '0';
+            end if;
             free_pages <= free_pages + 1;
           elsif (q_write_p1 = '0' and q_read_p0 = '1') then
-            if(free_pages = 1) then
+            if(free_pages = 3) then
               real_nomem <= '1';
             end if;
             free_pages <= free_pages - 1;
@@ -337,7 +352,7 @@ begin  -- syn
       if (rst_n_i = '0') or (initializing = '1') then
         done_p1 <= '0';
       else
-        if(((alloc_req_d0.alloc      = '1'  and real_nomem        = '0') or 
+        if(((alloc_req_d0.alloc      = '1'  and real_nomem_d1     = '0') or 
              alloc_req_d0.set_usecnt = '1'  or  alloc_req_d0.free = '1'  or 
              alloc_req_d0.f_free     = '1') and initializing      = '0') then
           done_p1 <= '1';
@@ -362,6 +377,7 @@ begin  -- syn
       end if;
     end if;
   end process;
+--   out_nomem <= real_nomem;
 
   pgaddr_o           <= q_output_addr_p1;
   done_o             <= done_p1;                 
