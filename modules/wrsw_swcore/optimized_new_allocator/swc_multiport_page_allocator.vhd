@@ -144,6 +144,10 @@ architecture syn of swc_multiport_page_allocator is
       pgaddr_o                : out std_logic_vector(g_page_addr_width -1 downto 0);
       free_last_usecnt_o      : out std_logic;
       done_o                  : out std_logic;
+      done_alloc_o            : out std_logic;     
+      done_usecnt_o           : out std_logic;     
+      done_free_o             : out std_logic;     
+      done_force_free_o       : out std_logic;     
       nomem_o                 : out std_logic;
       dbg_double_free_o       : out std_logic;
       dbg_double_force_free_o : out std_logic;
@@ -177,6 +181,7 @@ architecture syn of swc_multiport_page_allocator is
 
   signal ports              : t_port_state_array;
   signal arb_req, arb_grant : std_logic_vector(2*g_num_ports-1 downto 0);
+  signal arb_req_d0         : std_logic_vector(2*g_num_ports-1 downto 0);
 
 
   signal pg_alloc            : std_logic;
@@ -188,10 +193,16 @@ architecture syn of swc_multiport_page_allocator is
   signal pg_addr_alloc       : std_logic_vector(g_page_addr_width -1 downto 0);
   signal pg_free_last_usecnt : std_logic;
   signal pg_done             : std_logic;
+  signal done_alloc          : std_logic;     
+  signal done_usecnt         : std_logic;     
+  signal done_free           : std_logic;     
+  signal done_force_free     : std_logic;     
+
   signal pg_nomem            : std_logic;
   signal pg_req_vec          : std_logic_vector(g_num_ports-1 downto 0);
   signal pg_rsp_vec          : std_logic_vector(g_num_ports-1 downto 0);
-  signal pg_req_vec_d0       : std_logic_vector(g_num_ports-1 downto 0);
+  signal grant_ob_d0         : std_logic_vector(g_num_ports-1 downto 0);
+  signal grant_ib_d0         : std_logic_vector(g_num_ports-1 downto 0);
 
   signal alloc_done      : std_logic_vector(g_num_ports - 1 downto 0);
   signal free_done       : std_logic_vector(g_num_ports - 1 downto 0);
@@ -226,22 +237,22 @@ begin  -- syn
     ports(i).req_free       <= free_i(i);
     ports(i).req_alloc      <= alloc_i(i);-- and not (pg_nomem);
     ports(i).req_set_usecnt <= set_usecnt_i(i);
-    ports(i).req_addr_usecnt<= pgaddr_usecnt_i(g_page_addr_width * (i+1) -1 downto g_page_addr_width*i);
-    ports(i).req_addr_free  <= pgaddr_free_i(g_page_addr_width * (i+1) -1 downto g_page_addr_width*i); 
+    ports(i).req_addr_usecnt<= pgaddr_usecnt_i    (g_page_addr_width * (i+1) -1 downto g_page_addr_width*i);
+    ports(i).req_addr_free  <= pgaddr_free_i      (g_page_addr_width * (i+1) -1 downto g_page_addr_width*i); 
     ports(i).req_addr_f_free<= pgaddr_force_free_i(g_page_addr_width * (i+1) -1 downto g_page_addr_width*i);
     ports(i).req_ucnt       <= usecnt_i(g_usecount_width * (i+1) - 1 downto g_usecount_width*i);
   end generate gen_records;
 
   -- MUXes
   gen_arbiter : for i in 0 to g_num_ports-1 generate
-    process(ports, arb_req, arb_grant, pg_done, pg_nomem)
+    process(ports, arb_req, arb_grant, pg_done, pg_nomem,arb_req_d0)
     begin
       ports(i).grant_ib_d(0) <= arb_grant(2 * i);
       ports(i).grant_ob_d(0) <= arb_grant(2 * i + 1);
       ports(i).req_ib        <= ((ports(i).req_alloc and (not pg_nomem)) or ports(i).req_set_usecnt);  
       ports(i).req_ob        <= (ports(i).req_free  or ports(i).req_force_free);  
-      arb_req(2 * i)         <= ports(i).req_ib and not (ports(i).grant_ib_d(0) or pg_req_vec_d0(i));
-      arb_req(2 * i + 1)     <= ports(i).req_ob and not (ports(i).grant_ob_d(0)  or pg_req_vec_d0(i));
+      arb_req(2 * i)         <= ports(i).req_ib and not (ports(i).grant_ib_d(0) or grant_ib_d0(i));
+      arb_req(2 * i + 1)     <= ports(i).req_ob and not (ports(i).grant_ob_d(0) or grant_ob_d0(i));
     end process;
   end generate gen_arbiter;
 
@@ -319,14 +330,24 @@ begin  -- syn
   begin
     if rising_edge(clk_i) then
       if rst_n_i = '0'then
-        pg_req_vec_d0 <= (others => '0');
+        grant_ob_d0 <= (others => '0');       
+        grant_ib_d0 <= (others => '0');
       else
         for i in 0 to g_num_ports-1 loop
-          if(pg_req_vec(i) = '1') then
-            pg_req_vec_d0(i) <= '1';
-          elsif(pg_rsp_vec(i)='1' and pg_done='1') then
-            pg_req_vec_d0(i) <= '0';
-          end if;
+          
+          -- input
+          if(ports(i).grant_ib_d(0) = '1') then
+            grant_ib_d0(i) <= '1';
+          elsif(pg_rsp_vec(i)='1' and (alloc_done(i) ='1' or set_usecnt_done(i) ='1')) then
+            grant_ib_d0(i) <= '0';
+          end if;         
+          -- output
+          if(ports(i).grant_ob_d(0) = '1') then
+            grant_ob_d0(i) <= '1';
+          elsif(pg_rsp_vec(i)='1' and (free_done(i) ='1' or force_free_done(i) ='1')) then
+            grant_ob_d0(i) <= '0';
+          end if;         
+
         end loop;  -- i
       end if;
     end if;
@@ -354,6 +375,10 @@ begin  -- syn
       rsp_vec_o               => pg_rsp_vec,                  
       pgaddr_o                => pg_addr_alloc,
       done_o                  => pg_done,
+      done_alloc_o            => done_alloc,
+      done_usecnt_o           => done_usecnt,
+      done_free_o             => done_free,
+      done_force_free_o       => done_force_free,
       nomem_o                 => pg_nomem,
       dbg_double_force_free_o => dbg_double_force_free,
       dbg_double_free_o       => dbg_double_free,
@@ -365,10 +390,14 @@ begin  -- syn
   pgaddr_alloc_o <= pg_addr_alloc;
 
   gen_done : for i in 0 to g_num_ports-1 generate
-    alloc_done(i)      <= '1' when (ports(i).req_alloc     ='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
-    free_done(i)       <= '1' when (ports(i).req_free      ='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
-    force_free_done(i) <= '1' when (ports(i).req_force_free='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
-    set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
+--     alloc_done(i)      <= '1' when (ports(i).req_alloc     ='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
+--     free_done(i)       <= '1' when (ports(i).req_free      ='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
+--     force_free_done(i) <= '1' when (ports(i).req_force_free='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
+--     set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
+    alloc_done(i)      <= '1' when (ports(i).req_alloc     ='1' and pg_rsp_vec(i)='1' and done_alloc     ='1') else '0';
+    free_done(i)       <= '1' when (ports(i).req_free      ='1' and pg_rsp_vec(i)='1' and done_free      ='1') else '0';
+    force_free_done(i) <= '1' when (ports(i).req_force_free='1' and pg_rsp_vec(i)='1' and done_force_free='1') else '0';
+    set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and done_usecnt    ='1') else '0';
   end generate gen_done;
 
   alloc_done_o       <= alloc_done;

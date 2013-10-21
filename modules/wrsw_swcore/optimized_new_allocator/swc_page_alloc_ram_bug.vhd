@@ -115,13 +115,12 @@ entity swc_page_allocator_new is
     pgaddr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
 
     free_last_usecnt_o : out std_logic;
-
-    done_o : out std_logic;             -- "early" done output (active HI).
-                                        -- Indicates that
-                                        -- the alloc/release cycle is going to
-                                        -- end 1 cycle in advance, so the
-                                        -- multiport scheduler can optimize
-                                        -- it's performance
+    
+    done_o                   : out std_logic;
+    done_alloc_o             : out std_logic;     
+    done_usecnt_o            : out std_logic;     
+    done_free_o              : out std_logic;     
+    done_force_free_o        : out std_logic;     
 
     nomem_o : out std_logic;
 
@@ -380,7 +379,11 @@ begin  -- syn
 --   out_nomem <= real_nomem;
 
   pgaddr_o           <= q_output_addr_p1;
-  done_o             <= done_p1;                 
+  done_o             <= done_p1; 
+  done_alloc_o       <= done_p1 and alloc_req_d1.alloc;
+  done_usecnt_o      <= done_p1 and alloc_req_d1.set_usecnt;
+  done_free_o        <= done_p1 and alloc_req_d1.free;
+  done_force_free_o  <= done_p1 and alloc_req_d1.f_free;
   rsp_vec_o          <= alloc_req_d1.grant_vec;
   nomem_o            <= out_nomem or initializing;
   free_last_usecnt_o <= (not initializing) when (alloc_req_d1.free = '1' and unsigned(usecnt_rddata_p1) = 1) else '0';
