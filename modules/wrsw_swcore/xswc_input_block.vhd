@@ -612,7 +612,7 @@ begin
   return "0000";
 end function f_enum2nat;
 
-constant c_force_usecnt             : boolean := TRUE;
+constant c_force_usecnt             : boolean := FALSE;-- TRUE;
   constant c_special_res            : std_logic_vector(7 downto 0) := x"01";
   constant c_normal_res             : std_logic_vector(7 downto 0) := x"02"; 
 -- resource management
@@ -1159,7 +1159,8 @@ begin
             mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
             -------------------------------------------
             
-          elsif(pckstart_page_in_advance = '0') then
+          elsif(pckstart_page_in_advance = '0' and  
+                rtu_rsp_ack              = '0') then -- added to give precedence to usecnt set
             
             pckstart_page_alloc_req <= '1';
             s_page_alloc            <= S_PCKSTART_PAGE_REQ;
@@ -1169,7 +1170,8 @@ begin
             mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
             -------------------------------------------
             
-          elsif(pckinter_page_in_advance = '0') then
+          elsif(pckinter_page_in_advance = '0' and 
+                rtu_rsp_ack              = '0') then -- added to give precedence to usecnt set
             
             pckinter_page_alloc_req <= '1';
             s_page_alloc            <= S_PCKINTER_PAGE_REQ;
