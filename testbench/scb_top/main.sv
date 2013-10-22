@@ -110,7 +110,7 @@ module main;
    reg [g_max_ports-1:0] portRtuEnabled       = 18'b111111111111111111; //
    integer repeat_number                      = 20;
    integer tries_number                       = 3;
-   integer vid_init_for_inc                   = 0; // with opt 666
+   integer vid_init_for_inc                   = 0; // with opt 666  and 668
 //    reg [31:0] vlan_port_mask                  = 32'hFFFFFFFF;
    reg [31:0] mirror_src_mask                 = 'h00000002;
    reg [31:0] mirror_dst_mask                 = 'h00000080;
@@ -2052,7 +2052,7 @@ module main;
   /*
    * test 100% (high) with tagging/untagging
    **/
-///*
+/*
   initial begin
     portUnderTest        = 18'b100000000000000001;    
     g_enable_pck_gaps    = 0;
@@ -2072,7 +2072,7 @@ module main;
     trans_paths[17]      = '{17  ,0 ,0};
 
   end
-//*/
+*/
  /** ***************************   test scenario 65  ************************************* **/ 
   /*
    * test 100% (high) with tagging/untagging
@@ -2116,6 +2116,99 @@ module main;
 
   end
  */
+ /** ***************************   test scenario 67  ************************************* **/ 
+  /*
+   * stress test on all ports with Unicast
+   * problem - to be investigated - cuts frames
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b1111111111111111111;    
+    g_enable_pck_gaps    = 0;
+    repeat_number        = 500000;
+    tries_number         = 1;  
+    g_force_payload_size = 46*7;  
+    
+    g_is_qvlan           = 0;
+                         // tx  ,rx ,opt
+  end
+/*/
+
+ /** ***************************   test scenario 68  ************************************* **/ 
+  /*
+   * stress test on all ports with Unicast
+   **/
+/*
+  initial begin
+    portUnderTest        = 18'b1111111111111111111;    
+    g_enable_pck_gaps    = 0;
+    repeat_number        = 10;
+    tries_number         = 1;  
+    g_force_payload_size = 300;  
+    
+    g_is_qvlan           = 0;
+                         // tx  ,rx ,opt
+  end
+*/
+
+ /** ***************************   test scenario 69  ************************************* **/ 
+  /*
+   * stress test on all ports with Braodcast+FastForward
+   **/
+///*
+  initial begin
+                                             //      mask     , fid , prio,has_p,overr, drop , vid, valid
+   sim_vlan_tab[ 0] = '{'{32'h00000001, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
+   sim_vlan_tab[ 1] = '{'{32'h00000002, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1,  1'b1 };
+   sim_vlan_tab[ 2] = '{'{32'h00000004, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 2,  1'b1 };
+   sim_vlan_tab[ 3] = '{'{32'h00000008, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 3,  1'b1 };
+   sim_vlan_tab[ 4] = '{'{32'h00000010, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 4,  1'b1 };
+   sim_vlan_tab[ 5] = '{'{32'h00000020, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 5,  1'b1 };
+   sim_vlan_tab[ 6] = '{'{32'h00000040, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 6,  1'b1 };
+   sim_vlan_tab[ 7] = '{'{32'h00000080, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 7,  1'b1 };
+   sim_vlan_tab[ 8] = '{'{32'h00000100, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 8,  1'b1 };
+   sim_vlan_tab[ 9] = '{'{32'h00000200, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 9,  1'b1 };
+   sim_vlan_tab[10] = '{'{32'h00000400, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 10, 1'b1 };
+   sim_vlan_tab[11] = '{'{32'h00000800, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 11, 1'b1 };
+   sim_vlan_tab[12] = '{'{32'h00001000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 12, 1'b1 };
+   sim_vlan_tab[13] = '{'{32'h00002000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 13, 1'b1 };
+   sim_vlan_tab[14] = '{'{32'h00004000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 14, 1'b1 };
+   sim_vlan_tab[15] = '{'{32'h00008000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 15, 1'b1 };
+   sim_vlan_tab[16] = '{'{32'h00010000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 16, 1'b1 };
+   sim_vlan_tab[17] = '{'{32'h00020000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 17, 1'b1 };
+   sim_vlan_tab[18] = '{'{32'h00040000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 18, 1'b1 };
+                                        // tx  ,rx ,opt (send from port tx to rx with option opt
+
+    trans_paths[ 0]='{0  ,17 , 668 }; // port 0: 
+    trans_paths[ 1]='{1  ,16 , 668 }; // port 1
+    trans_paths[ 2]='{2  ,15 , 668 }; // port 2
+    trans_paths[ 3]='{3  ,14 , 668 }; // port 3
+    trans_paths[ 4]='{4  ,13 , 668 }; // port 4
+    trans_paths[ 5]='{5  ,12 , 668 }; // port 5
+    trans_paths[ 6]='{6  ,11 , 668 }; // port 6
+    trans_paths[ 7]='{7  ,10 , 668 }; // port 7
+    trans_paths[ 8]='{8  ,9  , 668 }; // port 8
+    trans_paths[ 9]='{9  ,8  , 668 }; // port 9
+    trans_paths[10]='{10 ,7  , 668 }; // port 10
+    trans_paths[11]='{11 ,6  , 668 }; // port 11
+    trans_paths[12]='{12 ,5  , 668 }; // port 12
+    trans_paths[13]='{13 ,4  , 668 }; // port 13
+    trans_paths[14]='{14 ,3  , 668 }; // port 14
+    trans_paths[15]='{15 ,2  , 668 }; // port 15
+    trans_paths[16]='{16 ,1  , 668 }; // port 16
+    trans_paths[17]='{17 ,0  , 668 }; // port 17
+
+    portUnderTest        = 18'b1111111111111111111;    
+    g_enable_pck_gaps    = 0;
+    repeat_number        = 10;
+    tries_number         = 1;  
+    g_force_payload_size = 42;  
+    mac_br               = 1;
+    g_is_qvlan           = 1;
+                         // tx  ,rx ,opt
+  end
+ //*/
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2180,7 +2273,7 @@ module main;
         tmpl.dst       = '{'h01, 'h80, 'hC2, 'h00, 'h00, 'h00}; //BPDU
       else if(opt==3)
         tmpl.dst       = '{17, 'h50, 'hca, 'hfe, 'hba, 'hbe};
-      else if(opt==4 || opt==10 || opt==13 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206 || opt == 207 || opt == 444 || opt==666|| opt==667)
+      else if(opt==4 || opt==10 || opt==13 || opt==201 || opt == 203 || opt == 204 || opt == 205 || opt == 206 || opt == 207 || opt == 444 || opt==666|| opt==667 || opt==668)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}; // broadcast      
       else if(opt==5)
         tmpl.dst       = '{'h11, 'h50, 'hca, 'hfe, 'hba, 'hbe}; // single Fast Forward
@@ -2305,6 +2398,8 @@ module main;
                 pkt.vid = vid_init_for_inc+srcPort;
               else if(opt== 667)
                 pkt.vid = (vid_init_for_inc+srcPort+i)%18;
+              else if(opt == 668)
+                pkt.vid = vid_init_for_inc+dstPort;                
               src.send(pkt);
               arr[i]  = pkt;
 //               repeat(60) @(posedge clk_sys);
@@ -2321,7 +2416,7 @@ module main;
               $display("|<= RX: port = %2d, pck_i = %4d (size=%2d)" , dstPort, j,  pkt2.payload.size);
               if(unvid)
                 arr[j].is_q  = 0;
-              if(!arr[j].equal(pkt2))
+              if((pkt.payload.size != pkt2.payload.size) || !arr[j].equal(pkt2))
                 begin
                   $display("Fault at %d", j);
                   $display("Should be: ");
@@ -3696,7 +3791,7 @@ module main;
               wait_cycles(start_send_init_delay[qq]);
               for(int g=0;g<tries_number;g++)
                 begin
-                  $display("Try port_0:%d",  g);
+                  $display("Try port_%d:%d", qq, g);
                   tx_test(seed                          /* seed    */, 
                           repeat_number                 /* n_tries */, 
                           g_is_qvlan                    /* is_q    */, 
