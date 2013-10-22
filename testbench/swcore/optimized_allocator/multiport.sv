@@ -25,7 +25,8 @@ module main;
    wire [`c_num_ports-1:0]  alloc_v, free_v, force_free_v, set_usecnt_v;
    wire [`c_num_ports-1:0]  alloc_done_v, free_done_v, force_free_done_v, set_usecnt_done_v;
    wire [`c_num_ports * `c_page_addr_width - 1 : 0] pgaddr_free_v, pgaddr_force_free_v, pgaddr_usecnt_v;
-   wire [`c_num_ports * `c_use_count_width - 1 : 0] usecnt_v;
+   wire [`c_num_ports * `c_use_count_width - 1 : 0] usecnt_set_v;
+   wire [`c_num_ports * `c_use_count_width - 1 : 0] usecnt_alloc_v;
    wire [`c_page_addr_width-1:0]                    pg_addr_alloc;
    wire                             pg_nomem;
   
@@ -44,7 +45,8 @@ module main;
            assign pgaddr_free_v[(i+1) * `c_page_addr_width - 1: i * `c_page_addr_width] = alloc_port[i].pg_addr_free;
            assign pgaddr_force_free_v[(i+1) * `c_page_addr_width - 1: i * `c_page_addr_width] = alloc_port[i].pg_addr_force_free;
            assign pgaddr_usecnt_v[(i+1) * `c_page_addr_width - 1: i * `c_page_addr_width] = alloc_port[i].pg_addr_usecnt;
-           assign usecnt_v[(i+1) * `c_use_count_width - 1 : i * `c_use_count_width]=alloc_port[i].usecnt;
+           assign usecnt_set_v[(i+1) * `c_use_count_width - 1 : i * `c_use_count_width]=alloc_port[i].usecnt;
+           assign usecnt_alloc_v[(i+1) * `c_use_count_width - 1 : i * `c_use_count_width]=alloc_port[i].usecnt;
         end
       
    endgenerate
@@ -75,7 +77,9 @@ module main;
            .pgaddr_free_i(pgaddr_free_v),
            .pgaddr_force_free_i(pgaddr_force_free_v),
            .pgaddr_usecnt_i(pgaddr_usecnt_v),
-           .usecnt_i(usecnt_v),
+//            .usecnt_i(usecnt_v),
+           .usecnt_set_i(usecnt_set_v),
+           .usecnt_alloc_i(usecnt_alloc_v),
 
            .pgaddr_alloc_o(pg_addr_alloc),
            .nomem_o(pg_nomem)

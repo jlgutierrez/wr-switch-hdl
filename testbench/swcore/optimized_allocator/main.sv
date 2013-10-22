@@ -199,11 +199,15 @@ interface IAllocatorPort (input clk_i);
    logic [g_page_addr_width-1:0] pg_addr_alloc, pg_addr_muxed;
    logic [g_num_ports      -1:0] pg_addr_req_vec;
    logic [g_num_ports      -1:0] pg_addr_rsp_vec;
-   logic [g_usecnt_width-1:0] usecnt;
+   logic [g_usecnt_width   -1:0] usecnt;
 
    assign pg_addr_muxed = free ? pg_addr_free :
                     force_free ? pg_addr_force_free :
-                    pg_addr_usecnt;
+                    'hx;
+
+//    assign pg_addr_muxed = free ? pg_addr_free :
+//                     force_free ? pg_addr_force_free :
+//                     pg_addr_usecnt;
    
 endinterface // IAllocatorPort
 
@@ -449,8 +453,10 @@ module main;
            .free_i(alloc_port.free),
            .force_free_i(alloc_port.force_free),
            .set_usecnt_i(alloc_port.set_usecnt),
-           .usecnt_i(alloc_port.usecnt),
-           .pgaddr_i(alloc_port.pg_addr_muxed),
+           .usecnt_set_i(alloc_port.usecnt),
+           .usecnt_alloc_i(alloc_port.usecnt),
+           .pgaddr_free_i(alloc_port.pg_addr_muxed),
+           .pgaddr_usecnt_i(alloc_port.pg_addr_usecnt),
            .req_vec_i(alloc_port.pg_addr_req_vec),
            .rsp_vec_o(alloc_port.pg_addr_rsp_vec),
            .pgaddr_o(alloc_port.pg_addr_alloc),
