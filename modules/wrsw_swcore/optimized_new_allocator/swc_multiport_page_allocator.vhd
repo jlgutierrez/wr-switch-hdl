@@ -66,28 +66,30 @@ entity swc_multiport_page_allocator is
     g_num_dbg_vector_width             : integer := 10*3
     );
   port (
-    rst_n_i : in std_logic;
-    clk_i   : in std_logic;
+    rst_n_i             : in std_logic;
+    clk_i               : in std_logic;
 
-    alloc_i      : in std_logic_vector(g_num_ports - 1 downto 0);
-    free_i       : in std_logic_vector(g_num_ports - 1 downto 0);
-    force_free_i : in std_logic_vector(g_num_ports - 1 downto 0);
-    set_usecnt_i : in std_logic_vector(g_num_ports - 1 downto 0);
+    alloc_i             : in std_logic_vector(g_num_ports - 1 downto 0);
+    free_i              : in std_logic_vector(g_num_ports - 1 downto 0);
+    force_free_i        : in std_logic_vector(g_num_ports - 1 downto 0);
+    set_usecnt_i        : in std_logic_vector(g_num_ports - 1 downto 0);
 
-    alloc_done_o      : out std_logic_vector(g_num_ports - 1 downto 0);
-    free_done_o       : out std_logic_vector(g_num_ports - 1 downto 0);
-    force_free_done_o : out std_logic_vector(g_num_ports - 1 downto 0);
-    set_usecnt_done_o : out std_logic_vector(g_num_ports - 1 downto 0);
+    alloc_done_o        : out std_logic_vector(g_num_ports - 1 downto 0);
+    free_done_o         : out std_logic_vector(g_num_ports - 1 downto 0);
+    force_free_done_o   : out std_logic_vector(g_num_ports - 1 downto 0);
+    set_usecnt_done_o   : out std_logic_vector(g_num_ports - 1 downto 0);
 
 
     pgaddr_free_i       : in std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
     pgaddr_force_free_i : in std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
     pgaddr_usecnt_i     : in std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
 
-    usecnt_i       : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
-    pgaddr_alloc_o : out std_logic_vector(g_page_addr_width-1 downto 0);
+    usecnt_set_i        : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
+    usecnt_alloc_i      : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
+    
+    pgaddr_alloc_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
 
-    free_last_usecnt_o : out std_logic_vector(g_num_ports - 1 downto 0);
+    free_last_usecnt_o  : out std_logic_vector(g_num_ports - 1 downto 0);
 
     nomem_o : out std_logic;
 
@@ -137,8 +139,10 @@ architecture syn of swc_multiport_page_allocator is
       free_i                  : in  std_logic;
       force_free_i            : in  std_logic;
       set_usecnt_i            : in  std_logic;
-      usecnt_i                : in  std_logic_vector(g_usecount_width-1 downto 0);
-      pgaddr_i                : in  std_logic_vector(g_page_addr_width -1 downto 0);
+      usecnt_set_i            : in  std_logic_vector(g_usecount_width-1 downto 0);
+      usecnt_alloc_i          : in  std_logic_vector(g_usecount_width-1 downto 0);
+      pgaddr_free_i           : in  std_logic_vector(g_page_addr_width -1 downto 0);
+      pgaddr_usecnt_i         : in  std_logic_vector(g_page_addr_width -1 downto 0);
       req_vec_i               : in  std_logic_vector(g_num_ports-1 downto 0);
       rsp_vec_o               : out std_logic_vector(g_num_ports-1 downto 0);
       pgaddr_o                : out std_logic_vector(g_page_addr_width -1 downto 0);
@@ -166,7 +170,8 @@ architecture syn of swc_multiport_page_allocator is
     req_addr_usecnt: std_logic_vector(g_page_addr_width-1 downto 0);
     req_addr_free  : std_logic_vector(g_page_addr_width-1 downto 0);
     req_addr_f_free: std_logic_vector(g_page_addr_width-1 downto 0);
-    req_ucnt       : std_logic_vector(g_usecount_width-1 downto 0);
+    req_ucnt_set   : std_logic_vector(g_usecount_width-1 downto 0);
+    req_ucnt_alloc : std_logic_vector(g_usecount_width-1 downto 0);
 
     grant_ib_d : std_logic_vector(2 downto 0);
     grant_ob_d : std_logic_vector(2 downto 0);
@@ -176,7 +181,6 @@ architecture syn of swc_multiport_page_allocator is
     done_set_usecnt : std_logic;
     done_force_free : std_logic;
   end record;
-
   type t_port_state_array is array(0 to g_num_ports-1) of t_port_state;
 
   signal ports              : t_port_state_array;
@@ -188,8 +192,10 @@ architecture syn of swc_multiport_page_allocator is
   signal pg_free             : std_logic;
   signal pg_force_free       : std_logic;
   signal pg_set_usecnt       : std_logic;
-  signal pg_usecnt           : std_logic_vector(g_usecount_width-1 downto 0);
-  signal pg_addr             : std_logic_vector(g_page_addr_width -1 downto 0);
+  signal pg_usecnt_set       : std_logic_vector(g_usecount_width-1 downto 0);
+  signal pg_usecnt_alloc     : std_logic_vector(g_usecount_width-1 downto 0);
+  signal pg_addr_ucnt_set    : std_logic_vector(g_page_addr_width -1 downto 0);
+  signal pg_addr_free        : std_logic_vector(g_page_addr_width -1 downto 0);
   signal pg_addr_alloc       : std_logic_vector(g_page_addr_width -1 downto 0);
   signal pg_free_last_usecnt : std_logic;
   signal pg_done             : std_logic;
@@ -240,7 +246,8 @@ begin  -- syn
     ports(i).req_addr_usecnt<= pgaddr_usecnt_i    (g_page_addr_width * (i+1) -1 downto g_page_addr_width*i);
     ports(i).req_addr_free  <= pgaddr_free_i      (g_page_addr_width * (i+1) -1 downto g_page_addr_width*i); 
     ports(i).req_addr_f_free<= pgaddr_force_free_i(g_page_addr_width * (i+1) -1 downto g_page_addr_width*i);
-    ports(i).req_ucnt       <= usecnt_i(g_usecount_width * (i+1) - 1 downto g_usecount_width*i);
+    ports(i).req_ucnt_set   <= usecnt_set_i(g_usecount_width * (i+1) - 1 downto g_usecount_width*i);
+    ports(i).req_ucnt_alloc <= usecnt_alloc_i(g_usecount_width * (i+1) - 1 downto g_usecount_width*i);
   end generate gen_records;
 
   -- MUXes
@@ -268,49 +275,68 @@ begin  -- syn
 --                        ports(i).req_addr_free   when (ports(i).grant_ob_d(0) = '1' and ports(i).req_free        = '1') else
 --                        ports(i).req_addr_f_free when (ports(i).grant_ob_d(0) = '1' and ports(i).req_force_free = '1') else
 --                        (others => 'X');
---       pg_usecnt     <= ports(i).req_ucnt        when (ports(i).grant_ib_d(0) = '1' and ports(i).req_set_usecn  = '1') else
+--       pg_usecnt     <= ports(i).req_ucnt_set        when (ports(i).grant_ib_d(0) = '1' and ports(i).req_set_usecn  = '1') else
 --                        (others => 'X');
 -- --     end process;
 --   end generate gen_pg_reqs;
 
   p_gen_pg_reqs : process(ports)
     variable alloc, free, force_free, set_usecnt : std_logic;
-    variable tmp_addr : std_logic_vector(g_page_addr_width-1 downto 0);
-    variable tmp_ucnt : std_logic_vector(g_usecount_width-1 downto 0);    
+    variable tmp_addr_ucnt  : std_logic_vector(g_page_addr_width-1 downto 0);
+    variable tmp_addr_free  : std_logic_vector(g_page_addr_width-1 downto 0);
+    variable tmp_ucnt_set   : std_logic_vector(g_usecount_width-1 downto 0);    
+    variable tmp_ucnt_alloc : std_logic_vector(g_usecount_width-1 downto 0);    
   begin
-    alloc      := '0';
-    free       := '0';
-    force_free := '0';
-    set_usecnt := '0';
-    tmp_addr   := (others => 'X');
-    tmp_ucnt   := (others => 'X');
+    alloc           := '0';
+    free            := '0';
+    force_free      := '0';
+    set_usecnt      := '0';
+    tmp_addr_ucnt   := (others => 'X');
+    tmp_addr_free   := (others => 'X');
+    tmp_ucnt_set    := (others => 'X');
+    tmp_ucnt_alloc  := (others => 'X');
     
     for i in 0 to g_num_ports-1 loop
       if(ports(i).grant_ib_d(0) = '1') then
-        alloc      := ports(i).req_alloc;
-        set_usecnt := ports(i).req_set_usecnt;
-        tmp_addr   := ports(i).req_addr_usecnt;
-        tmp_ucnt   := ports(i).req_ucnt;
+        alloc            := ports(i).req_alloc;
+        set_usecnt       := ports(i).req_set_usecnt;
+        tmp_addr_ucnt    := ports(i).req_addr_usecnt;
+        tmp_addr_free    := (others => 'X');
+        if(ports(i).req_alloc = '1') then
+          tmp_ucnt_alloc := ports(i).req_ucnt_alloc;
+        else
+          tmp_ucnt_alloc := (others => 'X');
+        end if;
+        if(ports(i).req_set_usecnt = '1') then
+          tmp_ucnt_set   := ports(i).req_ucnt_set;
+        else 
+          tmp_ucnt_set   := (others => 'X');
+        end if;
       elsif(ports(i).grant_ob_d(0) = '1') then
-        free       := ports(i).req_free;
-        force_free := ports(i).req_force_free;
+        free             := ports(i).req_free;
+        force_free       := ports(i).req_force_free;
+        tmp_addr_ucnt    := (others => 'X');
         if(ports(i).req_free = '1') then
-          tmp_addr := ports(i).req_addr_free;
-          tmp_ucnt := (others => 'X');
+          tmp_addr_free  := ports(i).req_addr_free;
+          tmp_ucnt_set   := (others => 'X');
+          tmp_ucnt_alloc := (others => 'X');
         elsif(ports(i).req_force_free = '1') then
-          tmp_addr := ports(i).req_addr_f_free;
-          tmp_ucnt := (others => 'X');
+          tmp_addr_free  := ports(i).req_addr_f_free;
+          tmp_ucnt_set   := (others => 'X');
+          tmp_ucnt_alloc := (others => 'X');
         end if;        
       end if;
       pg_req_vec(i) <= ports(i).grant_ib_d(0) or ports(i).grant_ob_d(0);
     end loop;  -- i
 
-    pg_alloc      <= alloc;
-    pg_free       <= free;
-    pg_force_free <= force_free;
-    pg_set_usecnt <= set_usecnt;
-    pg_addr       <= tmp_addr;
-    pg_usecnt     <= tmp_ucnt;
+    pg_alloc          <= alloc;
+    pg_free           <= free;
+    pg_force_free     <= force_free;
+    pg_set_usecnt     <= set_usecnt;
+    pg_addr_ucnt_set  <= tmp_addr_ucnt;
+    pg_addr_free      <= tmp_addr_free;
+    pg_usecnt_set     <= tmp_ucnt_set;
+    pg_usecnt_alloc   <= tmp_ucnt_alloc;
     
   end process;
 
@@ -369,8 +395,12 @@ begin  -- syn
       free_last_usecnt_o      => pg_free_last_usecnt,
       force_free_i            => pg_force_free,
       set_usecnt_i            => pg_set_usecnt,
-      usecnt_i                => pg_usecnt,
-      pgaddr_i                => pg_addr,
+      usecnt_set_i            => pg_usecnt_set,
+      usecnt_alloc_i          => pg_usecnt_alloc,
+      pgaddr_free_i           => pg_addr_free,
+      pgaddr_usecnt_i         => pg_addr_ucnt_set,
+--       usecnt_i                => pg_usecnt,
+--       pgaddr_i                => pg_addr,
       req_vec_i               => pg_req_vec,
       rsp_vec_o               => pg_rsp_vec,                  
       pgaddr_o                => pg_addr_alloc,
@@ -410,12 +440,14 @@ begin  -- syn
   begin
     if rising_edge(clk_i) then
       for i in 0 to g_num_ports-1 loop
-        if(ports(i).req_alloc = '1' and ports(i).req_set_usecnt = '1') then
-          report "simultaneous alloc/set_usecnt" severity failure;
-          
-        elsif (ports(i).req_free = '1' and ports(i).req_force_free = '1') then
-          report "simultaneous free/force_free" severity failure;
+--         if(ports(i).req_alloc = '1' and ports(i).req_set_usecnt = '1') then
+--           report "simultaneous alloc/set_usecnt" severity failure;
+--           
+--         elsif (ports(i).req_free = '1' and ports(i).req_force_free = '1') then
+--           report "simultaneous free/force_free" severity failure;
 
+        if (ports(i).req_free = '1' and ports(i).req_force_free = '1') then
+          report "simultaneous free/force_free" severity failure;
         end if;
 
       end loop;  -- i
