@@ -161,8 +161,9 @@ entity xswc_input_block is
 
     -- user count to be set (associated with an allocated page) in two cases:
     -- * mmu_pagereq_o    is HIGH - normal allocation
+    mmu_usecnt_alloc_o : out std_logic_vector(g_usecount_width - 1 downto 0);
     -- * mmu_set_usecnt_o is HIGH - force user count to existing page alloc
-    mmu_usecnt_o : out std_logic_vector(g_usecount_width - 1 downto 0);
+    mmu_usecnt_set_o   : out std_logic_vector(g_usecount_width - 1 downto 0);
 
     -- memory full
     mmu_nomem_i : in std_logic;
@@ -270,7 +271,9 @@ architecture syn of xswc_input_block is
   constant c_max_transfer_delay_width : integer := integer(CEIL(LOG2(real(c_max_transfer_delay + 1))));
   
 
-  type t_page_alloc is(S_IDLE,          -- waiting for some work :)
+  type t_page_alloc is(  S_IDLE,          -- waiting for some work :)
+                         S_PCKSTART_SET_AND_REQ, -- new state to do setting usecnt and requesting 
+                                                 -- new page at the same time 
                          S_PCKSTART_SET_USECNT,  -- setting usecnt to a page which was allocated 
                                   -- in advance to be used for the first page of 
                                   -- the pck
@@ -612,7 +615,7 @@ begin
   return "0000";
 end function f_enum2nat;
 
-constant c_force_usecnt             : boolean := FALSE;-- TRUE;
+constant c_force_usecnt             : boolean :=  TRUE;
   constant c_special_res            : std_logic_vector(7 downto 0) := x"01";
   constant c_normal_res             : std_logic_vector(7 downto 0) := x"02"; 
 -- resource management
@@ -637,7 +640,7 @@ constant c_force_usecnt             : boolean := FALSE;-- TRUE;
   
   signal dbg_dropped_on_res_full    : std_logic;
 
-begin  --arch
+begin  --archS_PCKSTART_SET_AND_REQ
   
   zeros                      <= (others => '0');
   --================================================================================================
@@ -1136,7 +1139,8 @@ begin
       --========================================
     else
 
-      -- main finite state machine
+      -- main finite state machine 
+      -- 
       case s_page_alloc is
 
         --===========================================================================================
@@ -1146,29 +1150,42 @@ begin
           pckstart_page_alloc_req <= '0';
           pckstart_usecnt_req     <= '0';
 
-
           if(tp_need_pckstart_usecnt_set = '1') then
-
-            s_page_alloc           <= S_PCKSTART_SET_USECNT;
-            pckstart_usecnt_req    <= '1';
-            pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
-            pckstart_usecnt_write  <= current_usecnt;
-            pckstart_usecnt_prev   <= current_usecnt;
-            ---------- source management  --------------
-            mmu_resource_out       <= current_res_info; --res_info; 
-            mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
-            -------------------------------------------
-            
-          elsif(pckstart_page_in_advance = '0' and  
-                rtu_rsp_ack              = '0') then -- added to give precedence to usecnt set
-            
+          
+            s_page_alloc            <= S_PCKSTART_SET_AND_REQ;
+            pckstart_usecnt_req     <= '1';
             pckstart_page_alloc_req <= '1';
-            s_page_alloc            <= S_PCKSTART_PAGE_REQ;
-            pckstart_usecnt_write   <= pckstart_usecnt_prev;
+            pckstart_usecnt_pgaddr  <= current_pckstart_pageaddr;
+            pckstart_usecnt_write   <= current_usecnt;
+            pckstart_usecnt_prev    <= current_usecnt;
             ---------- source management  --------------
-            mmu_resource_out        <= (others => '0'); -- always zero, even if we know (rare case)
-            mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
-            -------------------------------------------
+            mmu_resource_out        <= current_res_info; --res_info; 
+            mmu_rescnt_page_num     <= std_logic_vector(unknown_res_page_cnt);
+            -------------------------------------------          
+          
+
+--           if(tp_need_pckstart_usecnt_set = '1') then
+-- 
+--             s_page_alloc           <= S_PCKSTART_SET_USECNT;
+--             pckstart_usecnt_req    <= '1';
+--             pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
+--             pckstart_usecnt_write  <= current_usecnt;
+--             pckstart_usecnt_prev   <= current_usecnt;
+--             ---------- source management  --------------
+--             mmu_resource_out       <= current_res_info; --res_info; 
+--             mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
+--             -------------------------------------------
+--             
+--           elsif(pckstart_page_in_advance = '0' and  
+--                 rtu_rsp_ack              = '0') then -- added to give precedence to usecnt set
+--             
+--             pckstart_page_alloc_req <= '1';
+--             s_page_alloc            <= S_PCKSTART_PAGE_REQ;
+--             pckstart_usecnt_write   <= pckstart_usecnt_prev;
+--             ---------- source management  --------------
+--             mmu_resource_out        <= (others => '0'); -- always zero, even if we know (rare case)
+--             mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
+--             -------------------------------------------
             
           elsif(pckinter_page_in_advance = '0' and 
                 rtu_rsp_ack              = '0') then -- added to give precedence to usecnt set
@@ -1185,6 +1202,41 @@ begin
             mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
             -------------------------------------------  
 
+          end if;
+
+          --===========================================================================================
+        when S_PCKSTART_SET_AND_REQ =>
+          --===========================================================================================    
+
+          if(mmu_set_usecnt_done_i = '1' and mmu_page_alloc_done_i = '1') then
+            
+            pckstart_usecnt_req     <= '0';
+            pckstart_page_alloc_req <= '0';
+            
+            -- remember the page start addr
+            pckstart_pageaddr <= mmu_pageaddr_i;
+            pckstart_usecnt   <= pckstart_usecnt_write;            
+
+            if(pckinter_page_in_advance = '0') then
+              
+              pckinter_page_alloc_req <= '1';
+              s_page_alloc            <= S_PCKINTER_PAGE_REQ;
+              pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
+              ---------- source management  --------------
+              if(res_info_valid = '1') then
+                mmu_resource_out        <= current_res_info; --res_info;
+              else
+                mmu_resource_out        <= (others => '0');            
+              end if;
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
+              ------------------------------------------- 
+              
+            else
+              
+              s_page_alloc <= S_IDLE;
+              
+            end if;
+            
           end if;
 
           --===========================================================================================
@@ -2071,7 +2123,8 @@ snk_o.rty   <= '0';--snk_rty_int;             --'0';
 rtu_rsp_ack_o <= rtu_rsp_ack;
 
 mmu_set_usecnt_o     <= pckstart_usecnt_req;
-mmu_usecnt_o         <= pckstart_usecnt_write;
+mmu_usecnt_set_o     <= pckstart_usecnt_write;
+mmu_usecnt_alloc_o   <= std_logic_vector(to_unsigned(1,g_usecount_width));
 mmu_page_alloc_req_o <= pckinter_page_alloc_req or pckstart_page_alloc_req;
 
 mmu_force_free_o      <= mmu_force_free_req;
