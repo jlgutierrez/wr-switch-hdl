@@ -50,7 +50,8 @@
 -- 2012-01-24  2.0      twlostow completely changed (uses FIFO)
 -- 2012-03-05  2.1      mlipinsk added debugging stuff + made interchangeable with old (still buggy)
 -- 2012-03-15  2.2      twlostow fixed really ugly missing pages bug
--- 2012-10-11  3.1      mlipinsk optimized to work in single cycle + pipelined
+-- 2013-10-11  3.1      mlipinsk optimized to work in single cycle + pipelined
+-- 2013-10-22  3.2      mlipinsk parallel usecnt/alloc
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -105,9 +106,13 @@ entity swc_page_allocator_new is
     -- "Use count" value for the page to be allocated. If the page is to be
     -- used by multiple output queues, each of them will attempt to free it.
 
-    usecnt_i : in std_logic_vector(g_usecount_width-1 downto 0);
+    usecnt_set_i   : in std_logic_vector(g_usecount_width-1 downto 0);
+    usecnt_alloc_i : in std_logic_vector(g_usecount_width-1 downto 0);
+    
+    -- page input used by al
+    pgaddr_free_i : in std_logic_vector(g_page_addr_width -1 downto 0);
 
-    pgaddr_i : in std_logic_vector(g_page_addr_width -1 downto 0);
+    pgaddr_usecnt_i : in std_logic_vector(g_page_addr_width -1 downto 0);
     
     req_vec_i : in  std_logic_vector(g_num_ports-1 downto 0);
     rsp_vec_o : out std_logic_vector(g_num_ports-1 downto 0);
@@ -156,9 +161,13 @@ architecture syn of swc_page_allocator_new is
 
   signal initializing : std_logic;
 
-  signal usecnt_ena_wr_p1                 : std_logic;
-  signal usecnt_addr_rd_p0,usecnt_addr_wr_p1: std_logic_vector(g_page_addr_width-1 downto 0);
-  signal usecnt_rddata_p1, usecnt_data_wr_p1 : std_logic_vector(g_usecount_width-1 downto 0);
+
+  signal usecnt_addr_rd_p0                             : std_logic_vector(g_page_addr_width-1 downto 0);
+  signal usecnt_rddata_p1                              : std_logic_vector(g_usecount_width-1 downto 0);
+  signal usecnt_ena_wr_p1_ram1, usecnt_ena_wr_p1_ram2  : std_logic;
+  signal usecnt_wrdata_p1_ram1, usecnt_wrdata_p1_ram2  : std_logic_vector(g_usecount_width+1-1 downto 0);
+  signal usecnt_rddata_p1_ram1, usecnt_rddata_p1_ram2  : std_logic_vector(g_usecount_width+1-1 downto 0);
+  signal usecnt_addr_wr_p1_ram1,usecnt_addr_wr_p1_ram2 : std_logic_vector(g_page_addr_width-1 downto 0);
 
   signal q_output_addr_p1 : std_logic_vector(g_page_addr_width-1 downto 0);
   signal q_input_addr_p1  : std_logic_vector(g_page_addr_width-1 downto 0);
@@ -179,8 +188,10 @@ architecture syn of swc_page_allocator_new is
     free               : std_logic;
     f_free             : std_logic;  
     set_usecnt         : std_logic; 
-    usecnt             : std_logic_vector(g_usecount_width-1 downto 0);
-    pgaddr             : std_logic_vector(g_page_addr_width -1 downto 0);
+    usecnt_set         : std_logic_vector(g_usecount_width-1 downto 0); -- input when setting usecnt
+    usecnt_alloc       : std_logic_vector(g_usecount_width-1 downto 0); -- input when allocating usecnt
+    pgaddr_free        : std_logic_vector(g_page_addr_width -1 downto 0); 
+    pgaddr_usecnt      : std_logic_vector(g_page_addr_width -1 downto 0);
     grant_vec          : std_logic_vector(g_num_ports-1 downto 0);
   end record;
   
@@ -192,24 +203,28 @@ architecture syn of swc_page_allocator_new is
   signal alloc_req_d1 : t_alloc_req;
   
   constant alloc_req_zero  : t_alloc_req := (
-    alloc      => '0',
-    free       => '0',
-    f_free     => '0',
-    set_usecnt => '0',
-    usecnt     => (others => '0'),
-    pgaddr     => (others => '0'),
-    grant_vec  => (others => '0'));
+    alloc        => '0',
+    free         => '0',
+    f_free       => '0',
+    set_usecnt   => '0',
+    usecnt_set   => (others => '0'),
+    usecnt_alloc => (others => '0'),
+    pgaddr_free  => (others => '0'),
+    pgaddr_usecnt=> (others => '0'),
+    grant_vec    => (others => '0'));
    
 
 begin  -- syn
-  ram_ones                <= (others => '1');
-  alloc_req_in.alloc      <= alloc_i;
-  alloc_req_in.free       <= free_i;
-  alloc_req_in.f_free     <= force_free_i;
-  alloc_req_in.set_usecnt <= set_usecnt_i;
-  alloc_req_in.usecnt     <= usecnt_i;
-  alloc_req_in.pgaddr     <= pgaddr_i; 
-  alloc_req_in.grant_vec  <= req_vec_i;
+  ram_ones                  <= (others => '1');
+  alloc_req_in.alloc        <= alloc_i;
+  alloc_req_in.free         <= free_i;
+  alloc_req_in.f_free       <= force_free_i;
+  alloc_req_in.set_usecnt   <= set_usecnt_i;
+  alloc_req_in.usecnt_set   <= usecnt_set_i;
+  alloc_req_in.usecnt_alloc <= usecnt_alloc_i;
+  alloc_req_in.pgaddr_free  <= pgaddr_free_i; 
+  alloc_req_in.pgaddr_usecnt<= pgaddr_usecnt_i;   
+  alloc_req_in.grant_vec    <= req_vec_i;
 
   p_pipe: process(clk_i)
   begin
@@ -244,7 +259,7 @@ begin  -- syn
   q_read_p0  <= '1' when (alloc_req_d0.alloc = '1') and (real_nomem_d1 = '0') else '0'; 
   
   -- address of page stored in the memory (queue)
-  q_input_addr_p1 <= std_logic_vector(wr_ptr_p1) when initializing = '1' else alloc_req_d1.pgaddr;
+  q_input_addr_p1 <= std_logic_vector(wr_ptr_p1) when initializing = '1' else alloc_req_d1.pgaddr_free;
 
   -- memeory in which list of addresses of available pages is stored
   -- rd_ptr points to the address of next available page_addr
@@ -262,37 +277,68 @@ begin  -- syn
       ra_i    => std_logic_vector(rd_ptr_p0),
       rd_o    => q_output_addr_p1);
  
-  usecnt_addr_wr_p1 <= std_logic_vector(rd_ptr_p0) when initializing       = '1' else
-                       q_output_addr_p1            when alloc_req_d1.alloc = '1' else 
-                       alloc_req_d1.pgaddr;
+  usecnt_addr_wr_p1_ram1 <= std_logic_vector(rd_ptr_p0) when initializing            = '1' else
+                            q_output_addr_p1            when alloc_req_d1.alloc      = '1' else 
+                            alloc_req_d1.pgaddr_free;
 
-  usecnt_ena_wr_p1  <=  alloc_req_d1.alloc         or 
-                        alloc_req_d1.set_usecnt    or 
-                        alloc_req_d1.free          or 
-                        alloc_req_d1.f_free        or
-                        initializing;
 
-  usecnt_data_wr_p1 <= alloc_req_d1.usecnt                    when alloc_req_d1.set_usecnt = '1' else 
-                       alloc_req_d1.usecnt                    when alloc_req_d1.alloc      = '1' else
-                       f_gen_dummy_vec('0', g_usecount_width) when alloc_req_d1.f_free     = '1' else
-                       f_gen_dummy_vec('0', g_usecount_width) when initializing            = '1' else
-                       std_logic_vector(unsigned(usecnt_rddata_p1) - 1);
+  usecnt_addr_wr_p1_ram2 <= std_logic_vector(rd_ptr_p0) when initializing            = '1' else
+                            alloc_req_d1.pgaddr_usecnt  when alloc_req_d1.set_usecnt = '1' else 
+                            alloc_req_d1.pgaddr_free;
 
-  usecnt_addr_rd_p0<= alloc_req_d0.pgaddr;
 
+  usecnt_ena_wr_p1_ram1  <= alloc_req_d1.alloc         or 
+                            alloc_req_d1.free          or 
+                            alloc_req_d1.f_free        or
+                            initializing;
+
+  usecnt_ena_wr_p1_ram2  <= alloc_req_d1.set_usecnt    or 
+                            alloc_req_d1.free          or  -- zero when free (later RAM1 will be used)
+                            alloc_req_d1.f_free        or
+                            initializing;
+
+  usecnt_wrdata_p1_ram1  <= '1' & alloc_req_d1.usecnt_alloc              when alloc_req_d1.alloc      = '1' else
+                            '0' & f_gen_dummy_vec('0', g_usecount_width) when alloc_req_d1.f_free     = '1' else
+                            '0' & f_gen_dummy_vec('0', g_usecount_width) when initializing            = '1' else
+                            '1' & std_logic_vector(unsigned(usecnt_rddata_p1) - 1);
+
+  usecnt_wrdata_p1_ram2  <= '1' & alloc_req_d1.usecnt_set                when alloc_req_d1.set_usecnt = '1' else 
+                            '0' & f_gen_dummy_vec('0', g_usecount_width);
+
+
+  usecnt_addr_rd_p0      <= alloc_req_d0.pgaddr_free;
+
+
+  
+  usecnt_rddata_p1       <= usecnt_rddata_p1_ram2(g_usecount_width-1 downto 0) when (usecnt_rddata_p1_ram2(g_usecount_width) = '1') else
+                            usecnt_rddata_p1_ram1(g_usecount_width-1 downto 0);
   -- stores usecnts of pages, the addres is the page_addr (not ptr)
-  U_UseCnt_RAM : swc_rd_wr_ram
+  U_UseCnt_RAM_1 : swc_rd_wr_ram
     generic map (
-      g_data_width => g_usecount_width,
+      g_data_width => g_usecount_width+1,
       g_size       => 2**g_page_addr_width)
     port map (
       clk_i   => clk_i,
       rst_n_i => rst_n_i,
-      we_i    => usecnt_ena_wr_p1,
-      wa_i    => usecnt_addr_wr_p1,
-      wd_i    => usecnt_data_wr_p1,
+      we_i    => usecnt_ena_wr_p1_ram1,
+      wa_i    => usecnt_addr_wr_p1_ram1,
+      wd_i    => usecnt_wrdata_p1_ram1,
       ra_i    => usecnt_addr_rd_p0,
-      rd_o    => usecnt_rddata_p1);
+      rd_o    => usecnt_rddata_p1_ram1);
+
+  -- stores usecnts of pages, the addres is the page_addr (not ptr)
+  U_UseCnt_RAM_2 : swc_rd_wr_ram
+    generic map (
+      g_data_width => g_usecount_width+1,
+      g_size       => 2**g_page_addr_width)
+    port map (
+      clk_i   => clk_i,
+      rst_n_i => rst_n_i,
+      we_i    => usecnt_ena_wr_p1_ram2,
+      wa_i    => usecnt_addr_wr_p1_ram2,
+      wd_i    => usecnt_wrdata_p1_ram2,
+      ra_i    => usecnt_addr_rd_p0,
+      rd_o    => usecnt_rddata_p1_ram2);
 
   p_pointers : process(clk_i)
   begin
