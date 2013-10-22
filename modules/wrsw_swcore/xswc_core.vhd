@@ -160,7 +160,8 @@ architecture rtl of xswc_core is
    signal ib_page_alloc_req   : std_logic_vector(g_num_ports - 1 downto 0);
    signal ib_pageaddr_output  : std_logic_vector(g_num_ports * c_mpm_page_addr_width - 1 downto 0);
    signal ib_set_usecnt       : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ib_usecnt           : std_logic_vector(g_num_ports * c_usecount_width - 1 downto 0);
+   signal ib_usecnt_set       : std_logic_vector(g_num_ports * c_usecount_width - 1 downto 0);
+   signal ib_usecnt_alloc     : std_logic_vector(g_num_ports * c_usecount_width - 1 downto 0);
    
    -- Memory Management Unit -> Input Block 
    signal mmu_page_alloc_done  : std_logic_vector(g_num_ports - 1 downto 0);
@@ -410,7 +411,8 @@ architecture rtl of xswc_core is
                 
         mmu_set_usecnt_o         => ib_set_usecnt(i),
         mmu_set_usecnt_done_i    => mmu_set_usecnt_done(i),
-        mmu_usecnt_o             => ib_usecnt((i + 1) * c_usecount_width -1 downto i * c_usecount_width),
+        mmu_usecnt_set_o         => ib_usecnt_set((i + 1) * c_usecount_width -1 downto i * c_usecount_width),
+        mmu_usecnt_alloc_o       => ib_usecnt_alloc((i + 1) * c_usecount_width -1 downto i * c_usecount_width),
         mmu_nomem_i              => mmu_nomem,
         mmu_pageaddr_o           => ib_pageaddr_output((i + 1) * c_mpm_page_addr_width - 1 downto i * c_mpm_page_addr_width),
                 
@@ -674,7 +676,10 @@ architecture rtl of xswc_core is
       
       set_usecnt_i               => ib_set_usecnt,
       set_usecnt_done_o          => mmu_set_usecnt_done,
-      usecnt_i                   => ib_usecnt,
+      
+      usecnt_set_i               => ib_usecnt_set,
+      usecnt_alloc_i             => ib_usecnt_alloc,
+      
       pgaddr_usecnt_i            => ib_pageaddr_output,  
             
       free_i                     => ppfm_free,

@@ -233,7 +233,8 @@ package swc_swcore_pkg is
     mmu_force_free_addr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
     mmu_set_usecnt_o     : out std_logic;
     mmu_set_usecnt_done_i : in std_logic;
-    mmu_usecnt_o        : out std_logic_vector(g_usecount_width - 1 downto 0);
+    mmu_usecnt_set_o        : out std_logic_vector(g_usecount_width - 1 downto 0);
+    mmu_usecnt_alloc_o        : out std_logic_vector(g_usecount_width - 1 downto 0);
     mmu_nomem_i         : in std_logic;
 
     --- management
@@ -310,7 +311,9 @@ package swc_swcore_pkg is
       pgaddr_free_i       : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
       pgaddr_force_free_i : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
       pgaddr_usecnt_i     : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
-      usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width  - 1 downto 0);
+--       usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width  - 1 downto 0);
+      usecnt_set_i        : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
+      usecnt_alloc_i      : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
       pgaddr_alloc_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
       free_last_usecnt_o  : out std_logic_vector(g_num_ports - 1 downto 0);
       nomem_o             : out std_logic;
