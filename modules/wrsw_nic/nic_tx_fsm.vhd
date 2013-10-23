@@ -127,15 +127,13 @@ architecture behavioral of nic_tx_fsm is
   signal odd_length   : std_logic;
 
   signal tx_buf_addr      : unsigned(c_nic_buf_size_log2-3 downto 0);
-  signal tx_start_delayed : std_logic;
   signal tx_data_reg      : std_logic_vector(31 downto 0);
   signal tx_done          : std_logic;
 
   signal ignore_first_hword : std_logic;
   signal tx_cntr_expired    : std_logic;
-  signal is_runt_frame      : std_logic;
   signal needs_padding      : std_logic;
-  signal padding_size       : unsigned(7 downto 0);
+  signal padding_size       : unsigned(4 downto 0);
 
   signal rtu_valid_int    : std_logic;
   signal rtu_valid_int_d0 : std_logic;
@@ -158,11 +156,16 @@ begin  -- behavioral
 
   buf_addr_o <= std_logic_vector(tx_buf_addr);
 
-  is_runt_frame   <= '1' when (to_integer(unsigned(cur_tx_desc.len)) < 60) else '0';
-  tx_cntr_expired <= '1' when (tx_remaining = 0)                           else '0';
+  needs_padding		<= '1' when (to_integer(unsigned(cur_tx_desc.len)) < 60 and cur_tx_desc.pad_e='1') else '0';
+  odd_length			<= (not needs_padding) and cur_tx_desc.len(0);
+  tx_cntr_expired <= '1' when (tx_remaining = 0) else '0';
 
   txdesc_new_o <= cur_tx_desc;
-	src_o.stb 	 <= src_stb_int;
+  src_o.stb 	 <= src_stb_int;
+	--because it's validated with rtu_rsp_valid_o and sw_core stores it to internal register on rtu_rsp_valid strobe
+  rtu_dst_port_mask_o <= cur_tx_desc.dpm(g_port_mask_bits-1 downto 0);
+  rtu_prio_o          <= (others => '0');
+  rtu_drop_o          <= '0';
 
   count_acks: process(clk_sys_i)
   begin
@@ -233,9 +236,6 @@ begin  -- behavioral
         irq_txerr_o          <= '0';
         regs_o.sr_tx_error_i <= '0';
 
-        rtu_dst_port_mask_o <= (others => '0');
-        rtu_drop_o          <= '0';
-        
       else
         case state is
           when TX_DISABLED =>
@@ -253,8 +253,6 @@ begin  -- behavioral
 
             if(txdesc_grant_i = '1') then
               cur_tx_desc           <= txdesc_current_i;
-              txdesc_request_next_o <= '0';
-              state                 <= TX_START_PACKET;
               tx_buf_addr           <= resize(unsigned(txdesc_current_i.offset(tx_buf_addr'length+1 downto 2)), tx_buf_addr'length);
               tx_remaining          <= unsigned(txdesc_current_i.len(tx_remaining'length downto 1));
               state                 <= TX_MEM_FETCH;
@@ -264,6 +262,7 @@ begin  -- behavioral
             -- 1 wait cycle to make sure the 1st TX word has been successfully
             -- read from the buffer
           when TX_MEM_FETCH =>
+            txdesc_request_next_o <= '0';
             if(txdesc_current_i.len(0) = '1') then
               tx_remaining <= tx_remaining + 1;
             end if;
@@ -273,34 +272,21 @@ begin  -- behavioral
           when TX_START_PACKET =>
             regs_o.sr_tx_error_i <= '0';
 
-            rtu_prio_o          <= (others => '0');
-            rtu_dst_port_mask_o <= cur_tx_desc.dpm(g_port_mask_bits-1 downto 0);
-            rtu_drop_o          <= '0';
             rtu_valid_int       <= '1';
+            ignore_first_hword <= '1';
+            if(cur_tx_desc.len(0) = '1') then
+              padding_size <= 29 - unsigned(cur_tx_desc.len(padding_size'length downto 1));
+            else
+              padding_size <= 30 - unsigned(cur_tx_desc.len(padding_size'length downto 1));
+            end if;
 
 -- check if the memory is ready, read the 1st word of the payload
             if( ( (src_i.stall = '0' and g_cyc_on_stall = false) or g_cyc_on_stall = true)
                 and buf_grant_i = '0') then
 
-              tx_data_reg <= buf_data_i;
               src_o.cyc <= '1';
-
               tx_buf_addr        <= tx_buf_addr + 1;
-              ignore_first_hword <= '1';
               state              <= TX_STATUS;
-              if(is_runt_frame = '1' and cur_tx_desc.pad_e = '1') then
-                odd_length    <= '0';
-                needs_padding <= '1';
-                if(cur_tx_desc.len(0) = '1') then
-                  padding_size <= 29 - unsigned(cur_tx_desc.len(padding_size'length downto 1));
-                else
-                  padding_size <= 30 - unsigned(cur_tx_desc.len(padding_size'length downto 1));
-                end if;
-              else
-                odd_length    <= cur_tx_desc.len(0);
-                needs_padding <= '0';
-              end if;
-
               tx_data_reg <= f_buf_swap_endian_32(buf_data_i);
             end if;
 
@@ -336,7 +322,7 @@ begin  -- behavioral
                 src_o.sel(1) <= '1';
                 src_o.sel(0) <= (not odd_length) or needs_padding;
 
-                if(needs_padding = '1' and padding_size /= 0) then
+                if(needs_padding = '1') then
                   state <= TX_PAD;
                 elsif(cur_tx_desc.ts_e = '1') then
                   state <= TX_OOB1;
@@ -368,6 +354,7 @@ begin  -- behavioral
                 tx_remaining <= tx_remaining - 1;
                 state        <= TX_HWORD;
 
+                -- but we also fetch next word from the buffer
                 tx_data_reg <= f_buf_swap_endian_32(buf_data_i);
                 tx_buf_addr <= tx_buf_addr + 1;
 
@@ -377,7 +364,7 @@ begin  -- behavioral
 								-- (tx_cntr_expired=1) we are at the end of transmitted frame
                 src_o.sel(1) <= '1';
                 src_o.sel(0) <= (not odd_length) or needs_padding;
-                if(needs_padding = '1' and padding_size /= 0) then
+                if(needs_padding = '1') then
                   state <= TX_PAD;
                 elsif(cur_tx_desc.ts_e = '1') then
                   state <= TX_OOB1;
