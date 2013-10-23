@@ -34,74 +34,73 @@ use work.nic_wbgen2_pkg.all;
 entity nic_tx_fsm is
   generic(
     g_port_mask_bits  : integer := 32);
-  port (clk_sys_i : in  std_logic;
-        rst_n_i   : in  std_logic;
+  port (
+    clk_sys_i : in  std_logic;
+    rst_n_i   : in  std_logic;
 -------------------------------------------------------------------------------
 -- WRF source
 -------------------------------------------------------------------------------
-        src_o     : out t_wrf_source_out;
-        src_i     : in  t_wrf_source_in;
+    src_o     : out t_wrf_source_out;
+    src_i     : in  t_wrf_source_in;
 
 -------------------------------------------------------------------------------
 -- "Fake" RTU interface
 -------------------------------------------------------------------------------
 
-        rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
-        rtu_prio_o          : out std_logic_vector(2 downto 0);
-        rtu_drop_o          : out std_logic;
-        rtu_rsp_valid_o     : out std_logic;
-        rtu_rsp_ack_i       : in  std_logic;
-
-
+    rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
+    rtu_prio_o          : out std_logic_vector(2 downto 0);
+    rtu_drop_o          : out std_logic;
+    rtu_rsp_valid_o     : out std_logic;
+    rtu_rsp_ack_i       : in  std_logic;
 
 -------------------------------------------------------------------------------
 -- Wishbone regs & IRQs
 -------------------------------------------------------------------------------           
 
-        regs_i : in  t_nic_out_registers;
-        regs_o : out t_nic_in_registers;
+    regs_i : in  t_nic_out_registers;
+    regs_o : out t_nic_in_registers;
 
-        irq_tcomp_o      : out std_logic;
-        irq_tcomp_ack_i  : in  std_logic;
-        irq_tcomp_mask_i : in  std_logic;
+    irq_tcomp_o      : out std_logic;
+    irq_tcomp_ack_i  : in  std_logic;
+    irq_tcomp_mask_i : in  std_logic;
 
-        irq_txerr_o      : out std_logic;
-        irq_txerr_ack_i  : in  std_logic;
-        irq_txerr_mask_i : in  std_logic;
+    irq_txerr_o      : out std_logic;
+    irq_txerr_ack_i  : in  std_logic;
+    irq_txerr_mask_i : in  std_logic;
 
 -------------------------------------------------------------------------------
 -- TX Descriptor Manager I/F
 -------------------------------------------------------------------------------           
 
-        txdesc_reload_current_o : out std_logic;
-        -- 1 requests next available (empty) TX descriptor
-        txdesc_request_next_o   : out std_logic;
-        -- 1 indicates that an empty descriptor has been granted and it's available
-        -- on rxdesc_current_i
-        txdesc_grant_i          : in  std_logic;
-        -- currently granted TX descriptor
-        txdesc_current_i        : in  t_tx_descriptor;
-        -- updated RX descriptor (with new length, error flags, timestamp, etc.)
-        txdesc_new_o            : out t_tx_descriptor;
-        -- 1 requests an update of the current TX descriptor with the values
-        -- given on rxdesc_new_o output
-        txdesc_write_o          : out std_logic;
-        -- 1 indicates that the TX descriptor update is done
-        txdesc_write_done_i     : in  std_logic;
+    txdesc_reload_current_o : out std_logic;
+    -- 1 requests next available (empty) TX descriptor
+    txdesc_request_next_o   : out std_logic;
+    -- 1 indicates that an empty descriptor has been granted and it's available
+    -- on rxdesc_current_i
+    txdesc_grant_i          : in  std_logic;
+    -- currently granted TX descriptor
+    txdesc_current_i        : in  t_tx_descriptor;
+    -- updated RX descriptor (with new length, error flags, timestamp, etc.)
+    txdesc_new_o            : out t_tx_descriptor;
+    -- 1 requests an update of the current TX descriptor with the values
+    -- given on rxdesc_new_o output
+    txdesc_write_o          : out std_logic;
+    -- 1 indicates that the TX descriptor update is done
+    txdesc_write_done_i     : in  std_logic;
 
-        bna_i : in std_logic;
+    bna_i : in std_logic;
 
 -------------------------------------------------------------------------------
 -- Packet buffer RAM
 -------------------------------------------------------------------------------
 
-        -- 1 indicates that we'll have the memory access in the following clock
-        -- cycle
-        buf_grant_i : in  std_logic;
-        -- buffer address, data and write enable lines.
-        buf_addr_o  : out std_logic_vector(c_nic_buf_size_log2-3 downto 0);
-        buf_data_i  : in  std_logic_vector(31 downto 0)
-        );
+    -- 1 indicates that we'll have the memory access in the following clock
+    -- cycle
+    buf_grant_i : in  std_logic;
+    -- buffer address, data and write enable lines.
+    buf_addr_o  : out std_logic_vector(c_nic_buf_size_log2-3 downto 0);
+    buf_data_i  : in  std_logic_vector(31 downto 0)
+  );
 end nic_tx_fsm;
 
 
