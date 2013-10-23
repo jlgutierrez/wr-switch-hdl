@@ -76,9 +76,10 @@ begin  -- syn
   
   RAM : generic_dpram
     generic map (
-      g_data_width     => 32,
-      g_size      => 2**g_memsize_log2,
-      g_dual_clock => false)
+      g_data_width => 32,
+      g_size       => 2**g_memsize_log2,
+      g_dual_clock => false,
+      g_with_byte_enable => false)
     port map (
 -- host port
       rst_n_i => rst_n_i,
