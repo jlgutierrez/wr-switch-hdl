@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2013-10-11
+-- Last update: 2013-10-23
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -22,6 +22,25 @@
 -- - Set use count (set_usecnt_i = 1): sets the use count value for the given page.
 --   Used to define the reference count for pages pre-allocated in advance by
 --   the input blocks.
+--   
+-- Allocation request (alloc_i = 1) and setting use count (set_usecnt_i = 1) can
+-- be done simultaneously whereas Free (free_i = 1) and Force Free (force_free_i = 1)
+-- must be done separately then each other and the allocation/usecnat request.
+-- In other words, the core can accept:
+-- - allocate request or
+-- - usecant request or
+-- - allocate and usecnt request or
+-- - free request or
+-- - force free request
+-- 
+-- The core accepts one request per single cycle. The request input signal must
+-- be a sigle-cycle strobe.
+-- 
+-- Any of the requests is alwyas handled 2 cycles. The output done_{}  at the second
+-- cycle from the request, i.e.
+-- clk      _|-|_|-|_|-|_|-|_
+-- alloc_i  _ _|-|_ _ _ _ _ _
+-- done_o   _ _ _ _|-|_ _ _ _
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
@@ -105,18 +124,27 @@ entity swc_page_allocator_new is
 
     -- "Use count" value for the page to be allocated. If the page is to be
     -- used by multiple output queues, each of them will attempt to free it.
-
-    usecnt_set_i   : in std_logic_vector(g_usecount_width-1 downto 0);
+    -- read when alloc_i is HIGH
     usecnt_alloc_i : in std_logic_vector(g_usecount_width-1 downto 0);
     
-    -- page input used by al
+    -- "Use count" value for the page already allocated. If the page is to be
+    -- used by multiple output queues, each of them will attempt to free it.
+    -- read when set_usecnt_i is HIGH
+    usecnt_set_i   : in std_logic_vector(g_usecount_width-1 downto 0);
+    
+    -- page address to be freed (uscnt descreased or deallocated when uscnt=1)
     pgaddr_free_i : in std_logic_vector(g_page_addr_width -1 downto 0);
 
+    -- page address to set its usecnt
     pgaddr_usecnt_i : in std_logic_vector(g_page_addr_width -1 downto 0);
     
+    -- the core is multiplexed between many ports, this is the information about
+    -- the currently handled port. The input vector is just delayed by 2 cycls and 
+    -- outputd as output vector
     req_vec_i : in  std_logic_vector(g_num_ports-1 downto 0);
     rsp_vec_o : out std_logic_vector(g_num_ports-1 downto 0);
 
+    -- allocated page 
     pgaddr_o : out std_logic_vector(g_page_addr_width -1 downto 0);
 
     free_last_usecnt_o : out std_logic;
@@ -127,6 +155,13 @@ entity swc_page_allocator_new is
     done_free_o              : out std_logic;     
     done_force_free_o        : out std_logic;     
 
+    -- indicate that there is no more pages left. We use some kind of Hysteresis here, or
+    -- in other words: the threshold for decideng on nomem going HIGH and LOW is different.
+    -- nomem goes HIGH when memory will be empty after accepting the first request on
+    --                 the first cycle it is HIGH. Also it goes up at initialization
+    -- nomem goes LOW  when there is more then 3*num_port number of free pages,
+    --                 this prevents trashing, I need to check but 3 might be also because
+    --                 of the number of resources...
     nomem_o : out std_logic;
 
     dbg_double_free_o       : out std_logic;

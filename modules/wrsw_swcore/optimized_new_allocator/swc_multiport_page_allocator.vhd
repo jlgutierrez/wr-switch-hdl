@@ -10,7 +10,26 @@
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
--- Description: 
+-- Description: This is a wrapper and arbiter for multi-access to a single
+-- page allocation core. Some highlights:
+-- * theere are 4 kinds of requrest which are however grouped into two groups:
+--   (1) input port requirests
+--       alloc_i       -- request to allocate new page 
+--       set_usecnt_i  -- request to set usecount of already allocated page
+--   (2) output port requests:
+--       free_i        -- request to decrease usecnt of page (if uscnt=1, page is deallocated)
+--       force_free_i  -- request to deallocated a page regardless of usecnt
+-- * output port requests (2) cannot be done by a single port at the same time,
+--   this means that a port can either request free_i or force_free_i
+-- * input port requets (1) can be done in two fasions
+--   -> not simultaneously (like output)
+--   -> simultaneously and synchronized - so the data and request input is set/deset
+--      at the same time
+-- * internally, the arbitration is done between 2*num_port requests  
+--   -> num_port for input port requests
+--   -> num_port for output port requests
+--   this means that the upper bound latency for handling request is:
+--   max_time= 2*num_ports + 2 (time needed for handling by core) + 1 (arbitration)
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
@@ -241,7 +260,7 @@ begin  -- syn
   gen_records : for i in 0 to g_num_ports-1 generate
     ports(i).req_force_free <= force_free_i(i);
     ports(i).req_free       <= free_i(i);
-    ports(i).req_alloc      <= alloc_i(i);-- and not (pg_nomem);
+    ports(i).req_alloc      <= alloc_i(i);
     ports(i).req_set_usecnt <= set_usecnt_i(i);
     ports(i).req_addr_usecnt<= pgaddr_usecnt_i    (g_page_addr_width * (i+1) -1 downto g_page_addr_width*i);
     ports(i).req_addr_free  <= pgaddr_free_i      (g_page_addr_width * (i+1) -1 downto g_page_addr_width*i); 
@@ -262,23 +281,6 @@ begin  -- syn
       arb_req(2 * i + 1)     <= ports(i).req_ob and not (ports(i).grant_ob_d(0) or grant_ob_d0(i));
     end process;
   end generate gen_arbiter;
-
---   gen_pg_reqs : for i in 0 to g_num_ports-1 generate
--- --     process(ports)
--- --     begin
---       pg_alloc      <= ports(i).req_alloc       when (ports(i).grant_ib_d(0) = '1') else '0';
---       pg_set_usecnt <= ports(i).req_set_usecnt  when (ports(i).grant_ib_d(0) = '1') else '0';
---       pg_free       <= ports(i).req_free        when (ports(i).grant_ob_d(0) = '1') else '0';
---       pg_force_free <= ports(i).req_force_free  when (ports(i).grant_ob_d(0) = '1') else '0';
---       pg_req_vec(i) <= ports(i).grant_ib_d(0) or ports(i).grant_ob_d(0);
---       pg_addr       <= ports(i).req_addr_usecnt when (ports(i).grant_ib_d(0) = '1' and ports(i).req_set_usecnt  = '1') else
---                        ports(i).req_addr_free   when (ports(i).grant_ob_d(0) = '1' and ports(i).req_free        = '1') else
---                        ports(i).req_addr_f_free when (ports(i).grant_ob_d(0) = '1' and ports(i).req_force_free = '1') else
---                        (others => 'X');
---       pg_usecnt     <= ports(i).req_ucnt_set        when (ports(i).grant_ib_d(0) = '1' and ports(i).req_set_usecn  = '1') else
---                        (others => 'X');
--- --     end process;
---   end generate gen_pg_reqs;
 
   p_gen_pg_reqs : process(ports)
     variable alloc, free, force_free, set_usecnt : std_logic;
@@ -399,8 +401,6 @@ begin  -- syn
       usecnt_alloc_i          => pg_usecnt_alloc,
       pgaddr_free_i           => pg_addr_free,
       pgaddr_usecnt_i         => pg_addr_ucnt_set,
---       usecnt_i                => pg_usecnt,
---       pgaddr_i                => pg_addr,
       req_vec_i               => pg_req_vec,
       rsp_vec_o               => pg_rsp_vec,                  
       pgaddr_o                => pg_addr_alloc,
@@ -420,14 +420,11 @@ begin  -- syn
   pgaddr_alloc_o <= pg_addr_alloc;
 
   gen_done : for i in 0 to g_num_ports-1 generate
---     alloc_done(i)      <= '1' when (ports(i).req_alloc     ='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
---     free_done(i)       <= '1' when (ports(i).req_free      ='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
---     force_free_done(i) <= '1' when (ports(i).req_force_free='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
---     set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and pg_done='1') else '0';
     alloc_done(i)      <= '1' when (ports(i).req_alloc     ='1' and pg_rsp_vec(i)='1' and done_alloc     ='1') else '0';
     free_done(i)       <= '1' when (ports(i).req_free      ='1' and pg_rsp_vec(i)='1' and done_free      ='1') else '0';
     force_free_done(i) <= '1' when (ports(i).req_force_free='1' and pg_rsp_vec(i)='1' and done_force_free='1') else '0';
     set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and done_usecnt    ='1') else '0';
+    
   end generate gen_done;
 
   alloc_done_o       <= alloc_done;
