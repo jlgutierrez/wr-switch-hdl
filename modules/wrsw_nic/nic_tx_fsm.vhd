@@ -32,7 +32,8 @@ use work.nic_wbgen2_pkg.all;
 
 
 entity nic_tx_fsm is
-
+  generic(
+    g_port_mask_bits  : integer := 32);
   port (clk_sys_i : in  std_logic;
         rst_n_i   : in  std_logic;
 -------------------------------------------------------------------------------
@@ -45,7 +46,7 @@ entity nic_tx_fsm is
 -- "Fake" RTU interface
 -------------------------------------------------------------------------------
 
-        rtu_dst_port_mask_o : out std_logic_vector(31 downto 0);
+        rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
         rtu_prio_o          : out std_logic_vector(2 downto 0);
         rtu_drop_o          : out std_logic;
         rtu_rsp_valid_o     : out std_logic;
@@ -285,7 +286,7 @@ begin  -- behavioral
             regs_o.sr_tx_error_i <= '0';
 
             rtu_prio_o          <= (others => '0');
-            rtu_dst_port_mask_o <= cur_tx_desc.dpm;
+            rtu_dst_port_mask_o <= cur_tx_desc.dpm(g_port_mask_bits-1 downto 0);
             rtu_drop_o          <= '0';
             rtu_valid_int       <= '1';
 

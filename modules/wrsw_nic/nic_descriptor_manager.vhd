@@ -28,13 +28,12 @@ library work;
 use work.nic_constants_pkg.all;
 use work.nic_descriptors_pkg.all;
 
-
-
 entity nic_descriptor_manager is
   generic (
     g_desc_mode            : string := "tx";
     g_num_descriptors      : integer;
-    g_num_descriptors_log2 : integer);
+    g_num_descriptors_log2 : integer;
+    g_port_mask_bits       : integer := 32);  --worth using only in TX mode
   port (
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
@@ -179,7 +178,7 @@ begin  -- behavioral
 
               when "11" =>
                 p_unmarshall_tx_descriptor(dtbl_data_i, 3, tmp_desc_tx);  -- TX
-                granted_desc_tx.dpm <= tmp_desc_tx.dpm;
+                granted_desc_tx.dpm(g_port_mask_bits-1 downto 0) <= tmp_desc_tx.dpm(g_port_mask_bits-1 downto 0);
 
 
                 p_unmarshall_rx_descriptor(dtbl_data_i, 3, tmp_desc_rx);  -- RX
