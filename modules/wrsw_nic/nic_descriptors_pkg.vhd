@@ -93,9 +93,9 @@ package body NIC_descriptors_pkg is
   begin
 
     case regnum is
-      when 1      => tmp := desc.ts_id & x"000" & desc.pad_e & desc.ts_e & desc.error & desc.ready;
-      when 2      => tmp := f_resize_slv(desc.len, 16) & f_resize_slv(desc.offset, 16);
-      when 3      => tmp := desc.dpm;
+      when 3      => tmp := desc.ts_id & x"000" & desc.pad_e & desc.ts_e & desc.error & desc.ready;
+      when 0      => tmp := f_resize_slv(desc.len, 16) & f_resize_slv(desc.offset, 16);
+      when 1      => tmp := desc.dpm;
       when others => null;
     end case;
 
@@ -106,9 +106,9 @@ package body NIC_descriptors_pkg is
     variable tmp : std_logic_vector(31 downto 0);
   begin
     case regnum is
-      when 1      => tmp := "0000000000000000" & desc.ts_incorrect & desc.got_ts & desc.port_id & "000000" & desc.error & desc.empty;
-      when 2      => tmp := desc.ts_f & desc.ts_r;
-      when 3      => tmp := f_resize_slv(desc.len, 16) & f_resize_slv(desc.offset, 16);
+      when 3      => tmp := "0000000000000000" & desc.ts_incorrect & desc.got_ts & desc.port_id & "000000" & desc.error & desc.empty;
+      when 0      => tmp := desc.ts_f & desc.ts_r;
+      when 1      => tmp := f_resize_slv(desc.len, 16) & f_resize_slv(desc.offset, 16);
       when others => null;
     end case;
 
