@@ -48,7 +48,8 @@ architecture rtl of nic_elastic_buffer is
   signal fifo_out_ser : std_logic_vector(c_fifo_width-1 downto 0);
   signal fifo_full    : std_logic;
   signal fifo_empty   : std_logic;
-  signal fifo_usedw   : std_logic_vector(log2(g_depth)-1 downto 0);
+  signal fifo_almost_empty : std_logic;
+  signal fifo_almost_full  : std_logic;
 
   signal output_valid : std_logic;
   signal got_empty    : std_logic;
@@ -105,14 +106,10 @@ begin  -- rtl
   p_gen_stall : process(clk_sys_i)
   begin
     if rising_edge(clk_sys_i) then
-      if rst_n_i = '0' then
+      if rst_n_i = '0' or fifo_almost_empty = '1' then
         stall_int <= '0';
-      else
-        if (unsigned(fifo_usedw) < g_depth/2) then
-          stall_int <= '0';
-        elsif (unsigned(fifo_usedw) > g_depth-5) then
-          stall_int <= '1';
-        end if;
+      elsif fifo_almost_full = '1' then
+        stall_int <= '1';
       end if;
     end if;
   end process;
@@ -135,7 +132,11 @@ begin  -- rtl
     generic map (
       g_data_width => c_fifo_width,
       g_size       => g_depth,
-      g_with_count => true)
+      g_with_almost_empty => true,
+      g_with_almost_full  => true,
+      g_almost_empty_threshold  => g_depth/2,
+      g_almost_full_threshold   => g_depth-5,
+      g_with_count => false)
     port map (
       rst_n_i => rst_n_i,
       clk_i   => clk_sys_i,
@@ -145,7 +146,8 @@ begin  -- rtl
       q_o     => fifo_out_ser,
       empty_o => fifo_empty,
       full_o  => fifo_full,
-      count_o => fifo_usedw
+      almost_empty_o  => fifo_almost_empty,
+      almost_full_o   => fifo_almost_full
       );
 
   fab_o.data   <= fifo_out_ser(15 downto 0);
