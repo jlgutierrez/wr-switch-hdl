@@ -27,13 +27,13 @@ use IEEE.NUMERIC_STD.all;
 use work.nic_constants_pkg.all;
 use work.nic_descriptors_pkg.all;
 use work.wr_fabric_pkg.all;
-use work.endpoint_private_pkg.all;      -- dirty hack
 use work.nic_wbgen2_pkg.all;
 
 
 entity nic_tx_fsm is
   generic(
-    g_port_mask_bits  : integer := 32);
+    g_port_mask_bits  : integer := 32;
+    g_cyc_on_stall    : boolean := false);
   port (
     clk_sys_i : in  std_logic;
     rst_n_i   : in  std_logic;
@@ -110,18 +110,6 @@ architecture behavioral of nic_tx_fsm is
 
   signal cur_tx_desc : t_tx_descriptor;
 
-  component ep_rx_wb_master
-    generic (
-      g_ignore_ack : boolean);
-    port (
-      clk_sys_i  : in  std_logic;
-      rst_n_i    : in  std_logic;
-      snk_fab_i  : in  t_ep_internal_fabric;
-      snk_dreq_o : out std_logic;
-      src_wb_i   : in  t_wrf_source_in;
-      src_wb_o   : out t_wrf_source_out);
-  end component;
-
   function f_buf_swap_endian_32
     (
       data : std_logic_vector(31 downto 0)
@@ -152,11 +140,12 @@ architecture behavioral of nic_tx_fsm is
   signal rtu_valid_int    : std_logic;
   signal rtu_valid_int_d0 : std_logic;
 
-  signal fab_dreq : std_logic;
-  signal fab_out  : t_ep_internal_fabric;
-
   signal tx_err : std_logic;
   signal default_status_reg : t_wrf_status_reg;
+
+  signal ack_count : unsigned(3 downto 0);
+	signal src_stb_int	:	std_logic;
+
 begin  -- behavioral
 
 
@@ -173,19 +162,20 @@ begin  -- behavioral
   tx_cntr_expired <= '1' when (tx_remaining = 0)                           else '0';
 
   txdesc_new_o <= cur_tx_desc;
+	src_o.stb 	 <= src_stb_int;
 
-
-  U_WB_Master : ep_rx_wb_master
-    generic map(
-      g_ignore_ack => true)
-    port map (
-      clk_sys_i  => clk_sys_i,
-      rst_n_i    => rst_n_i,
-      snk_fab_i  => fab_out,
-      snk_dreq_o => fab_dreq,
-      src_wb_i   => src_i,
-      src_wb_o   => src_o);
-
+  count_acks: process(clk_sys_i)
+  begin
+    if rising_edge(clk_sys_i) then
+      if(rst_n_i='0') then
+        ack_count <= (others=>'0');
+      elsif(src_stb_int = '1' and src_i.stall = '0' and src_i.ack = '0') then
+        ack_count <= ack_count + 1;
+      elsif(src_i.ack = '1' and not(src_stb_int = '1' and src_i.stall = '0')) then
+        ack_count <= ack_count - 1;
+      end if;
+    end if;
+  end process;
 
   p_gen_tcomp_irq : process(clk_sys_i, rst_n_i)
   begin
@@ -231,13 +221,12 @@ begin  -- behavioral
         txdesc_write_o          <= '0';
         txdesc_reload_current_o <= '0';
 
-        fab_out.sof     <= '0';
-        fab_out.eof     <= '0';
-        fab_out.dvalid  <= '0';
-        fab_out.bytesel <= '0';
-        fab_out.data    <= (others => '0');
-        fab_out.addr    <= (others => '0');
-        fab_out.error   <= '0';
+        src_o.cyc   <= '0';
+        src_stb_int <= '0';
+        src_o.we  	<= '1';
+        src_o.adr 	<= (others => '0');
+        src_o.dat 	<= (others => '0');
+        src_o.sel 	<= (others => '0');
 
         tx_done              <= '0';
         rtu_valid_int        <= '0';
@@ -290,9 +279,11 @@ begin  -- behavioral
             rtu_valid_int       <= '1';
 
 -- check if the memory is ready, read the 1st word of the payload
-            if(fab_dreq = '1' and buf_grant_i = '0') then
+            if( ( (src_i.stall = '0' and g_cyc_on_stall = false) or g_cyc_on_stall = true)
+                and buf_grant_i = '0') then
+
               tx_data_reg <= buf_data_i;
-              fab_out.sof <= '1';
+              src_o.cyc <= '1';
 
               tx_buf_addr        <= tx_buf_addr + 1;
               ignore_first_hword <= '1';
@@ -314,15 +305,15 @@ begin  -- behavioral
             end if;
 
           when TX_STATUS =>
-            fab_out.sof <= '0';
+            src_o.adr  	<= c_WRF_STATUS;
+            src_o.sel  	<= "11";
+            src_o.dat  	<= f_marshall_wrf_status(default_status_reg);
             
-            if(fab_dreq = '1' and buf_grant_i = '0') then
-              fab_out.dvalid <= '1';
-              fab_out.addr <= c_WRF_STATUS;
-              fab_out.data <= f_marshall_wrf_status(default_status_reg);
-              state <= TX_HWORD;
-            else
-              fab_out.dvalid <= '0';
+            if( src_i.stall = '0' and buf_grant_i = '0') then
+              src_stb_int <= '1';
+              state 			<= TX_HWORD;
+						else
+            	src_stb_int <= '0';
             end if;
             
           when TX_HWORD =>
@@ -330,15 +321,20 @@ begin  -- behavioral
 
 -- generate the control value depending on the packet type, OOB and the current
 -- transmission offset.
-            fab_out.addr <= c_WRF_DATA;
-            fab_out.data <= tx_data_reg(31 downto 16);
 
             if(tx_err = '1') then
               state             <= TX_UPDATE_DESCRIPTOR;
               cur_tx_desc.error <= '1';
-            elsif(fab_dreq = '1') then
+            elsif( src_i.stall = '0' ) then
+              src_o.adr <= c_WRF_DATA;
+              src_o.dat <= tx_data_reg(31 downto 16);
+							ignore_first_hword <= '0';
+							src_stb_int		<= not ignore_first_hword;
+
               if(tx_cntr_expired = '1') then
-                fab_out.bytesel <= odd_length and (not needs_padding);
+								-- we are at the end of transmitted frame
+                src_o.sel(1) <= '1';
+                src_o.sel(0) <= (not odd_length) or needs_padding;
 
                 if(needs_padding = '1' and padding_size /= 0) then
                   state <= TX_PAD;
@@ -347,34 +343,14 @@ begin  -- behavioral
                 else
                   state <= TX_END_PACKET;
                 end if;
-                fab_out.dvalid <= '1';
               else
-                
-                if(ignore_first_hword = '1') then
-                  ignore_first_hword <= '0';
-                  fab_out.dvalid     <= '0';
-                  tx_remaining       <= tx_remaining - 1;
-                else
-                  fab_out.dvalid <= '1';
-                  tx_remaining   <= tx_remaining - 1;
-                end if;
-
+                src_o.sel <= "11";
+                tx_remaining  <= tx_remaining - 1;
                 state <= TX_LWORD;
               end if;
-              
-            else
-              fab_out.dvalid <= '0';
             end if;
 
-            fab_out.sof <= '0';
-
--- check for errors
-
-
           when TX_LWORD =>
-
-            fab_out.addr <= c_WRF_DATA;
-            fab_out.data <= tx_data_reg (15 downto 0);
 
 -- the TX fabric is ready, the memory is ready and we haven't reached the end
 -- of the packet yet:
@@ -382,35 +358,37 @@ begin  -- behavioral
             if(tx_err = '1') then
               state             <= TX_UPDATE_DESCRIPTOR;
               cur_tx_desc.error <= '1';
-            elsif(fab_dreq = '1' and buf_grant_i = '0') then
+            elsif( src_i.stall='0' and buf_grant_i = '0') then
+              src_o.adr <= c_WRF_DATA;
+              src_o.dat <= tx_data_reg(15 downto 0);
+              src_stb_int <= '1';
+
               if(tx_cntr_expired = '0') then
-                fab_out.dvalid <= '1';
+                src_o.sel    <= "11";
+                tx_remaining <= tx_remaining - 1;
+                state        <= TX_HWORD;
 
                 tx_data_reg <= f_buf_swap_endian_32(buf_data_i);
-
-                tx_remaining <= tx_remaining - 1;
-                tx_buf_addr  <= tx_buf_addr + 1;
-                state        <= TX_HWORD;
+                tx_buf_addr <= tx_buf_addr + 1;
 
 -- We're at the end of the packet. Generate an end-of-packet condition on the
 -- fabric I/F
               else
-                
-                fab_out.bytesel <= odd_length and (not needs_padding);
-                fab_out.dvalid  <= '1';
+								-- (tx_cntr_expired=1) we are at the end of transmitted frame
+                src_o.sel(1) <= '1';
+                src_o.sel(0) <= (not odd_length) or needs_padding;
                 if(needs_padding = '1' and padding_size /= 0) then
                   state <= TX_PAD;
-
                 elsif(cur_tx_desc.ts_e = '1') then
                   state <= TX_OOB1;
                 else
-                  state       <= TX_END_PACKET;
-                  fab_out.eof <= '0';
+                  state <= TX_END_PACKET;
                 end if;
               end if;
-            else
--- the fabric is not ready, don't send anything
-              fab_out.dvalid <= '0';
+							
+            elsif( src_i.stall='0' and buf_grant_i = '1') then
+              --if we wait for buffer then drop stb so that we don't retransmit last data word
+              src_stb_int <= '0';
             end if;
 
           when TX_PAD =>
@@ -418,60 +396,55 @@ begin  -- behavioral
             if(tx_err = '1') then
               state             <= TX_UPDATE_DESCRIPTOR;
               cur_tx_desc.error <= '1';
-            elsif(fab_dreq = '1') then
-              fab_out.data   <= x"0000";
-              fab_out.addr   <= c_WRF_DATA;
-              fab_out.dvalid <= '1';
+            elsif( src_i.stall='0' ) then
+              src_o.dat   <= x"0000";
+              src_o.adr   <= c_WRF_DATA;
+              src_o.sel   <= "11";
+              src_stb_int <= '1';
 
               padding_size <= padding_size - 1;
 
               if(padding_size = 0) then
-                fab_out.dvalid <= '0';
-                if(cur_tx_desc.ts_e = '1')then
+                src_stb_int <= '0';
+                if(cur_tx_desc.ts_e = '1') then
                   state <= TX_OOB1;
                 else
-                  fab_out.eof <= '0';
-                  state       <= TX_END_PACKET;
+                  state <= TX_END_PACKET;
                 end if;
               end if;
-            else
-              fab_out.dvalid <= '0';
             end if;
 
 
           when TX_OOB1 =>
-            fab_out.bytesel <= '0';
+            src_o.sel <= "11";
 
-            if(fab_dreq = '1') then
-              fab_out.data   <= c_WRF_OOB_TYPE_TX & x"000";
-              fab_out.addr   <= c_WRF_OOB;
-              fab_out.dvalid <= '1';
-              fab_out.eof    <= '0';
-              state          <= TX_OOB2;
+            if( src_i.stall='0' ) then
+              src_o.dat   <= c_WRF_OOB_TYPE_TX & x"000";
+              src_o.adr   <= c_WRF_OOB;
+              src_stb_int <= '1';
+              state       <= TX_OOB2;
             end if;
 
           when TX_OOB2 =>
-            fab_out.bytesel <= '0';
+            src_o.sel <= "11";
 
-            if(fab_dreq = '1') then
-              fab_out.data   <= cur_tx_desc.ts_id;
-              fab_out.addr   <= c_WRF_OOB;
-              fab_out.dvalid <= '1';
-              fab_out.eof    <= '0';
-              state          <= TX_END_PACKET;
+            if( src_i.stall='0' ) then
+              src_o.dat   <= cur_tx_desc.ts_id;
+              src_o.adr   <= c_WRF_OOB;
+              src_stb_int <= '1';
+              state       <= TX_END_PACKET;
             end if;
 
           when TX_END_PACKET =>
-            fab_out.dvalid  <= '0';
-            fab_out.bytesel <= '0';
+            src_stb_int <= '0';
+            src_o.sel   <= "11";
 
-            if(fab_dreq = '1') then
-              fab_out.eof <= '1';
-              state       <= TX_UPDATE_DESCRIPTOR;
+            if( src_i.stall='0' and ack_count = 0) then
+              state     <= TX_UPDATE_DESCRIPTOR;
             end if;
 
           when TX_UPDATE_DESCRIPTOR =>
-            fab_out.eof             <= '0';
+            src_o.cyc 							<= '0';
             txdesc_write_o          <= '1';
             txdesc_reload_current_o <= cur_tx_desc.error;
             cur_tx_desc.ready       <= '0';
@@ -490,7 +463,6 @@ begin  -- behavioral
 
             if(irq_txerr_mask_i = '1') then  -- clear the error status in
                                              -- interrupt-driver mode
-              
               irq_txerr_o <= '1';
               if(irq_txerr_ack_i = '1') then
                 irq_txerr_o <= '0';
@@ -499,7 +471,6 @@ begin  -- behavioral
             end if;
 
             regs_o.sr_tx_error_i <= '1';
-
             if(regs_i.sr_tx_error_o = '1' and regs_i.sr_tx_error_load_o = '1') then  --
               -- or in status register mode
               irq_txerr_o <= '0';
