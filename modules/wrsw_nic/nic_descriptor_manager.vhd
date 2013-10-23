@@ -153,12 +153,12 @@ begin  -- behavioral
             end if;
 
           when ARB_CHECK_EMPTY =>
-            p_unmarshall_rx_descriptor(dtbl_data_i, 1, tmp_desc_rx);
-            p_unmarshall_tx_descriptor(dtbl_data_i, 1, tmp_desc_tx);
+            tmp_desc_rx := f_unmarshall_rx_descriptor(dtbl_data_i, 1);
+            tmp_desc_tx := f_unmarshall_tx_descriptor(dtbl_data_i, 1);
+            granted_desc_tx <= tmp_desc_tx;
+            granted_desc_rx <= tmp_desc_rx;
 
             if((tmp_desc_rx.empty = '1' and g_desc_mode = "rx") or (tmp_desc_tx.ready = '1' and g_desc_mode = "tx")) then
-              granted_desc_tx <= tmp_desc_tx;
-              granted_desc_rx <= tmp_desc_rx;
               desc_subreg     <= "01";
               state           <= ARB_FETCH;
               bna_o           <= '0';
@@ -171,17 +171,17 @@ begin  -- behavioral
               when "10" =>              -- ignore the timestamps for RX
                                         -- descriptors (they're
                                         -- write-only by the NIC)
-                p_unmarshall_tx_descriptor(dtbl_data_i, 2, tmp_desc_tx);
+                tmp_desc_tx := f_unmarshall_tx_descriptor(dtbl_data_i, 2);
                 granted_desc_tx.len    <= tmp_desc_tx.len;
                 granted_desc_tx.offset <= tmp_desc_tx.offset;
 
 
               when "11" =>
-                p_unmarshall_tx_descriptor(dtbl_data_i, 3, tmp_desc_tx);  -- TX
+                tmp_desc_tx := f_unmarshall_tx_descriptor(dtbl_data_i, 3);  -- TX
                 granted_desc_tx.dpm(g_port_mask_bits-1 downto 0) <= tmp_desc_tx.dpm(g_port_mask_bits-1 downto 0);
 
 
-                p_unmarshall_rx_descriptor(dtbl_data_i, 3, tmp_desc_rx);  -- RX
+                tmp_desc_rx := f_unmarshall_rx_descriptor(dtbl_data_i, 3);  -- RX
                 granted_desc_rx.len    <= tmp_desc_rx.len;
                 granted_desc_rx.offset <= tmp_desc_rx.offset;
 

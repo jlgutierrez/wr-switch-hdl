@@ -65,13 +65,11 @@ package nic_descriptors_pkg is
   function f_marshall_rx_descriptor(desc   : t_rx_descriptor;
                                     regnum : integer) return std_logic_vector;
 
-  procedure p_unmarshall_tx_descriptor(mem_input : in    std_logic_vector(31 downto 0);
-                                       regnum    : in    integer;
-                                       desc      : inout t_tx_descriptor);
+  function f_unmarshall_tx_descriptor(mem_input : std_logic_vector(31 downto 0);
+                                      regnum : integer) return t_tx_descriptor;
 
-  procedure p_unmarshall_rx_descriptor(mem_input : in    std_logic_vector(31 downto 0);
-                                       regnum    : in    integer;
-                                       desc      : inout t_rx_descriptor);
+  function f_unmarshall_rx_descriptor(mem_input : std_logic_vector(31 downto 0);
+                                       regnum   : integer) return t_rx_descriptor;
 
   function f_resize_slv(x : std_logic_vector;
                       newsize : integer) return std_logic_vector;
@@ -119,11 +117,10 @@ package body NIC_descriptors_pkg is
   end f_marshall_rx_descriptor;
 
   
-  procedure p_unmarshall_tx_descriptor(mem_input : in    std_logic_vector(31 downto 0);
-                                       regnum    : in    integer;
-                                       desc      : inout t_tx_descriptor) is
+  function f_unmarshall_tx_descriptor(mem_input : std_logic_vector(31 downto 0); regnum : integer)
+    return t_tx_descriptor is
+      variable desc : t_tx_descriptor;
   begin
-    
     case regnum is
       when 1 =>
         desc.ts_id := mem_input(31 downto 16);
@@ -138,13 +135,13 @@ package body NIC_descriptors_pkg is
         desc.dpm := mem_input;
       when others => null;
     end case;
-  end p_unmarshall_tx_descriptor;
+    return desc;
+  end f_unmarshall_tx_descriptor;
 
-  procedure p_unmarshall_rx_descriptor(mem_input : in    std_logic_vector(31 downto 0);
-                                       regnum    : in    integer;
-                                       desc      : inout t_rx_descriptor) is
+  function f_unmarshall_rx_descriptor(mem_input : std_logic_vector(31 downto 0); regnum : integer)
+    return t_rx_descriptor is
+      variable desc : t_rx_descriptor;
   begin
-    
     case regnum is
       when 1 =>
         desc.empty   := mem_input(0);
@@ -162,7 +159,8 @@ package body NIC_descriptors_pkg is
         desc.offset := mem_input(c_nic_buf_size_log2-1 downto 0);
       when others => null;
     end case;
-  end p_unmarshall_rx_descriptor;
+    return desc;
+  end f_unmarshall_rx_descriptor;
 
 
 end package body;
