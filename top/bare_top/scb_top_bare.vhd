@@ -535,7 +535,8 @@ begin
     U_Nic : xwrsw_nic
       generic map (
         g_interface_mode      => PIPELINED,
-        g_address_granularity => BYTE)
+        g_address_granularity => BYTE,
+        g_port_mask_bits      => c_NUM_PORTS+1)
       port map (
         clk_sys_i           => clk_sys,
         rst_n_i             => rst_n_sys,
@@ -543,7 +544,7 @@ begin
         snk_o               => endpoint_snk_out(c_NUM_PORTS),
         src_i               => endpoint_src_in(c_NUM_PORTS),
         src_o               => endpoint_src_out(c_NUM_PORTS),
-        rtu_dst_port_mask_o => rtu_rsp(c_NUM_PORTS).port_mask(31 downto 0),
+        rtu_dst_port_mask_o => rtu_rsp(c_NUM_PORTS).port_mask(c_NUM_PORTS downto 0),
         rtu_prio_o          => rtu_rsp(c_NUM_PORTS).prio,
         rtu_drop_o          => rtu_rsp(c_NUM_PORTS).drop,
         rtu_rsp_valid_o     => rtu_rsp(c_NUM_PORTS).valid,

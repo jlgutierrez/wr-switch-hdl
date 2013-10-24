@@ -141,7 +141,9 @@ package wrsw_top_pkg is
   component xwrsw_nic
     generic (
       g_interface_mode      : t_wishbone_interface_mode;
-      g_address_granularity : t_wishbone_address_granularity);
+      g_address_granularity : t_wishbone_address_granularity;
+      g_src_cyc_on_stall    : boolean := false;
+      g_port_mask_bits      : integer := 32); --should be num_ports+1
     port (
       clk_sys_i           : in  std_logic;
       rst_n_i             : in  std_logic;
@@ -149,7 +151,7 @@ package wrsw_top_pkg is
       snk_o               : out t_wrf_sink_out;
       src_i               : in  t_wrf_source_in;
       src_o               : out t_wrf_source_out;
-      rtu_dst_port_mask_o : out std_logic_vector(31 downto 0);
+      rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
       rtu_prio_o          : out std_logic_vector(2 downto 0);
       rtu_drop_o          : out std_logic;
       rtu_rsp_valid_o     : out std_logic;
