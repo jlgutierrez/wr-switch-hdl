@@ -124,6 +124,7 @@ module main;
    bit mac_range                              = 0;
    bit mac_br                                 = 0;
    bit hp_fw_cpu                              = 0;
+   bit rx_forward_on_fmatch_full              = 0;                 
    bit unrec_fw_cpu                           = 0;
    bit rtu_dbg_f_fast_match                   = 0;
    bit rtu_dbg_f_full_match                   = 0;
@@ -2151,13 +2152,14 @@ module main;
   end
 */
 
- /** ***************************   test scenario 69  ************************************* **/ 
+ /** ***************************   test scenario 69 (BUG case  *************************** **/ 
   /*
    * stress test on all ports with Braodcast+FastForward
+   * FIXME: dropping does not work well - swcore gets lost
    **/
-///*
+/*
   initial begin
-                                             //      mask     , fid , prio,has_p,overr, drop , vid, valid
+                     //      mask     , fid , prio,has_p,overr, drop , vid, valid
    sim_vlan_tab[ 0] = '{'{32'h00000001, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
    sim_vlan_tab[ 1] = '{'{32'h00000002, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1,  1'b1 };
    sim_vlan_tab[ 2] = '{'{32'h00000004, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 2,  1'b1 };
@@ -2177,8 +2179,8 @@ module main;
    sim_vlan_tab[16] = '{'{32'h00010000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 16, 1'b1 };
    sim_vlan_tab[17] = '{'{32'h00020000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 17, 1'b1 };
    sim_vlan_tab[18] = '{'{32'h00040000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 18, 1'b1 };
-                                        // tx  ,rx ,opt (send from port tx to rx with option opt
 
+//                   tx  ,rx ,opt (send from port tx to rx with option opt)
     trans_paths[ 0]='{0  ,17 , 668 }; // port 0: 
     trans_paths[ 1]='{1  ,16 , 668 }; // port 1
     trans_paths[ 2]='{2  ,15 , 668 }; // port 2
@@ -2200,15 +2202,78 @@ module main;
 
     portUnderTest        = 18'b1111111111111111111;    
     g_enable_pck_gaps    = 0;
-    repeat_number        = 10;
+    g_min_pck_gap        = 150;
+    g_max_pck_gap        = 150;
+    repeat_number        = 20;
     tries_number         = 1;  
-    g_force_payload_size = 42;  
-    mac_br               = 1;
+    g_force_payload_size = 42; 
+    rx_forward_on_fmatch_full = 0; 
+//     mac_br               = 1;
+    g_is_qvlan           = 1;
+                         // tx  ,rx ,opt
+  end
+/*/
+ /** ***************************   test scenario 70  ************************************* **/ 
+  /*
+   * stress test on all ports with Braodcast+FastForward
+   * 
+   **/
+///*
+  initial begin
+                     //      mask     , fid , prio,has_p,overr, drop , vid, valid
+   sim_vlan_tab[ 0] = '{'{32'h00000001, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
+   sim_vlan_tab[ 1] = '{'{32'h00000002, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1,  1'b1 };
+   sim_vlan_tab[ 2] = '{'{32'h00000004, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 2,  1'b1 };
+   sim_vlan_tab[ 3] = '{'{32'h00000008, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 3,  1'b1 };
+   sim_vlan_tab[ 4] = '{'{32'h00000010, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 4,  1'b1 };
+   sim_vlan_tab[ 5] = '{'{32'h00000020, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 5,  1'b1 };
+   sim_vlan_tab[ 6] = '{'{32'h00000040, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 6,  1'b1 };
+   sim_vlan_tab[ 7] = '{'{32'h00000080, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 7,  1'b1 };
+   sim_vlan_tab[ 8] = '{'{32'h00000100, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 8,  1'b1 };
+   sim_vlan_tab[ 9] = '{'{32'h00000200, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 9,  1'b1 };
+   sim_vlan_tab[10] = '{'{32'h00000400, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 10, 1'b1 };
+   sim_vlan_tab[11] = '{'{32'h00000800, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 11, 1'b1 };
+   sim_vlan_tab[12] = '{'{32'h00001000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 12, 1'b1 };
+   sim_vlan_tab[13] = '{'{32'h00002000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 13, 1'b1 };
+   sim_vlan_tab[14] = '{'{32'h00004000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 14, 1'b1 };
+   sim_vlan_tab[15] = '{'{32'h00008000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 15, 1'b1 };
+   sim_vlan_tab[16] = '{'{32'h00010000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 16, 1'b1 };
+   sim_vlan_tab[17] = '{'{32'h00020000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 17, 1'b1 };
+   sim_vlan_tab[18] = '{'{32'h00040000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 18, 1'b1 };
+
+//                   tx  ,rx ,opt (send from port tx to rx with option opt)
+    trans_paths[ 0]='{0  ,17 , 668 }; // port 0: 
+    trans_paths[ 1]='{1  ,16 , 668 }; // port 1
+    trans_paths[ 2]='{2  ,15 , 668 }; // port 2
+    trans_paths[ 3]='{3  ,14 , 668 }; // port 3
+    trans_paths[ 4]='{4  ,13 , 668 }; // port 4
+    trans_paths[ 5]='{5  ,12 , 668 }; // port 5
+    trans_paths[ 6]='{6  ,11 , 668 }; // port 6
+    trans_paths[ 7]='{7  ,10 , 668 }; // port 7
+    trans_paths[ 8]='{8  ,9  , 668 }; // port 8
+    trans_paths[ 9]='{9  ,8  , 668 }; // port 9
+    trans_paths[10]='{10 ,7  , 668 }; // port 10
+    trans_paths[11]='{11 ,6  , 668 }; // port 11
+    trans_paths[12]='{12 ,5  , 668 }; // port 12
+    trans_paths[13]='{13 ,4  , 668 }; // port 13
+    trans_paths[14]='{14 ,3  , 668 }; // port 14
+    trans_paths[15]='{15 ,2  , 668 }; // port 15
+    trans_paths[16]='{16 ,1  , 668 }; // port 16
+    trans_paths[17]='{17 ,0  , 668 }; // port 17
+
+    portUnderTest        = 18'b1111111111111111111;    
+    g_enable_pck_gaps    = 0;
+    g_min_pck_gap        = 150;
+    g_max_pck_gap        = 150;
+    repeat_number        = 20;
+    tries_number         = 1;  
+    g_force_payload_size = 42; 
+    rx_forward_on_fmatch_full = 1; 
+//     mac_br               = 1;
     g_is_qvlan           = 1;
                          // tx  ,rx ,opt
   end
  //*/
-
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2406,6 +2471,8 @@ module main;
 //              repeat(6) @(posedge clk_sys); //minimum interframe gap : 96 bits = 12 bytes = 6 words
 //               repeat(2) @(posedge clk_sys); //it seems that in reality it's less
 //               wait_cycles(pck_gap); 
+              if(pck_gap)
+                wait_cycles(pck_gap); 
            end
         end   // fork 1
         begin // fork 2
@@ -3123,8 +3190,11 @@ module main;
       rtu.rx_set_hp_prio_mask (hp_prio_mask /*hp prio mask*/);
 //       rtu.rx_set_hp_prio_mask ('b10000001 /*hp prio mask*/); //HP traffic set to 7th priority
 //       rtu.rx_set_cpu_port     ((1<<g_num_ports)/*mask: virtual port of CPU*/);
-      rtu.rx_read_cpu_port();     
-      rtu.rx_drop_on_fmatch_full();
+      rtu.rx_read_cpu_port(); 
+      if(rx_forward_on_fmatch_full)
+        rtu.rx_forward_on_fmatch_full();
+      else
+        rtu.rx_drop_on_fmatch_full();
       rtu.rx_feature_ctrl(mr, mac_ptp , mac_ll, mac_single, mac_range, mac_br);
       rtu.rx_fw_to_CPU(hp_fw_cpu,unrec_fw_cpu);
       rtu.rx_feature_dbg(rtu_dbg_f_fast_match, rtu_dbg_f_full_match);
