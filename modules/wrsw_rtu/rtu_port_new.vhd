@@ -189,6 +189,7 @@ architecture behavioral of rtu_port_new is
   signal zeros                       : std_logic_vector(47 downto 0);
   signal dbg_force_fast_match_only   : std_logic; 
   signal dbg_force_full_match_only   : std_logic; 
+  signal new_req_at_full_match_rsp_d : std_logic;
 
   constant c_match_zero: t_match_response := (
     valid     => '0',
@@ -333,6 +334,7 @@ begin
   full_match_aboard       <= (not full_match_valid) and    -- suppress when we have replay from full match
                             ((aboard_possible and fast_match_wr_req) or -- new request when full match busy
                              (rtu_rq_aboard_i)); -- other externa, e.g. from swcore, **not implemented yet
+
   --------------------------------------------------------------------------------------------
   -- register input request to make it available for both matches (full/fast)
   --------------------------------------------------------------------------------------------
@@ -416,7 +418,17 @@ begin
         full_match_req_in_progress <= '0';
         full_match             <= c_match_zero;
         full_match_aboard_d    <= '0';
-      else    
+        new_req_at_full_match_rsp_d <='1';
+        
+      else  
+        -- we consider a case when new request appears when the FULL Match response
+        -- is available  (full_match_valid='1') 
+        if(full_match_valid = '1' and fast_match_wr_req ='1' and fast_match_wr_req_d = '0') then
+          new_req_at_full_match_rsp_d <= '1';
+        elsif(port_state = S_FAST_MATCH) then
+          new_req_at_full_match_rsp_d <= '0';
+        end if;
+        
         if(full_match_aboard = '1') then
           full_match_aboard_d    <= '1';
         elsif(rsp.valid = '1' and rtu_rsp_ack_i ='1') then
@@ -618,7 +630,7 @@ begin
           ------------------------------------------------------------------------------------------------------------             
           when S_RESPONSE =>
               
-            if(full_match_aboard_d = '1' and match_required ='1') then
+            if((full_match_aboard_d = '1' or new_req_at_full_match_rsp_d = '1') and match_required ='1') then
               -- if we are in this state because we received abanddon request  and match is 
               -- required (RTU enabled/no mirroring), we go straight to FAST_MATCH
               port_state      <= S_FAST_MATCH;
@@ -735,7 +747,7 @@ begin
   -- decideing whe RTU can accept new request (if RTU port is not idle, and Endpoint has new 
   -- requests, it ignores incoming frame)
   rtu_idle <= '0' when (port_state = S_FAST_MATCH) else
-              '0' when (port_state = S_FINAL_MASK and rsp.valid = '1') else 
+              '0' when (port_state = S_FINAL_MASK and rsp.valid = '1') else -- only if we run over previus response (not ack-ed yet)
               '0' when (port_state = S_FULL_MATCH and full_match_aboard_d = '1') else
               '1';
    
