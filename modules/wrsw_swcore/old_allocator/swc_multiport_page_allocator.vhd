@@ -62,7 +62,8 @@ entity swc_multiport_page_allocator is
     g_special_res_num_pages            : integer ;
     g_resource_num                     : integer ; -- this include 1 for unknown
     g_resource_num_width               : integer ;
-    g_num_dbg_vector_width             : integer   
+    g_num_dbg_vector_width             : integer ;
+    g_with_RESOURCE_MGR                : boolean := false   
   );
   port (
     rst_n_i             : in std_logic;
@@ -83,7 +84,9 @@ entity swc_multiport_page_allocator is
     pgaddr_force_free_i : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
     pgaddr_usecnt_i     : in  std_logic_vector(g_num_ports * g_page_addr_width - 1 downto 0);
     
-    usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
+--     usecnt_i            : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
+    usecnt_set_i        : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
+    usecnt_alloc_i      : in  std_logic_vector(g_num_ports * g_usecount_width - 1 downto 0);
     pgaddr_alloc_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
 
     free_last_usecnt_o  : out std_logic_vector(g_num_ports - 1 downto 0);
