@@ -295,7 +295,8 @@ package swc_swcore_pkg is
       g_special_res_num_pages            : integer ;
       g_resource_num                     : integer ; -- this include 1 for unknown
       g_resource_num_width               : integer ;
-      g_num_dbg_vector_width             : integer       
+      g_num_dbg_vector_width             : integer ;
+      g_with_RESOURCE_MGR                : boolean := false      
     );  
     port (
       rst_n_i             : in std_logic;

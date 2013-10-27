@@ -82,7 +82,8 @@ entity swc_multiport_page_allocator is
     g_special_res_num_pages            : integer := 256;
     g_resource_num                     : integer := 3; -- this include 1 for unknown
     g_resource_num_width               : integer := 2;
-    g_num_dbg_vector_width             : integer := 10*3
+    g_num_dbg_vector_width             : integer := 10*3;
+    g_with_RESOURCE_MGR                : boolean := false
     );
   port (
     rst_n_i             : in std_logic;
@@ -147,10 +148,19 @@ architecture syn of swc_multiport_page_allocator is
 
   component swc_page_allocator_new
     generic (
-      g_num_pages       : integer;
-      g_page_addr_width : integer;
-      g_num_ports       : integer;
-      g_usecount_width  : integer);
+      g_num_pages             : integer;
+      g_page_addr_width       : integer;
+      g_num_ports             : integer;
+      g_usecount_width        : integer;
+      --- management
+      g_with_RESOURCE_MGR     : boolean := false;
+      g_page_size             : integer := 64;
+      g_max_pck_size          : integer := 759; -- in 16 bit words (1518 [octets])/(2 [octets])
+      g_special_res_num_pages : integer := 256;
+      g_resource_num          : integer := 3;   -- this include: unknown, special and x* normal , so
+                                                -- g_resource_num = 2+x
+      g_resource_num_width    : integer := 2;
+      g_num_dbg_vector_width  : integer );
     port (
       clk_i                   : in  std_logic;
       rst_n_i                 : in  std_logic;
@@ -172,6 +182,16 @@ architecture syn of swc_multiport_page_allocator is
       done_free_o             : out std_logic;     
       done_force_free_o       : out std_logic;     
       nomem_o                 : out std_logic;
+      -------- resource management --------
+      resource_i              : in  std_logic_vector(g_resource_num_width-1 downto 0);
+      resource_o              : out std_logic_vector(g_resource_num_width-1 downto 0);
+      free_resource_valid_i   : in  std_logic;
+      rescnt_page_num_i       : in  std_logic_vector(g_page_addr_width   -1 downto 0);
+      set_usecnt_succeeded_o  : out std_logic;
+      res_full_o              : out std_logic_vector(g_resource_num      -1 downto 0);
+      res_almost_full_o       : out std_logic_vector(g_resource_num      -1 downto 0);
+      dbg_o                   : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0);
+      -----------------------
       dbg_double_free_o       : out std_logic;
       dbg_double_force_free_o : out std_logic;
       dbg_q_write_o           : out std_logic;
@@ -236,6 +256,31 @@ architecture syn of swc_multiport_page_allocator is
 
   signal dbg_double_force_free, dbg_double_free    : std_logic;
   signal dbg_q_read, dbg_q_write, dbg_initializing : std_logic;
+
+  --------------------------- resource management ----------------------------------
+    -- resource number
+  signal pg_resource_in           : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pg_alloc_usecnt_resource : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pg_free_resource         : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pg_force_free_resource   : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pg_resource_out          : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pg_free_resource_valid   : std_logic;
+  signal pg_rescnt_page_num       : std_logic_vector(g_page_addr_width-1 downto 0);
+  signal pg_res_full              : std_logic_vector(g_resource_num   -1 downto 0);
+  signal pg_res_almost_full       : std_logic_vector(g_resource_num   -1 downto 0);
+
+  type t_port_resource_out is record
+    resource    : std_logic_vector(g_resource_num_width-1 downto 0);
+    full        : std_logic_vector(g_resource_num-1 downto 0);
+    almost_full : std_logic_vector(g_resource_num-1 downto 0);
+  end record;
+ 
+  type t_port_resource_out_array is array(integer range <>) of t_port_resource_out;
+  
+  signal resources_feedback      : t_port_resource_out_array(g_num_ports-1 downto 0);
+  signal resources_out           : t_port_resource_out_array(g_num_ports-1 downto 0);
+  signal pg_set_usecnt_succeeded : std_logic;
+  signal set_usecnt_succeeded    : std_logic_vector(g_num_ports -1 downto 0);
 
   function f_bool_2_sl (x : boolean) return std_logic is
   begin
@@ -388,7 +433,14 @@ begin  -- syn
       g_num_pages       => g_page_num,
       g_page_addr_width => g_page_addr_width,
       g_num_ports       => g_num_ports,
-      g_usecount_width  => g_usecount_width)
+      g_usecount_width  => g_usecount_width,
+      --- management
+      g_page_size             => g_page_size,
+      g_max_pck_size          => g_max_pck_size,
+      g_special_res_num_pages => g_special_res_num_pages,
+      g_resource_num          => g_resource_num,
+      g_resource_num_width    => g_resource_num_width,
+      g_num_dbg_vector_width  => g_num_dbg_vector_width)
     port map (
       clk_i                   => clk_i,
       rst_n_i                 => rst_n_i,
@@ -410,6 +462,16 @@ begin  -- syn
       done_free_o             => done_free,
       done_force_free_o       => done_force_free,
       nomem_o                 => pg_nomem,
+      -------- resource management --------
+      set_usecnt_succeeded_o  => pg_set_usecnt_succeeded,
+      resource_i              => pg_resource_in,
+      resource_o              => pg_resource_out,
+      free_resource_valid_i   => pg_free_resource_valid,
+      rescnt_page_num_i       => pg_rescnt_page_num,
+      res_full_o              => pg_res_full,
+      res_almost_full_o       => pg_res_almost_full,
+      dbg_o                   => dbg_o,
+      -------------------------------      
       dbg_double_force_free_o => dbg_double_force_free,
       dbg_double_free_o       => dbg_double_free,
       dbg_q_read_o            => dbg_q_read,
@@ -454,13 +516,18 @@ begin  -- syn
   --------------------------------------------------------------------------------------------------
   --                               Resource Manager logic and instantiation
   --------------------------------------------------------------------------------------------------
-  -- dummy
-  set_usecnt_succeeded_o <= (others => '1');
-  res_full_o             <= (others => '0');
-  res_almost_full_o      <= (others => '0');
-  resource_o             <= (others => '0');
+  gen_no_RESOURCE_MGR: if (g_with_RESOURCE_MGR = false) generate
+    set_usecnt_succeeded_o <= (others => '1');
+    res_full_o             <= (others => '0');
+    res_almost_full_o      <= (others => '0');
+    resource_o             <= (others => '0');
+    
+    pg_resource_in         <= (others => '0');
+    pg_free_resource_valid <= '0';
+    pg_rescnt_page_num     <= (others => '0');
+  end generate;
 
-
+  
 
 
   --------------------------------------------------------------------------------------------------

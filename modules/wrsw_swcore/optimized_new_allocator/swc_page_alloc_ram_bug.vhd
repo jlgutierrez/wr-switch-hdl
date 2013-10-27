@@ -91,7 +91,17 @@ entity swc_page_allocator_new is
     g_num_ports : integer := 10;
 
     -- number of bits of the user (reference) count value
-    g_usecount_width : integer := 4
+    g_usecount_width : integer := 4;
+
+    --- management
+    g_with_RESOURCE_MGR     : boolean := false;
+    g_page_size             : integer := 64;
+    g_max_pck_size          : integer := 759; -- in 16 bit words (1518 [octets])/(2 [octets])
+    g_special_res_num_pages : integer := 256;
+    g_resource_num          : integer := 3;   -- this include: unknown, special and x* normal , so
+                                              -- g_resource_num = 2+x
+    g_resource_num_width    : integer := 2;
+    g_num_dbg_vector_width  : integer 
     );
 
   port (
@@ -163,6 +173,36 @@ entity swc_page_allocator_new is
     --                 this prevents trashing, I need to check but 3 might be also because
     --                 of the number of resources...
     nomem_o : out std_logic;
+
+    --------------------------- resource management ----------------------------------
+    -- resource number
+    resource_i                    : in  std_logic_vector(g_resource_num_width-1 downto 0);
+    
+    -- outputed when freeing
+    resource_o                    : out std_logic_vector(g_resource_num_width-1 downto 0);
+
+    -- used only when freeing page, 
+    -- if HIGH then the input resource_i value will be used
+    -- if LOW  then the value read from memory will be used (stored along with usecnt)
+    free_resource_valid_i         : in std_logic;
+    
+    -- number of pages added to the resurce
+    rescnt_page_num_i             : in  std_logic_vector(g_page_addr_width   -1 downto 0);
+
+    -- valid when (done_o and usecnt_i) = HIGH
+    -- set_usecnt_succeeded_o = LOW ->> indicates that the usecnt was not set and the resources
+    --                                were not moved from unknown to resource_o because there is
+    --                                not enough resources
+    -- set_usecnt_succeeded_o = HIGH->> indicates that usecnt_i requres was handled successfully    
+    set_usecnt_succeeded_o        : out std_logic;
+    
+
+    res_full_o                    : out std_logic_vector(g_resource_num      -1 downto 0);
+    res_almost_full_o             : out std_logic_vector(g_resource_num      -1 downto 0);
+
+    dbg_o                         : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0);
+
+    ----------------------------------------------------------------------
 
     dbg_double_free_o       : out std_logic;
     dbg_double_force_free_o : out std_logic;
@@ -468,5 +508,14 @@ begin  -- syn
   rsp_vec_o          <= alloc_req_d1.grant_vec;
   nomem_o            <= out_nomem or initializing;
   free_last_usecnt_o <= (not initializing) when (alloc_req_d1.free = '1' and unsigned(usecnt_rddata_p1) = 1) else '0';
+
+  gen_no_RESOURCE_MGR: if (g_with_RESOURCE_MGR = false) generate
+    resource_o                                                  <= (others => '0');
+    set_usecnt_succeeded_o                                      <= '1';
+    res_full_o                                                  <= (others => '0');
+    res_almost_full_o                                           <= (others => '0');
+    dbg_o (g_page_addr_width+1-1 downto 0)                      <= std_logic_vector(free_pages); 
+    dbg_o (g_num_dbg_vector_width-1 downto g_page_addr_width+1) <= (others =>'0'); 
+  end generate;
 
 end syn;
