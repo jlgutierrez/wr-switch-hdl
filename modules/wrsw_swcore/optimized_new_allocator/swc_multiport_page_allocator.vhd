@@ -200,18 +200,24 @@ architecture syn of swc_multiport_page_allocator is
   end component;
 
   type t_port_state is record
-    req_ib         : std_logic;
-    req_ob         : std_logic;
-    req_alloc      : std_logic;
-    req_free       : std_logic;
-    req_set_usecnt : std_logic;
-    req_force_free : std_logic;
-    req_addr_usecnt: std_logic_vector(g_page_addr_width-1 downto 0);
-    req_addr_free  : std_logic_vector(g_page_addr_width-1 downto 0);
-    req_addr_f_free: std_logic_vector(g_page_addr_width-1 downto 0);
-    req_ucnt_set   : std_logic_vector(g_usecount_width-1 downto 0);
-    req_ucnt_alloc : std_logic_vector(g_usecount_width-1 downto 0);
-
+    req_ib               : std_logic;
+    req_ob               : std_logic;
+    req_alloc            : std_logic;
+    req_free             : std_logic;
+    req_set_usecnt       : std_logic;
+    req_force_free       : std_logic;
+    req_addr_usecnt      : std_logic_vector(g_page_addr_width-1 downto 0);
+    req_addr_free        : std_logic_vector(g_page_addr_width-1 downto 0);
+    req_addr_f_free      : std_logic_vector(g_page_addr_width-1 downto 0);
+    req_ucnt_set         : std_logic_vector(g_usecount_width-1 downto 0);
+    req_ucnt_alloc       : std_logic_vector(g_usecount_width-1 downto 0);
+    req_resource         : std_logic_vector(g_resource_num_width-1 downto 0);
+    req_free_resource    : std_logic_vector(g_resource_num_width-1 downto 0);
+    req_free_res_valid   : std_logic;
+    req_f_free_resource  : std_logic_vector(g_resource_num_width-1 downto 0);
+    req_f_free_res_valid : std_logic;
+    req_rescnt_pg_num    : std_logic_vector(g_page_addr_width   -1 downto 0);
+    
     grant_ib_d : std_logic_vector(2 downto 0);
     grant_ob_d : std_logic_vector(2 downto 0);
 
@@ -303,15 +309,22 @@ architecture syn of swc_multiport_page_allocator is
 begin  -- syn
 
   gen_records : for i in 0 to g_num_ports-1 generate
-    ports(i).req_force_free <= force_free_i(i);
-    ports(i).req_free       <= free_i(i);
-    ports(i).req_alloc      <= alloc_i(i);
-    ports(i).req_set_usecnt <= set_usecnt_i(i);
-    ports(i).req_addr_usecnt<= pgaddr_usecnt_i    (g_page_addr_width * (i+1) -1 downto g_page_addr_width*i);
-    ports(i).req_addr_free  <= pgaddr_free_i      (g_page_addr_width * (i+1) -1 downto g_page_addr_width*i); 
-    ports(i).req_addr_f_free<= pgaddr_force_free_i(g_page_addr_width * (i+1) -1 downto g_page_addr_width*i);
-    ports(i).req_ucnt_set   <= usecnt_set_i(g_usecount_width * (i+1) - 1 downto g_usecount_width*i);
-    ports(i).req_ucnt_alloc <= usecnt_alloc_i(g_usecount_width * (i+1) - 1 downto g_usecount_width*i);
+    ports(i).req_force_free       <= force_free_i(i);
+    ports(i).req_free             <= free_i(i);
+    ports(i).req_alloc            <= alloc_i(i);
+    ports(i).req_set_usecnt       <= set_usecnt_i(i);
+    ports(i).req_free_res_valid   <= free_resource_valid_i(i);
+    ports(i).req_f_free_res_valid <= force_free_resource_valid_i(i);
+    
+    ports(i).req_addr_usecnt      <= pgaddr_usecnt_i      (g_page_addr_width   *(i+1)-1 downto g_page_addr_width   *i);
+    ports(i).req_addr_free        <= pgaddr_free_i        (g_page_addr_width   *(i+1)-1 downto g_page_addr_width   *i); 
+    ports(i).req_addr_f_free      <= pgaddr_force_free_i  (g_page_addr_width   *(i+1)-1 downto g_page_addr_width   *i);
+    ports(i).req_ucnt_set         <= usecnt_set_i         (g_usecount_width    *(i+1)-1 downto g_usecount_width    *i);
+    ports(i).req_ucnt_alloc       <= usecnt_alloc_i       (g_usecount_width    *(i+1)-1 downto g_usecount_width    *i);
+    ports(i).req_resource         <= resource_i           (g_resource_num_width*(i+1)-1 downto g_resource_num_width*i);
+    ports(i).req_free_resource    <= free_resource_i      (g_resource_num_width*(i+1)-1 downto g_resource_num_width*i);
+    ports(i).req_f_free_resource  <= force_free_resource_i(g_resource_num_width*(i+1)-1 downto g_resource_num_width*i);
+    ports(i).req_rescnt_pg_num    <= rescnt_page_num_i    (g_page_addr_width   *(i+1)-1 downto g_page_addr_width   *i);
   end generate gen_records;
 
   -- MUXes
@@ -435,6 +448,7 @@ begin  -- syn
       g_num_ports       => g_num_ports,
       g_usecount_width  => g_usecount_width,
       --- management
+      g_with_RESOURCE_MGR     => g_with_RESOURCE_MGR,
       g_page_size             => g_page_size,
       g_max_pck_size          => g_max_pck_size,
       g_special_res_num_pages => g_special_res_num_pages,
@@ -485,8 +499,7 @@ begin  -- syn
     alloc_done(i)      <= '1' when (ports(i).req_alloc     ='1' and pg_rsp_vec(i)='1' and done_alloc     ='1') else '0';
     free_done(i)       <= '1' when (ports(i).req_free      ='1' and pg_rsp_vec(i)='1' and done_free      ='1') else '0';
     force_free_done(i) <= '1' when (ports(i).req_force_free='1' and pg_rsp_vec(i)='1' and done_force_free='1') else '0';
-    set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and done_usecnt    ='1') else '0';
-    
+    set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and done_usecnt    ='1') else '0';  
   end generate gen_done;
 
   alloc_done_o       <= alloc_done;
@@ -525,10 +538,51 @@ begin  -- syn
     pg_resource_in         <= (others => '0');
     pg_free_resource_valid <= '0';
     pg_rescnt_page_num     <= (others => '0');
-  end generate;
+  end generate gen_no_RESOURCE_MGR;
 
-  
+  gen_RESOURCE_MGR: if (g_with_RESOURCE_MGR = true) generate
+    p_gen_resource_reqs : process(ports)
+      variable     tmp_resource_in      : std_logic_vector(g_resource_num_width-1 downto 0);
+      variable     tmp_free_res_valid   : std_logic; 
+      variable     tmp_rescnt_pg_num    : std_logic_vector(g_page_addr_width   -1 downto 0);
+    begin
+      tmp_resource_in          := (others => 'X');
+      tmp_free_res_valid       := '0';
+      tmp_rescnt_pg_num        := (others => 'X');
+    
+      for i in 0 to g_num_ports-1 loop
+        if(ports(i).grant_ib_d(0) = '1') then
+          tmp_resource_in      := ports(i).req_resource;
+          tmp_free_res_valid   := '0';
+          tmp_rescnt_pg_num    := ports(i).req_rescnt_pg_num;
+        elsif(ports(i).grant_ob_d(0) = '1') then
+          if(ports(i).req_free = '1' and ports(i).req_free_res_valid = '1') then
+            tmp_resource_in    := ports(i).req_free_resource;
+            tmp_free_res_valid := '1';
+          elsif(ports(i).req_force_free = '1' and ports(i).req_f_free_res_valid ='1') then
+            tmp_resource_in    := ports(i).req_f_free_resource;
+            tmp_free_res_valid := '1';
+          else -- to see problems in red on simulation
+            tmp_resource_in    := (others =>'X');
+            tmp_free_res_valid := '0';            
+          end if; 
+          tmp_rescnt_pg_num    := (others =>'X');
+        end if;
+      end loop;  -- i
 
+      pg_resource_in           <= tmp_resource_in;
+      pg_free_resource_valid   <= tmp_free_res_valid;
+      pg_rescnt_page_num       <= tmp_rescnt_pg_num;
+
+    end process p_gen_resource_reqs;
+    
+    gen_res_out : for i in 0 to g_num_ports-1 generate
+      resource_o       ((i+1)*g_resource_num_width-1 downto i*g_resource_num_width) <= pg_resource_out when (free_done(i) ='1' or force_free_done(i) ='1') else 
+                                                                                       (others => '0');
+      res_full_o       ((i+1)*g_resource_num      -1 downto i*g_resource_num)       <= pg_res_full;
+      res_almost_full_o((i+1)*g_resource_num      -1 downto i*g_resource_num)       <= pg_res_almost_full;
+    end generate gen_res_out;
+  end generate gen_RESOURCE_MGR;  
 
   --------------------------------------------------------------------------------------------------
 

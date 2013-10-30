@@ -659,6 +659,7 @@ architecture rtl of xswc_core is
       g_page_num                => c_mpm_page_num,
       g_usecount_width          => c_usecount_width,
       -- management
+      g_with_RESOURCE_MGR       => true,
       g_max_pck_size            => c_res_mmu_max_pck_size,
       g_page_size               => g_mpm_page_size,
       g_special_res_num_pages   => c_res_mmu_special_res_num_pages,

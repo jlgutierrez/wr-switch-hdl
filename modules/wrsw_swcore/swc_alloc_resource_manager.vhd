@@ -88,6 +88,8 @@
 -- Revisions  :
 -- Date        Version  Author   Description
 -- 2010-03-30  1.0      mlipinsk Created
+-- 2013-10-30  1.1      mlipinsk adapted to optimized alloc (alloc & usecnt at 
+--                               same time must be handled)
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -210,15 +212,38 @@ begin
         end loop;
 
       else
+        -----------------------------------------------------------------------------------------
+        -- "resource count set" is used to move a number of pages from "unknown" resources
+        -- to any other resource pool. Therefore, if the cur_res is different then "unknown" (0),
+        -- we subtract from unknown pool
+        -----------------------------------------------------------------------------------------
         
-        if(alloc_i = '1') then
+        if(alloc_i = '1' and rescnt_set_i = '1') then
+          -- here we allocate the first page of frame, so it's always to unknown resource num=0
+          -- and we also, at the same time, set usecnt (i.e. take pages from unknown to other 
+          -- resource), so we need to:
+          -- * add to the indicated resource (cur_res) the number of set pages 
+          --   (rescnt_page_num_i) - rescnt_set request)
+          -- * add to the unknown resources a single page - allocation request
+          -- * substract from unknown resource the number of set pages (rescnt_page_num) and
+          --   add single page for the allocation
+          -- ... SIMPLE...;-p
+          resources(cur_res).cnt <= resources(cur_res).cnt + unsigned(rescnt_page_num_i);
+          if(cur_res /= 0) then
+            resources(0).cnt <= resources(0).cnt - unsigned(rescnt_page_num_i) + 1; 
+          else
+            resources(0).cnt <= resources(0).cnt + 1;
+          end if;          
+        elsif(alloc_i = '1') then
+          -- we are allocating a page, it can be the first page (so unknow resource) but
+          -- it can also be inter-frame page (known resource...)
           resources(cur_res).cnt <= resources(cur_res).cnt + 1;
         elsif(free_i = '1') then
+          -- freeing page from some resource
           resources(cur_res).cnt <= resources(cur_res).cnt - 1;
         elsif(rescnt_set_i = '1') then
-          -- "resource count set" is used to move a number of pages from "unknown" resources
-          -- to any other resource pool. Therefore, if the cur_res is different then "unknown" (0),
-          -- we subtract from unknown pool
+          -- setting page usecnt and moving a number of pages from unknown resource to 
+          -- a known one 
           resources(cur_res).cnt <= resources(cur_res).cnt + unsigned(rescnt_page_num_i);
           if(cur_res /= 0) then
             resources(0).cnt <= resources(0).cnt - unsigned(rescnt_page_num_i);
