@@ -186,7 +186,9 @@ entity swc_page_allocator_new is
     -- if LOW  then the value read from memory will be used (stored along with usecnt)
     free_resource_valid_i         : in std_logic;
     
-    -- number of pages added to the resurce
+    -- number of pages added to the resource  - understanding how counting the usage of
+    -- pages for different resources is (hell) tricky --> I have problems ... ;-p See
+    -- swc_alloc_resource_manager.vhd for details
     rescnt_page_num_i             : in  std_logic_vector(g_page_addr_width   -1 downto 0);
 
     -- valid when (done_o and usecnt_i) = HIGH

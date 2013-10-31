@@ -529,7 +529,7 @@ begin  -- syn
   --------------------------------------------------------------------------------------------------
   --                               Resource Manager logic and instantiation
   --------------------------------------------------------------------------------------------------
-  gen_no_RESOURCE_MGR: if (g_with_RESOURCE_MGR = false) generate
+  gen_no_RESOURCE_MGR: if (g_with_RESOURCE_MGR = false) generate -- so we don't want resource gnr
     set_usecnt_succeeded_o <= (others => '1');
     res_full_o             <= (others => '0');
     res_almost_full_o      <= (others => '0');
@@ -540,7 +540,9 @@ begin  -- syn
     pg_rescnt_page_num     <= (others => '0');
   end generate gen_no_RESOURCE_MGR;
 
-  gen_RESOURCE_MGR: if (g_with_RESOURCE_MGR = true) generate
+  gen_RESOURCE_MGR: if (g_with_RESOURCE_MGR = true) generate -- so we do want resource gnr
+    
+    -- input mux
     p_gen_resource_reqs : process(ports)
       variable     tmp_resource_in      : std_logic_vector(g_resource_num_width-1 downto 0);
       variable     tmp_free_res_valid   : std_logic; 
@@ -554,9 +556,13 @@ begin  -- syn
         if(ports(i).grant_ib_d(0) = '1') then
           tmp_resource_in      := ports(i).req_resource;
           tmp_free_res_valid   := '0';
-          tmp_rescnt_pg_num    := ports(i).req_rescnt_pg_num;
+          if(ports(i).req_set_usecnt = '1') then 
+            tmp_rescnt_pg_num    := ports(i).req_rescnt_pg_num;
+          else
+            tmp_rescnt_pg_num    := (others => 'X'); -- to see red in simulation when data not used
+          end if;
         elsif(ports(i).grant_ob_d(0) = '1') then
-          if(ports(i).req_free = '1' and ports(i).req_free_res_valid = '1') then
+          if(ports(i).req_free = '1' and ports(i).req_free_res_valid = '1') then -- way to enable X if else
             tmp_resource_in    := ports(i).req_free_resource;
             tmp_free_res_valid := '1';
           elsif(ports(i).req_force_free = '1' and ports(i).req_f_free_res_valid ='1') then
@@ -576,11 +582,14 @@ begin  -- syn
 
     end process p_gen_resource_reqs;
     
+    -- output de-mux
     gen_res_out : for i in 0 to g_num_ports-1 generate
       resource_o       ((i+1)*g_resource_num_width-1 downto i*g_resource_num_width) <= pg_resource_out when (free_done(i) ='1' or force_free_done(i) ='1') else 
                                                                                        (others => '0');
       res_full_o       ((i+1)*g_resource_num      -1 downto i*g_resource_num)       <= pg_res_full;
       res_almost_full_o((i+1)*g_resource_num      -1 downto i*g_resource_num)       <= pg_res_almost_full;
+      
+      set_usecnt_succeeded_o(i) <= pg_set_usecnt_succeeded when (set_usecnt_done(i) ='1') else '0';  
     end generate gen_res_out;
   end generate gen_RESOURCE_MGR;  
 
