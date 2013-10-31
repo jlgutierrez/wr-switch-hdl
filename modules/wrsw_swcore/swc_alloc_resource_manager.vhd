@@ -64,6 +64,16 @@
 -- * the one provided by external soruce (when res_num_valid_i = HIGH) - this should be used for
 --   the inter-pages of the frame
 --   
+--   
+-- resource page count - tricky (!!!!)
+-- * the count is not really for the page being allocated by for the request for allocation
+-- * the pages are being requested in advance, so it would be hard to associate the
+--   the allocated page with the cnt because we allocate and later we use it or not for
+--   a given frame
+-- * however, when we receive frame, we do alloc requests (i.e. we had in advance allocated 
+--   first page, we use it, and as soon as we can, we allcote again page in advance....)
+--   and we actually count how many alloc requets we did for a given frame, even if the pages
+--   we allocate now will be used for the next frame... -> it works, it seems 
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2012, Maciej Lipinski / CERN
@@ -133,7 +143,20 @@ entity swc_alloc_resource_manager is
     clk_i                         : in std_logic;             -- clock & reset
     rst_n_i                       : in std_logic;
 
-    -- indicates the resource to which the page shall be allocated
+    -- indicates the resource to which the page shall be allocated or from which it shall be
+    -- deallocated (freed). it is used:
+    -- * when alloc_i      HIGH - to indicate to which resource add single page
+    -- * when rescnt_set_i HIGH - to indicate to which resource set a number (rescnt_page_num_i) 
+    --                            pages from unknown (num=0) resource (regardless whether 
+    --                            alloc_i is HIGH or LOW
+    -- * when free_i       HIGH - to indicate from which resource to substract a single page
+    -- 
+    -- When both, alloc_i and rescnt_set_i are HIGH, the resource_i is used by the latter 
+    -- to re-allocate rescnt_page_num_i number of pages from the unknown resource (num=0) to 
+    -- the resource_i resource. In such case, alloc_i allocates a single page to unknown
+    -- resource (num = 0). It might have been done more universal but I found it a waste
+    -- of resources, if such solution is sufficient.
+    --  
     resource_i                    : in std_logic_vector(g_resource_num_width-1 downto 0);
     
     -- indicate that is allocated
@@ -145,7 +168,9 @@ entity swc_alloc_resource_manager is
     -- setting resource cnt to already allocated pages (strobe)
     rescnt_set_i                  : in std_logic;
     
-    -- the number to be set
+    -- the of pages number to be added to the resource number indicated by resource_i (and 
+    -- substracted from resource number=0 [unknown]). It is used only when rescnt_set_i is HIGH
+    -- (whether alloc_i is HIGH or LOW)
     rescnt_page_num_i             : in std_logic_vector(g_total_num_pages_width-1 downto 0);
     
     res_full_o                    : out std_logic_vector(g_resource_num- 1 downto 0);
@@ -228,11 +253,11 @@ begin
           -- * substract from unknown resource the number of set pages (rescnt_page_num) and
           --   add single page for the allocation
           -- ... SIMPLE...;-p
-          resources(cur_res).cnt <= resources(cur_res).cnt + unsigned(rescnt_page_num_i);
-          if(cur_res /= 0) then
-            resources(0).cnt <= resources(0).cnt - unsigned(rescnt_page_num_i) + 1; 
+          if(cur_res = 0) then
+            resources(0).cnt       <= resources(0).cnt       + 1;
           else
-            resources(0).cnt <= resources(0).cnt + 1;
+            resources(0).cnt       <= resources(0).cnt       - unsigned(rescnt_page_num_i) + 1; 
+            resources(cur_res).cnt <= resources(cur_res).cnt + unsigned(rescnt_page_num_i);
           end if;          
         elsif(alloc_i = '1') then
           -- we are allocating a page, it can be the first page (so unknow resource) but
