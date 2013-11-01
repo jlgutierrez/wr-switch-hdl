@@ -1229,11 +1229,15 @@ begin
               s_page_alloc            <= S_PCKINTER_PAGE_REQ;
               pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
               ---------- source management  --------------
-              if(res_info_valid = '1') then
-                mmu_resource_out        <= current_res_info; --res_info;
-              else
-                mmu_resource_out        <= (others => '0');            
-              end if;
+
+-- -------------------------------- 01/11/2013: possible bug: --------------------------------
+-- see note below
+-- -------------------------------- ------------------------- -------------------------------- 
+--               if(res_info_valid = '1') then
+--                 mmu_resource_out        <= current_res_info; --res_info;
+--               else
+--                 mmu_resource_out        <= (others => '0');            
+--               end if;
               mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
               ------------------------------------------- 
               
@@ -1268,11 +1272,20 @@ begin
               s_page_alloc            <= S_PCKINTER_PAGE_REQ;
               pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
               ---------- source management  --------------
-              if(res_info_valid = '1') then
-                mmu_resource_out        <= current_res_info; --res_info;
-              else
-                mmu_resource_out        <= (others => '0');            
-              end if;
+-- -------------------------------- 01/11/2013: possible bug: --------------------------------
+-- when we get RTU decision at the last page
+-- 1) we start S_PCKSTART_SET_USECNT
+-- 2) before the SET_USECNT state is exited, the frame finishes... the res_info_valid goes LOW
+-- 3) so when we allocate the next inter-frame page, we need to allocated it to the resource 
+--    of the finished frame, but the res_info is LOW, so we set mm_resource_out to zero.... 
+--    and we are f-ed with the page count. 
+-- this is why, if we enter S_PCKINTER_PAGE_REQ we remember the mm_resurce_out (not update)
+-- -------------------------------- ---------------------------------- -----------------------
+--               if(res_info_valid = '1') then
+--                 mmu_resource_out        <= current_res_info; --res_info;
+--               else
+--                 mmu_resource_out        <= (others => '0');            
+--               end if;
               mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
               ------------------------------------------- 
               
@@ -2102,12 +2115,11 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
       
         -- reset the count of pages allocated to unknown resource when sync-ing FSMs
         if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then 
---           unknown_res_page_cnt <= to_unsigned(1,unknown_res_page_cnt'length);
-             unknown_res_page_cnt <= to_unsigned(0,unknown_res_page_cnt'length);
+          unknown_res_page_cnt <= to_unsigned(1,unknown_res_page_cnt'length);
 --         elsif(mpm_pg_req_i = '1' and mpm_dlast = '0' and s_transfer_pck = S_WAIT_RTU_VALID) then 
-        
         -- counting how many pages has been used before usecnt_set
-        elsif((pckstart_page_in_advance = '0' or pckinter_page_in_advance ='0') and rtu_rsp_ack  = '0' and  -- the very same condition to enter S_PCKINTER_PAGE_REQ
+--         elsif((pckstart_page_in_advance = '0' or pckinter_page_in_advance ='0') and rtu_rsp_ack  = '0' and  -- the very same condition to enter S_PCKINTER_PAGE_REQ
+        elsif(pckinter_page_in_advance ='0' and rtu_rsp_ack  = '0' and  -- the very same condition to enter S_PCKINTER_PAGE_REQ
               s_transfer_pck = S_WAIT_RTU_VALID and pckstart_page_alloc_req ='0' and pckinter_page_alloc_req ='0') then
           unknown_res_page_cnt <= unknown_res_page_cnt + 1;
         end if;
