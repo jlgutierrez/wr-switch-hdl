@@ -552,6 +552,7 @@ begin  -- syn
     res_almost_full_o                                           <= (others => '0');
     dbg_o (g_page_addr_width+1-1 downto 0)                      <= std_logic_vector(free_pages); 
     dbg_o (g_num_dbg_vector_width-1 downto g_page_addr_width+1) <= (others =>'0'); 
+    set_usecnt_allowed_p1                                       <= '1';
   end generate;
 
   gen_RESOURCE_MGR: if (g_with_RESOURCE_MGR = true) generate
