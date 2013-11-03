@@ -56,6 +56,22 @@ module main;
       EthPacketSink recv;
    } port_t;
 
+   typedef struct{
+       int               page; 
+       int               usecnt;
+       int               resnum;
+       int               port;
+   } t_mmu_in;
+   
+   t_mmu_in mmu_in[g_num_ports+1][1024];
+   int mmu_alloc_cnt[g_num_ports+1];
+   int mmu_usecnt_cnt[g_num_ports+1];
+   int mmu_free_cnt[g_num_ports+1];
+   int mmu_f_free_cnt[g_num_ports+1];
+   int tx_done = 0;
+   int rx_done = 0;
+   reg [g_num_ports-1:0] txrx_done = 0;
+   
    port_t ports[$];
    CSimDrv_NIC nic;
    CRTUSimDriver rtu;
@@ -128,6 +144,7 @@ module main;
    bit unrec_fw_cpu                           = 0;
    bit rtu_dbg_f_fast_match                   = 0;
    bit rtu_dbg_f_full_match                   = 0;
+   bit g_ignore_rx_test_check                 = 0;
    
    // vlans
 //    int prio_map[8]                         = '{7, // Class of Service masked into prioTag 0
@@ -2216,9 +2233,10 @@ module main;
  /** ***************************   test scenario 70  ************************************* **/ 
   /*
    * stress test on all ports with Braodcast+FastForward
+   * BUG: s_rcv_pck goes into S_PAUSE -> WHY ??? (important, size: 200)
    * 
    **/
-///*
+/*
   initial begin
                      //      mask     , fid , prio,has_p,overr, drop , vid, valid
    sim_vlan_tab[ 0] = '{'{32'h00000001, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
@@ -2267,10 +2285,100 @@ module main;
     g_max_pck_gap        = 150;
     repeat_number        = 20;
     tries_number         = 1;  
-    g_force_payload_size = 42; 
+    g_force_payload_size = 200;//42; 
     rx_forward_on_fmatch_full = 1; 
-//     mac_br               = 1;
+    mac_br               = 0;
     g_is_qvlan           = 1;
+                         // tx  ,rx ,opt
+  end
+ */
+ /** ***************************   test scenario 71  ************************************* **/ 
+  /*
+   * stress test on all ports with Braodcast+FastForward
+   
+   * 
+   **/
+/*
+  initial begin
+                     //      mask     , fid , prio,has_p,overr, drop , vid, valid
+   sim_vlan_tab[ 0] = '{'{32'h00000001, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
+   sim_vlan_tab[ 1] = '{'{32'h00000002, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 1,  1'b1 };
+   sim_vlan_tab[ 2] = '{'{32'h00000004, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 2,  1'b1 };
+   sim_vlan_tab[ 3] = '{'{32'h00000008, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 3,  1'b1 };
+   sim_vlan_tab[ 4] = '{'{32'h00000010, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 4,  1'b1 };
+   sim_vlan_tab[ 5] = '{'{32'h00000020, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 5,  1'b1 };
+   sim_vlan_tab[ 6] = '{'{32'h00000040, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 6,  1'b1 };
+   sim_vlan_tab[ 7] = '{'{32'h00000080, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 7,  1'b1 };
+   sim_vlan_tab[ 8] = '{'{32'h00000100, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 8,  1'b1 };
+   sim_vlan_tab[ 9] = '{'{32'h00000200, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 9,  1'b1 };
+   sim_vlan_tab[10] = '{'{32'h00000400, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 10, 1'b1 };
+   sim_vlan_tab[11] = '{'{32'h00000800, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 11, 1'b1 };
+   sim_vlan_tab[12] = '{'{32'h00001000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 12, 1'b1 };
+   sim_vlan_tab[13] = '{'{32'h00002000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 13, 1'b1 };
+   sim_vlan_tab[14] = '{'{32'h00004000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 14, 1'b1 };
+   sim_vlan_tab[15] = '{'{32'h00008000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 15, 1'b1 };
+   sim_vlan_tab[16] = '{'{32'h00010000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 16, 1'b1 };
+   sim_vlan_tab[17] = '{'{32'h00020000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 17, 1'b1 };
+   sim_vlan_tab[18] = '{'{32'h00040000, 8'h0, 3'h0, 1'b0, 1'b0, 1'b0}, 18, 1'b1 };
+
+//                   tx  ,rx ,opt (send from port tx to rx with option opt)
+    trans_paths[ 0]='{0  ,17 , 668 }; // port 0: 
+    trans_paths[ 1]='{1  ,16 , 668 }; // port 1
+    trans_paths[ 2]='{2  ,15 , 668 }; // port 2
+    trans_paths[ 3]='{3  ,14 , 668 }; // port 3
+    trans_paths[ 4]='{4  ,13 , 668 }; // port 4
+    trans_paths[ 5]='{5  ,12 , 668 }; // port 5
+    trans_paths[ 6]='{6  ,11 , 668 }; // port 6
+    trans_paths[ 7]='{7  ,10 , 668 }; // port 7
+    trans_paths[ 8]='{8  ,9  , 668 }; // port 8
+    trans_paths[ 9]='{9  ,8  , 668 }; // port 9
+    trans_paths[10]='{10 ,7  , 668 }; // port 10
+    trans_paths[11]='{11 ,6  , 668 }; // port 11
+    trans_paths[12]='{12 ,5  , 668 }; // port 12
+    trans_paths[13]='{13 ,4  , 668 }; // port 13
+    trans_paths[14]='{14 ,3  , 668 }; // port 14
+    trans_paths[15]='{15 ,2  , 668 }; // port 15
+    trans_paths[16]='{16 ,1  , 668 }; // port 16
+    trans_paths[17]='{17 ,0  , 668 }; // port 17
+
+//     portUnderTest        = 18'b1111111111111111111;
+    portUnderTest        = 18'b111111111111111111;
+//     portUnderTest        = 18'b100000000000000001;        
+//     portUnderTest        = 18'b000000000000000001;
+//     portUnderTest        = 18'b111000000000000111;             
+    g_enable_pck_gaps    = 0;
+    g_min_pck_gap        = 150;
+    g_max_pck_gap        = 150;
+    repeat_number        = 10; //10
+    tries_number         = 1;  
+    g_force_payload_size = 42; //250;//42; 
+    rx_forward_on_fmatch_full = 1; 
+    mac_br               = 0;
+    g_is_qvlan           = 1;
+                         // tx  ,rx ,opt
+  end
+*/
+ /** ***************************   test scenario 71  ************************************* **/ 
+  /*
+   * stress test on all ports with Braodcast+FastForward
+   
+   * 
+   **/
+///*
+  initial begin
+
+    portUnderTest        = 18'b111111111111111111;
+//     portUnderTest        = 18'b000000000000000001;
+    g_enable_pck_gaps    = 1;
+    g_min_pck_gap        = 0;
+    g_max_pck_gap        = 400;
+    repeat_number        = 30; //10
+    tries_number         = 1;  
+    g_force_payload_size = 0;//300;//46;//42; //250;//42; 
+    rx_forward_on_fmatch_full = 0; 
+    mac_br               = 0;
+    g_is_qvlan           = 0;
+    g_ignore_rx_test_check = 1;
                          // tx  ,rx ,opt
   end
  //*/
@@ -2474,16 +2582,17 @@ module main;
               if(pck_gap)
                 wait_cycles(pck_gap); 
            end
+           tx_done = 1;
         end   // fork 1
         begin // fork 2
-        if(opt != 101 && opt != 201 && opt != 900 && opt != 901 && opt != 206 && opt != 666 && opt != 667)
+        if(opt != 101 && opt != 201 && opt != 900 && opt != 901 && opt != 206 && opt != 666 && opt != 667 && g_ignore_rx_test_check == 0)
           for(int j=0;j<n_tries;j++)
             begin
               sink.recv(pkt2);
               $display("|<= RX: port = %2d, pck_i = %4d (size=%2d)" , dstPort, j,  pkt2.payload.size);
               if(unvid)
                 arr[j].is_q  = 0;
-              if((pkt.payload.size != pkt2.payload.size) || !arr[j].equal(pkt2))
+              if((arr[j].payload.size != pkt2.payload.size) || !arr[j].equal(pkt2))
                 begin
                   $display("Fault at %d", j);
                   $display("Should be: ");
@@ -2492,6 +2601,7 @@ module main;
                   pkt2.dump();
                 end
             end // for (i=0;i<n_tries;i++)
+            rx_done = 1;
         end // fork 2
       join
       seed = gen.get_seed();
@@ -3075,6 +3185,7 @@ module main;
       int seed;
       rtu_vlan_entry_t def_vlan;
       int q;
+      int z;
       
       CWishboneAccessor cpu_acc = DUT.cpu.get_accessor();
       
@@ -3873,6 +3984,7 @@ module main;
                           trans_paths[qq].op             /*option=4 */);
                 end  //for
              end   //if
+             txrx_done[qq]=1;
           end  //thread
        join_none;//fork
    
@@ -3886,9 +3998,75 @@ module main;
             @(posedge clk_sys);
          end
       join_none
-      
+
+//       for(q=z; q<g_max_ports; z++)
+//         fork
+//           forever begin
+//             automatic int zz=z;
+//             if(portUnderTest[zz]) 
+//               begin 
+//                 if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.alloc_done_o[zz])
+//                   mmu_alloc_cnt[zz]++;
+//                 if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.set_usecnt_done_o[zz])
+//                   mmu_usecnt_cnt[zz]++;              
+//                 if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.free_done_o[zz])
+//                   mmu_free_cnt[zz]++; 
+//                 if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.force_free_done_o[zz])
+//                   mmu_f_free_cnt[zz]++;
+//               end   //if
+//             @(posedge clk_sys);
+//             end  //thread
+//          join_none;//fork     
+       
 
    end 
+     
+   initial begin
+     int q =0;
+     while(!rst_n) @(posedge clk_sys);
+      
+     forever begin      
+       for(q=0;q<g_max_ports;q++) begin
+         if(portUnderTest[q]) begin 
+           if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.alloc_done_o[q])
+             mmu_alloc_cnt[q]++;
+           if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.set_usecnt_done_o[q])
+             mmu_usecnt_cnt[q]++;              
+           if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.free_done_o[q])
+             mmu_free_cnt[q]++; 
+           if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.force_free_done_o[q])
+             mmu_f_free_cnt[q]++;
+         end //if
+       end // for
+       @(posedge clk_sys);
+     end //forever
+   end //initial begin
+        
+  
+
+   initial begin 
+     int l = 0;
+     int pg_cnt =0;
+     while(!rst_n) @(posedge clk_sys);
+     while(txrx_done != portUnderTest) @(posedge clk_sys);
+     wait_cycles(10);
+     $display("free pages: %4d",DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages);
+     if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.g_with_RESOURCE_MGR) begin
+       $display("unknown: %4d",DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.dbg_o[9 : 0]);
+       $display("special: %4d",DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.dbg_o[19:10]);
+       $display("normal : %4d",DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.dbg_o[29:20]);
+     end
+          $display("------------------- this check works only for unicast traffic ------------------------");
+     for(l=0;l<g_max_ports+1;l++) 
+       begin
+         pg_cnt = mmu_alloc_cnt[trans_paths[l].tx]-mmu_f_free_cnt[trans_paths[l].tx]-mmu_free_cnt[trans_paths[l].rx];
+         if(pg_cnt == 2) // very simple sanity check
+           $display("CNT: tx_port=%2d: alloc=%3d; usecnt=%3d; force free=%3d | rx_port=%2d: free=%3d [OK]",trans_paths[l].tx, mmu_alloc_cnt[trans_paths[l].tx], mmu_usecnt_cnt[trans_paths[l].tx],mmu_f_free_cnt[trans_paths[l].tx], trans_paths[l].rx, mmu_free_cnt[trans_paths[l].rx]);         
+         else
+           $display("CNT: tx_port=%2d: alloc=%3d; usecnt=%3d; force free=%3d | rx_port=%2d: free=%3d [--]",trans_paths[l].tx, mmu_alloc_cnt[trans_paths[l].tx], mmu_usecnt_cnt[trans_paths[l].tx],mmu_f_free_cnt[trans_paths[l].tx], trans_paths[l].rx, mmu_free_cnt[trans_paths[l].rx]);         
+       end//if
+           $display("------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ------------------------");
+   end //initla begin
 
 endmodule // main
 
