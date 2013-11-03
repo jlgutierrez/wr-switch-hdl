@@ -539,6 +539,14 @@ architecture syn of xswc_input_block is
   signal linkl_FSM : std_logic_vector(3  downto 0);
   
   signal zeros    : std_logic_vector(g_num_ports - 1 downto 0);
+  
+  constant c_wrf_status_error : t_wrf_status_reg := (
+        '0', -- is_hp
+        '0', -- has_smac
+        '0', -- has_crc
+        '1', -- error
+        '0', -- tag_me
+       x"00");-- match_class
   -------------------------------------------------------------------------------
   -- Function which calculates number of 1's in a vector
   ------------------------------------------------------------------------------- 
@@ -633,9 +641,18 @@ constant c_force_usecnt             : boolean :=  TRUE;
   -- (unless we needed to wait for RTU's decision to the end of reception) so we drop the frame
   -- if the resoruce is almost full
   signal res_info_almsot_full       : std_logic;
+  signal cur_res_info_almsot_full   : std_logic;
   
   -- a currently requested resource is full
   signal res_info_full              : std_logic;
+  signal cur_res_info_full          : std_logic;
+  signal mem_full_dump              : std_logic;
+  
+  -- synchronizing 4 FSMs to work together is not easy....:
+  signal tp_transfer_ready          : std_logic;
+  signal tp_transfer_rtu_valid      : std_logic;
+  signal tp_transfer_wait_sof       : std_logic;
+  signal tp_transfer_set_usecnt     : std_logic;
   
   signal dbg_dropped_on_res_full    : std_logic;
 
@@ -677,13 +694,29 @@ begin  --archS_PCKSTART_SET_AND_REQ
   in_pck_eof <= in_pck_eof_normal or in_pck_eof_on_pause;
 
   -- detecting error 
-  in_pck_err <= '1' when in_pck_dvalid = '1' and
-                   (snk_adr_int = c_WRF_STATUS) and
-                   (f_unmarshall_wrf_status(snk_dat_int).error = '1') else
+  in_pck_err <= '1' when  in_pck_dvalid = '1' and
+                         (snk_adr_int = c_WRF_STATUS) and
+                          (f_unmarshall_wrf_status(snk_dat_int).error = '1') else
+                '0';
+               
+  -- this indicates that a memory-full happens when the frame has been already tranfsered
+  -- to output (probably already being send out...) so we need to handled this properly, i.e.:
+  -- * write to MPM error status for the output
+  -- * stop receving    
+  mem_full_dump <= '1' when (lw_sync_2nd_stage_chk = '1' and 
+                             lw_sync_second_stage  = '0' and
+                             (mmu_nomem_i = '1' or cur_res_info_full = '1') and
+                            tp_transfer_valid = '1') else 
                    '0';
-
+--   -- this indicates that frame has not been yet transfered, we are lucky, we can 
+--   -- just drop receving the frame with no extra magic                   
+--   mem_full_drop <= '1' when (lw_sync_2nd_stage_chk = '1' and 
+--                              lw_sync_second_stage  = '0' and
+--                              (mmu_nomem_i = '1' or cur_res_info_full = '1') and
+--                             tp_transfer_valid = '1') else 
+--                    '0';
   -- to simplify stuff:
-  finish_rcv_pck <= '1' when (in_pck_eof = '1' or in_pck_err = '1' or tp_drop = '1') else '0';
+  finish_rcv_pck <= '1' when (in_pck_eof = '1' or in_pck_err = '1' or tp_drop = '1' or mem_full_dump ='1') else '0';
   --==================================================================================================
   -- FSM to receive pcks, it translates pWB I/F into MPM I/F
   --==================================================================================================
@@ -868,9 +901,21 @@ begin  --archS_PCKSTART_SET_AND_REQ
               rp_in_pck_err   <= '1';
               mpm_dvalid      <= '1';
               mpm_data        <= in_pck_dat;                
-            -- write to MPM data only if you know two consequtive WB writes, this is to detect EOF and
-            -- set HIGH dlast at an appropriate time
+            elsif(mem_full_dump = '1')then
+              -- this is an exceptional situatio when
+              -- 1) we've already transfered RTU decision (so output is tx-ing) AND
+              -- 2) memory is full, so we cannot store the rx-ed frame          AND
+              -- 3) we cannot pause, if we do, we will create holse on the output
+              -- so we dump the frame, by writing to memory error status (so tx will dump) and
+              -- we stop rx-ing
+              -- We set rp_in_pck_err so it is handled in the next cycle as error
+--               rp_in_pck_err   <= '1';
+              mpm_dvalid      <= '1';
+              mpm_data        <= c_WRF_STATUS & -- generate error msg for out_block                          
+                                 f_marshall_wrf_status(c_wrf_status_error); 
             elsif((in_pck_dvalid = '1' and in_pck_dvalid_d0 = '1') or finish_rcv_pck = '1') then
+              -- write to MPM data only if you know two consequtive WB writes, this is to detect EOF and
+              -- set HIGH dlast at an appropriate time
               mpm_dvalid <= '1';
               mpm_data   <= in_pck_dat_d0;
 
@@ -915,7 +960,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
               -- decision from RTU to drop, PCK has not been transfered at all, so we need 
               -- to handle freeing. we also need to receive the rest of the pck
               -- TODO(1.0): throw error????
-            elsif(tp_drop = '1') then
+            elsif(tp_drop = '1' ) then
               
               mmu_force_free_addr <= current_pckstart_pageaddr;
 
@@ -950,9 +995,16 @@ begin  --archS_PCKSTART_SET_AND_REQ
               -- sync with (expliclitely) with ll_write and (implicitely) with transfer_pck 
               -- (transfer waits for  first page to be cleared (which is condition of sync_2nd_stage, 
             elsif(lw_sync_2nd_stage_chk = '1' and lw_sync_second_stage = '0') then
-              
-              snk_stall_force_h <= '1';
-              s_rcv_pck         <= S_PAUSE;
+             
+              if(mem_full_dump ='1') then 
+                -- stay in the the same state, we already set rp_in_pck_err and the problem
+                -- will be handled in the next cycle as error
+                s_rcv_pck         <= S_DROP;
+              else
+                -- hopefully will not happen
+                snk_stall_force_h <= '1';
+                s_rcv_pck         <= S_PAUSE;
+              end if;
 
             end if;
 
@@ -2066,10 +2118,50 @@ tp_drop <= '1' when ((s_transfer_pck = S_DROP) or
                                   ((current_drop = '1' or current_mask = zeros) and rtu_rsp_ack = '1')) else '0';
 
 -- transfer_pck FSM indicates that transfer already started or is finished, 
-tp_transfer_valid <= '1' when (s_transfer_pck = S_TRANSFERED or
-                                  s_transfer_pck = S_TRANSFER or
-                                  s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
+tp_transfer_valid <= '1' when (s_transfer_pck            = S_TRANSFERED         or
+                                  s_transfer_pck         = S_TRANSFER           or
+                                  s_transfer_pck         = S_TOO_LONG_TRANSFER  or
+                                  tp_transfer_ready      = '1'                  or
+                                  tp_transfer_rtu_valid  = '1'                  or
+                                  tp_transfer_wait_sof   = '1'                  or
+                                  tp_transfer_set_usecnt = '1') else 
+                     '0';
 
+----------------------------------- this is nasty but should work.... ------------------------
+-- we need to detect cases where the decision about entering transfer state is being made...
+-- so I recreate the "if" statement which can cause the s_transfer_pck FSM to enter
+-- the S_TRANSFER state. THIS IS NASTY but tell me better way....
+tp_transfer_ready     <= '1' when ( s_transfer_pck       = S_READY                   and
+                                   (rtu_rsp_ack          = '0' or  tp_drop    = '0') and
+                                    rtu_rsp_ack          = '1'                       and
+                                    in_pck_sof           = '1'                       and
+                                    current_usecnt       = current_pckstart_usecnt   and 
+                                    c_force_usecnt       = FALSE                     and 
+                                    lw_pckstart_pg_clred = '1') else
+                          '0';      
+
+tp_transfer_rtu_valid <= '1' when ( s_transfer_pck       = S_WAIT_RTU_VALID        and
+                                    rp_in_pck_error      = '0'                     and 
+                                    rtu_rsp_ack          = '1'                     and
+                                    tp_drop              = '0'                     and 
+                                    current_usecnt       = current_pckstart_usecnt and
+                                    c_force_usecnt       = FALSE                   and 
+                                    lw_pckstart_pg_clred = '1') else
+                         '0';
+tp_transfer_wait_sof  <= '1' when ( s_transfer_pck       = S_WAIT_SOF              and
+                                    in_pck_sof           = '1'                     and
+                                    current_usecnt       = current_pckstart_usecnt and 
+                                    c_force_usecnt       = FALSE                   and 
+                                    lw_pckstart_pg_clred = '1') else
+                         '0';
+tp_transfer_set_usecnt<= '1' when ( s_transfer_pck        = S_SET_USECNT           and
+                                    mmu_set_usecnt_done_i = '1'                    and 
+                                    tp_need_pckstart_usecnt_set = '1'              and
+                                    rp_in_pck_error       = '0'                    and
+                                    mmu_set_usecnt_succeeded_i = '1'               and
+                                    lw_pckstart_pg_clred = '1') else
+                          '0';
+                          
 -- rcv_pck FSM indicates that there is or was error on the received pck
 rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 
@@ -2102,6 +2194,10 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 
   res_info_almsot_full <= mmu_res_almost_full_i(to_integer(unsigned(res_info)));
   res_info_full        <= mmu_res_full_i(to_integer(unsigned(res_info)));
+  
+  cur_res_info_almsot_full <= mmu_res_almost_full_i(to_integer(unsigned(current_res_info)));
+  cur_res_info_full        <= mmu_res_full_i(to_integer(unsigned(current_res_info)));
+
   ---------------------------------------------
   
   p_cnt_unused_pages: process(clk_i)
