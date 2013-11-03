@@ -418,12 +418,13 @@ begin
         full_match_req_in_progress <= '0';
         full_match             <= c_match_zero;
         full_match_aboard_d    <= '0';
-        new_req_at_full_match_rsp_d <='1';
+        new_req_at_full_match_rsp_d <='0';
         
       else  
         -- we consider a case when new request appears when the FULL Match response
-        -- is available  (full_match_valid='1') 
-        if(full_match_valid = '1' and fast_match_wr_req ='1' and fast_match_wr_req_d = '0') then
+        -- is available  (full_match_valid='1' or the states that we create/send the response) 
+        if((full_match_valid = '1' or port_state = S_FINAL_MASK or port_state = S_RESPONSE ) and 
+            fast_match_wr_req ='1' and fast_match_wr_req_d = '0') then
           new_req_at_full_match_rsp_d <= '1';
         elsif(port_state = S_FAST_MATCH) then
           new_req_at_full_match_rsp_d <= '0';
@@ -498,7 +499,8 @@ begin
           ------------------------------------------------------------------------------------------------------------ 
           when S_IDLE =>
             
-            if(fast_match_wr_req = '1') then
+            if(fast_match_wr_req = '1' or 
+               new_req_at_full_match_rsp_d = '1') then -- should not be used, but just in case
               port_state          <= S_FAST_MATCH;
             elsif(none_match_wr_req = '1') then
               rsp                 <= c_rtu_rsp_drop;
@@ -630,7 +632,7 @@ begin
           ------------------------------------------------------------------------------------------------------------             
           when S_RESPONSE =>
               
-            if((full_match_aboard_d = '1' or new_req_at_full_match_rsp_d = '1') and match_required ='1') then
+            if((full_match_aboard_d = '1' or new_req_at_full_match_rsp_d = '1' or fast_match_wr_req = '1') and match_required ='1') then
               -- if we are in this state because we received abanddon request  and match is 
               -- required (RTU enabled/no mirroring), we go straight to FAST_MATCH
               port_state      <= S_FAST_MATCH;
