@@ -256,7 +256,10 @@ entity xswc_input_block is
 
     dbg_hwdu_o  : out std_logic_vector(15 downto 0);
 
-    tap_out_o: out std_logic_vector(49 + 62 downto 0)
+    tap_out_o: out std_logic_vector(49 + 62 downto 0);
+    
+    dbg_pckstart_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
+    dbg_pckinter_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0)
 
     );
 end xswc_input_block;
@@ -1482,9 +1485,10 @@ begin
         -- make sure we're not forwarding packets to ourselves. 
         current_mask      <= rtu_dst_port_mask_i; -- and (not f_gen_mask(g_port_index, current_mask'length));
         current_res_info  <= res_info;
-        current_hp        <= rtu_hp_i         ;
+        current_hp        <= rtu_hp_i;
         current_prio      <= rtu_prio_i;
-        current_drop      <= rtu_drop_i;-- or res_info_almsot_full;
+        current_drop      <= rtu_drop_i or   -- RTU decides to dump the frame
+                             (res_info_almsot_full and not rtu_hp_i); -- the frame is not HP and we ar running our of memory
         current_usecnt    <= rtu_dst_port_usecnt;
 
         rtu_rsp_ack <= '1';
@@ -2351,6 +2355,9 @@ linkl_FSM <= x"0" when (s_ll_write = S_IDLE) else
 dbg_hwdu_o <= rtu_rsp_valid_i & alloc_FSM & trans_FSM & rcv_p_FSM & linkl_FSM;
 
 dbg_dropped_on_res_full <= pckstart_usecnt_req and mmu_set_usecnt_done_i and (not mmu_set_usecnt_succeeded_i);
+
+dbg_pckstart_pageaddr_o <= pckstart_pageaddr;
+dbg_pckinter_pageaddr_o <= pckinter_pageaddr;
 
 -- tap_out_o <= f_slv_resize(              -- 
 --  -- f_enum2nat(s_rcv_pck) &               --

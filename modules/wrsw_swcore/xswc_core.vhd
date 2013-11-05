@@ -354,6 +354,10 @@ architecture rtl of xswc_core is
   
    signal hwdu_input_block            : t_hwdu_input_block_array;
    signal hwdu_mmu                    : std_logic_vector(c_hwdu_mmu_width                           -1 downto 0);
+   
+   signal dbg_pckstart_pageaddr : std_logic_vector(g_num_ports*c_mpm_page_addr_width - 1 downto 0);
+   signal dbg_pckinter_pageaddr : std_logic_vector(g_num_ports*c_mpm_page_addr_width - 1 downto 0);
+   
   begin --rtl
    
   --chipscope_icon_1: chipscope_icon
@@ -477,7 +481,10 @@ architecture rtl of xswc_core is
 --         pta_resource_o           => open,
         pta_hp_o                 => ib_hp (i),
         dbg_hwdu_o               => hwdu_input_block(i),
-        tap_out_o => tap_ib(i)
+        tap_out_o                => tap_ib(i),
+        
+        dbg_pckstart_pageaddr_o  => dbg_pckstart_pageaddr((i+1)*c_mpm_page_addr_width-1 downto i*c_mpm_page_addr_width),
+        dbg_pckinter_pageaddr_o  => dbg_pckinter_pageaddr((i+1)*c_mpm_page_addr_width-1 downto i*c_mpm_page_addr_width)
         );
         
         
@@ -551,7 +558,7 @@ architecture rtl of xswc_core is
         src_i                    => src_i(i),
         src_o                    => src_o(i),
 
-        tap_out_o => tap_ob(i)
+        tap_out_o                => tap_ob(i)
       );        
         
   end generate gen_blocks;
@@ -659,7 +666,7 @@ architecture rtl of xswc_core is
       g_page_num                => c_mpm_page_num,
       g_usecount_width          => c_usecount_width,
       -- management
-      g_with_RESOURCE_MGR       => true,
+      g_with_RESOURCE_MGR       => false, --true,
       g_max_pck_size            => c_res_mmu_max_pck_size,
       g_page_size               => g_mpm_page_size,
       g_special_res_num_pages   => c_res_mmu_special_res_num_pages,

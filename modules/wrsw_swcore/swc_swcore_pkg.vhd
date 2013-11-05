@@ -278,7 +278,10 @@ package swc_swcore_pkg is
 
     dbg_hwdu_o  : out std_logic_vector(15 downto 0);
 
-    tap_out_o : out std_logic_vector(49+62 downto 0)
+    tap_out_o : out std_logic_vector(49+62 downto 0);
+        
+    dbg_pckstart_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
+    dbg_pckinter_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0)
 
     );
   end component;
