@@ -261,8 +261,8 @@ architecture syn of swc_page_allocator_new is
   signal tmp_page        : std_logic_vector(g_page_addr_width -1 downto 0);
   signal free_blocks     : unsigned(g_page_addr_width downto 0);
   signal usecnt_not_zero : std_logic;
-  signal real_nomem_d0   : std_logic;
-  signal real_nomem_d1   : std_logic;
+  signal out_nomem_d0    : std_logic;
+  signal out_nomem_d1    : std_logic;
 
   -------------------------- resource management
   signal res_mgr_alloc           : std_logic;
@@ -345,7 +345,7 @@ begin  -- syn
   q_write_p1 <= '1' when (alloc_req_d1.free   = '1' and unsigned(usecnt_rddata_p1) = 1) or
                          (alloc_req_d1.f_free = '1') else initializing;
 
-  -- increaze pointer to next address -> it stores next freee page, we use the currently read
+  -- increase pointer to next address -> it stores next freee page, we use the currently read
   -- and increase for next usage
   -- The core accepts requsts which occure at the fist cycle of nomem HIGH -> this is because
   -- we cannot stop once granted access based on the request in the previous cycle:
@@ -356,7 +356,7 @@ begin  -- syn
   -- nomem_d0  : _______|-------
   -- alloc_d0  " _______|-|____  <= this need to be handled
   -- nomem_d1  : ________|-------
-  q_read_p0  <= '1' when (alloc_req_d0.alloc = '1') and (real_nomem_d1 = '0') else '0'; 
+  q_read_p0  <= '1' when (alloc_req_d0.alloc = '1') and (out_nomem_d1 = '0') else '0'; 
   
   -- address of page stored in the memory (queue)
   q_input_addr_p1 <= std_logic_vector(wr_ptr_p1) when initializing = '1' else alloc_req_d1.pgaddr_free;
@@ -459,14 +459,16 @@ begin  -- syn
         rd_ptr_p0        <= (others => '0');
         wr_ptr_p1        <= (others => '0');
         real_nomem       <= '0';
-        real_nomem_d0    <= '0';
-        real_nomem_d1    <= '0';
+        out_nomem_d0     <= '0';
+        out_nomem_d1     <= '0';
         free_pages       <= to_unsigned(g_num_pages-1, free_pages'length);
         q_read_d1        <= '0';
       else
         q_read_d1        <= q_read_p0;
-        real_nomem_d0    <= real_nomem;
-        real_nomem_d1    <= real_nomem_d0;
+        -- so.. we remember the outputed nomem info and use it later to process allocations
+        -- which happened in the first cycle of nomem output 
+        out_nomem_d0     <= out_nomem; 
+        out_nomem_d1     <= out_nomem_d0;
 
         if(initializing = '1') then
           if(wr_ptr_p1 = g_num_pages-1) then
@@ -508,7 +510,7 @@ begin  -- syn
       if (rst_n_i = '0') or (initializing = '1') then
         done_p1 <= '0';
       else
-        if(((alloc_req_d0.alloc      = '1'  and real_nomem_d1     = '0') or 
+        if(((alloc_req_d0.alloc      = '1'  and out_nomem_d1      = '0') or 
              alloc_req_d0.set_usecnt = '1'  or  alloc_req_d0.free = '1'  or 
              alloc_req_d0.f_free     = '1') and initializing      = '0') then
           done_p1 <= '1';
