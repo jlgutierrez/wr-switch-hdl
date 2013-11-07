@@ -177,7 +177,7 @@ architecture rtl of mpm_read_path is
   type t_rport_core_state_array is array(integer range <>) of t_rport_core_state;
   type t_rport_io_state_array is array(integer range <>) of t_rport_io_state;
 
-  signal mem_req, mem_grant : std_logic_vector(g_num_ports-1 downto 0);
+  signal mem_req, mem_grant, mem_grant_sreg : std_logic_vector(g_num_ports-1 downto 0);
   signal ll_req, ll_grant   : std_logic_vector(g_num_ports-1 downto 0);
 
   signal io   : t_rport_io_state_array(g_num_ports-1 downto 0);
@@ -235,25 +235,42 @@ begin  -- rtl
   end generate gen_serialize_ios;
 
   -- The actual round-robin arbiter for muxing memory accesses.
-  --p_mem_arbiter : process(clk_core_i)
-  --begin
-  --  if rising_edge(clk_core_i) then
-  --    if rst_n_core_i = '0' then
-  --      mem_grant <= (others => '0');
-  --    else
-  --      f_rr_arbitrate(mem_req, mem_grant, mem_grant);
-  --    end if;
-  --  end if;
-  --end process;
+--   p_mem_arbiter : process(clk_core_i)
+--   begin
+--    if rising_edge(clk_core_i) then
+--      if rst_n_core_i = '0' then
+--        mem_grant <= (others => '0');
+--      else
+--        f_rr_arbitrate(mem_req, mem_grant, mem_grant);
+--      end if;
+--    end if;
+--   end process;
 
-  U_Mem_Arbiter: gc_rr_arbiter
-    generic map (
-      g_size => g_num_ports)
-    port map (
-      clk_i   => clk_core_i,
-      rst_n_i => rst_n_core_i,
-      req_i   => mem_req,
-      grant_o => mem_grant);
+--   U_Mem_Arbiter: gc_rr_arbiter
+--     generic map (
+--       g_size => g_num_ports)
+--     port map (
+--       clk_i   => clk_core_i,
+--       rst_n_i => rst_n_core_i,
+--       req_i   => mem_req,
+--       grant_o => mem_grant);
+      
+
+  p_mem_arbiter : process(clk_core_i)
+  begin
+   if rising_edge(clk_core_i) then
+     if rst_n_core_i = '0' then
+       mem_grant                              <= (others => '0');
+       mem_grant_sreg(g_num_ports-1 downto 1) <= (others => '0');
+       mem_grant_sreg(0)                      <= '1';
+     else
+       -- spartan arbieter
+       mem_grant_sreg <= mem_grant_sreg(g_num_ports-2 downto 0) & mem_grant_sreg(g_num_ports-1); -- shift
+       mem_grant      <= mem_grant_sreg and mem_req;
+     end if;
+   end if;
+  end process;
+  
 
   gen_mux_inputs : for i in 0 to g_num_ports-1 generate
     rd_mux_a_in(c_fbm_addr_width * (i + 1) - 1 downto c_fbm_addr_width * i) <= core(i).fbm_addr;
@@ -328,17 +345,17 @@ begin  -- rtl
 --     logic_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i)) and (not rport_abort_d(i));
   end generate gen_fifos;
 
--- The arbiter for accessing the linked list
-  --p_ll_arbiter : process(clk_io_i)
-  --begin
-  --  if rising_edge(clk_io_i) then
-  --    if rst_n_io_i = '0' then
-  --      ll_grant <= (others => '0');
-  --    else
-  --      f_rr_arbitrate(ll_req, ll_grant, ll_grant);
-  --    end if;
-  --  end if;
-  --end process;
+  --The arbiter for accessing the linked list
+--   p_ll_arbiter : process(clk_io_i)
+--   begin
+--    if rising_edge(clk_io_i) then
+--      if rst_n_io_i = '0' then
+--        ll_grant <= (others => '0');
+--      else
+--        f_rr_arbitrate(ll_req, ll_grant, ll_grant);
+--      end if;
+--    end if;
+--   end process;
 
   gen_ll_access_arbiter : for i in 0 to g_num_ports-1 generate
     ll_req(i)           <= io(i).ll_req ; --and not io(i).ll_grant;
