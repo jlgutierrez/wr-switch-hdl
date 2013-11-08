@@ -2322,7 +2322,8 @@ alloc_FSM <= "000" when (s_page_alloc = S_IDLE) else
              "001" when (s_page_alloc = S_PCKSTART_SET_USECNT) else
              "010" when (s_page_alloc = S_PCKSTART_PAGE_REQ) else
              "011" when (s_page_alloc = S_PCKINTER_PAGE_REQ) else
-             "100";
+             "100" when (s_page_alloc = S_PCKSTART_SET_AND_REQ) else
+             "101" ;
 trans_FSM <= x"0" when (s_transfer_pck = S_IDLE) else
              x"1" when (s_transfer_pck = S_READY) else
              x"2" when (s_transfer_pck = S_WAIT_RTU_VALID) else
