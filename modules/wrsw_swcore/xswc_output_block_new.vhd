@@ -294,9 +294,20 @@ architecture behavoural of xswc_output_block_new is
   
   signal ifg_count : unsigned(3 downto 0);
   signal cyc_d0    : std_logic;
+  signal drop_at_retry : std_logic; -- 
 
-  constant tx_interframe_gap: unsigned(3 downto 0) := x"2";
-
+  constant tx_interframe_gap      : unsigned(3 downto 0) := x"1";-- x"2"; !!!! changed it on 8-Nov-2013, brave thing to change something that almost works
+  
+  -- if TRUE,  any time a retry request is received from EP (most probably PCS), the request
+  -- will be ignored and frame dumped 
+  --    NOTE: usually, such retry requets comes because there is a problem on input (e.g.: PAUSE
+  --          and a "hole" in memory is created, PCS stops receiving data (unacceptable) so it 
+  --          gets lost -> tries again to send out the frame. usually in ends up in infinite
+  --          retry of sending the same frame
+  --    
+  -- if FALSE, when a retry requsts comes from EP, it will be handled only if output queues are free
+  constant c_always_drop_at_retry : boolean := true;
+  
 begin  --  behavoural
 
   wrf_status_err.is_hp       <= '0';
@@ -762,7 +773,7 @@ begin  --  behavoural
               src_out_int.stb <= mpm_dvalid_i;
             end if;
 
-            if(src_i.err = '1') then
+            if(src_i.err = '1' or drop_at_retry = '1') then
               s_send_pck      <= S_EOF;      -- we free page in EOF
               src_out_int.cyc <= '0';
               src_out_int.stb <= '0';
@@ -957,6 +968,12 @@ begin  --  behavoural
                  (src_out_int.adr = c_WRF_STATUS) and  -- the address indicates status *and*
                  (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else  -- the status indicates error       
                  '0';
+  drop_at_retry <= '1' when (c_always_drop_at_retry     = true  and 
+                             src_i.rty                  = '1') else
+                   '1' when (c_always_drop_at_retry     = false and 
+                             src_i.rty                  = '1' and 
+                              not_empty_and_shaped_array = zeros) else
+                   '0' ;
 
 --dsel--  mpm2wb_adr_int <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
 --dsel--  mpm2wb_sel_int <= '1' & mpm_dsel_i;   -- TODO: something generic
