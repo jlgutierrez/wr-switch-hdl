@@ -139,7 +139,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"11_09_13_00"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"08_11_13_00"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
@@ -270,7 +270,7 @@ architecture rtl of scb_top_bare is
 
   signal rtu_req                            : t_rtu_request_array(c_NUM_PORTS downto 0);
   signal rtu_rsp                            : t_rtu_response_array(c_NUM_PORTS downto 0);
-  signal rtu_req_ack, rtu_full, rtu_rsp_ack : std_logic_vector(c_NUM_PORTS downto 0);
+  signal rtu_req_ack, rtu_full, rtu_rsp_ack, rtu_rq_abort: std_logic_vector(c_NUM_PORTS downto 0);
 
 -- System clock selection: 0 = startup clock, 1 = PLL clock
   signal sel_clk_sys, sel_clk_sys_int : std_logic;
@@ -545,7 +545,6 @@ begin
         wb_o                => cnx_master_in(c_SLAVE_NIC));
   
     rtu_rsp(c_NUM_PORTS).hp <= '0';
-  
     fc_rx_pause(c_NUM_PORTS)       <= c_zero_pause; -- no pause for NIC  
     
     U_Endpoint_Fanout : xwb_crossbar
@@ -614,6 +613,7 @@ begin
 
           rtu_full_i         => rtu_full(i),
           rtu_rq_strobe_p1_o => rtu_req(i).valid,
+          rtu_rq_abort_o     => rtu_rq_abort(i),
           rtu_rq_smac_o      => rtu_req(i).smac,
           rtu_rq_dmac_o      => rtu_req(i).dmac,
           rtu_rq_prio_o      => rtu_req(i).prio,
@@ -734,8 +734,9 @@ begin
 
         dbg_o     => dbg_n_regs(32+c_DBG_V_SWCORE-1 downto 32), 
         
-        rtu_rsp_i => rtu_rsp,
-        rtu_ack_o => rtu_rsp_ack
+        rtu_rsp_i       => rtu_rsp,
+        rtu_ack_o       => rtu_rsp_ack,
+        rtu_abort_o     => open --rtu_rsp_abort
         );
      
     -- SWcore global pause nr=0 assigned to TRU
@@ -776,6 +777,7 @@ begin
         req_full_o => rtu_full(g_num_ports-1 downto 0),
         rsp_o      => rtu_rsp(g_num_ports-1 downto 0),
         rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
+        rq_abort_i => rtu_rq_abort(g_num_ports-1 downto 0),
         ------ new TRU stuff ----------
         tru_req_o  => tru_req,
         tru_resp_i => tru_resp,
@@ -1075,7 +1077,7 @@ begin
   clk_sel_o         <= '0';
   clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
   clk_sys_o         <= clk_sys;
-  
+--   
   CS_ICON : chipscope_icon
    port map (
     CONTROL0 => CONTROL0);
@@ -1114,22 +1116,22 @@ begin
 --   TRIG3(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
 
   ----------------------------- dbg_epj.v2
---   TRIG0(15    downto   0) <= phys_i(0).rx_data;
---   TRIG0(17    downto  16) <= phys_i(0).rx_k;
---   TRIG0(              18) <= phys_i(0).rx_enc_err;
---   TRIG0(23    downto  19) <= phys_i(0).rx_bitslide;
---   TRIG0(31    downto  24) <= ep_dbg_rx_buf_array(0);
--- 
---   TRIG1(29    downto   0) <= ep_dbg_fab_pipes_array(0)(29 downto 0); -- rx_path
--- 
---   TRIG2(11    downto   0) <= ep_dbg_fab_pipes_array(7)(43 downto 32); -- tx_path
---   TRIG2(29    downto  20) <= dbg_n_regs(41 downto 32) ; -- unknow resources
--- 
---   TRIG3(15    downto   0) <= ep_dbg_data_array(7);
---   TRIG3(17    downto  16) <= ep_dbg_k_array(7);
---   TRIG3(              18) <= phys_i(7).tx_enc_err;
---   TRIG3(              19) <= phys_i(7).tx_disparity;
---   TRIG3(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
+  TRIG0(15    downto   0) <= phys_i(0).rx_data;
+  TRIG0(17    downto  16) <= phys_i(0).rx_k;
+  TRIG0(              18) <= phys_i(0).rx_enc_err;
+  TRIG0(23    downto  19) <= phys_i(0).rx_bitslide;
+  TRIG0(31    downto  24) <= ep_dbg_rx_buf_array(0);
+
+  TRIG1(29    downto   0) <= ep_dbg_fab_pipes_array(0)(29 downto 0); -- rx_path
+
+  TRIG2(11    downto   0) <= ep_dbg_fab_pipes_array(7)(43 downto 32); -- tx_path
+  TRIG2(29    downto  20) <= dbg_n_regs(41 downto 32) ; -- unknow resources
+
+  TRIG3(15    downto   0) <= ep_dbg_data_array(7);
+  TRIG3(17    downto  16) <= ep_dbg_k_array(7);
+  TRIG3(              18) <= phys_i(7).tx_enc_err;
+  TRIG3(              19) <= phys_i(7).tx_disparity;
+  TRIG3(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
 
 --   ----------------------------- dbg_epj.v3
 --   TRIG0(15    downto   0) <= phys_i(0).rx_data;
@@ -1199,33 +1201,33 @@ begin
 -- 
 
   ----------------------------- dbg_epj.v6
-  TRIG0(15    downto   0) <= phys_i(0).rx_data;
-  TRIG0(17    downto  16) <= phys_i(0).rx_k;
-  TRIG0(              18) <= phys_i(0).rx_enc_err;
-  TRIG0(31    downto  22) <= ep_dbg_tx_pcs_wr_array(7);
-
-  TRIG1(15    downto   0) <= endpoint_src_out(0).dat;
-  TRIG1(              16) <= endpoint_src_out(0).cyc;
-  TRIG1(              17) <= endpoint_src_out(0).stb;
-  TRIG1(              18) <= endpoint_src_in(0).stall;
-  TRIG1(              19) <= endpoint_src_in(0).err;
-  TRIG1(31    downto  22) <= ep_dbg_tx_pcs_rd_array(7);
-
-
-  TRIG2(15    downto   0) <= endpoint_snk_in(7).dat;
-  TRIG2(17    downto  16) <= endpoint_snk_in(7).adr;
-  TRIG2(              18) <= endpoint_snk_in(7).cyc;
-  TRIG2(              19) <= endpoint_snk_in(7).stb;
-  TRIG2(              20) <= endpoint_snk_in(7).stb;
-  TRIG2(              21) <= endpoint_snk_out(7).stall;
-  TRIG2(              22) <= endpoint_snk_out(7).ack;
-  TRIG2(              23) <= endpoint_snk_out(7).err;
-  TRIG2(31    downto  24) <= dbg_n_regs(39 downto 32) ; -- unknow resources
-
-  TRIG3(15    downto   0) <= ep_dbg_data_array(7);
-  TRIG3(17    downto  16) <= ep_dbg_k_array(7);
-  TRIG3(              18) <= phys_i(7).tx_enc_err;
-  TRIG3(              19) <= phys_i(7).tx_disparity;
-  TRIG3(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
+--   TRIG0(15    downto   0) <= phys_i(0).rx_data;
+--   TRIG0(17    downto  16) <= phys_i(0).rx_k;
+--   TRIG0(              18) <= phys_i(0).rx_enc_err;
+--   TRIG0(31    downto  22) <= ep_dbg_tx_pcs_wr_array(7);
+-- 
+--   TRIG1(15    downto   0) <= endpoint_src_out(0).dat;
+--   TRIG1(              16) <= endpoint_src_out(0).cyc;
+--   TRIG1(              17) <= endpoint_src_out(0).stb;
+--   TRIG1(              18) <= endpoint_src_in(0).stall;
+--   TRIG1(              19) <= endpoint_src_in(0).err;
+--   TRIG1(31    downto  22) <= ep_dbg_tx_pcs_rd_array(7);
+-- 
+-- 
+--   TRIG2(15    downto   0) <= endpoint_snk_in(7).dat;
+--   TRIG2(17    downto  16) <= endpoint_snk_in(7).adr;
+--   TRIG2(              18) <= endpoint_snk_in(7).cyc;
+--   TRIG2(              19) <= endpoint_snk_in(7).stb;
+--   TRIG2(              20) <= endpoint_snk_in(7).stb;
+--   TRIG2(              21) <= endpoint_snk_out(7).stall;
+--   TRIG2(              22) <= endpoint_snk_out(7).ack;
+--   TRIG2(              23) <= endpoint_snk_out(7).err;
+--   TRIG2(31    downto  24) <= dbg_n_regs(39 downto 32) ; -- unknow resources
+-- 
+--   TRIG3(15    downto   0) <= ep_dbg_data_array(7);
+--   TRIG3(17    downto  16) <= ep_dbg_k_array(7);
+--   TRIG3(              18) <= phys_i(7).tx_enc_err;
+--   TRIG3(              19) <= phys_i(7).tx_disparity;
+--   TRIG3(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
 
 end rtl;

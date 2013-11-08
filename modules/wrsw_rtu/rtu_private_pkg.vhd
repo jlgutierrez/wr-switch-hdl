@@ -293,7 +293,8 @@ package rtu_private_pkg is
       rst_n_i                   : in std_logic;
       rtu_idle_o                : out std_logic;
       rtu_rq_i                  : in  t_rtu_request;
-      rtu_rq_aboard_i           : in  std_logic;
+      rtu_rq_abort_i            : in  std_logic;
+      rtu_rsp_abort_i           : in  std_logic;
       rtu_rsp_o                 : out t_rtu_response;
       rtu_rsp_ack_i             : in std_logic;
       full_match_wr_req_o       : out std_logic;

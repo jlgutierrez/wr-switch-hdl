@@ -304,7 +304,8 @@ package wrsw_top_pkg is
       shaper_drop_at_hp_ena_i   : in  std_logic := '0';
       dbg_o                      : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0);
       rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
-      rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)
+      rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0);
+      rtu_abort_o    : out std_logic_vector(g_num_ports  - 1 downto 0)
       );
   end component;
 
@@ -348,6 +349,7 @@ package wrsw_top_pkg is
       req_full_o  : out std_logic_vector(g_num_ports-1 downto 0);
       rsp_o       : out t_rtu_response_array(g_num_ports-1 downto 0);
       rsp_ack_i   : in  std_logic_vector(g_num_ports-1 downto 0);
+      rq_abort_i : in  std_logic_vector(g_num_ports-1 downto 0);
       tru_req_o   : out  t_tru_request;
       tru_resp_i  : in   t_tru_response;  
       rtu2tru_o   : out  t_rtu2tru;

@@ -187,6 +187,7 @@ entity xswc_input_block is
 
     rtu_rsp_valid_i     : in  std_logic;
     rtu_rsp_ack_o       : out std_logic;
+    rtu_rsp_abort_o     : out std_logic;
     rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
     rtu_hp_i            : in  std_logic; 
     rtu_drop_i          : in  std_logic;

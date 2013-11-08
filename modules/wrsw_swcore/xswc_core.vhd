@@ -123,7 +123,8 @@ entity xswc_core is
 -------------------------------------------------------------------------------      
     
     rtu_rsp_i                 : in t_rtu_response_array(g_num_ports  - 1 downto 0);
-    rtu_ack_o                 : out std_logic_vector(g_num_ports  - 1 downto 0)
+    rtu_ack_o                 : out std_logic_vector(g_num_ports  - 1 downto 0);
+    rtu_abort_o               : out std_logic_vector(g_num_ports  - 1 downto 0)
 
     );
 end xswc_core;
@@ -438,7 +439,8 @@ architecture rtl of xswc_core is
         -------------------------------------------------------------------------------
         -- I/F with Routing Table Unit (RTU)
         -------------------------------------------------------------------------------      
-        rtu_rsp_ack_o            => rtu_ack_o(i),        
+        rtu_rsp_ack_o            => rtu_ack_o(i),    
+        rtu_rsp_abort_o          => rtu_abort_o(i),    
         rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
         rtu_dst_port_mask_i      => rtu_rsp_i(i).port_mask(g_num_ports  - 1 downto 0),
         rtu_hp_i                 => rtu_rsp_i(i).hp, --'0', -- TODO: add stuff to RTU
