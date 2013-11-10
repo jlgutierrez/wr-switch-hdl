@@ -973,7 +973,16 @@ begin  --archS_PCKSTART_SET_AND_REQ
                 s_rcv_pck <= S_WAIT_FORCE_FREE;
               else
                 mmu_force_free_req <= '1';
-                s_rcv_pck          <= S_DROP;
+                 
+                -- it might happen that drop decision comes in the cycle when EOF - can go 
+                -- straight to IDLE
+                if(in_pck_eof = '1') then
+                  snk_stall_force_h <= '0';
+                  snk_stall_force_l <= '1';
+                  s_rcv_pck         <= S_IDLE;
+                else
+                  s_rcv_pck         <= S_DROP;
+                end if;
               end if;
 
               snk_stall_force_l <= '0';
@@ -1002,7 +1011,8 @@ begin  --archS_PCKSTART_SET_AND_REQ
              
               if(mem_full_dump ='1') then 
                 -- stay in the the same state, we already set rp_in_pck_err and the problem
-                -- will be handled in the next cycle as error
+                -- will be handled in the next cycle as error.
+                -- if this happens when EOF, we are fine cause EOF was already handled
                 s_rcv_pck         <= S_DROP;
               else
                 -- hopefully will not happen
