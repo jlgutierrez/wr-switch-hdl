@@ -139,14 +139,15 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"08_11_13_00"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"12_11_13_01"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
   constant c_RTU_EVENTS    : integer := 9; -- number of RMON events per port
-  constant c_DBG_V_SWCORE  : integer := (3*10) + 2 +    -- 3 resources, each has with of CNT of 10 bits +2 to make it 32
-                                        (g_num_ports+1)*16; -- states of input blocks (including NIC)
+  constant c_DBG_V_SWCORE  : integer := (3*10) + 2 +         -- 3 resources, each has with of CNT of 10 bits +2 to make it 32
+                                        (g_num_ports+1)*16  + -- states of input blocks (including NIC)
+                                        (g_num_ports+1)*8;   -- states of output blocks (including NIC)
   constant c_DBG_N_REGS    : integer := 1 + integer(ceil(real(c_DBG_V_SWCORE)/real(32))); -- 32-bits debug registers which go to HWDU
   constant c_TRU_EVENTS    : integer := 1;
   constant c_ALL_EVENTS    : integer := c_TRU_EVENTS + c_RTU_EVENTS + c_epevents_sz;
@@ -297,11 +298,17 @@ architecture rtl of scb_top_bare is
   -----------------------------------------------------------------------------
 
   signal vic_irqs : std_logic_vector(31 downto 0);
+  type t_trig is array(integer range <>) of std_logic_vector(31 downto 0);
 
   signal control0                   : std_logic_vector(35 downto 0);
-  signal trig0, trig1, trig2, trig3 : std_logic_vector(31 downto 0);
+  signal trig0, trig1, trig2, trig3 : t_trig(7 downto 0);--std_logic_vector(31 downto 0);
+  signal t0, t1, t2, t3             : std_logic_vector(31 downto 0);
   signal rst_n_periph               : std_logic;
   signal link_kill                  : std_logic_vector(c_NUM_PORTS-1 downto 0);
+
+ 
+
+
 
   function f_fabric_2_slv (
     in_i : t_wrf_sink_in;
@@ -390,6 +397,8 @@ architecture rtl of scb_top_bare is
   signal ep_dbg_fab_pipes_array : t_ep_dbg_fab_pipes_array(g_num_ports-1 downto 0);
   signal ep_dbg_tx_pcs_wr_array : t_ep_dbg_tx_pcs_array(g_num_ports-1 downto 0);
   signal ep_dbg_tx_pcs_rd_array : t_ep_dbg_tx_pcs_array(g_num_ports-1 downto 0);
+  signal dbg_chps_id          : std_logic_vector(7 downto 0);
+  
 begin
 
 
@@ -400,6 +409,7 @@ begin
   --CS_ILA : chipscope_ila
   --  port map (
   --    CONTROL => CONTROL0,
+
   --    CLK     => clk_sys,
   --    TRIG0   => TRIG0,
   --    TRIG1   => TRIG1,
@@ -708,9 +718,9 @@ begin
         g_wb_addr_width                   => 2,
         g_wb_sel_width                    => 2,
         g_wb_ob_ignore_ack                => false,
-        g_mpm_mem_size                    => 67584,
-        g_mpm_page_size                   => 66,
-        g_mpm_ratio                       => 6,  --f_swc_ratio,  --2
+        g_mpm_mem_size                    => 65536, --test: 61440,--old: 65536,
+        g_mpm_page_size                   => 64,    --test:    60,--old: 64,
+        g_mpm_ratio                       => 8,     --test:    10,--old: 8,  --f_swc_ratio,  --2
         g_mpm_fifo_size                   => 8,
         g_mpm_fetch_next_pg_in_advance    => false,
         g_drop_outqueue_head_on_full      => true,
@@ -1001,7 +1011,7 @@ begin
         clk_i   => clk_sys,
 
         dbg_regs_i  => dbg_n_regs,
-
+        dbg_chps_id_o => dbg_chps_id,
         wb_i  => cnx_master_out(c_SLAVE_HWDU),
         wb_o  => cnx_master_in(c_SLAVE_HWDU));
 
@@ -1014,6 +1024,7 @@ begin
       cnx_master_in(c_SLAVE_HWDU).err   <= '0';
       cnx_master_in(c_SLAVE_HWDU).stall <= '0';
       cnx_master_in(c_SLAVE_HWDU).rty   <= '0';
+      dbg_chps_id                       <= (others =>'0');
     end generate;
 
 
@@ -1084,11 +1095,16 @@ begin
   CS_ILA : chipscope_ila
    port map (
      CONTROL => CONTROL0,
-     CLK     => phys_i(0).rx_clk,
-     TRIG0   => TRIG0,
-     TRIG1   => TRIG1,
-     TRIG2   => TRIG2,
-     TRIG3   => TRIG3);
+     CLK     => clk_sys, --phys_i(0).rx_clk,
+     TRIG0   => T0,
+     TRIG1   => T1,
+     TRIG2   => T2,
+     TRIG3   => T3);
+
+     T0   <= TRIG0(to_integer(unsigned(dbg_chps_id)));
+     T1   <= TRIG1(to_integer(unsigned(dbg_chps_id)));
+     T2   <= TRIG2(to_integer(unsigned(dbg_chps_id)));
+     T3   <= TRIG3(to_integer(unsigned(dbg_chps_id)));
 
   --------------------------- dbg_epj
 --   TRIG0(15    downto   0) <= phys_i(0).rx_data;
@@ -1115,23 +1131,23 @@ begin
 --   TRIG3(              19) <= phys_i(7).tx_disparity;
 --   TRIG3(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
 
-  ----------------------------- dbg_epj.v2
-  TRIG0(15    downto   0) <= phys_i(0).rx_data;
-  TRIG0(17    downto  16) <= phys_i(0).rx_k;
-  TRIG0(              18) <= phys_i(0).rx_enc_err;
-  TRIG0(23    downto  19) <= phys_i(0).rx_bitslide;
-  TRIG0(31    downto  24) <= ep_dbg_rx_buf_array(0);
+--   ----------------------------- dbg_epj.v2
+  TRIG0(1)(15    downto   0) <= phys_i(0).rx_data;
+  TRIG0(1)(17    downto  16) <= phys_i(0).rx_k;
+  TRIG0(1)(              18) <= phys_i(0).rx_enc_err;
+  TRIG0(1)(23    downto  19) <= phys_i(0).rx_bitslide;
+  TRIG0(1)(31    downto  24) <= ep_dbg_rx_buf_array(0);
 
-  TRIG1(29    downto   0) <= ep_dbg_fab_pipes_array(0)(29 downto 0); -- rx_path
+  TRIG1(1)(29    downto   0) <= ep_dbg_fab_pipes_array(0)(29 downto 0); -- rx_path
 
-  TRIG2(11    downto   0) <= ep_dbg_fab_pipes_array(7)(43 downto 32); -- tx_path
-  TRIG2(29    downto  20) <= dbg_n_regs(41 downto 32) ; -- unknow resources
+  TRIG2(1)(11    downto   0) <= ep_dbg_fab_pipes_array(7)(43 downto 32); -- tx_path
+  TRIG2(1)(29    downto  20) <= dbg_n_regs(41 downto 32) ; -- unknow resources
 
-  TRIG3(15    downto   0) <= ep_dbg_data_array(7);
-  TRIG3(17    downto  16) <= ep_dbg_k_array(7);
-  TRIG3(              18) <= phys_i(7).tx_enc_err;
-  TRIG3(              19) <= phys_i(7).tx_disparity;
-  TRIG3(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
+  TRIG3(1)(15    downto   0) <= ep_dbg_data_array(7);
+  TRIG3(1)(17    downto  16) <= ep_dbg_k_array(7);
+  TRIG3(1)(              18) <= phys_i(7).tx_enc_err;
+  TRIG3(1)(              19) <= phys_i(7).tx_disparity;
+  TRIG3(1)(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
 
 --   ----------------------------- dbg_epj.v3
 --   TRIG0(15    downto   0) <= phys_i(0).rx_data;
@@ -1229,5 +1245,107 @@ begin
 --   TRIG3(              18) <= phys_i(7).tx_enc_err;
 --   TRIG3(              19) <= phys_i(7).tx_disparity;
 --   TRIG3(29    downto  20) <= dbg_n_regs(61 downto 52) ; -- normal resources
+
+
+  ----------------------------- dbg_epj new-v7
+  TRIG0(0)(15    downto   0) <= phys_i(0).rx_data          ;            
+  TRIG0(0)(17    downto  16) <= phys_i(0).rx_k;
+  TRIG0(0)(              18) <= phys_i(0).rx_enc_err;
+  TRIG0(0)(20    downto  19) <= ep_dbg_k_array(7);
+
+  TRIG0(0)(              24) <= endpoint_src_out(0).cyc;
+  TRIG0(0)(              25) <= endpoint_src_out(0).stb;
+  TRIG0(0)(              26) <= endpoint_src_in(0).stall;
+  TRIG0(0)(              27) <= endpoint_src_in(0).err;
+  TRIG0(0)(              28) <= endpoint_src_in(0).ack;
+  TRIG0(0)(              29) <= endpoint_snk_in(7).cyc;
+  TRIG0(0)(              30) <= endpoint_snk_in(7).stb;
+  TRIG0(0)(              31) <= endpoint_snk_out(7).stall;
+
+
+  TRIG1(0)(29    downto   0) <= ep_dbg_fab_pipes_array(0)(29 downto 0); -- rx_path
+  TRIG1(0)(              30) <= endpoint_snk_out(7).ack;
+  TRIG1(0)(              31) <= endpoint_snk_out(7).err;
+
+  TRIG2(0)(11    downto   0) <= ep_dbg_fab_pipes_array(7)(43 downto 32); -- tx_path
+  TRIG2(0)(29    downto  20) <= dbg_n_regs(41 downto 32) ; -- unknow resources
+  TRIG2(0)(              30) <= phys_i(7).tx_enc_err;
+  TRIG2(0)(              31) <= phys_i(7).tx_disparity;
+
+
+  TRIG3(0)(15    downto   0) <= ep_dbg_data_array(7);
+  TRIG3(0)(23    downto  16) <= endpoint_snk_in(7).dat(7 downto 0);
+  
+  gen_18P_out_blk_states: if(g_num_ports = 18 ) generate 
+    TRIG3(0)(31    downto  24) <= dbg_n_regs(431 downto 424); -- for 18 ports: should be states of output block i SWcore
+  end generate gen_18P_out_blk_states;
+  gen_8P_out_blk_states: if(g_num_ports = 8 ) generate 
+    TRIG3(0)(31    downto  24) <= dbg_n_regs(271 downto 264); -- for 8 ports: should be states of output block i SWcore
+  end generate gen_8P_out_blk_states;
+
+
+  ----------------------------- dbg_epj new - v8
+--   TRIG0(2)(15    downto   0) <= phys_i(0).rx_data          ;            
+--   TRIG0(2)(17    downto  16) <= phys_i(0).rx_k;
+--   TRIG0(2)(              18) <= phys_i(0).rx_enc_err;
+--   TRIG0(2)(20    downto  19) <= ep_dbg_k_array(7);
+-- 
+--   TRIG0(2)(              24) <= endpoint_src_out(0).cyc;
+--   TRIG0(2)(              25) <= endpoint_src_out(0).stb;
+--   TRIG0(2)(              26) <= endpoint_src_in(0).stall;
+--   TRIG0(2)(              27) <= endpoint_src_in(0).err;
+--   TRIG0(2)(              28) <= endpoint_src_in(0).ack;
+--   TRIG0(2)(              29) <= endpoint_snk_in(7).cyc;
+--   TRIG0(2)(              30) <= endpoint_snk_in(7).stb;
+--   TRIG0(2)(              31) <= endpoint_snk_out(7).stall;
+-- 
+-- 
+--   TRIG1(2)(29    downto   0) <= ep_dbg_fab_pipes_array(0)(29 downto 0); -- rx_path
+--   TRIG1(2)(              30) <= endpoint_snk_out(7).ack;
+--   TRIG1(2)(              31) <= endpoint_snk_out(7).err;
+-- 
+--   TRIG2(2)(11    downto   0) <= ep_dbg_fab_pipes_array(7)(43 downto 32); -- tx_path
+--   TRIG2(2)(29    downto  20) <= dbg_n_regs(41 downto 32) ; -- unknow resources
+--   TRIG2(2)(              30) <= phys_i(7).tx_enc_err;
+--   TRIG2(2)(              31) <= phys_i(7).tx_disparity;
+-- 
+--   TRIG3(2)(7    downto   0) <= dbg_n_regs(239 downto 232); 
+--   TRIG3(2)(21    downto  12) <= ep_dbg_tx_pcs_wr_array(0);
+--   TRIG3(2)(31    downto  22) <= ep_dbg_tx_pcs_rd_array(7);
+-- 
+--   ----------------------------- dbg_epj new-v7
+--   TRIG0(3)(15    downto   0) <= phys_i(0).rx_data          ;            
+--   TRIG0(3)(17    downto  16) <= phys_i(0).rx_k;
+--   TRIG0(3)(              18) <= phys_i(0).rx_enc_err;
+--   TRIG0(3)(20    downto  19) <= ep_dbg_k_array(7);
+-- 
+--   TRIG0(3)(              24) <= endpoint_src_out(0).cyc;
+--   TRIG0(3)(              25) <= endpoint_src_out(0).stb;
+--   TRIG0(3)(              26) <= endpoint_src_in(0).stall;
+--   TRIG0(3)(              27) <= endpoint_src_in(0).err;
+--   TRIG0(3)(              28) <= endpoint_src_in(0).ack;
+--   TRIG0(3)(              29) <= endpoint_snk_in(1).cyc;
+--   TRIG0(3)(              30) <= endpoint_snk_in(1).stb;
+--   TRIG0(3)(              31) <= endpoint_snk_out(1).stall;
+-- 
+-- 
+--   TRIG1(3)(29    downto   0) <= ep_dbg_fab_pipes_array(0)(29 downto 0); -- rx_path
+--   TRIG1(3)(              30) <= endpoint_snk_out(1).ack;
+--   TRIG1(3)(              31) <= endpoint_snk_out(1).err;
+-- 
+--   TRIG2(3)(11    downto   0) <= ep_dbg_fab_pipes_array(1)(43 downto 32); -- tx_path
+--   TRIG2(3)(29    downto  20) <= dbg_n_regs(41 downto 32) ; -- unknow resources
+--   TRIG2(3)(              30) <= phys_i(1).tx_enc_err;
+--   TRIG2(3)(              31) <= phys_i(1).tx_disparity;
+-- 
+-- 
+--   TRIG3(3)(15    downto   0) <= ep_dbg_data_array(1);
+--   TRIG3(3)(23    downto  16) <= endpoint_snk_in(7).dat(7 downto 0);
+--   gen_18P_out_blk_states: if(g_num_ports = 18 ) generate 
+--     TRIG3(3)(31    downto  24) <= dbg_n_regs(431 downto 424); -- for 18 ports: should be states of output block i SWcore
+--   end generate gen_18P_out_blk_states;
+--   gen_8P_out_blk_states: if(g_num_ports = 8 ) generate 
+--     TRIG3(3)(31    downto  24) <= dbg_n_regs(271 downto 264); -- for 8 ports: should be states of output block i SWcore
+--   end generate gen_8P_out_blk_states;
 
 end rtl;
