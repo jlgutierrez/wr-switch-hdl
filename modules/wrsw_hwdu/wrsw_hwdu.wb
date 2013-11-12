@@ -69,5 +69,18 @@ peripheral {
       access_dev = WRITE_ONLY;
     };
   };
+  reg {
+    name = "Choose Chipscope input";
+    description = "Single chipscope module is connected to a MUX, this register is used to contol the MUX";
+    prefix = "CHPS_ID";
+
+    field {
+      name = "MUX ID";
+      size = 8;
+      type = SLV;
+      access_bus = READ_WRITE;
+      access_dev = READ_ONLY;
+    };
+  };
 
 };

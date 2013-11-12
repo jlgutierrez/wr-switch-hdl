@@ -35,8 +35,9 @@ entity wrsw_hwdu is
     clk_i   : in std_logic;
 
     dbg_regs_i : in std_logic_vector(g_nregs*g_rwidth-1 downto 0);
+    dbg_chps_id_o : out std_logic_vector(7 downto 0);
 
-    wb_adr_i   : in  std_logic_vector(0 downto 0);
+    wb_adr_i   : in  std_logic_vector(1 downto 0);
     wb_dat_i   : in  std_logic_vector(31 downto 0);
     wb_dat_o   : out std_logic_vector(31 downto 0);
     wb_cyc_i   : in  std_logic;
@@ -54,7 +55,7 @@ architecture behav of wrsw_hwdu is
     port (
       rst_n_i    : in  std_logic;
       clk_sys_i  : in  std_logic;
-      wb_adr_i   : in  std_logic_vector(0 downto 0);
+      wb_adr_i   : in  std_logic_vector(1 downto 0);
       wb_dat_i   : in  std_logic_vector(31 downto 0);
       wb_dat_o   : out std_logic_vector(31 downto 0);
       wb_cyc_i   : in  std_logic;
@@ -138,5 +139,6 @@ begin
     end if;
   end process;
 
+ dbg_chps_id_o <= wb_regs_out.chps_id_o;
 
 end behav;
