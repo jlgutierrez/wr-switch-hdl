@@ -501,6 +501,7 @@ package swc_swcore_pkg is
       g_mpm_partial_select_width         : integer ;
       g_mpm_fetch_next_pg_in_advance     : boolean := false;
       g_mmu_resource_num_width           : integer;
+      g_hwdu_output_block_width          : integer :=8;      
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;
       g_wb_sel_width                     : integer ;
@@ -532,6 +533,7 @@ package swc_swcore_pkg is
       ots_output_drop_at_rx_hp_i : in std_logic;      
       src_i : in  t_wrf_source_in;
       src_o : out t_wrf_source_out;
+      dbg_hwdu_o : out std_logic_vector(g_hwdu_output_block_width -1 downto 0);            
       tap_out_o : out std_logic_vector(15 downto 0)
 
       );

@@ -397,7 +397,8 @@ package wrsw_top_pkg is
       clk_i   : in std_logic;
   
       dbg_regs_i  : in std_logic_vector(g_nregs*g_rwidth-1 downto 0);
-  
+      dbg_chps_id_o : out std_logic_vector(7 downto 0);
+
       wb_i : in  t_wishbone_slave_in;
       wb_o : out t_wishbone_slave_out);
   end component;

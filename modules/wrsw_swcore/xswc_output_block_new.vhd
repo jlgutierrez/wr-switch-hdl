@@ -76,6 +76,7 @@ entity xswc_output_block_new is
     g_wb_data_width                   : integer;
     g_wb_addr_width                   : integer;
     g_wb_sel_width                    : integer;
+    g_hwdu_output_block_width         : integer := 8;
     g_wb_ob_ignore_ack                : boolean := true;
     g_drop_outqueue_head_on_full      : boolean := true
     );
@@ -129,6 +130,10 @@ entity xswc_output_block_new is
     src_i : in  t_wrf_source_in;
     src_o : out t_wrf_source_out;
 
+-------------------------------------------------------------------------------
+-- debugging
+-------------------------------------------------------------------------------  
+    dbg_hwdu_o : out std_logic_vector(g_hwdu_output_block_width -1 downto 0);
     tap_out_o : out std_logic_vector(15 downto 0)
     );
 end xswc_output_block_new;
@@ -295,6 +300,9 @@ architecture behavoural of xswc_output_block_new is
   signal ifg_count : unsigned(3 downto 0);
   signal cyc_d0    : std_logic;
   signal drop_at_retry : std_logic; -- 
+
+  signal send_FSM : std_logic_vector(3 downto 0);
+  signal prep_FSM : std_logic_vector(3 downto 0);
 
   constant tx_interframe_gap      : unsigned(3 downto 0) := x"1";-- x"2"; !!!! changed it on 8-Nov-2013, brave thing to change something that almost works
   
@@ -881,7 +889,9 @@ begin  --  behavoural
             --===========================================================================================
           when others =>
             --=========================================================================================== 
-            s_send_pck <= S_IDLE;
+            s_send_pck      <= S_IDLE;
+            src_out_int.cyc <= '0';
+            src_out_int.stb <= '0';
         end case;
       end if;
     end if;
@@ -1002,4 +1012,21 @@ begin  --  behavoural
   ppfm_free_o        <= ppfm_free;
   ppfm_free_pgaddr_o <= ppfm_free_pgaddr;
 
+  send_FSM  <= x"0" when (s_send_pck = S_IDLE) else
+               x"1" when (s_send_pck = S_DATA) else
+               x"2" when (s_send_pck = S_FLUSH_STALL) else
+               x"3" when (s_send_pck = S_FINISH_CYCLE) else
+               x"4" when (s_send_pck = S_EOF) else
+               x"5" when (s_send_pck = S_RETRY) else
+               x"6" when (s_send_pck = S_WAIT_FREE_PCK) else
+               x"7" ;
+
+  prep_FSM  <= x"5" when (s_prep_to_send = S_IDLE) else
+               x"1" when (s_prep_to_send = S_NEWPCK_PAGE_READY) else
+               x"2" when (s_prep_to_send = S_NEWPCK_PAGE_SET_IN_ADVANCE) else
+               x"3" when (s_prep_to_send = S_NEWPCK_PAGE_USED) else
+               x"4" when (s_prep_to_send = S_RETRY_PREPARE) else
+               x"0" when (s_prep_to_send = S_RETRY_READY) else
+               x"6" ;
+  dbg_hwdu_o(7 downto 0)<= send_FSM & prep_FSM;
 end behavoural;

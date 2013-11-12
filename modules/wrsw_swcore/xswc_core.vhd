@@ -153,6 +153,7 @@ architecture rtl of xswc_core is
    ----------------------------------------------
    constant c_hwdu_input_block_width          : integer := 16;
    constant c_hwdu_mmu_width                  : integer := 10*3;
+   constant c_hwdu_output_block_width         : integer := 8;
 
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Memory Management Unit<<
@@ -352,8 +353,10 @@ architecture rtl of xswc_core is
    signal mmu2ib_set_usecnt_succeeded : std_logic_vector(g_num_ports                                -1 downto 0);
    
    type t_hwdu_input_block_array is array(0 to g_num_ports-1) of std_logic_vector(c_hwdu_input_block_width-1 downto 0);
-  
+   type t_hwdu_output_block_array is array(0 to g_num_ports-1) of std_logic_vector(c_hwdu_output_block_width-1 downto 0);
+   
    signal hwdu_input_block            : t_hwdu_input_block_array;
+   signal hwdu_output_block           : t_hwdu_output_block_array;
    signal hwdu_mmu                    : std_logic_vector(c_hwdu_mmu_width                           -1 downto 0);
    
    signal dbg_pckstart_pageaddr : std_logic_vector(g_num_ports*c_mpm_page_addr_width - 1 downto 0);
@@ -559,7 +562,7 @@ architecture rtl of xswc_core is
 
         src_i                    => src_i(i),
         src_o                    => src_o(i),
-
+        dbg_hwdu_o               => hwdu_output_block(i),
         tap_out_o                => tap_ob(i)
       );        
         
@@ -798,8 +801,12 @@ architecture rtl of xswc_core is
 
   dbg_o(31 downto 0) <= "00" & hwdu_mmu;
 
-  hwdu_gen: for i in 0 to (g_num_ports-1) generate
-    dbg_o((i+1)*c_hwdu_input_block_width+32-1 downto i*c_hwdu_input_block_width+32) <= hwdu_input_block(i);
+  hwdu_gen: for i in 0 to (g_num_ports-1) generate --19 ports for 18-port switch
+    dbg_o((i+1)*c_hwdu_input_block_width+32-1 downto 
+              i*c_hwdu_input_block_width+32)          <= hwdu_input_block(i);
+
+    dbg_o((i+1)*c_hwdu_output_block_width+(g_num_ports*c_hwdu_input_block_width)+32-1 downto
+              i*c_hwdu_output_block_width+(g_num_ports*c_hwdu_input_block_width)+32) <= hwdu_output_block(i);
   end generate hwdu_gen;
 
 end rtl;
