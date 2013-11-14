@@ -304,6 +304,12 @@ architecture behavoural of xswc_output_block_new is
   signal send_FSM : std_logic_vector(3 downto 0);
   signal prep_FSM : std_logic_vector(3 downto 0);
 
+  -- In theory stall is making sure the proper gap is there,but in case... two cycles
+  -- are needed between falling and rising edge of cyc output signal in order for EP
+  -- to prepare for new frame. actually, it is :
+  -- * one cycle  for odd 
+  -- * two cycles for even - we make artificially gap more by one, so things work the same
+  --   for odd and even (the same gap between)
   constant tx_interframe_gap      : unsigned(3 downto 0) := x"1";-- x"2"; !!!! changed it on 8-Nov-2013, brave thing to change something that almost works
   
   -- if TRUE,  any time a retry request is received from EP (most probably PCS), the request
@@ -427,6 +433,7 @@ begin  --  behavoural
         dp_valid           <= '0';
         free_dped_pck_req  <= '0';
         free_dped_pck_addr <= (others =>'0');
+        mm_valid           <= '0';
         
       else
 

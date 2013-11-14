@@ -44,7 +44,13 @@ package wrsw_shared_types_pkg is
     drop             : std_logic;
     respMask         : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0); -- mask with 1 at requesting port
   end record;
-
+  
+  constant c_tru_response_zero : t_tru_response := (
+                      valid            => '0',
+                      port_mask        => (others => '0'),
+                      drop             => '0',
+                      respMask         => (others => '0'));
+  
   type t_tru_request_array is array(integer range <>) of t_tru_request;
   type t_tru_response_array is array(integer range <>) of t_tru_response;
 

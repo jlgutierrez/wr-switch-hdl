@@ -105,6 +105,14 @@ package wrsw_tru_pkg is
     inject_user_value     : std_logic_vector(15 downto 0) ;
   end record;
   
+  constant c_tru2ep_zero : t_tru2ep := (
+    link_kill             => '0',
+    fc_pause_req          => '0',
+    fc_pause_delay        => (others => '0'),
+    inject_req            => '0',
+    inject_packet_sel     => (others => '0'),
+    inject_user_value     => (others => '0'));
+  
   type t_ep2tru is record
     status           : std_logic;
 --     ctrlRd           : std_logic;
