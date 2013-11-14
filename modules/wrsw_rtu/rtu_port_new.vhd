@@ -333,8 +333,8 @@ begin
   
   -- request to aboard full match
   full_match_aboard       <= (not full_match_valid) and    -- suppress when we have replay from full match
-                            ((aboard_possible and fast_match_wr_req) or -- new request when full match busy
-                             (rtu_rsp_abort_i)); -- other externa, e.g. from swcore, **not implemented yet
+                            ((aboard_possible and fast_match_wr_req));-- or -- new request when full match busy
+--                              (rtu_rsp_abort_i)); -- other externa, e.g. from swcore, **not implemented yet
 
   --------------------------------------------------------------------------------------------
   -- register input request to make it available for both matches (full/fast)
@@ -513,7 +513,7 @@ begin
           ------------------------------------------------------------------------------------------------------------             
           when S_FAST_MATCH =>
             
-            if(rtu_rq_abort_i = '1') then
+            if(rtu_rq_abort_i = '1' or rtu_rsp_abort_i = '1') then
               port_state <= S_IDLE;
             elsif(dbg_force_full_match_only = '1') then
               port_state          <= S_FULL_MATCH;
@@ -544,11 +544,11 @@ begin
                   delayed_full_match_wr_req <= '1';
                 end if;
               end if;
-            elsif(rtu_rsp_abort_i = '1' and fast_match.valid = '0') then
-              -- TODO: this should not happen -> handle exeption  
-              port_state     <= S_FINAL_MASK;
-              rsp            <= c_rtu_rsp_drop;
-              delayed_full_match_wr_req <= '0';
+--             elsif(rtu_rsp_abort_i = '1' and fast_match.valid = '0') then
+--               -- TODO: this should not happen -> handle exeption  
+--               port_state     <= S_FINAL_MASK;
+--               rsp            <= c_rtu_rsp_drop;
+--               delayed_full_match_wr_req <= '0';
             end if;
 
           ------------------------------------------------------------------------------------------------------------ 
@@ -559,7 +559,7 @@ begin
           ------------------------------------------------------------------------------------------------------------          
           when S_FULL_MATCH =>
           
-            if(rtu_rq_abort_i = '1') then
+            if(rtu_rq_abort_i = '1' or rtu_rsp_abort_i = '1') then
               port_state                <= S_IDLE;
               delayed_full_match_wr_req <= '0';
             elsif(full_match_aboard = '0'  and full_match_req_in_progress = '0' and full_match_wr_full_i = '0' and rq_rsp_cnt =  0) then 
@@ -588,7 +588,7 @@ begin
           ------------------------------------------------------------------------------------------------------------             
           when S_FINAL_MASK =>
             
-            if(rtu_rq_abort_i = '1') then
+            if(rtu_rq_abort_i = '1' or rtu_rsp_abort_i = '1') then
               port_state                <= S_IDLE;
               delayed_full_match_wr_req <= '0';
             elsif(rsp.valid   = '0') then

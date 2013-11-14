@@ -153,6 +153,7 @@ entity xwrsw_rtu_new is
     rsp_o       : out t_rtu_response_array(g_num_ports-1 downto 0);
     rsp_ack_i   : in  std_logic_vector(g_num_ports-1 downto 0);
     rq_abort_i  : in  std_logic_vector(g_num_ports-1 downto 0);
+    rsp_abort_i  : in  std_logic_vector(g_num_ports-1 downto 0);
     tru_req_o   : out  t_tru_request;
     tru_resp_i  : in   t_tru_response;  
     rtu2tru_o   : out  t_rtu2tru;
@@ -348,7 +349,7 @@ begin
         rtu_idle_o               => port_idle(i), -- TODO: req_full_o ??/
         rtu_rq_i                 => req_i(i),
         rtu_rq_abort_i           => rq_abort_i(i), 
-        rtu_rsp_abort_i          => '0', -- new stuff from SWcore
+        rtu_rsp_abort_i          => rsp_abort_i(i),--'0', -- new stuff from SWcore
         rtu_rsp_o                => rsp(i),
         rtu_rsp_ack_i            => rsp_ack_i(i),
         

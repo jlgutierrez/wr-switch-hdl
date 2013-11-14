@@ -797,7 +797,8 @@ begin  --archS_PCKSTART_SET_AND_REQ
         rp_in_pck_err        <= '0';
         rp_accept_rtu        <= '1';
 
-        rp_rcv_first_page <= '0';
+        rp_rcv_first_page    <= '0';
+        rtu_rsp_abort_o      <= '0';
         --========================================
       else
 
@@ -817,6 +818,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
             snk_stall_force_l <= '1';
             in_pck_dvalid_d0  <= '0';
             in_pck_dat_d0     <= (others => '0');
+            rtu_rsp_abort_o     <= '0';
 
             -- Sync with trasnfer_pck FSM and ll_write FSM: 
             if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then
@@ -848,7 +850,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
                 snk_stall_force_l <= '0';
                 snk_stall_force_h <= '1';
                 rp_drop_on_stuck  <= '1';
-                rp_accept_rtu     <= '1';
+                rp_accept_rtu     <= '0'; -- high one cycle later (in drop)
               else                      -- by default: stall when stuck
                 snk_stall_force_h <= '1';
                 snk_stall_force_l <= '1';
@@ -1026,11 +1028,18 @@ begin  --archS_PCKSTART_SET_AND_REQ
           when S_DROP =>
             --===========================================================================================
             
+
             if (in_pck_eof = '1' or in_pck_err = '1') then
               rp_drop_on_stuck  <= '0';
               snk_stall_force_h <= '1';
               snk_stall_force_l <= '1';
               s_rcv_pck         <= S_IDLE;
+              
+              if(rp_accept_rtu = '1' and rtu_rsp_valid_i = '0' ) then 
+                -- no RTU decision for the frame, abort rtu match
+                rtu_rsp_abort_o     <= '1';
+              end if;
+              
             end if;
 
             --===========================================================================================
@@ -1087,7 +1096,8 @@ begin  --archS_PCKSTART_SET_AND_REQ
               if(g_input_block_cannot_accept_data = "drop_pck") then
                 snk_stall_force_l <= '0';
                 if (in_pck_sof = '1') then
-                  s_rcv_pck <= S_DROP;
+                  rp_accept_rtu     <= '1';
+                  s_rcv_pck         <= S_DROP;
                 end if;
 
                 -- by default: stall when stuck

@@ -298,6 +298,7 @@ package wrsw_components_pkg is
       rsp_o       : out t_rtu_response_array(g_num_ports-1 downto 0);
       rsp_ack_i   : in  std_logic_vector(g_num_ports-1 downto 0);
       rq_abort_i   : in  std_logic_vector(g_num_ports-1 downto 0);
+      rsp_abort_i  : in  std_logic_vector(g_num_ports-1 downto 0);
       tru_req_o   : out  t_tru_request;
       tru_resp_i  : in   t_tru_response;  
       rtu2tru_o   : out  t_rtu2tru;

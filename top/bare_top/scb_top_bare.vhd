@@ -139,7 +139,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"13_11_13_03"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"14_11_13_02"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
@@ -271,7 +271,7 @@ architecture rtl of scb_top_bare is
 
   signal rtu_req                            : t_rtu_request_array(c_NUM_PORTS downto 0);
   signal rtu_rsp                            : t_rtu_response_array(c_NUM_PORTS downto 0);
-  signal rtu_req_ack, rtu_full, rtu_rsp_ack, rtu_rq_abort: std_logic_vector(c_NUM_PORTS downto 0);
+  signal rtu_req_ack, rtu_full, rtu_rsp_ack, rtu_rq_abort, rtu_rsp_abort: std_logic_vector(c_NUM_PORTS downto 0);
 
 -- System clock selection: 0 = startup clock, 1 = PLL clock
   signal sel_clk_sys, sel_clk_sys_int : std_logic;
@@ -746,7 +746,7 @@ begin
         
         rtu_rsp_i       => rtu_rsp,
         rtu_ack_o       => rtu_rsp_ack,
-        rtu_abort_o     => open --rtu_rsp_abort
+        rtu_abort_o     =>rtu_rsp_abort-- open --rtu_rsp_abort
         );
      
     -- SWcore global pause nr=0 assigned to TRU
@@ -787,7 +787,8 @@ begin
         req_full_o => rtu_full(g_num_ports-1 downto 0),
         rsp_o      => rtu_rsp(g_num_ports-1 downto 0),
         rsp_ack_i  => rtu_rsp_ack(g_num_ports-1 downto 0),
-        rq_abort_i => rtu_rq_abort(g_num_ports-1 downto 0),
+        rsp_abort_i=> rtu_rsp_abort(g_num_ports-1 downto 0), -- this is request from response receiving node
+        rq_abort_i => rtu_rq_abort(g_num_ports-1 downto 0), -- this is request from requesting module
         ------ new TRU stuff ----------
         tru_req_o  => tru_req,
         tru_resp_i => tru_resp,
