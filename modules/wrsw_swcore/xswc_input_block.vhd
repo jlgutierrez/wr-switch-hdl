@@ -1086,7 +1086,10 @@ begin  --archS_PCKSTART_SET_AND_REQ
           when S_INPUT_STUCK =>
             --===========================================================================================
             
-            if(tp_stuck = '0') then     -- un-stuck the input :)
+            if(tp_stuck = '0' and             -- un-stuck the input :)
+                   in_pck_sof = '0') then     -- could be solved better (more optimal: remember sof), but this will work
+                                              -- it happened that new frame came when transfer was acked (stuck signal UP..>)
+                                              -- in such case we were missing SOF and the frame)
 
               s_rcv_pck <= S_IDLE;
               
