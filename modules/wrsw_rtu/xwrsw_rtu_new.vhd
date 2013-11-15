@@ -642,7 +642,8 @@ begin
   -- scaling of the number of ports
   p_pcr_registers : process(clk_sys_i)
   begin
-    if(rst_n_i = '0') then
+    if rising_edge(clk_sys_i) then
+      if(rst_n_i = '0') then
 
         regs_towb.pcr_learn_en_i   <= '0';
         regs_towb.pcr_pass_all_i   <= '0';
@@ -657,8 +658,8 @@ begin
         pcr_prio_val               <= (others => (others => '0'));
         pcr_b_unrec                <= (others => '0');
     
-    else
-      if rising_edge(clk_sys_i) then
+      else
+
         regs_towb.pcr_learn_en_i  <= pcr_learn_en(current_pcr);
         regs_towb.pcr_pass_all_i  <= pcr_pass_all(current_pcr);
         regs_towb.pcr_pass_bpdu_i <= pcr_pass_bpdu(current_pcr);

@@ -190,7 +190,7 @@ begin
   end process;
 
 
-  p_gen_mem_addr : process(bucket_entry, hash_i, lookup_state, start_i)
+  p_gen_mem_addr : process(bucket_entry, hash_i, lookup_state, start_i, hash_reg)
   begin
     if(start_i = '1' and lookup_state = IDLE) then
       mem_addr <= hash_i & "00";

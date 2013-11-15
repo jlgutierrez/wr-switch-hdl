@@ -469,7 +469,7 @@ begin
 -------------------------------------------------------------------------------
 -- helper process for producing the RX fabric data request signal (combinatorial)
 -------------------------------------------------------------------------------  
-  gen_rx_dreq : process(rx_dreq_mask, buf_grant_i, rx_rdreg_toggle, fab_in, regs_i)
+  gen_rx_dreq : process(rx_dreq_mask, buf_grant_i, rx_rdreg_toggle, fab_in, regs_i, state)
   begin
 -- make sure we don't have any incoming data when the reception is masked (e.g.
 -- the NIC is updating the descriptors of finishing the memory write. 

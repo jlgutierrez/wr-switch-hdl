@@ -329,7 +329,7 @@ begin  -- syn
 
   -- MUXes
   gen_arbiter : for i in 0 to g_num_ports-1 generate
-    process(ports, arb_req, arb_grant, pg_done, pg_nomem,arb_req_d0)
+    process(ports, arb_req, arb_grant, pg_done, pg_nomem,arb_req_d0, grant_ob_d0, grant_ib_d0)
     begin
       ports(i).grant_ib_d(0) <= arb_grant(2 * i);
       ports(i).grant_ob_d(0) <= arb_grant(2 * i + 1);
