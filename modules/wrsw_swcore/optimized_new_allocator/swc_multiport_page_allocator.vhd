@@ -311,7 +311,7 @@ begin  -- syn
   gen_records : for i in 0 to g_num_ports-1 generate
     ports(i).req_force_free       <= force_free_i(i);
     ports(i).req_free             <= free_i(i);
-    ports(i).req_alloc            <= alloc_i(i);
+    ports(i).req_alloc            <= alloc_i(i) and (not pg_nomem);
     ports(i).req_set_usecnt       <= set_usecnt_i(i);
     ports(i).req_free_res_valid   <= free_resource_valid_i(i);
     ports(i).req_f_free_res_valid <= force_free_resource_valid_i(i);
@@ -333,7 +333,7 @@ begin  -- syn
     begin
       ports(i).grant_ib_d(0) <= arb_grant(2 * i);
       ports(i).grant_ob_d(0) <= arb_grant(2 * i + 1);
-      ports(i).req_ib        <= ((ports(i).req_alloc and (not pg_nomem)) or ports(i).req_set_usecnt);  
+      ports(i).req_ib        <= (ports(i).req_alloc or ports(i).req_set_usecnt);  
       ports(i).req_ob        <= (ports(i).req_free  or ports(i).req_force_free);  
       arb_req(2 * i)         <= ports(i).req_ib and not (ports(i).grant_ib_d(0) or grant_ib_d0(i));
       arb_req(2 * i + 1)     <= ports(i).req_ob and not (ports(i).grant_ob_d(0) or grant_ob_d0(i));
@@ -362,7 +362,7 @@ begin  -- syn
         set_usecnt       := ports(i).req_set_usecnt;
         tmp_addr_ucnt    := ports(i).req_addr_usecnt;
         tmp_addr_free    := (others => 'X');
-        if(ports(i).req_alloc = '1') then
+        if(ports(i).req_alloc = '1' ) then
           tmp_ucnt_alloc := ports(i).req_ucnt_alloc;
         else
           tmp_ucnt_alloc := (others => 'X');
@@ -496,10 +496,16 @@ begin  -- syn
   pgaddr_alloc_o <= pg_addr_alloc;
 
   gen_done : for i in 0 to g_num_ports-1 generate
-    alloc_done(i)      <= '1' when (ports(i).req_alloc     ='1' and pg_rsp_vec(i)='1' and done_alloc     ='1') else '0';
-    free_done(i)       <= '1' when (ports(i).req_free      ='1' and pg_rsp_vec(i)='1' and done_free      ='1') else '0';
-    force_free_done(i) <= '1' when (ports(i).req_force_free='1' and pg_rsp_vec(i)='1' and done_force_free='1') else '0';
-    set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and done_usecnt    ='1') else '0';  
+-- when nomem it got lost -> the req_alloc is forced LOW by nomam HIGH, so the alloc which happened just before nomem
+-- was not answered...
+--     alloc_done(i)      <= '1' when (ports(i).req_alloc     ='1' and pg_rsp_vec(i)='1' and done_alloc     ='1') else '0';
+--     free_done(i)       <= '1' when (ports(i).req_free      ='1' and pg_rsp_vec(i)='1' and done_free      ='1') else '0';
+--     force_free_done(i) <= '1' when (ports(i).req_force_free='1' and pg_rsp_vec(i)='1' and done_force_free='1') else '0';
+--     set_usecnt_done(i) <= '1' when (ports(i).req_set_usecnt='1' and pg_rsp_vec(i)='1' and done_usecnt    ='1') else '0';  
+    alloc_done(i)      <= '1' when (pg_rsp_vec(i)='1' and done_alloc     ='1') else '0';
+    free_done(i)       <= '1' when (pg_rsp_vec(i)='1' and done_free      ='1') else '0';
+    force_free_done(i) <= '1' when (pg_rsp_vec(i)='1' and done_force_free='1') else '0';
+    set_usecnt_done(i) <= '1' when (pg_rsp_vec(i)='1' and done_usecnt    ='1') else '0';  
   end generate gen_done;
 
   alloc_done_o       <= alloc_done;
