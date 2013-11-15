@@ -1037,6 +1037,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
               
               if(rp_accept_rtu = '1' and rtu_rsp_valid_i = '0' ) then 
                 -- no RTU decision for the frame, abort rtu match
+                rp_accept_rtu       <= '0';
                 rtu_rsp_abort_o     <= '1';
               end if;
               
