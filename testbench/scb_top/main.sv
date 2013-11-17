@@ -94,6 +94,8 @@ module main;
    integer g_min_pck_gap                      = 300; // cycles
    integer g_max_pck_gap                      = 300; // cycles
    integer g_force_payload_size               = 0; // if 0, then opt is used
+   integer g_payload_range_min                = 63;
+   integer g_payload_range_max                = 257;
    integer g_failure_scenario                 = 0;   // no link failure
    integer g_active_port                      = 0;
    integer g_backup_port                      = 1;
@@ -2145,10 +2147,10 @@ module main;
   initial begin
     portUnderTest        = 18'b100000000000000001;    
     g_enable_pck_gaps    = 0;
-    repeat_number        = 500000;
+    repeat_number        = 500;
     tries_number         = 1;  
     g_force_payload_size = 46;  
-    
+    rx_forward_on_fmatch_full = 1; 
     g_is_qvlan           = 0;
                          // tx  ,rx ,opt
     trans_paths[0]       = '{0  ,17 ,0};
@@ -2371,12 +2373,13 @@ module main;
     g_enable_pck_gaps    = 0;
     g_min_pck_gap        = 150;
     g_max_pck_gap        = 150;
-    repeat_number        = 10; //10
+    repeat_number        = 100; //10
     tries_number         = 1;  
     g_force_payload_size = 42; //250;//42; 
     rx_forward_on_fmatch_full = 1; 
     mac_br               = 0;
     g_is_qvlan           = 1;
+    g_simple_allocator_unicast_check = 1;
                          // tx  ,rx ,opt
   end
 */
@@ -2442,11 +2445,11 @@ module main;
     g_enable_pck_gaps    = 0;
     g_min_pck_gap        = 0;
     g_max_pck_gap        = 400;
-    repeat_number        = 30; //10
+    repeat_number        = 60; //10
     tries_number         = 1;  
-    g_force_payload_size = 1500;//300;//46;//42; //250;//42; 
+    g_force_payload_size = 207; //1500;//300;//46;//42; //250;//42; 
     rx_forward_on_fmatch_full = 1; 
-    mac_br               = 0;
+    mac_br               = 1;
     g_is_qvlan           = 0;
     g_ignore_rx_test_check = 1;
     g_simple_allocator_unicast_check = 1;
@@ -2463,9 +2466,9 @@ module main;
 
   
     portUnderTest        = 18'b100000000000000001;
-    trans_paths[ 0]='{0  ,17 , 1 }; // port 0:
-    trans_paths[17]='{17 ,0  , 1 }; // port 17
-    g_enable_pck_gaps    = 1;
+    trans_paths[ 0]='{0  ,17 , 0 }; // port 0:
+    trans_paths[17]='{17 ,0  , 0 }; // port 17
+    g_enable_pck_gaps    = 0;
     g_min_pck_gap        = 100;
     g_max_pck_gap        = 400;
     repeat_number        = 30; //10
@@ -2483,10 +2486,10 @@ module main;
 
  /** ***************************   test scenario 74  ************************************* **/ 
   /*
-   * snake
+   * snake !!!!!!!!!!!!! (need to uncomment/commeent)
    * 
    **/
-///*
+/*
   initial begin
 
                      //      mask     , fid  , prio,has_p,overr, drop , vid, valid
@@ -2515,14 +2518,15 @@ module main;
     trans_paths[ 0]='{0  ,17 , 1 }; // port 0:
     trans_paths[17]='{17 ,0  , 1 }; // port 17
     
-    g_enable_pck_gaps    = 1;
+    g_enable_pck_gaps    = 0;
     g_min_pck_gap        = 0;
     g_max_pck_gap        = 400;
-    repeat_number        = 30; //10
+    repeat_number        = 100;//2700; //10
     tries_number         = 1;  
-    g_force_payload_size = 0;//300;//46;//42; //250;//42; 
-    rx_forward_on_fmatch_full = 0; 
-    mac_br               = 0;
+    g_force_payload_size = 207;//47;// 0;//300;//46;//42; //250;//42; 
+//     g_force_payload_size = 482;// should be 500 in spirent
+    rx_forward_on_fmatch_full = 1; 
+    mac_br               = 1;
     g_is_qvlan           = 0;
     g_ignore_rx_test_check = 0;
     g_simple_allocator_unicast_check = 1;
@@ -2531,6 +2535,62 @@ module main;
     
     g_set_untagging     = 2; // untagging
   end
+*/
+ /** ***************************   test scenario 75  ************************************* **/ 
+  /*
+   * stress
+   * 
+   **/
+/*
+  initial begin
+
+  
+    portUnderTest        = 18'b100000000000000001;
+    trans_paths[ 0]='{0  ,17 , 1 }; // port 0:
+    trans_paths[17]='{17 ,0  , 1 }; // port 17
+    g_enable_pck_gaps    = 0;
+    g_min_pck_gap        = 100;
+    g_max_pck_gap        = 400;
+    repeat_number        = 300; //10
+    tries_number         = 1;  
+    g_force_payload_size = 47;//300;//46;//42; //250;//42; 
+    rx_forward_on_fmatch_full = 1; 
+    mac_br               = 0;
+    g_is_qvlan           = 0;
+    g_ignore_rx_test_check = 0;
+    g_simple_allocator_unicast_check = 1;
+    
+                         // tx  ,rx ,opt
+  end
+*/
+ /** ***************************   test scenario 76  ************************************* **/ 
+  /*
+   * ptpd problems
+   * 
+   **/
+///*
+  initial begin
+
+  
+    portUnderTest        = 18'b100000000000000001;
+    trans_paths[ 0]='{0  ,17 , 1 }; // port 0:
+    trans_paths[17]='{17 ,0  , 1 }; // port 17
+    g_enable_pck_gaps    = 0;
+    g_min_pck_gap        = 0;
+    g_max_pck_gap        = 400;
+    repeat_number        = 100; //10
+    tries_number         = 1;  
+    g_force_payload_size = 0;//47;//300;//46;//42; //250;//42; 
+    rx_forward_on_fmatch_full = 1; 
+    g_payload_range_min  = 63;
+    g_payload_range_max  = 500;
+    mac_br               = 0;
+    g_is_qvlan           = 0;
+    g_ignore_rx_test_check = 0;
+    g_simple_allocator_unicast_check = 1;
+    g_set_untagging      = 3; // untagging
+                         // tx  ,rx ,opt
+  end
 //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2538,7 +2598,8 @@ module main;
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-   always #2.5ns clk_swc_mpm_core <=~clk_swc_mpm_core;
+   always #2.66ns clk_swc_mpm_core <=~clk_swc_mpm_core;
+//    always #4ns clk_swc_mpm_core <=~clk_swc_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
    always #8ns clk_ref <= ~clk_ref;
    
@@ -2655,7 +2716,8 @@ module main;
         else if(opt == 200)
           gen.set_size(1000, 1001);
         else
-          gen.set_size(63, 257);
+          gen.set_size(g_payload_range_min, g_payload_range_max);
+//           gen.set_size(63, 257);
         end
       else
         gen.set_size(g_force_payload_size, g_force_payload_size+1); // setting the precise size below
@@ -2933,20 +2995,7 @@ module main;
 
    
 //    `ifdef `snake_test
-     scb_snake_sim_svwrap
-       #(
-         .g_num_ports(g_num_ports)
-         ) DUT (
-              .clk_sys_i(clk_sys),
-              .clk_ref_i(clk_ref),
-              .rst_n_i(rst_n),
-              .cpu_irq(cpu_irq),
-              .clk_swc_mpm_core_i(clk_swc_mpm_core),
-              .ep_ctrl_i(ep_ctrl),
-              .ep_failure_type(ep_failure_type)
-              );
-//    `else
-//      scb_top_sim_svwrap
+//      scb_snake_sim_svwrap
 //        #(
 //          .g_num_ports(g_num_ports)
 //          ) DUT (
@@ -2958,6 +3007,19 @@ module main;
 //               .ep_ctrl_i(ep_ctrl),
 //               .ep_failure_type(ep_failure_type)
 //               );
+//    `else
+     scb_top_sim_svwrap
+       #(
+         .g_num_ports(g_num_ports)
+         ) DUT (
+              .clk_sys_i(clk_sys),
+              .clk_ref_i(clk_ref),
+              .rst_n_i(rst_n),
+              .cpu_irq(cpu_irq),
+              .clk_swc_mpm_core_i(clk_swc_mpm_core),
+              .ep_ctrl_i(ep_ctrl),
+              .ep_failure_type(ep_failure_type)
+              );
 //    `endif
      
 
@@ -2995,13 +3057,18 @@ module main;
            
            if(g_set_untagging == 1)
            begin
-             for(j=0;j<10; j++)
+             for(j=0;j<g_limit_config_to_port_num; j++)
                ep.vlan_egress_untag(j /*vlan*/ ,1);
            end
            else if(g_set_untagging == 2)
            begin
-             for(j=0;j<10; j++)
+             for(j=0;j<g_limit_config_to_port_num; j++)
                ep.vlan_egress_untag(ep_vlan_conf[j].pvid /*vlan*/ ,1);
+           end
+           else if(g_set_untagging == 3)
+           begin
+               ep.vlan_egress_untag_direct('hFFFF /*vlan*/ ,0);
+               ep.vlan_egress_untag_direct('hFFFF /*vlan*/ ,1);
            end
            tmp.ep = ep;
            tmp.send = EthPacketSource'(DUT.to_port[i]);
@@ -4227,7 +4294,11 @@ module main;
      wait_cycles(100);
      while(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages < 985) @(posedge clk_sys);
      $display("free pages: %4d",DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages);
-     if(!g_simple_allocator_unicast_check) $stop; //$finish; // finish sim
+     if(!g_simple_allocator_unicast_check) 
+     begin
+       wait_cycles(2000);// wait so we can do other stuff (i.e. display the other alloc check
+       $stop; //$finish; // finish sim
+     end
      if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.g_with_RESOURCE_MGR) begin
        $display("unknown: %4d",DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.dbg_o[9 : 0]);
        $display("special: %4d",DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.dbg_o[19:10]);

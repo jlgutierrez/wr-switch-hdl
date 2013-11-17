@@ -35,6 +35,13 @@ class CSimDrv_WR_Endpoint;
    //   m_acc.write(m_base + `ADDR_EP_VCR1, vid | ((untag ? 1: 0) << 12));
    endtask // vlan_egress_untag
 
+   task vlan_egress_untag_direct(uint16_t mask, uint16_t addr);
+      uint64_t wval=0;
+      wval = (mask << 10) | ('h000003FF & addr);
+      $display("[vlan_egress_untag], write offset: %d, data: 0x%x ", addr,wval);      
+      m_acc.write(m_base + `ADDR_EP_VCR1, wval);
+   endtask // vlan_egress_untag
+
    task vcr1_buffer_write(int is_vlan, int addr, uint64_t data);
 //       $display("addr=0x%x , data=0x%x",addr,data);
       m_acc.write(m_base + `ADDR_EP_VCR1, 
