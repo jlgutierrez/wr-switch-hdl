@@ -281,7 +281,7 @@ architecture behavoural of xswc_output_block_new is
   signal mm_valid         : std_logic;
 
   signal cycle_frozen     : std_logic;
-  signal cycle_frozen_cnt : unsigned(5 downto 0);
+  signal cycle_frozen_cnt : unsigned(9 downto 0);
 
   signal current_tx_prio : std_logic_vector(g_queue_num - 1 downto 0);
   
@@ -345,14 +345,15 @@ begin  --  behavoural
         cycle_frozen     <= '0';
         cycle_frozen_cnt <= (others => '0');
       else
-        if(src_out_int.cyc = '1') then
-          if(src_out_int.stb = '1') then
-            cycle_frozen_cnt <= (others => '0');
-          else
-            cycle_frozen_cnt <= cycle_frozen_cnt + 1;
-            if(cycle_frozen_cnt = "111111") then
-              cycle_frozen <= '1';
-            end if;
+        
+        if(s_prep_to_send = S_IDLE or -- from here we will enter S_NEWPCK_PAGE_READY
+           (s_prep_to_send = S_IDLE and s_send_pck = S_EOF)) then -- condition of entering S_NEWPCK_PAGE_READY
+          cycle_frozen_cnt <= (others => '0');
+          cycle_frozen     <= '0';
+        else
+          cycle_frozen_cnt <= cycle_frozen_cnt + 1;
+          if(cycle_frozen_cnt = to_unsigned(765,10)) then -- waits max frame size... not good
+            cycle_frozen <= '1';
           end if;
         end if;
       end if;
@@ -807,11 +808,10 @@ begin  --  behavoural
               src_out_int.stb <= '1';                           
             elsif(src_i.stall = '1' and mpm_dvalid_i = '1') then
               s_send_pck <= S_FLUSH_STALL;
-            end if;
-
-            if(mpm_dlast_i = '1')then
+            elsif(mpm_dlast_i = '1')then
               s_send_pck <= S_FINISH_CYCLE;  -- we free page in EOF
             end if;
+
             if(mpm_dvalid_i = '1') then  -- only when dvalid to avoid copying crap (i.e. XXX)
               tmp_adr <= mpm2wb_adr_int;
               tmp_dat <= mpm2wb_dat_int;
@@ -1028,12 +1028,13 @@ begin  --  behavoural
                x"6" when (s_send_pck = S_WAIT_FREE_PCK) else
                x"7" ;
 
-  prep_FSM  <= x"5" when (s_prep_to_send = S_IDLE) else
-               x"1" when (s_prep_to_send = S_NEWPCK_PAGE_READY) else
+  prep_FSM  <= x"7" when (cycle_frozen   = '1')                          else
+               x"5" when (s_prep_to_send = S_IDLE)                       else
+               x"1" when (s_prep_to_send = S_NEWPCK_PAGE_READY)          else
                x"2" when (s_prep_to_send = S_NEWPCK_PAGE_SET_IN_ADVANCE) else
-               x"3" when (s_prep_to_send = S_NEWPCK_PAGE_USED) else
-               x"4" when (s_prep_to_send = S_RETRY_PREPARE) else
-               x"0" when (s_prep_to_send = S_RETRY_READY) else
+               x"3" when (s_prep_to_send = S_NEWPCK_PAGE_USED)           else
+               x"4" when (s_prep_to_send = S_RETRY_PREPARE)              else
+               x"0" when (s_prep_to_send = S_RETRY_READY)                else
                x"6" ;
   dbg_hwdu_o(7 downto 0)<= send_FSM & prep_FSM;
 end behavoural;
