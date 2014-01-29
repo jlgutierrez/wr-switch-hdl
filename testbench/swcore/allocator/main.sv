@@ -14,6 +14,7 @@ typedef struct {
    int         page;
 } alloc_request_t;
 
+
 function automatic int first_free(int tab[]);
    int         i;
    

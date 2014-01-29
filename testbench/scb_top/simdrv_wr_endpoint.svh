@@ -54,7 +54,14 @@ class CSimDrv_WR_Endpoint;
 
       if(data.size() & 1)
         $fatal("CSimDrv_WR_Endpoint::write_template(): data size must be even");
+      
+      if(user_offset >= data.size()-2)
+        $fatal("CSimDrv_WR_Endpoint::write_template(): user_offset cannot be set to the last word of the template");
 
+      if(user_offset & 1)
+        $fatal("CSimDrv_WR_Endpoint::write_template(): user_offset must be even");
+
+     
       $display("write_template: size %d", data.size());
       
       for(i=0;i<data.size();i+=2)
@@ -69,6 +76,41 @@ class CSimDrv_WR_Endpoint;
 
            if(i == user_offset)
              v |= (1<<17);
+
+           vcr1_buffer_write(0, slot * 64 + i/2, v);
+        end
+   endtask // write_template
+
+   task write_inj_gen_frame(byte header[], int frame_size);
+      int i;
+      int slot = 0;
+
+      if(header.size() & 1)
+        $fatal("CSimDrv_WR_Endpoint::write_inj_gen_frame(): header size must be even");
+      if(frame_size < 64)
+        $fatal("CSimDrv_WR_Endpoint::write_inj_gen_frame(): frame size needs to be greater than 64");
+
+      $display("write_template: size %d",frame_size);
+      
+      frame_size = frame_size -4;//CRC which is automaticly suffixed
+      for(i=0;i<frame_size;i+=2)
+        begin
+           uint64_t v = 0; 
+           if(i < header.size())
+             v = ((header[i] << 8) | header[i+1]) & 64'h0000FFFF;
+           else
+             v = 0;
+           
+           if(i == 0)
+             v |= (1<<16); // start of template
+
+           if((frame_size & 1) && (i == (frame_size - 1))) // end of template with odd size
+             v |= (1<<16) | (1<<17);
+           else if(i == (frame_size - 2)) // end of template with even size
+             v |= (1<<16);
+           
+           if(i == header.size())
+             v |= (1<<17); // place for frame ID
 
            vcr1_buffer_write(0, slot * 64 + i/2, v);
         end
@@ -169,6 +211,26 @@ class CSimDrv_WR_Endpoint;
      m_acc.write(m_base + `ADDR_EP_FCR, wval);
      $display("PAUSE cofig: tx_802.3 en=%1d, rx_802.3 en=%1d, tx_801.2Q (prio-based)=%1d, rx_802.1Q (prio-based)=%1d",
               txpause_802_3, rxpause_802_3, txpause_802_1q, rxpause_802_1q);     
+   endtask // automatic
+
+   task automatic inject_gen_ctrl_config(int interframe_gap, int sel_id);
+     uint64_t wval = 0;
+     wval  = (interframe_gap << `EP_INJ_CTRL_PIC_CONF_IFG_OFFSET) & `EP_INJ_CTRL_PIC_CONF_IFG | 
+             (sel_id         << `EP_INJ_CTRL_PIC_CONF_SEL_OFFSET) & `EP_INJ_CTRL_PIC_CONF_SEL |
+              `EP_INJ_CTRL_PIC_VALID;
+     m_acc.write(m_base + `ADDR_EP_INJ_CTRL, wval);
+     $display("INJ ctrl cofig: interframe gap=%1d, pattern sel id=%1d",interframe_gap,sel_id);     
+   endtask // automatic
+   task automatic inject_gen_ctrl_enable();
+     uint64_t wval = 0;
+     wval  = `EP_INJ_CTRL_PIC_ENA;
+     m_acc.write(m_base + `ADDR_EP_INJ_CTRL, wval);
+     $display("INJ ctrl cofig: enabled");     
+   endtask // automatic
+   task automatic inject_gen_ctrl_disable();
+     uint64_t wval = 0;
+     m_acc.write(m_base + `ADDR_EP_INJ_CTRL, wval);
+     $display("INJ ctrl cofig: disabled");     
    endtask // automatic
 
 
