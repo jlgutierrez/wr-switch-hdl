@@ -597,7 +597,7 @@ begin
       g_without_network => false,
       g_with_TRU        => false,
       g_with_TATSU      => false,
-      g_with_HWDU       => false,
+      g_with_HWDU       => true,
       g_with_PSTATS     => false)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
