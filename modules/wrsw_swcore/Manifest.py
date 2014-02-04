@@ -11,12 +11,18 @@ files = [
 "swc_core.vhd",
 "swc_multiport_linked_list.vhd",
 
+"optimized_new_allocator/swc_multiport_page_allocator.vhd",
+"optimized_new_allocator/swc_page_alloc_ram_bug.vhd",
+#"optimized_new_allocator/swc_page_alloc.vhd",
+
+# new by TOM
 #"new_allocator/swc_multiport_page_allocator.vhd",
 #"new_allocator/swc_page_alloc_ram_bug.vhd",
+#"new_allocator/swc_page_alloc.vhd",
 
-
-"old_allocator/swc_multiport_page_allocator.vhd",
-"old_allocator/swc_page_alloc_old.vhd",
+# working
+#"old_allocator/swc_multiport_page_allocator.vhd",
+#"old_allocator/swc_page_alloc_old.vhd",
 
 "swc_alloc_resource_manager.vhd",
 
