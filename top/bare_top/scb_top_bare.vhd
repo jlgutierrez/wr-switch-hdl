@@ -139,7 +139,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"16_11_13_05"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"04_02_14_00"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 16;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
@@ -1296,20 +1296,20 @@ begin
   end generate gen_8P_out_blk_states;
 
   ----------------------------- dbg_id1
-  TRIG0(1)(15    downto   0) <= endpoint_snk_in(7).dat;
-  TRIG0(1)(17    downto  16) <= endpoint_snk_in(7).adr(1 downto 0);
-  TRIG0(1)(              18) <= endpoint_snk_out(7).ack;
+  TRIG0(1)(15    downto   0) <= endpoint_snk_in(7).dat;             -- 0 -15
+  TRIG0(1)(17    downto  16) <= endpoint_snk_in(7).adr(1 downto 0); -- 16-17
+  TRIG0(1)(              18) <= endpoint_snk_out(7).ack;            -- 17
 --   TRIG0(1)(20    downto  19) <= ep_dbg_k_array(7);
   TRIG0(1)(28    downto  19) <= ep_dbg_tx_pcs_rd_array(7);-- pcs new
 --   TRIG0(1)(              28) <= endpoint_snk_out(7).err;
-  TRIG0(1)(              29) <= endpoint_snk_in(7).cyc;
-  TRIG0(1)(              30) <= endpoint_snk_in(7).stb;
-  TRIG0(1)(              31) <= endpoint_snk_out(7).stall;
+  TRIG0(1)(              29) <= endpoint_snk_in(7).cyc;             -- 29
+  TRIG0(1)(              30) <= endpoint_snk_in(7).stb;             -- 30
+  TRIG0(1)(              31) <= endpoint_snk_out(7).stall;          -- 31
 
-  TRIG1(1)(21    downto   0) <= ep_dbg_fab_pipes_array(7)(63 downto 42); -- tx_path
+  TRIG1(1)(21    downto   0) <= ep_dbg_fab_pipes_array(7)(63 downto 42); -- tx_path: 32 - 53
   TRIG1(1)(31    downto  22) <= ep_dbg_tx_pcs_wr_array(7);     -- pcs new: pcs tx write to FIFO  
 
-  TRIG2(1)(11    downto   0) <= ep_dbg_fab_pipes_array(7)(41 downto 30); -- tx_path
+  TRIG2(1)(11    downto   0) <= ep_dbg_fab_pipes_array(7)(41 downto 30); -- tx_path : 64- 75
   TRIG2(1)(29    downto  20) <= dbg_n_regs(41 downto 32) ; -- unknow resources
   TRIG2(1)(              30) <= phys_i(7).tx_enc_err;
   TRIG2(1)(              31) <= endpoint_snk_out(7).err;--phys_i(7).tx_disparity;
