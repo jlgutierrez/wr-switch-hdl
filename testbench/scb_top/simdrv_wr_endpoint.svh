@@ -89,6 +89,8 @@ class CSimDrv_WR_Endpoint;
         $fatal("CSimDrv_WR_Endpoint::write_inj_gen_frame(): header size must be even");
       if(frame_size < 64)
         $fatal("CSimDrv_WR_Endpoint::write_inj_gen_frame(): frame size needs to be greater than 64");
+      if(frame_size > 1024)
+        $fatal("CSimDrv_WR_Endpoint::write_inj_gen_frame(): frame size needs to be less than 1024 (to be modified)");
 
       $display("write_template: size %d",frame_size);
       
@@ -213,13 +215,14 @@ class CSimDrv_WR_Endpoint;
               txpause_802_3, rxpause_802_3, txpause_802_1q, rxpause_802_1q);     
    endtask // automatic
 
-   task automatic inject_gen_ctrl_config(int interframe_gap, int sel_id);
+   task automatic inject_gen_ctrl_config(int interframe_gap, int sel_id, int mode);
      uint64_t wval = 0;
      wval  = (interframe_gap << `EP_INJ_CTRL_PIC_CONF_IFG_OFFSET) & `EP_INJ_CTRL_PIC_CONF_IFG | 
              (sel_id         << `EP_INJ_CTRL_PIC_CONF_SEL_OFFSET) & `EP_INJ_CTRL_PIC_CONF_SEL |
-              `EP_INJ_CTRL_PIC_VALID;
+             (mode           << `EP_INJ_CTRL_PIC_MODE_ID_OFFSET ) & `EP_INJ_CTRL_PIC_MODE_ID_OFFSET  |
+              `EP_INJ_CTRL_PIC_CONF_VALID | `EP_INJ_CTRL_PIC_MODE_VALID;
      m_acc.write(m_base + `ADDR_EP_INJ_CTRL, wval);
-     $display("INJ ctrl cofig: interframe gap=%1d, pattern sel id=%1d",interframe_gap,sel_id);     
+     $display("INJ ctrl cofig: interframe gap=%1d, pattern sel id=%1d, mode = %1d",interframe_gap,sel_id, mode);     
    endtask // automatic
    task automatic inject_gen_ctrl_enable();
      uint64_t wval = 0;
@@ -231,6 +234,14 @@ class CSimDrv_WR_Endpoint;
      uint64_t wval = 0;
      m_acc.write(m_base + `ADDR_EP_INJ_CTRL, wval);
      $display("INJ ctrl cofig: disabled");     
+   endtask // automatic
+
+   task automatic inject_gen_ctrl_mode(int mode );
+     uint64_t wval = 0;
+     wval  = (mode           << `EP_INJ_CTRL_PIC_MODE_ID_OFFSET ) & `EP_INJ_CTRL_PIC_MODE_ID  |
+              `EP_INJ_CTRL_PIC_MODE_VALID | `EP_INJ_CTRL_PIC_ENA;
+     m_acc.write(m_base + `ADDR_EP_INJ_CTRL, wval);
+     $display("INJ ctrl cofig: mode = %1d",mode);     
    endtask // automatic
 
 

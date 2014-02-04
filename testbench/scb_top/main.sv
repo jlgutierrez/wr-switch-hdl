@@ -243,6 +243,14 @@ module main;
                                              'h00,'h00,'h00,'h00,'h00,'h00, //48-53: padding
                                              'h00,'h00,'h00,'h00,'h00,'h00, //54-59: padding
                                              'h00,'h00,'h00,'h00};          //60-63: padding
+   byte TEST_GEN_templ[]                  ='{'h01,'h80,'hC2,'h00,'h00,'h01, //0 - 5: dst addr
+                                             'h00,'h00,'h00,'h00,'h00,'h00, //6 -11: src addr (to be filled in ?)
+                                             'hDE,'hED};                    //12-13: EtherType
+                                            
+   integer inj_gen_frame_size            = 225;
+   integer inj_gen_if_gap_size           = 10;
+   integer inj_gen_mode                  = 0; //0:default | 1: corrupted | 2,3: undefined (yet)
+   integer g_test_inj_gen                = 0;
                                            //qmode, fix_prio, prio_val, pvid   
    t_vlan_port_config ep_vlan_conf[]      ='{'{  0,        0,        0,   1 }, //port =  0
                                              '{  0,        0,        0,   1 }, //port =  1
@@ -2565,10 +2573,10 @@ module main;
 */
  /** ***************************   test scenario 76  ************************************* **/ 
   /*
-   * ptpd problems
+   * ptpd problems - solved ;-p
    * 
    **/
-///*
+/*
   initial begin
 
   
@@ -2590,6 +2598,121 @@ module main;
     g_simple_allocator_unicast_check = 1;
     g_set_untagging      = 3; // untagging
                          // tx  ,rx ,opt
+  end
+*/
+ /** ***************************   test scenario 77  ************************************* **/ 
+  /*
+   * page-edge-crossing problem
+   * 
+   **/
+/*
+  initial begin
+
+  
+    portUnderTest        = 18'b100000000000000001;
+    trans_paths[ 0]='{0  ,17 , 0 }; // port 0:
+    trans_paths[17]='{17 ,0  , 0 }; // port 17
+    g_enable_pck_gaps    = 0;
+    g_min_pck_gap        = 0;
+    g_max_pck_gap        = 400;
+    repeat_number        = 100; //10
+    tries_number         = 1;  
+
+                           // 2xpage  = 2x64
+                           // payload = { 2x(2x64) [bytes in pages] - 14 [header]  - 4 [crc]}  [bytes]
+                           // payload = 238 bytes ->page breaker :238/239
+    g_force_payload_size = 239;//47;//300;//46;//42; //250;//42; 
+    rx_forward_on_fmatch_full = 1; 
+    
+    mac_br               = 0;
+    g_is_qvlan           = 0;
+    g_ignore_rx_test_check = 0;
+    g_simple_allocator_unicast_check = 1;
+    g_set_untagging      = 3; // untagging
+                         // tx  ,rx ,opt
+  end
+*/
+ /** ***************************   test scenario 78  ************************************* **/ 
+  /*
+   * snake !!!!!!!!!!!!! (need to uncomment/commeent)
+   * 
+   **/
+/*
+  initial begin
+
+                     //      mask     , fid  , prio,has_p,overr, drop , vid, valid
+   sim_vlan_tab[ 0] = '{'{32'hFFFFFFFF, 8'h0 , 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
+   sim_vlan_tab[ 1] = '{'{32'h00000003, 8'h1 , 3'h0, 1'b0, 1'b0, 1'b0}, 1,  1'b1 };
+   sim_vlan_tab[ 2] = '{'{32'h0000000C, 8'h2 , 3'h0, 1'b0, 1'b0, 1'b0}, 2,  1'b1 };
+   sim_vlan_tab[ 3] = '{'{32'h00000030, 8'h3 , 3'h0, 1'b0, 1'b0, 1'b0}, 3,  1'b1 };
+   sim_vlan_tab[ 4] = '{'{32'h000000C0, 8'h4 , 3'h0, 1'b0, 1'b0, 1'b0}, 4,  1'b1 };
+   sim_vlan_tab[ 5] = '{'{32'h00000300, 8'h5 , 3'h0, 1'b0, 1'b0, 1'b0}, 5,  1'b1 };
+   sim_vlan_tab[ 6] = '{'{32'h00000C00, 8'h6 , 3'h0, 1'b0, 1'b0, 1'b0}, 6,  1'b1 };
+   sim_vlan_tab[ 7] = '{'{32'h00003000, 8'h7 , 3'h0, 1'b0, 1'b0, 1'b0}, 7,  1'b1 };
+   sim_vlan_tab[ 8] = '{'{32'h0000C000, 8'h8 , 3'h0, 1'b0, 1'b0, 1'b0}, 8,  1'b1 };
+   sim_vlan_tab[ 9] = '{'{32'h00030000, 8'h9 , 3'h0, 1'b0, 1'b0, 1'b0}, 9,  1'b1 };
+   sim_vlan_tab[10] = '{'{32'h000C0000, 8'h10, 3'h0, 1'b0, 1'b0, 1'b0}, 10, 1'b1 };
+   sim_vlan_tab[11] = '{'{32'h00300000, 8'h11, 3'h0, 1'b0, 1'b0, 1'b0}, 11, 1'b1 };
+   sim_vlan_tab[12] = '{'{32'h00C00000, 8'h12, 3'h0, 1'b0, 1'b0, 1'b0}, 12, 1'b1 };
+   sim_vlan_tab[13] = '{'{32'h03000000, 8'h13, 3'h0, 1'b0, 1'b0, 1'b0}, 13, 1'b1 };
+   sim_vlan_tab[14] = '{'{32'h0C000000, 8'h14, 3'h0, 1'b0, 1'b0, 1'b0}, 14, 1'b1 };
+   sim_vlan_tab[15] = '{'{32'h30000000, 8'h15, 3'h0, 1'b0, 1'b0, 1'b0}, 15, 1'b1 };
+   sim_vlan_tab[16] = '{'{32'hC0000000, 8'h16, 3'h0, 1'b0, 1'b0, 1'b0}, 16, 1'b1 };
+   sim_vlan_tab[17] = '{'{32'h00000000, 8'h17, 3'h0, 1'b0, 1'b0, 1'b0}, 17, 1'b0 };
+   sim_vlan_tab[18] = '{'{32'h00000000, 8'h18, 3'h0, 1'b0, 1'b0, 1'b0}, 18, 1'b0 };  
+
+    portUnderTest        = 18'b100000000000000001;
+                  // tx  ,rx ,opt
+    trans_paths[ 0]='{0  ,17 , 1 }; // port 0:
+    trans_paths[17]='{17 ,0  , 1 }; // port 17
+    
+    g_enable_pck_gaps    = 0;
+    g_min_pck_gap        = 0;
+    g_max_pck_gap        = 400;
+    repeat_number        = 10000;//2700; //10
+    tries_number         = 1;  
+    g_force_payload_size = 225-18; // header = 14 bytes | CRC = 4 bytes
+
+//     g_force_payload_size = 207;//47;// 0;//300;//46;//42; //250;//42; 
+//     g_force_payload_size = 482;// should be 500 in spirent
+    rx_forward_on_fmatch_full = 1; 
+    mac_br               = 1;
+    g_is_qvlan           = 0;
+    g_ignore_rx_test_check = 0;
+    g_simple_allocator_unicast_check = 1;
+    
+    g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
+    
+    g_set_untagging     = 2; // untagging
+  end
+*/
+   /** ***************************   test scenario 79   ********************** **/   /*
+
+   */
+///*
+  initial begin
+    portUnderTest        = 18'b101000000000000101; // we send pcks (Markers) in other place
+                         // tx  ,rx ,opt
+    trans_paths[ 0]      ='{0  ,17 , 0 }; // port 0:
+    trans_paths[17]      ='{17 ,0  , 0 }; // port 17
+//     trans_paths[ 2]      ='{2  ,15 , 0 }; // port 2:
+//     trans_paths[15]      ='{15 ,2  , 0 }; // port 15
+    repeat_number        = 50;
+    tries_number         = 1;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 46;// 225-18;    
+    g_injection_templates_programmed = 2;
+    g_limit_config_to_port_num = 4; //to speed up the config, don't configure VLANS and stuff 
+                                    // in ports above nubmer 7
+    //g_test_inj_gen       = 1; // inject test-frame scenario
+    g_test_inj_gen       = 2; // inject test-frames + enable corruption + disable corrutption
+    inj_gen_frame_size   = 64;
+    inj_gen_mode         = 1;//0:default | 1: corrupt frames
+    inj_gen_if_gap_size  = 100;
+    g_ignore_rx_test_check =1;
+    rx_forward_on_fmatch_full = 1; 
+    mac_br               = 0;
+    g_is_qvlan           = 0;
   end
 //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -3049,6 +3172,12 @@ module main;
            begin
              ep.write_template(0, PAUSE_templ, 16);
              ep.write_template(1, BPDU_templ,  20);
+           end
+           else if(g_injection_templates_programmed == 2 & i < g_limit_config_to_port_num)
+           begin
+             ep.inject_gen_ctrl_config(inj_gen_if_gap_size /*interframe gap*/,0 /*template sel id*/, inj_gen_mode /*mode of injection*/);
+             ep.write_inj_gen_frame(TEST_GEN_templ /*header template*/,inj_gen_frame_size /*frame gap*/);
+//              ep.inject_gen_ctrl_enable();
            end
            if(g_pause_mode == 1)
              ep.pause_config( 1/*txpause_802_3*/, 1/*rxpause_802_3*/, 0/*txpause_802_1q*/, 0/*rxpause_802_1q*/);
@@ -4203,6 +4332,38 @@ module main;
          end 
       join_none; //
 
+      fork
+         begin
+           if(g_test_inj_gen == 1)
+           begin 
+             wait_cycles(400);
+             ports[2].ep.inject_gen_ctrl_enable();
+             wait_cycles(4000);
+             ports[2].ep.inject_gen_ctrl_disable();
+             wait_cycles(4000);
+             ports[2].ep.inject_gen_ctrl_enable();
+             wait_cycles(4000);
+             ports[2].ep.inject_gen_ctrl_disable();
+           end
+           if(g_test_inj_gen == 2)
+           begin 
+             wait_cycles(400);
+             ports[2].ep.inject_gen_ctrl_enable();
+             wait_cycles(500);
+             ports[2].ep.inject_gen_ctrl_mode(1);
+             wait_cycles(500);
+             ports[2].ep.inject_gen_ctrl_mode(0);
+             wait_cycles(500);
+             ports[2].ep.inject_gen_ctrl_disable();
+             wait_cycles(1000);
+             ports[2].ep.inject_gen_ctrl_enable();
+             wait_cycles(1000);
+             ports[2].ep.inject_gen_ctrl_disable();
+           end
+         end 
+      join_none; //
+
+
       for(q=0; q<g_max_ports; q++)
         fork
           automatic int qq=q;
@@ -4228,7 +4389,7 @@ module main;
              
           end  //thread
        join_none;//fork
-   
+      
       fork
          forever begin
             nic.update(DUT.U_Top.U_Wrapped_SCBCore.vic_irqs[0]);
@@ -4290,7 +4451,7 @@ module main;
      int l = 0;
      int pg_cnt =0;
      while(!rst_n) @(posedge clk_sys);
-     while(txrx_done != portUnderTest) @(posedge clk_sys);
+     while(txrx_done != portUnderTest || g_transition_scenario != 0) @(posedge clk_sys);
      wait_cycles(100);
      while(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages < 985) @(posedge clk_sys);
      $display("free pages: %4d",DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages);
@@ -4344,7 +4505,7 @@ module main;
      int pg_cnt =0;
      init_alloc_tab();
      while(!rst_n) @(posedge clk_sys);    
-     while(txrx_done != portUnderTest) @(posedge clk_sys);
+     while(txrx_done != portUnderTest || g_transition_scenario != 0) @(posedge clk_sys);
      wait_cycles(1000);
 //      while(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages < (1024-2*(g_num_ports+1))) @(posedge clk_sys);
      while(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages < 985) @(posedge clk_sys);
