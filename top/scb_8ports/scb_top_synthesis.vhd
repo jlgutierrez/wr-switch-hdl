@@ -239,7 +239,8 @@ architecture Behavioral of scb_top_synthesis is
       g_without_network : boolean;
       g_with_TRU        : boolean;
       g_with_TATSU      : boolean;
-      g_with_HWDU       : boolean);
+      g_with_HWDU       : boolean;
+      g_with_HWIU       : boolean);
     port (
       sys_rst_n_i         : in  std_logic;
       clk_startup_i       : in  std_logic;
@@ -597,7 +598,8 @@ begin
       g_without_network => false,
       g_with_TRU        => true,
       g_with_TATSU      => true,
-      g_with_HWDU       => true)
+      g_with_HWDU       => false,
+      g_with_HWIU       => true)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_sys_startup,

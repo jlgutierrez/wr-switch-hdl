@@ -27,6 +27,7 @@ entity scb_top_bare is
     g_with_TRU        : boolean := false;
     g_with_TATSU      : boolean := false;
     g_with_HWDU       : boolean := false;
+    g_with_HWIU       : boolean := false;
     g_with_PSTATS     : boolean := true
     );
   port (
@@ -965,9 +966,28 @@ begin
                 ep_events ((i+1)*c_epevents_sz-1 downto i*c_epevents_sz);
   end generate gen_events_assemble;
 
-  --=====================================--
-  --               HWDU                  --
-  --=====================================--
+  --============================================================--
+  -- Hardware Info Unit providing firmware version for software --
+  --============================================================--
+
+  gen_HWIU: if(g_with_HWIU = true) generate
+    U_HWIU: xwrsw_hwiu
+      generic map(
+        g_interface_mode => PIPELINED,
+        g_address_granularity => BYTE,
+        g_ndbg_regs => c_DBG_N_REGS,
+        g_ver_major => 3,
+        g_ver_minor => 3,
+        g_build     => 1)
+      port map(
+        rst_n_i       => rst_n_periph,
+        clk_i         => clk_sys,
+        dbg_regs_i    => dbg_n_regs,
+        dbg_chps_id_o => dbg_chps_id,
+        wb_i          => cnx_master_out(c_SLAVE_HWDU),
+        wb_o          => cnx_master_in(c_SLAVE_HWDU));
+  end generate;
+
   gen_HWDU: if(g_with_HWDU = true) generate
     U_HWDU : xwrsw_hwdu
       generic map(
@@ -986,7 +1006,8 @@ begin
         dbg_n_regs(  32-1 downto 0)                 <= c_GW_VERSION;
 --         dbg_n_regs(2*32-1 downto c_DBG_V_SWCORE+32) <= (others=>'0');
     end generate;
-    gen_no_HWDU: if(g_with_HWDU = false) generate
+
+    gen_no_HWDU: if(g_with_HWDU = false and g_with_HWIU = false) generate
       cnx_master_in(c_SLAVE_HWDU).ack   <= '1';
       cnx_master_in(c_SLAVE_HWDU).dat   <= c_GW_VERSION;--x"deadbeef";
       cnx_master_in(c_SLAVE_HWDU).err   <= '0';
@@ -1060,21 +1081,6 @@ begin
   clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
   clk_sys_o         <= clk_sys;
 
-  -----------------------------------------------------------------------------
-  -- Hardware Info Unit providing firmware version for software
-  -----------------------------------------------------------------------------
---  U_HWIU: xwrsw_hwiu
---    generic map(
---      g_interface_mode => PIPELINED,
---      g_address_granularity => BYTE,
---      g_ver_major => 3,
---      g_ver_minor => 3,
---      g_build     => 1)
---    port map(
---      rst_n_i => rst_n_periph,
---      clk_i   => clk_sys,
---      wb_i    => cnx_master_out(c_SLAVE_HWIU),
---      wb_o    => cnx_master_in(c_SLAVE_HWIU));
 
 --   
 --  CS_ICON : chipscope_icon

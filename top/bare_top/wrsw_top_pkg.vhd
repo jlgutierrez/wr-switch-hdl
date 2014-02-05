@@ -224,7 +224,8 @@ package wrsw_top_pkg is
       g_without_network : boolean;
       g_with_TRU        : boolean  := false;
       g_with_TATSU      : boolean  := false;
-      g_with_HWDU       : boolean  := false);
+      g_with_HWDU       : boolean  := false;
+      g_with_HWIU       : boolean  := false);
     port (
       sys_rst_n_i         : in  std_logic;
       clk_startup_i       : in  std_logic;
@@ -405,7 +406,6 @@ package wrsw_top_pkg is
       wb_i : in  t_wishbone_slave_in;
       wb_o : out t_wishbone_slave_out);
   end component;
-
 
   --TEMP
   component dummy_rmon
