@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-02-02
+-- Last update: 2013-03-05
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -36,7 +36,7 @@
 -- Date        Version  Author   Description
 -- 2010-11-03  1.0      mlipinsk created
 -- 2012-02-02  2.0      mlipinsk generic-azed
-
+-- 2013-03-05  2.1      mlipinsk added hp, removed pck_size
 -------------------------------------------------------------------------------
 
 
@@ -51,8 +51,8 @@ use ieee.numeric_std.all;
 entity swc_pck_transfer_output is
   generic(
     g_page_addr_width    : integer ;--:= c_swc_page_addr_width;
-    g_prio_width         : integer ;--:= c_swc_prio_width;
-    g_max_pck_size_width : integer --:= c_swc_max_pck_size_width
+    g_prio_width         : integer --:= c_swc_prio_width;
+--     g_max_pck_size_width : integer --:= c_swc_max_pck_size_width
   );
   port (
     clk_i   : in std_logic;
@@ -65,7 +65,8 @@ entity swc_pck_transfer_output is
     ob_transfer_data_valid_o : out  std_logic;
     ob_pageaddr_o            : out  std_logic_vector(g_page_addr_width - 1 downto 0);
     ob_prio_o                : out  std_logic_vector(g_prio_width - 1 downto 0);
-    ob_pck_size_o            : out  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--     ob_pck_size_o            : out  std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    ob_hp_o                  : out  std_logic;
     ob_transfer_data_ack_i   : in  std_logic;
 -------------------------------------------------------------------------------
 -- I/F with Page Transfer Input (PTI)
@@ -75,7 +76,8 @@ entity swc_pck_transfer_output is
     pti_transfer_data_ack_o    : out  std_logic;
     pti_pageaddr_i             : in   std_logic_vector(g_page_addr_width - 1 downto 0);
     pti_prio_i                 : in   std_logic_vector(g_prio_width - 1 downto 0);
-    pti_pck_size_i             : in   std_logic_vector(g_max_pck_size_width - 1 downto 0)
+--     pti_pck_size_i             : in   std_logic_vector(g_max_pck_size_width - 1 downto 0)
+    pti_hp_i                   : in   std_logic
     
     );
 end swc_pck_transfer_output;
@@ -86,7 +88,8 @@ architecture syn of swc_pck_transfer_output is
     signal ob_transfer_data_valid : std_logic;
     signal ob_pageaddr            : std_logic_vector(g_page_addr_width - 1 downto 0);
     signal ob_prio                : std_logic_vector(g_prio_width - 1      downto 0);
-    signal ob_pck_size            : std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--     signal ob_pck_size            : std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    signal ob_hp                  : std_logic;
     
 begin --arch
 
@@ -100,7 +103,8 @@ begin --arch
       --===================================================
       ob_pageaddr               <= (others => '0');
       ob_prio                   <= (others => '0');
-      ob_pck_size               <= (others => '0');
+--       ob_pck_size               <= (others => '0');
+      ob_hp                     <= '0';
       ob_transfer_data_valid    <= '0';
       pti_transfer_data_ack     <= '0';
       --===================================================
@@ -110,7 +114,8 @@ begin --arch
 
           ob_pageaddr <= pti_pageaddr_i;
           ob_prio     <= pti_prio_i;
-          ob_pck_size <= pti_pck_size_i;
+--           ob_pck_size <= pti_pck_size_i;
+          ob_hp       <= pti_hp_i;
           
         end if;        
 
@@ -136,6 +141,7 @@ begin --arch
   ob_transfer_data_valid_o  <= ob_transfer_data_valid;
   ob_pageaddr_o             <= ob_pageaddr;
   ob_prio_o                 <= ob_prio;
-  ob_pck_size_o             <= ob_pck_size;
+--   ob_pck_size_o             <= ob_pck_size;
+  ob_hp_o                   <= ob_hp;
   
 end syn; -- arch

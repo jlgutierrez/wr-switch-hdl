@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-28
--- Last update: 2012-07-10
+-- Last update: 2012-03-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -74,6 +74,7 @@
 -- 2012-01-20  3.0      mlipinsk wisbhonized
 -- 2012-02-02  4.0      mlipinsk generic-azed
 -- 2012-02-15  5.0      mlipinsk adapted to the new (async) MPM
+-- 2013-03-08  5.1      mlipinsk removed dsel
 -------------------------------------------------------------------------------
 -- TODO: 
 -- 1) think about enabling reception of new pck when still waiting for the transfer,
@@ -113,7 +114,12 @@ entity xswc_input_block is
     g_partial_select_width : integer;
     g_ll_data_width        : integer;
     g_max_oob_size         : integer;   -- on words (16 bits)
-    g_port_index           : integer    -- ID of this port
+    g_port_index           : integer;    -- ID of this port
+
+    --- resource management
+    g_resource_num         : integer;
+    g_resource_num_width   : integer
+    
     );
   port (
     clk_i   : in std_logic;
@@ -155,18 +161,35 @@ entity xswc_input_block is
 
     -- user count to be set (associated with an allocated page) in two cases:
     -- * mmu_pagereq_o    is HIGH - normal allocation
+    mmu_usecnt_alloc_o : out std_logic_vector(g_usecount_width - 1 downto 0);
     -- * mmu_set_usecnt_o is HIGH - force user count to existing page alloc
-    mmu_usecnt_o : out std_logic_vector(g_usecount_width - 1 downto 0);
+    mmu_usecnt_set_o   : out std_logic_vector(g_usecount_width - 1 downto 0);
 
     -- memory full
     mmu_nomem_i : in std_logic;
+
+    --------------------------- resource management ----------------------------------
+    -- resource number
+    --mmu_resource_i             : in  std_logic_vector(g_resource_num_width-1 downto 0);
+    
+    -- outputed when freeing
+    mmu_resource_o             : out std_logic_vector(g_resource_num_width-1 downto 0);
+
+    -- number of pages added to the resurce
+    mmu_rescnt_page_num_o      : out std_logic_vector(g_page_addr_width-1 downto 0);
+    mmu_set_usecnt_succeeded_i : in  std_logic;
+    mmu_res_full_i             : in  std_logic_vector(g_resource_num   -1 downto 0);
+    mmu_res_almost_full_i      : in  std_logic_vector(g_resource_num   -1 downto 0); 
+
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
 
     rtu_rsp_valid_i     : in  std_logic;
     rtu_rsp_ack_o       : out std_logic;
+    rtu_rsp_abort_o     : out std_logic;
     rtu_dst_port_mask_i : in  std_logic_vector(g_num_ports - 1 downto 0);
+    rtu_hp_i            : in  std_logic; 
     rtu_drop_i          : in  std_logic;
     rtu_prio_i          : in  std_logic_vector(g_prio_width - 1 downto 0);
 
@@ -222,11 +245,22 @@ entity xswc_input_block is
     -- forwarded
     pta_mask_o : out std_logic_vector(g_num_ports - 1 downto 0);
 
-    pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+--     pta_pck_size_o : out std_logic_vector(g_max_pck_size_width - 1 downto 0);
+
+    -- information about resoruce allocation
+--     pta_resource_o : out std_logic_vector(g_resource_num_width - 1 downto 0);
+    
+    -- htraffic
+    pta_hp_o : out std_logic;
 
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
-    tap_out_o : out std_logic_vector(49 + 62 downto 0)
+    dbg_hwdu_o  : out std_logic_vector(15 downto 0);
+
+    tap_out_o: out std_logic_vector(49 + 62 downto 0);
+    
+    dbg_pckstart_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
+    dbg_pckinter_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0)
 
     );
 end xswc_input_block;
@@ -241,20 +275,22 @@ architecture syn of xswc_input_block is
   constant c_max_transfer_delay_width : integer := integer(CEIL(LOG2(real(c_max_transfer_delay + 1))));
   
 
-  type t_page_alloc is(S_IDLE,          -- waiting for some work :)
-                       S_PCKSTART_SET_USECNT,  -- setting usecnt to a page which was allocated 
-                       -- in advance to be used for the first page of 
-                       -- the pck
-                       -- (only in case of the initially allocated usecnt
-                       -- is different than required)
-                       S_PCKSTART_PAGE_REQ,  -- allocating in advnace first page of the pck
-                       S_PCKINTER_PAGE_REQ);  -- allocating in advance page to be used by 
-  -- all but first page of the pck (inter-packet)
+  type t_page_alloc is(  S_IDLE,          -- waiting for some work :)
+                         S_PCKSTART_SET_AND_REQ, -- new state to do setting usecnt and requesting 
+                                                 -- new page at the same time 
+                         S_PCKSTART_SET_USECNT,  -- setting usecnt to a page which was allocated 
+                                  -- in advance to be used for the first page of 
+                                  -- the pck
+                                  -- (only in case of the initially allocated usecnt
+                                  -- is different than required)
+                         S_PCKSTART_PAGE_REQ,  -- allocating in advnace first page of the pck
+                         S_PCKINTER_PAGE_REQ);  -- allocating in advance page to be used by 
+                                  -- all but first page of the pck (inter-packet)
   type t_transfer_pck is(S_IDLE,  -- wait for some work :), it is used only after reset
                          S_READY,  -- being in S_READY state means that we are in sync with rcv_pck
                          S_WAIT_RTU_VALID,  -- Started receiving pck, wait for RTU decision
                          S_WAIT_SOF,  -- received RTU decision but new pck has not been started
-                         -- still receiving the old one, or non
+                                      -- still receiving the old one, or non
                          S_SET_USECNT,  -- set usecnt of the first page
                          S_WAIT_WITH_TRANSFER,  -- waits for ll_write to clear the first page
                          S_TOO_LONG_TRANSFER,
@@ -262,38 +298,38 @@ architecture syn of xswc_input_block is
 
                          S_TRANSFERED,  -- transfer has been done, waiting for the end of pck (EOF                         
                          S_DROP  -- after receiving RTU decision to drop the pck,
-                         -- it still needs to be received
+                                 -- it still needs to be received
                          ); 
 
   type t_rcv_pck is(S_IDLE,             -- wait for some work :)
-                    S_READY,  -- Can accept new pck (i.e. the previous pck has been transfered
-                    S_PAUSE,  -- need to pause reception (internal reason, e.g.: next page not allocated) 
-                    -- still receiving the old one, or non
-                    S_RCV_DATA,         -- accepting pck
-                    S_DROP,             -- if 
-                    S_WAIT_FORCE_FREE,  -- waits for the access to the force freeing process (it
-                    -- only happens when the previous request has not been handled
-                    -- (in theory, hardly possible, so it will happen for sure ;=))
-                    S_INPUT_STUCK  -- it might happen that the SWcore gets stack, in such case we need 
-                    -- to decide what to do (drop/stall/etc), it is recognzied and done
-                    -- here
-                    );
+                         S_READY,  -- Can accept new pck (i.e. the previous pck has been transfered
+                         S_PAUSE,  -- need to pause reception (internal reason, e.g.: next page not allocated) 
+                                   -- still receiving the old one, or non
+                         S_RCV_DATA,    -- accepting pck
+                         S_DROP,        -- if 
+                         S_WAIT_FORCE_FREE,  -- waits for the access to the force freeing process (it
+                                   -- only happens when the previous request has not been handled
+                                   -- (in theory, hardly possible, so it will happen for sure ;=))
+                         S_INPUT_STUCK  -- it might happen that the SWcore gets stack, in such case we need 
+                                   -- to decide what to do (drop/stall/etc), it is recognzied and done
+                                   -- here
+                         );
 
   type t_ll_write is(S_IDLE,            -- wait for some work :)
-                     S_READY_FOR_PGR_AND_DLAST,  -- can write both: 
-                     --  (1) request of inter-pck page (mpm_pg_req_i)
-                     --  (2) request of last page write (dlast)                                                       
-                     S_READY_FOR_DLAST_ONLY,  -- can write only last page (dlast) since the
-                     -- inter-pck page has not been allocated yet
-                     S_WRITE,  -- write Linked List (either double write (with 
-                     -- clearing the next page to be used) or just
-                     -- one page (if next page not allocated yet)
-                     S_EOF_ON_WR,  -- request for writting the last page (dlast) 
-                     -- received while writting to Linked List
-                     S_SOF_ON_WR  -- reception of new PCK received while writting
-                     );        -- this might require some work (if the next
-  -- first page is not cleard) but it also might
-  -- require no work 
+                          S_READY_FOR_PGR_AND_DLAST,  -- can write both: 
+                              --  (1) request of inter-pck page (mpm_pg_req_i)
+                              --  (2) request of last page write (dlast)                                                       
+                          S_READY_FOR_DLAST_ONLY,  -- can write only last page (dlast) since the
+                              -- inter-pck page has not been allocated yet
+                          S_WRITE,  -- write Linked List (either double write (with 
+                              -- clearing the next page to be used) or just
+                              -- one page (if next page not allocated yet)
+                          S_EOF_ON_WR,  -- request for writting the last page (dlast) 
+                              -- received while writting to Linked List
+                          S_SOF_ON_WR  -- reception of new PCK received while writting
+                          );  -- this might require some work (if the next
+                              -- first page is not cleard) but it also might
+                              -- require no work 
   -- state machines
   signal s_page_alloc   : t_page_alloc;  -- page allocation and usecnt setting
   signal s_transfer_pck : t_transfer_pck;  -- reception of RTU decision, its transfer to outputs
@@ -326,10 +362,12 @@ architecture syn of xswc_input_block is
   signal rtu_rsp_ack         : std_logic;
 
   -- rtu decision stored for the current pck
-  signal current_prio   : std_logic_vector(g_prio_width - 1 downto 0);
-  signal current_mask   : std_logic_vector(g_num_ports - 1 downto 0);
-  signal current_usecnt : std_logic_vector(g_usecount_width - 1 downto 0);
-  signal current_drop   : std_logic;
+  signal current_prio      : std_logic_vector(g_prio_width - 1 downto 0);
+  signal current_mask      : std_logic_vector(g_num_ports - 1 downto 0);
+  signal current_res_info  : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal current_hp        : std_logic;
+  signal current_usecnt    : std_logic_vector(g_usecount_width - 1 downto 0);
+  signal current_drop      : std_logic;
 
   -- this is stored when first page is taken from the allocated in advanced register
   signal current_pckstart_pageaddr : std_logic_vector(g_page_addr_width - 1 downto 0);
@@ -340,6 +378,8 @@ architecture syn of xswc_input_block is
   signal pta_transfer_pck : std_logic;
   signal pta_pageaddr     : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal pta_mask         : std_logic_vector(g_num_ports - 1 downto 0);
+  signal pta_resource     : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal pta_hp           : std_logic;
   signal pta_prio         : std_logic_vector(g_prio_width - 1 downto 0);
 --   signal pta_pck_size              : std_logic_vector(g_max_pck_size_width - 1 downto 0);  
 
@@ -362,7 +402,6 @@ architecture syn of xswc_input_block is
   signal snk_we_int        : std_logic;
   signal snk_stall_int     : std_logic;
   -- outputs
-  signal snk_err_int       : std_logic;
   signal snk_ack_int       : std_logic;
   signal snk_rty_int       : std_logic;
   signal snk_stall_force_h : std_logic;
@@ -394,7 +433,6 @@ architecture syn of xswc_input_block is
   -- used to produce delayed in_pck_sof -- basically, this is illegal by pWB standard, but 
   -- if it happens, we loose, pck, why not to take care of this?
   signal in_pck_sof_on_stall : std_logic;
-  signal in_pck_delayed_sof  : std_logic;
 
   -- indicates that the reception of pck finishes due to :
   -- (1) eof, error    (by in_pck_*)
@@ -426,10 +464,7 @@ architecture syn of xswc_input_block is
     next_page       : std_logic_vector(g_page_addr_width - 1 downto 0);
     next_page_valid : std_logic;
     addr            : std_logic_vector(g_page_addr_width - 1 downto 0);
---    dsel            : std_logic_vector(g_partial_select_width - 1 downto 0);
     size            : std_logic_vector(c_page_size_width - 1 downto 0);
---    oob_size        : std_logic_vector(c_max_oob_size_width - 1 downto 0);
---    oob_dsel        : std_logic_vector(g_partial_select_width - 1 downto 0);
     first_page_clr  : std_logic;
   end record;
 
@@ -502,7 +537,20 @@ architecture syn of xswc_input_block is
   signal lw_pckstart_pg_clred : std_logic;
   signal pckstart_pg_clred    : std_logic;
 
+  signal alloc_FSM : std_logic_vector(2  downto 0);
+  signal trans_FSM : std_logic_vector(3  downto 0);
+  signal rcv_p_FSM : std_logic_vector(3  downto 0);
+  signal linkl_FSM : std_logic_vector(3  downto 0);
+  
   signal zeros    : std_logic_vector(g_num_ports - 1 downto 0);
+  
+  constant c_wrf_status_error : t_wrf_status_reg := (
+        '0', -- is_hp
+        '0', -- has_smac
+        '0', -- has_crc
+        '1', -- error
+        '0', -- tag_me
+       x"00");-- match_class
   -------------------------------------------------------------------------------
   -- Function which calculates number of 1's in a vector
   ------------------------------------------------------------------------------- 
@@ -526,67 +574,95 @@ architecture syn of xswc_input_block is
 
   function f_gen_mask(index : integer; length : integer)
     return std_logic_vector is
-    variable tmp : std_logic_vector(length-1 downto 0);
+  variable tmp : std_logic_vector(length-1 downto 0);
   begin
-    tmp        := (others => '0');
+    tmp := (others => '0');
     tmp(index) := '1';
     return tmp;
-  end f_gen_mask;
-
-  function f_slv_resize(x : std_logic_vector; len : natural) return std_logic_vector is
+  end function f_gen_mask;
+  
+  function f_slv_resize(x: std_logic_vector; len: natural) return std_logic_vector is
     variable tmp : std_logic_vector(len-1 downto 0);
   begin
-    tmp                      := (others => '0');
+    tmp := (others => '0');
     tmp(x'length-1 downto 0) := x;
     return tmp;
-  end f_slv_resize;
+  end function f_slv_resize;
 
+function f_enum2nat (enum_arg :t_page_alloc) return std_logic_vector is
+begin
+  for t in t_page_alloc loop
+    if(enum_arg = t) then
+      return std_logic_vector(to_unsigned(t_page_alloc'pos(t),4));
+    end if;
+  end loop;  -- i
+  return "0000";
+end function f_enum2nat;
+function f_enum2nat (enum_arg :t_rcv_pck) return std_logic_vector is
+begin
+  for t in t_rcv_pck loop
+    if(enum_arg = t) then
+      return std_logic_vector(to_unsigned(t_rcv_pck'pos(t),4));
+    end if;
+  end loop;  -- i
+  return "0000";
+end function f_enum2nat;
+function f_enum2nat (enum_arg :t_ll_write) return std_logic_vector is
+begin
+  for t in t_ll_write loop
+    if(enum_arg = t) then
+      return std_logic_vector(to_unsigned(t_ll_write'pos(t),4));
+    end if;
+  end loop;  -- i
+  return "0000";
+end function f_enum2nat;
+function f_enum2nat (enum_arg :t_transfer_pck) return std_logic_vector is
+begin
+  for t in t_transfer_pck loop
+    if(enum_arg = t) then
+      return std_logic_vector(to_unsigned(t_transfer_pck'pos(t),4));
+    end if;
+  end loop;  -- i
+  return "0000";
+end function f_enum2nat;
 
+constant c_force_usecnt             : boolean :=  TRUE;
+  constant c_special_res            : std_logic_vector(7 downto 0) := x"01";
+  constant c_normal_res             : std_logic_vector(7 downto 0) := x"02"; 
+-- resource management
+  signal mmu_resource_out           : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal mmu_rescnt_page_num        : std_logic_vector(g_page_addr_width-1 downto 0);
+  signal mmu_res_full               : std_logic_vector(g_resource_num   -1 downto 0);
+  signal mmu_res_almost_full        : std_logic_vector(g_resource_num   -1 downto 0); 
 
+  signal unknown_res_page_cnt       : unsigned(g_page_addr_width-1 downto 0);
 
-  function f_enum2nat (enum_arg : t_page_alloc) return std_logic_vector is
-  begin
-    for t in t_page_alloc loop
-      if(enum_arg = t) then
-        return std_logic_vector(to_unsigned(t_page_alloc'pos(t), 4));
-      end if;
-    end loop;  -- i
-    return "0000";
-  end function f_enum2nat;
-  function f_enum2nat (enum_arg : t_rcv_pck) return std_logic_vector is
-  begin
-    for t in t_rcv_pck loop
-      if(enum_arg = t) then
-        return std_logic_vector(to_unsigned(t_rcv_pck'pos(t), 4));
-      end if;
-    end loop;  -- i
-    return "0000";
-  end function f_enum2nat;
-  function f_enum2nat (enum_arg : t_ll_write) return std_logic_vector is
-  begin
-    for t in t_ll_write loop
-      if(enum_arg = t) then
-        return std_logic_vector(to_unsigned(t_ll_write'pos(t), 4));
-      end if;
-    end loop;  -- i
-    return "0000";
-  end function f_enum2nat;
-  function f_enum2nat (enum_arg : t_transfer_pck) return std_logic_vector is
-  begin
-    for t in t_transfer_pck loop
-      if(enum_arg = t) then
-        return std_logic_vector(to_unsigned(t_transfer_pck'pos(t), 4));
-      end if;
-    end loop;  -- i
-    return "0000";
-  end function f_enum2nat;
+  signal res_info_valid             : std_logic;
+  signal res_info                   : std_logic_vector(g_resource_num_width-1 downto 0);
 
-  constant c_force_usecnt : boolean := true;
-
-begin  --arch
+  -- the number of pages reserved for a given resource (res_num) is not enough to accommodate
+  -- max_size ethernet frame. In most cases we don't know what the received frame's sie will be
+  -- (unless we needed to wait for RTU's decision to the end of reception) so we drop the frame
+  -- if the resoruce is almost full
+  signal res_info_almsot_full       : std_logic;
+  signal cur_res_info_almsot_full   : std_logic;
   
-  zeros <= (others => '0');
+  -- a currently requested resource is full
+  signal res_info_full              : std_logic;
+  signal cur_res_info_full          : std_logic;
+  signal mem_full_dump              : std_logic;
+  
+  -- synchronizing 4 FSMs to work together is not easy....:
+  signal tp_transfer_ready          : std_logic;
+  signal tp_transfer_rtu_valid      : std_logic;
+  signal tp_transfer_wait_sof       : std_logic;
+  signal tp_transfer_set_usecnt     : std_logic;
+  
+  signal dbg_dropped_on_res_full    : std_logic;
 
+begin  --archS_PCKSTART_SET_AND_REQ
+  
+  zeros                      <= (others => '0');
   --================================================================================================
   --------------------------------------------------------------------------------------------------
   -----------------------     Receiving the PCK and writting to MPM  -------------------------------
@@ -611,7 +687,7 @@ begin  --arch
 
   -- we store in FBM addr and data 
   in_pck_dat <= snk_adr_int & snk_dat_int;
-
+  
   -- detecting the end of the pck
   -- it is enough always, except special case when we receive eof during PAUSE state, 
   -- in this case,we come back to RCV_DATA and regenerate EOF (this is to make things simpler, 
@@ -622,21 +698,29 @@ begin  --arch
   in_pck_eof <= in_pck_eof_normal or in_pck_eof_on_pause;
 
   -- detecting error 
-  in_pck_err <= '1' when in_pck_dvalid = '1' and
-                (snk_adr_int = c_WRF_STATUS) and
-                (f_unmarshall_wrf_status(snk_dat_int).error = '1') else
+  in_pck_err <= '1' when  in_pck_dvalid = '1' and
+                         (snk_adr_int = c_WRF_STATUS) and
+                          (f_unmarshall_wrf_status(snk_dat_int).error = '1') else
                 '0';
-
-  --detecting end of data in the received frame, the data shall be followed by 
-  -- (1) nothing (end of frame) 
-  -- (2) OOB
-  -- (3) USER data
-  -- so end of data is most often not equal to end of frame
-
-  -- indicaste that the current input is data or status, 
-
+               
+  -- this indicates that a memory-full happens when the frame has been already tranfsered
+  -- to output (probably already being send out...) so we need to handled this properly, i.e.:
+  -- * write to MPM error status for the output
+  -- * stop receving    
+  mem_full_dump <= '1' when (lw_sync_2nd_stage_chk = '1' and 
+                             lw_sync_second_stage  = '0' and
+                             (mmu_nomem_i = '1' or cur_res_info_full = '1') and
+                            tp_transfer_valid = '1') else 
+                   '0';
+--   -- this indicates that frame has not been yet transfered, we are lucky, we can 
+--   -- just drop receving the frame with no extra magic                   
+--   mem_full_drop <= '1' when (lw_sync_2nd_stage_chk = '1' and 
+--                              lw_sync_second_stage  = '0' and
+--                              (mmu_nomem_i = '1' or cur_res_info_full = '1') and
+--                             tp_transfer_valid = '1') else 
+--                    '0';
   -- to simplify stuff:
-  finish_rcv_pck <= '1' when (in_pck_eof = '1' or in_pck_err = '1' or tp_drop = '1') else '0';
+  finish_rcv_pck <= '1' when (in_pck_eof = '1' or in_pck_err = '1' or tp_drop = '1' or mem_full_dump ='1') else '0';
   --==================================================================================================
   -- FSM to receive pcks, it translates pWB I/F into MPM I/F
   --==================================================================================================
@@ -663,7 +747,8 @@ begin  --arch
         -- tracks start of frame on the stall (not allowed, but sometimes happen)
         if(snk_cyc_int = '1' and snk_cyc_d0 = '0' and snk_stall_int = '1') then
           in_pck_sof_on_stall <= '1';
-        elsif(in_pck_delayed_sof = '1' and in_pck_sof_on_stall = '1') then
+--         elsif(in_pck_delayed_sof = '1' and in_pck_sof_on_stall = '1') then
+        elsif(in_pck_sof_delayed = '1' and in_pck_sof_on_stall = '1') then
           in_pck_sof_on_stall <= '0';
         end if;
 
@@ -712,7 +797,8 @@ begin  --arch
         rp_in_pck_err        <= '0';
         rp_accept_rtu        <= '1';
 
-        rp_rcv_first_page <= '0';
+        rp_rcv_first_page    <= '0';
+        rtu_rsp_abort_o      <= '0';
         --========================================
       else
 
@@ -720,7 +806,9 @@ begin  --arch
         mpm_dlast           <= '0';
         mpm_dvalid          <= '0';
         in_pck_eof_on_pause <= '0';
-        new_pck_first_page  <= '0';
+        --if(s_ll_write = S_WRITE) then
+          new_pck_first_page  <= '0';
+        --end if;
 
         case s_rcv_pck is
           --===========================================================================================
@@ -730,6 +818,7 @@ begin  --arch
             snk_stall_force_l <= '1';
             in_pck_dvalid_d0  <= '0';
             in_pck_dat_d0     <= (others => '0');
+            rtu_rsp_abort_o     <= '0';
 
             -- Sync with trasnfer_pck FSM and ll_write FSM: 
             if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then
@@ -742,9 +831,9 @@ begin  --arch
               -- received when we get the RTU decision, so we are waiting in IDLE.
               -- in such case, we will get tp_drop before getting tp_sync, but we will
               -- still have tp_drop when finally tp_sync is HIGH, so this is why the order of if's
-            elsif(tp_drop = '1' and  -- transfer_pck state indicates the drop decision
+            elsif(tp_drop            = '1'   and  -- transfer_pck state indicates the drop decision
                   mmu_force_free_req = '0') then  -- the pck is not being freed yet
-
+              
               mmu_force_free_addr <= current_pckstart_pageaddr;
 
               if(mmu_force_free_req = '1') then  -- it means that the previous request is still 
@@ -761,7 +850,7 @@ begin  --arch
                 snk_stall_force_l <= '0';
                 snk_stall_force_h <= '1';
                 rp_drop_on_stuck  <= '1';
-                rp_accept_rtu     <= '1';
+                rp_accept_rtu     <= '0'; -- high one cycle later (in drop)
               else                      -- by default: stall when stuck
                 snk_stall_force_h <= '1';
                 snk_stall_force_l <= '1';
@@ -797,6 +886,10 @@ begin  --arch
             --===========================================================================================
           when S_RCV_DATA =>
             --===========================================================================================
+            -- to extend the span of new_pck_first_page into s_ll_write = S_IDLE, when there is S_SOF
+            if(s_ll_write = S_SOF_ON_WR and new_pck_first_page = '1') then
+              new_pck_first_page <='1';
+            end if;
             if(in_pck_dvalid = '1') then
               in_pck_dvalid_d0 <= in_pck_dvalid;
               in_pck_dat_d0    <= in_pck_dat;
@@ -808,11 +901,30 @@ begin  --arch
               mpm_dlast <= '1';
             end if;
 
-            -- write to MPM data only if you know two consequtive WB writes, this is to detect EOF and
-            -- set HIGH dlast at an appropriate time
-            if((in_pck_dvalid = '1' and in_pck_dvalid_d0 = '1') or finish_rcv_pck = '1') then
+            if(in_pck_err = '1' and tp_drop = '0') then
+              -- write the error status to the memory (so it's properly sent -- with error)
+              -- and indicate that the error needs to be handled in the next cycle            
+              rp_in_pck_err   <= '1';
+              mpm_dvalid      <= '1';
+              mpm_data        <= in_pck_dat;                
+            elsif(mem_full_dump = '1')then
+              -- this is an exceptional situatio when
+              -- 1) we've already transfered RTU decision (so output is tx-ing) AND
+              -- 2) memory is full, so we cannot store the rx-ed frame          AND
+              -- 3) we cannot pause, if we do, we will create holse on the output
+              -- so we dump the frame, by writing to memory error status (so tx will dump) and
+              -- we stop rx-ing
+              -- We set rp_in_pck_err so it is handled in the next cycle as error
+--               rp_in_pck_err   <= '1';
+              mpm_dvalid      <= '1';
+              mpm_data        <= c_WRF_STATUS & -- generate error msg for out_block                          
+                                 f_marshall_wrf_status(c_wrf_status_error); 
+            elsif((in_pck_dvalid = '1' and in_pck_dvalid_d0 = '1') or finish_rcv_pck = '1') then
+              -- write to MPM data only if you know two consequtive WB writes, this is to detect EOF and
+              -- set HIGH dlast at an appropriate time
               mpm_dvalid <= '1';
               mpm_data   <= in_pck_dat_d0;
+
             end if;
 
             -- here we count the size of page and oob
@@ -827,8 +939,7 @@ begin  --arch
             end if;
 
             --- below deciding on the next state:
-
-            if(in_pck_err = '1') then
+            if(rp_in_pck_err = '1') then
 
               snk_stall_force_h <= '1';
               snk_stall_force_l <= '1';
@@ -855,7 +966,7 @@ begin  --arch
               -- decision from RTU to drop, PCK has not been transfered at all, so we need 
               -- to handle freeing. we also need to receive the rest of the pck
               -- TODO(1.0): throw error????
-            elsif(tp_drop = '1') then
+            elsif(tp_drop = '1' ) then
               
               mmu_force_free_addr <= current_pckstart_pageaddr;
 
@@ -864,14 +975,23 @@ begin  --arch
                 s_rcv_pck <= S_WAIT_FORCE_FREE;
               else
                 mmu_force_free_req <= '1';
-                s_rcv_pck          <= S_DROP;
+                 
+                -- it might happen that drop decision comes in the cycle when EOF - can go 
+                -- straight to IDLE
+                if(in_pck_eof = '1') then
+                  snk_stall_force_h <= '0';
+                  snk_stall_force_l <= '1';
+                  s_rcv_pck         <= S_IDLE;
+                else
+                  s_rcv_pck         <= S_DROP;
+                end if;
               end if;
 
               snk_stall_force_l <= '0';
               
             elsif(in_pck_eof = '1') then
               
-              snk_stall_force_h <= '1';
+              snk_stall_force_h <= '0';
               snk_stall_force_l <= '1';
               s_rcv_pck         <= S_IDLE;
 
@@ -890,9 +1010,17 @@ begin  --arch
               -- sync with (expliclitely) with ll_write and (implicitely) with transfer_pck 
               -- (transfer waits for  first page to be cleared (which is condition of sync_2nd_stage, 
             elsif(lw_sync_2nd_stage_chk = '1' and lw_sync_second_stage = '0') then
-              
-              snk_stall_force_h <= '1';
-              s_rcv_pck         <= S_PAUSE;
+             
+              if(mem_full_dump ='1') then 
+                -- stay in the the same state, we already set rp_in_pck_err and the problem
+                -- will be handled in the next cycle as error.
+                -- if this happens when EOF, we are fine cause EOF was already handled
+                s_rcv_pck         <= S_DROP;
+              else
+                -- hopefully will not happen
+                snk_stall_force_h <= '1';
+                s_rcv_pck         <= S_PAUSE;
+              end if;
 
             end if;
 
@@ -900,11 +1028,19 @@ begin  --arch
           when S_DROP =>
             --===========================================================================================
             
+
             if (in_pck_eof = '1' or in_pck_err = '1') then
               rp_drop_on_stuck  <= '0';
               snk_stall_force_h <= '1';
               snk_stall_force_l <= '1';
               s_rcv_pck         <= S_IDLE;
+              
+              if(rp_accept_rtu = '1' and rtu_rsp_valid_i = '0' ) then 
+                -- no RTU decision for the frame, abort rtu match
+                rp_accept_rtu       <= '0';
+                rtu_rsp_abort_o     <= '1';
+              end if;
+              
             end if;
 
             --===========================================================================================
@@ -951,7 +1087,10 @@ begin  --arch
           when S_INPUT_STUCK =>
             --===========================================================================================
             
-            if(tp_stuck = '0') then     -- un-stuck the input :)
+            if(tp_stuck = '0' and             -- un-stuck the input :)
+                   in_pck_sof = '0') then     -- could be solved better (more optimal: remember sof), but this will work
+                                              -- it happened that new frame came when transfer was acked (stuck signal UP..>)
+                                              -- in such case we were missing SOF and the frame)
 
               s_rcv_pck <= S_IDLE;
               
@@ -961,7 +1100,8 @@ begin  --arch
               if(g_input_block_cannot_accept_data = "drop_pck") then
                 snk_stall_force_l <= '0';
                 if (in_pck_sof = '1') then
-                  s_rcv_pck <= S_DROP;
+                  rp_accept_rtu     <= '1';
+                  s_rcv_pck         <= S_DROP;
                 end if;
 
                 -- by default: stall when stuck
@@ -992,7 +1132,7 @@ begin  --arch
   -- requestd, but the request takes time (more then 1 cycle). so we delay setting of 
   -- *rp_rcv_first_page* to be able to copie the addr to be clearted (in ll_write FSM) from 
   -- current_pckstart_pageaddr in case *rp_rcv_first_page* is asserted
-  if(new_pck_first_page = '1') then
+  if(new_pck_first_page = '1' and rp_rcv_first_page = '0') then
     rp_rcv_first_page <= '1';
   elsif((mpm_pg_req_i = '1' or mpm_dlast = '1') and rp_rcv_first_page = '1') then
     rp_rcv_first_page <= '0';
@@ -1071,11 +1211,16 @@ begin
       pckstart_usecnt_write  <= (others => '0');
       pckstart_usecnt_prev   <= (others => '0');
       pckstart_usecnt_pgaddr <= (others => '0');
+      
+      --- management
+      mmu_resource_out       <= (others => '0');
+      mmu_rescnt_page_num    <= (others => '0');
 
       --========================================
     else
 
-      -- main finite state machine
+      -- main finite state machine 
+      -- 
       case s_page_alloc is
 
         --===========================================================================================
@@ -1085,27 +1230,103 @@ begin
           pckstart_page_alloc_req <= '0';
           pckstart_usecnt_req     <= '0';
 
+--------------------------------------------new crap ---------------------------------------------------
+          if(tp_need_pckstart_usecnt_set = '1' and pckstart_page_in_advance = '0') then
+          
+            s_page_alloc            <= S_PCKSTART_SET_AND_REQ;
+            pckstart_usecnt_req     <= '1';
+            pckstart_page_alloc_req <= '1';
+            pckstart_usecnt_pgaddr  <= current_pckstart_pageaddr;
+            pckstart_usecnt_write   <= current_usecnt;
+            pckstart_usecnt_prev    <= current_usecnt;
+            ---------- source management  --------------
+            mmu_resource_out        <= current_res_info; --res_info; 
+            mmu_rescnt_page_num     <= std_logic_vector(unknown_res_page_cnt);
+            -------------------------------------------          
 
-          if(tp_need_pckstart_usecnt_set = '1') then
+          elsif(tp_need_pckstart_usecnt_set = '1' and pckstart_page_in_advance = '1') then
 
             s_page_alloc           <= S_PCKSTART_SET_USECNT;
             pckstart_usecnt_req    <= '1';
             pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
             pckstart_usecnt_write  <= current_usecnt;
             pckstart_usecnt_prev   <= current_usecnt;
+            ---------- source management  --------------
+            mmu_resource_out       <= current_res_info; --res_info; 
+            mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
+            -------------------------------------------
             
-          elsif(pckstart_page_in_advance = '0') then
+          elsif(pckstart_page_in_advance = '0' and  
+                rtu_rsp_ack              = '0') then -- added to give precedence to usecnt set
             
             pckstart_page_alloc_req <= '1';
             s_page_alloc            <= S_PCKSTART_PAGE_REQ;
             pckstart_usecnt_write   <= pckstart_usecnt_prev;
+            ---------- source management  --------------
+            mmu_resource_out        <= (others => '0'); -- always zero, even if we know (rare case)
+            mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
+            -----------------------------------------
             
-          elsif(pckinter_page_in_advance = '0') then
+          elsif(pckinter_page_in_advance = '0' and 
+                rtu_rsp_ack              = '0') then -- added to give precedence to usecnt set
             
             pckinter_page_alloc_req <= '1';
             s_page_alloc            <= S_PCKINTER_PAGE_REQ;
             pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
+            ---------- source management  --------------
+            if(res_info_valid = '1') then
+              mmu_resource_out        <= current_res_info;--res_info;
+            else
+              mmu_resource_out        <= (others => '0');            
+            end if;
+            mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
+            -------------------------------------------  
 
+          end if;
+
+          --===========================================================================================
+        when S_PCKSTART_SET_AND_REQ =>
+          --===========================================================================================    
+
+          if(mmu_set_usecnt_done_i = '1') then
+            pckstart_usecnt_req     <= '0';
+          end if;
+
+          if(mmu_page_alloc_done_i = '1') then
+            pckstart_page_alloc_req <= '0';            
+            -- remember the page start addr
+            pckstart_pageaddr       <= mmu_pageaddr_i;
+            pckstart_usecnt         <= pckstart_usecnt_write;     
+          end if;
+
+          -- it might happen that there is no more pages (but should not) and the usecnt_done
+          -- comes earlier then alloc_done. This is why we consider two cases for usecnt.
+          if((mmu_set_usecnt_done_i = '1' or pckstart_usecnt_req ='0') and mmu_page_alloc_done_i = '1') then
+            
+            if(pckinter_page_in_advance = '0') then
+              
+              pckinter_page_alloc_req <= '1';
+              s_page_alloc            <= S_PCKINTER_PAGE_REQ;
+              pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
+              ---------- source management  --------------
+
+-- -------------------------------- 01/11/2013: possible bug: --------------------------------
+-- see note below
+-- -------------------------------- ------------------------- -------------------------------- 
+--               if(res_info_valid = '1') then
+--                 mmu_resource_out        <= current_res_info; --res_info;
+--               else
+--                 mmu_resource_out        <= (others => '0');            
+--               end if;
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
+              ------------------------------------------- 
+              
+            else
+              
+              s_page_alloc <= S_IDLE;
+              
+            end if;
+            
           end if;
 
           --===========================================================================================
@@ -1120,12 +1341,33 @@ begin
               pckstart_page_alloc_req <= '1';
               s_page_alloc            <= S_PCKSTART_PAGE_REQ;
               pckstart_usecnt_write   <= pckstart_usecnt_prev;
+              ---------- source management  --------------
+              mmu_resource_out        <= (others => '0'); -- always zero, even if we know (rare case)
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
+              -------------------------------------------
               
             elsif(pckinter_page_in_advance = '0') then
               
               pckinter_page_alloc_req <= '1';
               s_page_alloc            <= S_PCKINTER_PAGE_REQ;
               pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
+              ---------- source management  --------------
+-- -------------------------------- 01/11/2013: possible bug: --------------------------------
+-- when we get RTU decision at the last page
+-- 1) we start S_PCKSTART_SET_USECNT
+-- 2) before the SET_USECNT state is exited, the frame finishes... the res_info_valid goes LOW
+-- 3) so when we allocate the next inter-frame page, we need to allocated it to the resource 
+--    of the finished frame, but the res_info is LOW, so we set mm_resource_out to zero.... 
+--    and we are f-ed with the page count. 
+-- this is why, if we enter S_PCKINTER_PAGE_REQ we remember the mm_resurce_out (not update)
+-- -------------------------------- ---------------------------------- -----------------------
+--               if(res_info_valid = '1') then
+--                 mmu_resource_out        <= current_res_info; --res_info;
+--               else
+--                 mmu_resource_out        <= (others => '0');            
+--               end if;
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
+              ------------------------------------------- 
               
             else
               
@@ -1153,13 +1395,25 @@ begin
               pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
               pckstart_usecnt_write  <= current_usecnt;
               pckstart_usecnt_prev   <= current_usecnt;
+              ---------- source management  --------------
+              mmu_resource_out       <= current_res_info; --res_info; 
+              mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
+              -------------------------------------------
               
             elsif(pckinter_page_in_advance = '0') then
               
               pckinter_page_alloc_req <= '1';
               s_page_alloc            <= S_PCKINTER_PAGE_REQ;
               pckstart_usecnt_write   <= std_logic_vector(to_unsigned(1, g_usecount_width));
-              
+              ---------- source management  --------------
+              if(res_info_valid = '1') then
+                mmu_resource_out        <= current_res_info; --res_info;
+              else
+                mmu_resource_out        <= (others => '0');            
+              end if;
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here        
+              ------------------------------------------- 
+
             else
               
               s_page_alloc <= S_IDLE;
@@ -1176,20 +1430,43 @@ begin
             pckinter_page_alloc_req <= '0';
             pckinter_pageaddr       <= mmu_pageaddr_i;
 
-            if(tp_need_pckstart_usecnt_set = '1') then
+            if(tp_need_pckstart_usecnt_set = '1' and pckstart_page_in_advance = '0') then
+          
+              s_page_alloc            <= S_PCKSTART_SET_AND_REQ;
+              pckstart_usecnt_req     <= '1';
+              pckstart_page_alloc_req <= '1';
+              pckstart_usecnt_pgaddr  <= current_pckstart_pageaddr;
+              pckstart_usecnt_write   <= current_usecnt;
+              pckstart_usecnt_prev    <= current_usecnt;
+              ---------- source management  --------------
+              mmu_resource_out        <= current_res_info; --res_info; 
+              mmu_rescnt_page_num     <= std_logic_vector(unknown_res_page_cnt);
+              -------------------------------------------          
+  
+            elsif(tp_need_pckstart_usecnt_set = '1' and pckstart_page_in_advance = '1') then
               
               s_page_alloc           <= S_PCKSTART_SET_USECNT;
               pckstart_usecnt_req    <= '1';
               pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
               pckstart_usecnt_write  <= current_usecnt;
               pckstart_usecnt_prev   <= current_usecnt;
-              
-            elsif(pckstart_page_in_advance = '0') then
+              ---------- source management  --------------
+              mmu_resource_out       <= current_res_info;--res_info; 
+              mmu_rescnt_page_num    <= std_logic_vector(unknown_res_page_cnt);
+              -------------------------------------------
+           
+
+            elsif(pckstart_page_in_advance = '0' and  
+                  rtu_rsp_ack              = '0') then -- added to give precedence to usecnt set
               
               pckstart_page_alloc_req <= '1';
               s_page_alloc            <= S_PCKSTART_PAGE_REQ;
               pckstart_usecnt_write   <= pckstart_usecnt_prev;
-              
+              ---------- source management  --------------
+              mmu_resource_out        <= (others => '0'); -- always zero, even if we know (rare case)
+              mmu_rescnt_page_num     <= (others => '0'); -- we don't use it here           
+              -------------------------------------------
+
             else
               
               s_page_alloc <= S_IDLE;
@@ -1218,21 +1495,26 @@ begin
   if rising_edge(clk_i) then
     if(rst_n_i = '0') then
       --========================================
-      current_mask   <= (others => '0');
-      current_drop   <= '0';
-      current_usecnt <= (others => '0');
-      current_prio   <= (others => '0');
-      current_usecnt <= (others => '0');
-      rtu_rsp_ack    <= '0';
+      current_mask      <= (others => '0');
+      current_res_info  <= (others => '0');
+      current_hp        <= '0';
+      current_drop      <= '0';
+      current_usecnt    <= (others => '0');
+      current_prio      <= (others => '0');
+      current_usecnt    <= (others => '0');
+      rtu_rsp_ack       <= '0';
       --========================================
     else
       -- remember input rtu decision
       if(rtu_rsp_valid_i = '1' and rtu_rsp_ack = '0' and rp_accept_rtu = '1') then
         -- make sure we're not forwarding packets to ourselves. 
-        current_mask   <= rtu_dst_port_mask_i;  -- and (not f_gen_mask(g_port_index, current_mask'length));
-        current_prio   <= rtu_prio_i;
-        current_drop   <= rtu_drop_i;
-        current_usecnt <= rtu_dst_port_usecnt;
+        current_mask      <= rtu_dst_port_mask_i; -- and (not f_gen_mask(g_port_index, current_mask'length));
+        current_res_info  <= res_info;
+        current_hp        <= rtu_hp_i;
+        current_prio      <= rtu_prio_i;
+        current_drop      <= rtu_drop_i or   -- RTU decides to dump the frame
+                             (res_info_almsot_full and not rtu_hp_i); -- the frame is not HP and we ar running our of memory
+        current_usecnt    <= rtu_dst_port_usecnt;
 
         rtu_rsp_ack <= '1';
       else
@@ -1350,6 +1632,8 @@ begin
       pta_transfer_pck <= '0';
       pta_pageaddr     <= (others => '0');
       pta_mask         <= (others => '0');
+      pta_resource     <= (others => '0');
+      pta_hp           <= '0';
       pta_prio         <= (others => '0');
       --========================================
     else
@@ -1376,7 +1660,7 @@ begin
           elsif(rtu_rsp_ack = '1' and in_pck_sof = '1') then
 
             -- don't need to set usecnt
-            if(current_usecnt = current_pckstart_usecnt and c_force_usecnt = false) then
+            if(current_usecnt = current_pckstart_usecnt and c_force_usecnt=FALSE) then
               -- if(current_usecnt = pckstart_usecnt_prev) then
 
               -- first page is cleared in the Linked List
@@ -1385,6 +1669,8 @@ begin
                 s_transfer_pck   <= S_TRANSFER;
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
+                pta_resource     <= current_res_info;
+                pta_hp           <= current_hp;
                 pta_prio         <= current_prio;
                 -- we take stright from allocated in 
                 -- advance because we are on SOF
@@ -1414,15 +1700,19 @@ begin
         when S_WAIT_RTU_VALID =>
           --===========================================================================================
 
+          -- error coming from rcv_pck FSM, ignore transfer
+          if (rp_in_pck_error = '1') then
+              s_transfer_pck <= S_DROP;
+
           -- RTU decision received
-          if(rtu_rsp_ack = '1') then
+          elsif(rtu_rsp_ack = '1') then
 
             -- error coming from rcv_pck FSM or RTU decisio no drop, both cases, ignore transfer
             if (rp_in_pck_error = '1' or tp_drop = '1') then
               s_transfer_pck <= S_DROP;
 
               -- don't need to set usecnt
-            elsif(current_usecnt = current_pckstart_usecnt and c_force_usecnt = false) then
+            elsif(current_usecnt = current_pckstart_usecnt and c_force_usecnt=FALSE) then
               -- elsif(current_usecnt = pckstart_usecnt_prev) then
 
               -- first page is cleared in the Linked List
@@ -1431,6 +1721,8 @@ begin
                 pta_transfer_pck <= '1';
                 pta_pageaddr     <= current_pckstart_pageaddr;
                 pta_mask         <= current_mask;
+                pta_resource     <= current_res_info;
+                pta_hp           <= current_hp;                
                 pta_prio         <= current_prio;
                 -- wait for the first page to be cleard, sync-ing transfer_pck and rcv_pck and ll_wrie
               else
@@ -1446,10 +1738,11 @@ begin
           --===========================================================================================
         when S_WAIT_SOF =>
           --===========================================================================================
+          
           if(in_pck_sof = '1') then
 
             -- don't need to set usecnt
-            if(current_usecnt = current_pckstart_usecnt and c_force_usecnt = false) then
+            if(current_usecnt = current_pckstart_usecnt and c_force_usecnt=FALSE) then
               -- if(current_usecnt = pckstart_usecnt_prev) then
 
               -- first page is cleared in the Linked List
@@ -1457,6 +1750,8 @@ begin
                 s_transfer_pck   <= S_TRANSFER;
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
+                pta_resource     <= current_res_info;
+                pta_hp           <= current_hp;                
                 pta_prio         <= current_prio;
                 -- take directly from allocation in advanc !!!
                 pta_pageaddr     <= pckstart_pageaddr;
@@ -1481,12 +1776,19 @@ begin
             -- error coming from rcv_pck FSM, ignore transfer
             if (rp_in_pck_error = '1') then
               s_transfer_pck <= S_DROP;
+              
+            -- there is no resources available so the set_usecnt operation was not successfull
+            -- we need to drop the pck
+            elsif(mmu_set_usecnt_succeeded_i = '0') then
+              s_transfer_pck <= S_DROP;
             else
               -- first page is cleared in the Linked List      
               if(lw_pckstart_pg_clred = '1') then
                 s_transfer_pck   <= S_TRANSFER;
                 pta_transfer_pck <= '1';
                 pta_mask         <= current_mask;
+                pta_resource     <= current_res_info;
+                pta_hp           <= current_hp;
                 pta_prio         <= current_prio;
                 pta_pageaddr     <= current_pckstart_pageaddr;
               else
@@ -1514,6 +1816,8 @@ begin
             s_transfer_pck   <= S_TRANSFER;
             pta_transfer_pck <= '1';
             pta_mask         <= current_mask;
+            pta_resource     <= current_res_info;
+            pta_hp           <= current_hp;
             pta_prio         <= current_prio;
             pta_pageaddr     <= current_pckstart_pageaddr;
           end if;
@@ -1540,11 +1844,11 @@ begin
           if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then
             s_transfer_pck <= S_READY;
 
-            -- this is to prevent trashing of the drop process (it happened that force_free was
-            -- re-done many times by rcv_pck FSM when transfer_pck FSM stayed in DROP state waiting
-            -- for global sync
+          -- this is to prevent trashing of the drop process (it happened that force_free was
+          -- re-done many times by rcv_pck FSM when transfer_pck FSM stayed in DROP state waiting
+          -- for global sync
           elsif(mmu_force_free_req = '1' and mmu_force_free_done_i = '1') then
-            s_transfer_pck <= S_IDLE;
+            s_transfer_pck <= S_IDLE;  
           end if;
 
           --===========================================================================================
@@ -1697,6 +2001,7 @@ begin
               ll_entry.eof             <= '1';
               ll_entry.addr            <= rp_ll_entry_addr;
               ll_entry.size            <= rp_ll_entry_size;
+              -- we use the space of next_page for dsel/size ..        
               ll_entry.next_page       <= (others => '0');
               ll_entry.next_page_valid <= '0';
               ll_entry.first_page_clr  <= '0';
@@ -1827,9 +2132,9 @@ lw_sync_second_stage <= '1' when (s_ll_write = S_READY_FOR_PGR_AND_DLAST and lw_
 lw_sync_2nd_stage_chk <= '1' when (page_word_cnt = to_unsigned(g_page_size - 3, c_page_size_width)) else '0';
 
 -- transfer_pck FSM sync (tp): needs to be true for rcv_pck to enter READY state
-tp_sync <= '1' when (s_transfer_pck = S_IDLE or  -- 
-                     s_transfer_pck = S_DROP or  -- 
-                     s_transfer_pck = S_TRANSFERED) else '0';
+tp_sync <= '1' when (s_transfer_pck = S_IDLE or               -- 
+                                 -- s_transfer_pck = S_DROP or  -- 
+                                  s_transfer_pck = S_TRANSFERED) else '0';
 
 -- rcv_pck FSM is sync-ed                                  
 rp_sync <= '1' when (s_rcv_pck = S_IDLE) else '0';
@@ -1839,15 +2144,127 @@ tp_stuck <= '1' when (s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
 
 -- transfer_pck FSM indicates that the frame should be dropped
 tp_drop <= '1' when ((s_transfer_pck = S_DROP) or
-                     ((current_drop = '1' or current_mask = zeros) and rtu_rsp_ack = '1')) else '0';
+                                  ((current_drop = '1' or current_mask = zeros) and rtu_rsp_ack = '1')) else '0';
 
 -- transfer_pck FSM indicates that transfer already started or is finished, 
-tp_transfer_valid <= '1' when (s_transfer_pck = S_TRANSFERED or
-                               s_transfer_pck = S_TRANSFER or
-                               s_transfer_pck = S_TOO_LONG_TRANSFER) else '0';
+tp_transfer_valid <= '1' when (s_transfer_pck            = S_TRANSFERED         or
+                                  s_transfer_pck         = S_TRANSFER           or
+                                  s_transfer_pck         = S_TOO_LONG_TRANSFER  or
+                                  tp_transfer_ready      = '1'                  or
+                                  tp_transfer_rtu_valid  = '1'                  or
+                                  tp_transfer_wait_sof   = '1'                  or
+                                  tp_transfer_set_usecnt = '1') else 
+                     '0';
 
+----------------------------------- this is nasty but should work.... ------------------------
+-- we need to detect cases where the decision about entering transfer state is being made...
+-- so I recreate the "if" statement which can cause the s_transfer_pck FSM to enter
+-- the S_TRANSFER state. THIS IS NASTY but tell me better way....
+tp_transfer_ready     <= '1' when ( s_transfer_pck       = S_READY                   and
+                                   (rtu_rsp_ack          = '0' or  tp_drop    = '0') and
+                                    rtu_rsp_ack          = '1'                       and
+                                    in_pck_sof           = '1'                       and
+                                    current_usecnt       = current_pckstart_usecnt   and 
+                                    c_force_usecnt       = FALSE                     and 
+                                    lw_pckstart_pg_clred = '1') else
+                          '0';      
+
+tp_transfer_rtu_valid <= '1' when ( s_transfer_pck       = S_WAIT_RTU_VALID        and
+                                    rp_in_pck_error      = '0'                     and 
+                                    rtu_rsp_ack          = '1'                     and
+                                    tp_drop              = '0'                     and 
+                                    current_usecnt       = current_pckstart_usecnt and
+                                    c_force_usecnt       = FALSE                   and 
+                                    lw_pckstart_pg_clred = '1') else
+                         '0';
+tp_transfer_wait_sof  <= '1' when ( s_transfer_pck       = S_WAIT_SOF              and
+                                    in_pck_sof           = '1'                     and
+                                    current_usecnt       = current_pckstart_usecnt and 
+                                    c_force_usecnt       = FALSE                   and 
+                                    lw_pckstart_pg_clred = '1') else
+                         '0';
+tp_transfer_set_usecnt<= '1' when ( s_transfer_pck        = S_SET_USECNT           and
+                                    mmu_set_usecnt_done_i = '1'                    and 
+                                    tp_need_pckstart_usecnt_set = '1'              and
+                                    rp_in_pck_error       = '0'                    and
+                                    mmu_set_usecnt_succeeded_i = '1'               and
+                                    lw_pckstart_pg_clred = '1') else
+                          '0';
+                          
 -- rcv_pck FSM indicates that there is or was error on the received pck
 rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
+
+
+--================================================================================================
+--------------------------------------------------------------------------------------------------
+--------------------------------        resource management       --------------------------------
+--------------------------------------------------------------------------------------------------
+--================================================================================================
+
+  -- generate signal indicating that the inforamtion about resource number for a given
+  -- pck is valid (based on RTU decision), it is used during allocation of a new
+  -- inter-pck page to indicate that the previous page was allocated to a give resource
+  res_info_valid <= '1' when ((s_transfer_pck = S_WAIT_SOF           or
+                               s_transfer_pck = S_SET_USECNT         or
+                               s_transfer_pck = S_WAIT_WITH_TRANSFER or
+                               s_transfer_pck = S_TOO_LONG_TRANSFER  or
+                               s_transfer_pck = S_TRANSFER           or
+                               s_transfer_pck = S_TRANSFERED       ) and
+                              (s_rcv_pck      = S_RCV_DATA           or 
+                               s_rcv_pck      = S_PAUSE            ))else 
+                    '0';
+
+  ---------------------------------------------
+  -- mapping of RTU decision into resources
+--   res_info             <= f_map_rtu_rsp_to_mmu_res(rtu_prio_i, rtu_hp_i , g_resource_num_width);
+  
+  res_info             <= c_special_res(g_resource_num_width-1 downto 0) when rtu_hp_i = '1' else
+                          c_normal_res (g_resource_num_width-1 downto 0);
+
+  res_info_almsot_full <= mmu_res_almost_full_i(to_integer(unsigned(res_info)));
+  res_info_full        <= mmu_res_full_i(to_integer(unsigned(res_info)));
+  
+  cur_res_info_almsot_full <= mmu_res_almost_full_i(to_integer(unsigned(current_res_info)));
+  cur_res_info_full        <= mmu_res_full_i(to_integer(unsigned(current_res_info)));
+
+  ---------------------------------------------
+  
+  p_cnt_unused_pages: process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        --================================================
+        unknown_res_page_cnt <= to_unsigned(0,unknown_res_page_cnt'length);
+        --================================================
+      else
+      
+        -- reset the count of pages allocated to unknown resource when sync-ing FSMs
+        if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then 
+          unknown_res_page_cnt <= to_unsigned(1,unknown_res_page_cnt'length);
+--         elsif(mpm_pg_req_i = '1' and mpm_dlast = '0' and s_transfer_pck = S_WAIT_RTU_VALID) then 
+        -- counting how many pages has been used before usecnt_set
+--         elsif((pckstart_page_in_advance = '0' or pckinter_page_in_advance ='0') and rtu_rsp_ack  = '0' and  -- the very same condition to enter S_PCKINTER_PAGE_REQ
+        elsif(pckinter_page_in_advance ='0' and rtu_rsp_ack  = '0' and  -- the very same condition to enter S_PCKINTER_PAGE_REQ
+              s_transfer_pck = S_WAIT_RTU_VALID and pckstart_page_alloc_req ='0' and pckinter_page_alloc_req ='0') then
+          unknown_res_page_cnt <= unknown_res_page_cnt + 1;
+        end if;
+
+      end if;  -- if(rst_n_i = '0') then
+    end if;  --rising_edge(clk_i) then
+
+  end process;
+
+
+ mmu_resource_o        <= mmu_resource_out;
+ mmu_rescnt_page_num_o <= mmu_rescnt_page_num;
+
+
+
+--================================================================================================
+--------------------------------------------------------------------------------------------------
+--------------------------------         inputs/outputs           --------------------------------
+--------------------------------------------------------------------------------------------------
+--================================================================================================
 
 --================================================================================================
 -- Input signals
@@ -1855,21 +2272,22 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 rtu_dst_port_usecnt <= std_logic_vector(to_unsigned(cnt(rtu_dst_port_mask_i), g_usecount_width));
 
 -- generating output STALL: fifo_full or stall_after_err or stall_when_stuck;
+-- snk_stall_int <= ((not mpm_dreq_i) or snk_stall_force_h or in_pck_eof) and snk_stall_force_l;
 snk_stall_int <= ((not mpm_dreq_i) or snk_stall_force_h) and snk_stall_force_l;
 
 snk_o.stall <= snk_stall_int;
 snk_o.err   <= '0';
 snk_o.ack   <= snk_ack_int;
-snk_o.rty   <= '0';  --snk_rty_int;             --'0'; 
+snk_o.rty   <= '0';--snk_rty_int;             --'0'; 
 --================================================================================================
 -- Output signals
 --================================================================================================
 
 rtu_rsp_ack_o <= rtu_rsp_ack;
 
-
 mmu_set_usecnt_o     <= pckstart_usecnt_req;
-mmu_usecnt_o         <= pckstart_usecnt_write;
+mmu_usecnt_set_o     <= pckstart_usecnt_write;
+mmu_usecnt_alloc_o   <= pckstart_usecnt_write;--std_logic_vector(to_unsigned(1,g_usecount_width));
 mmu_page_alloc_req_o <= pckinter_page_alloc_req or pckstart_page_alloc_req;
 
 mmu_force_free_o      <= mmu_force_free_req;
@@ -1885,17 +2303,20 @@ mpm_data_o    <= mpm_data;
 pta_transfer_pck_o <= pta_transfer_pck;
 pta_pageaddr_o     <= pta_pageaddr;
 pta_mask_o         <= pta_mask;         --current_mask;
+-- pta_resource_o     <= pta_resource;
+pta_hp_o           <= pta_hp;
 pta_prio_o         <= pta_prio;         --current_prio;
-pta_pck_size_o     <= (others => '0');  -- unused
+-- pta_pck_size_o     <= (others => '0');  -- unused
 
 -- pWB
---snk_dat_int <= snk_i.dat;
---snk_adr_int <= snk_i.adr;
+-- snk_dat_int <= snk_i.dat;
+-- snk_adr_int <= snk_i.adr;
 snk_sel_int <= snk_i.sel;
 snk_cyc_int <= snk_i.cyc;
 snk_stb_int <= snk_i.stb;
 snk_we_int  <= snk_i.we;
 
+--dsel--
 p_encode_byte_selects : process(snk_i)
 begin
   if(unsigned(not snk_i.sel) /= 0) then
@@ -1910,13 +2331,6 @@ begin
   end if;
 end process;
 
-
-
--- old
---  ll_data_eof(g_page_addr_width-1 downto g_page_addr_width-g_partial_select_width) <= ll_entry.dsel;
---  ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
---  ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others =>'0');
-
 ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
 ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others => '0');
 
@@ -1929,43 +2343,83 @@ ll_next_addr_o                          <= ll_entry.next_page;
 ll_next_addr_valid_o                    <= ll_entry.next_page_valid;
 ll_wr_req_o                             <= ll_wr_req;
 
+alloc_FSM <= "000" when (s_page_alloc = S_IDLE) else
+             "001" when (s_page_alloc = S_PCKSTART_SET_USECNT) else
+             "010" when (s_page_alloc = S_PCKSTART_PAGE_REQ) else
+             "011" when (s_page_alloc = S_PCKINTER_PAGE_REQ) else
+             "100" when (s_page_alloc = S_PCKSTART_SET_AND_REQ) else
+             "101" ;
+trans_FSM <= x"0" when (s_transfer_pck = S_IDLE) else
+             x"1" when (s_transfer_pck = S_READY) else
+             x"2" when (s_transfer_pck = S_WAIT_RTU_VALID) else
+             x"3" when (s_transfer_pck = S_WAIT_SOF) else
+             x"4" when (s_transfer_pck = S_SET_USECNT) else
+             x"5" when (s_transfer_pck = S_WAIT_WITH_TRANSFER) else
+             x"6" when (s_transfer_pck = S_TOO_LONG_TRANSFER) else
+             x"7" when (s_transfer_pck = S_TRANSFER) else
+             x"8" when (s_transfer_pck = S_TRANSFERED) else
+             x"9" when (s_transfer_pck = S_DROP) else
+             x"A";
 
+rcv_p_FSM <= x"0" when (s_rcv_pck = S_IDLE) else
+             x"1" when (s_rcv_pck = S_READY) else
+             x"2" when (s_rcv_pck = S_PAUSE) else
+             x"3" when (s_rcv_pck = S_RCV_DATA) else
+             x"4" when (s_rcv_pck = S_DROP) else
+             x"5" when (s_rcv_pck = S_WAIT_FORCE_FREE) else
+             x"6" when (s_rcv_pck = S_INPUT_STUCK) else
+             x"7";
 
+linkl_FSM <= x"0" when (s_ll_write = S_IDLE) else
+             x"1" when (s_ll_write = S_READY_FOR_PGR_AND_DLAST) else
+             x"2" when (s_ll_write = S_READY_FOR_DLAST_ONLY) else
+             x"3" when (s_ll_write = S_WRITE) else
+             x"4" when (s_ll_write = S_EOF_ON_WR) else
+             x"5" when (s_ll_write = S_SOF_ON_WR) else
+             x"6";
 
---tap_out_o <= f_slv_resize(              -- 
+dbg_hwdu_o <= rtu_rsp_valid_i & alloc_FSM & trans_FSM & rcv_p_FSM & linkl_FSM;
+
+dbg_dropped_on_res_full <= pckstart_usecnt_req and mmu_set_usecnt_done_i and (not mmu_set_usecnt_succeeded_i);
+
+dbg_pckstart_pageaddr_o <= pckstart_pageaddr;
+dbg_pckinter_pageaddr_o <= pckinter_pageaddr;
+
+-- tap_out_o <= f_slv_resize(              -- 
 --  -- f_enum2nat(s_rcv_pck) &               --
---  (mmu_nomem_i) &
---  (mmu_page_alloc_done_i) &
---  (pckinter_page_alloc_req or pckstart_page_alloc_req) &
---  snk_stall_int &
---  in_pck_sof_allowed &
---  in_pck_sof_on_stall &
---  snk_stall_d0 &
---  snk_cyc_int &                         -- 94
---  in_pck_sof_delayed &                  -- 93
---  f_enum2nat(s_transfer_pck) &          -- 89
---  lw_sync_second_stage &                -- 88
---  in_pck_err &                          -- 87
---  in_pck_eof &                          -- 86
---  in_pck_sof &                          -- 85
---  f_enum2nat(s_ll_write) &              -- 81
---  f_enum2nat(s_page_alloc) &            -- 77
---  pckinter_pageaddr &                   -- 67
---  pckinter_page_in_advance &            -- 66
---  '1' &                                 -- 65
-
---  ll_wr_req &                           -- 64
---  ll_wr_done_i &                        -- 63
---  ll_entry.addr &                       -- 54
---  ll_entry.valid &                      -- 53
---  ll_entry.eof &                        -- 52
---  ll_entry.oob_size &                   -- 49
---  ll_entry.next_page &                  -- 39
---  ll_entry.next_page_valid &            -- 38
---  "0000000000" &  --pta_pageaddr &                        -- 28
---  pta_transfer_pck &                    -- 27
---  "0000000000" &  --mpm_pg_addr &                         -- 17
---  mpm_pg_req_i,                         -- 16
---  50 + 62);
+--   (mmu_nomem_i) &
+--   (mmu_page_alloc_done_i) &
+--   (pckinter_page_alloc_req or pckstart_page_alloc_req) &
+--   snk_stall_int &
+--   in_pck_sof_allowed &
+--   in_pck_sof_on_stall &
+--   snk_stall_d0 &
+--   snk_cyc_int &                         -- 94
+--   in_pck_sof_delayed &                  -- 93
+--   f_enum2nat(s_transfer_pck) &          -- 89
+--   lw_sync_second_stage &                -- 88
+--   in_pck_err &                          -- 87
+--   in_pck_eof &                          -- 86
+--   in_pck_sof &                          -- 85
+--   f_enum2nat(s_ll_write) &              -- 81
+--   f_enum2nat(s_page_alloc) &            -- 77
+--   pckinter_pageaddr &                   -- 67
+--   pckinter_page_in_advance &            -- 66
+--   '1' &                                 -- 65
+-- 
+--   ll_wr_req &                           -- 64
+--   ll_wr_done_i &                        -- 63
+--   ll_entry.addr &                       -- 54
+--   ll_entry.valid &                      -- 53
+--   ll_entry.eof &                        -- 52
+--   ll_entry.dsel &                       -- 51
+--   ll_entry.oob_size &                   -- 49
+--   ll_entry.next_page &                  -- 39
+--   ll_entry.next_page_valid &            -- 38
+--   "0000000000" & --pta_pageaddr &                        -- 28
+--   pta_transfer_pck &                    -- 27
+--   "0000000000" & --mpm_pg_addr &                         -- 17
+--   mpm_pg_req_i,                         -- 16
+--   50 + 62);
 
 end syn;  -- arch

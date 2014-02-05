@@ -176,7 +176,7 @@ architecture Behavioral of scb_top_synthesis is
 
   attribute maxskew: string;
   attribute maxskew of clk_dmtd : signal is "0.5ns";
-
+  attribute buffer_type                    : string;
   -----------------------------------------------------------------------------
   -- Component declarations
   -----------------------------------------------------------------------------
@@ -212,6 +212,11 @@ architecture Behavioral of scb_top_synthesis is
   signal clk_gtx12_15 : std_logic;
   signal clk_gtx16_19 : std_logic;
 
+  attribute buffer_type of clk_dmtd       : signal is "BUFG";
+  attribute buffer_type of clk_ref        : signal is "BUFG";
+  attribute buffer_type of clk_aux        : signal is "BUFG";
+  attribute buffer_type of clk_sys        : signal is "BUFG";
+
   signal clk_gtx : std_logic_vector(c_NUM_PHYS-1 downto 0);
 
   signal cpu_nwait_int : std_logic;
@@ -236,7 +241,11 @@ architecture Behavioral of scb_top_synthesis is
     generic (
       g_num_ports       : integer;
       g_simulation      : boolean;
-      g_without_network : boolean);
+      g_without_network : boolean;
+      g_with_TRU        : boolean;
+      g_with_TATSU      : boolean;
+      g_with_HWDU       : boolean;
+      g_with_PSTATS     : boolean);
     port (
       sys_rst_n_i         : in  std_logic;
       clk_startup_i       : in  std_logic;
@@ -266,7 +275,7 @@ architecture Behavioral of scb_top_synthesis is
       uart_rxd_i          : in  std_logic;
       clk_en_o            : out std_logic;
       clk_sel_o           : out std_logic;
---    uart_sel_o          : out std_logic;
+      uart_sel_o          : out std_logic;
       clk_dmtd_divsel_o   : out std_logic;
       phys_o              : out t_phyif_output_array(g_num_ports-1 downto 0);
       phys_i              : in  t_phyif_input_array(g_num_ports-1 downto 0);
@@ -591,7 +600,11 @@ begin
     generic map (
       g_num_ports       => c_NUM_PORTS,
       g_simulation      => g_simulation,
-      g_without_network => false)
+      g_without_network => false,
+      g_with_TRU        => false,
+      g_with_TATSU      => false,
+      g_with_HWDU       => true,
+      g_with_PSTATS     => false)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_sys_startup,

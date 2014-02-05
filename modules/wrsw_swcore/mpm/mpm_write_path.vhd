@@ -135,7 +135,7 @@ architecture rtl of mpm_write_path is
   signal wport  : t_mpm_write_port_array(g_num_ports-1 downto 0);
 
 
-  signal arb_req, arb_grant : std_logic_vector(g_num_ports-1 downto 0);
+  signal arb_req, arb_grant, arb_grant_sreg : std_logic_vector(g_num_ports-1 downto 0);
 
   signal wr_mux_a_in : std_logic_vector(g_num_ports * c_fbm_addr_width -1 downto 0);
   signal wr_mux_d_in : std_logic_vector(g_num_ports * c_fbm_data_width -1 downto 0);
@@ -188,27 +188,43 @@ begin  -- rtl
   end generate gen_input_arbiter_ios;
 
 
-  U_RR_Arbiter: gc_rr_arbiter
-    generic map (
-      g_size => g_num_ports)
-    port map (
-      clk_i    => clk_core_i,
-      rst_n_i  => rst_n_core_i,
-      req_i    => arb_req,
-      grant_o  => arb_grant);
-  
-    --  -- The actual round-robin arbiter.
-    --p_input_arbiter : process(clk_core_i)
-    --begin
-    --  if rising_edge(clk_core_i) then
-    --    if rst_n_core_i = '0' then
-    --      arb_grant <= (others => '0');
-    --    else
-    --      f_rr_arbitrate(arb_req, arb_grant, arb_grant);
-    --    end if;
-    --  end if;
-    --end process;
+--   U_RR_Arbiter: gc_rr_arbiter
+--     generic map (
+--       g_size => g_num_ports)
+--     port map (
+--       clk_i    => clk_core_i,
+--       rst_n_i  => rst_n_core_i,
+--       req_i    => arb_req,
+--       grant_o  => arb_grant);
+--   
+     -- The actual round-robin arbiter.
+--     p_input_arbiter : process(clk_core_i)
+--     begin
+--      if rising_edge(clk_core_i) then
+--        if rst_n_core_i = '0' then
+--          arb_grant <= (others => '0');
+--        else
+--          f_rr_arbitrate(arb_req, arb_grant, arb_grant);
+--        end if;
+--      end if;
+--     end process;
 
+
+  p_input_arbiter : process(clk_core_i)
+  begin
+   if rising_edge(clk_core_i) then
+     if rst_n_core_i = '0' then
+       arb_grant                              <= (others => '0');
+       arb_grant_sreg(g_num_ports-1 downto 1) <= (others => '0');
+       arb_grant_sreg(0)                      <= '1';
+     else
+       -- spartan arbieter
+       arb_grant_sreg <= arb_grant_sreg(g_num_ports-2 downto 0) & arb_grant_sreg(g_num_ports-1); -- shift
+       arb_grant      <= arb_grant_sreg and arb_req;
+     end if;
+   end if;
+  end process;
+  
 
 
   -- write side address counter. Calculates the address of the entry in the F.B. Memory

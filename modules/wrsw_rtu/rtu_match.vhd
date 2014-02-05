@@ -17,7 +17,7 @@
 --
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Maciej Lipinski / CERN
+-- Copyright (c) 2010z Maciej Lipinski / CERN
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   
@@ -178,6 +178,9 @@ entity rtu_match is
     -- 1: packet is broadcast     
     rtu_pcr_b_unrec_i : in std_logic_vector(g_num_ports - 1 downto 0);
 
+    -- 
+    rtu_b_unrec_fw_cpu_i : in std_logic;
+    rtu_cpu_mask_i       : in std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
     -------------------------------------------------------------------------------
     -- HASH based on CRC
     -------------------------------------------------------------------------------   
@@ -221,7 +224,7 @@ architecture behavioral of rtu_match is
   signal s_rsp_dst_port_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);
   signal s_rsp_drop          : std_logic;
   signal s_rsp_prio          : std_logic_vector (c_wrsw_prio_width-1 downto 0);
-
+  signal s_rsp_bpdu          : std_logic; -- ML (oct 2012)
 --|manage input fifo
 --ML: signal s_rd_input_req_fifo  : std_logic;
 --ML: signal s_input_fifo_full    : std_logic;
@@ -337,17 +340,35 @@ architecture behavioral of rtu_match is
     return rv;
   end f_onehot_encode;
 
-
-
-  signal requesting_port : std_logic_vector(g_num_ports-1 downto 0);
+  signal requesting_port       : std_logic_vector(g_num_ports-1 downto 0);
+  signal s_urec_broadcast_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);  
   signal zeros : std_logic_vector(g_num_ports-1 downto 0);
-
-  signal s_urec_broadcast_mask : std_logic_vector(c_RTU_MAX_PORTS-1 downto 0);-- ML (11/04/2013)
 -------------------------------------------------------------------------------------------------------------------------
 --| Address outs and flag generation and 
 -------------------------------------------------------------------------------------------------------------------------
 begin
+
+  -- mask used for broadcasting unrecognizd traffic. such a broadcast should avoid
+  -- sending frames to NIC (CPU) which is port number g_num_ports - this coused switch's CPU
+  -- to get almost stuck. however, normal broadcast has to be forwarded to NIC so that
+  -- ARP and other protocols could work on it
+  -- 
+--   UREC_MASK: for i in 0 to c_RTU_MAX_PORTS-1 generate
+--       s_urec_broadcast_mask(i) <= '1' when (i < g_num_ports) else '0';
+--   end generate;
+
+  -- if forward of unrecognized frames to CPU is disabled (LOW), then we use
+  -- the cpu_mask to forward everywhere but to CPU, otherwise we do on all ports
+--   s_urec_broadcast_mask <= (not rtu_cpu_mask_i) when (rtu_b_unrec_fw_cpu_i = '0') else
+--                            (others =>'1');
+
+  -- ML (11/04/2013) : to prevent broadcasting of unrecognized frames to CPU
+  s_urec_broadcast_mask(g_num_ports-1     downto 0)           <= (others =>'1');
+  s_urec_broadcast_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) <= (others =>'1') when (rtu_b_unrec_fw_cpu_i = '1') else 
+                                                                 (others =>'0');   
+
   zeros <= (others =>'0');
+
   -----------------------------------------------------------------------------------------------------------------------
   --| Hash calculation
   -----------------------------------------------------------------------------------------------------------------------
@@ -355,10 +376,6 @@ begin
   -- the sooner we have feed, the sooner the hash function (asynch) 
   -- will start calculating hash (which takes time)
   s_hash_input_fid <= vlan_tab_entry_i.fid;
-
-  -- ML (11/04/2013) : to prevent broadcasting of unrecognized frames to CPU
-  s_urec_broadcast_mask(g_num_ports-1     downto 0)           <= (others =>'1');
-  s_urec_broadcast_mask(c_RTU_MAX_PORTS-1 downto g_num_ports) <= (others =>'0');
 
   --source hash calculate
   U_rtu_match_hash_src : rtu_crc
@@ -404,6 +421,7 @@ begin
         --do reset
         s_rsp_dst_port_mask <= (others => '0');
         s_rsp_drop          <= '0';
+        s_rsp_bpdu          <= '0';
         s_rsp_prio          <= (others => '0');
         s_htab_rd_data_ack  <= '0';
 
@@ -448,6 +466,7 @@ begin
             
             s_rsp_dst_port_mask <= (others => '0');
             s_rsp_drop          <= '0';
+            s_rsp_bpdu          <= '0';
             s_rsp_prio          <= (others => '0');
             s_htab_rd_data_ack  <= '0';
 
@@ -561,6 +580,7 @@ begin
                 s_port_id <= requesting_port;
 
                 s_rsp_drop          <= '1';
+                s_rsp_bpdu          <= '0';
                 s_rsp_dst_port_mask <= (others => '0');
                 s_rsp_prio          <= (others => '0');
                 mstate              <= OUTPUT_RESPONSE;
@@ -609,6 +629,7 @@ begin
 
               -- RETURN
               s_rsp_drop    <= '1';
+              s_rsp_bpdu    <= '0';
               mstate        <= OUTPUT_RESPONSE;
               s_vlan_tab_rd <= '0';
 
@@ -680,10 +701,6 @@ begin
               -------------------------------------------
               if(htab_found_i = '1') then
 
-                -- ML (24/03/2013): aging bugfix : update aging only for source found
-                -- s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
-                -- s_aram_main_wr     <= '1';
-
                 ----------------------------------------------------------------------------
                 --  SOURCE MAC ENTRY SEARCH 
                 ----------------------------------------------------------------------------                      
@@ -692,7 +709,7 @@ begin
                   -- ML (24/03/2013): aging bugfix : update aging only for source found
                   -- update aging aram (in any case that entry was found,
                   -- even if dropped later, we update aging aram
-                  s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(s_aram_bitsel_msb & htab_entry_i.bucket_entry)), 32);
+                  s_aram_main_data_o <= rtu_aram_main_data_i or f_onehot_encode(to_integer(unsigned(std_logic_vector'(s_aram_bitsel_msb & htab_entry_i.bucket_entry))), 32);
                   s_aram_main_wr     <= '1';
 
                   -------------------------------------------       
@@ -703,6 +720,7 @@ begin
 
                     -- RETURN
                     s_rsp_drop          <= '1';
+                    s_rsp_bpdu          <= '0';
                     s_rsp_dst_port_mask <= (others => '0');
                     s_rsp_prio          <= (others => '0');
                     mstate              <= OUTPUT_RESPONSE;
@@ -744,6 +762,7 @@ begin
 
                     -- RETURN
                     s_rsp_drop          <= '1';
+                    s_rsp_bpdu          <= '0';
                     s_rsp_dst_port_mask <= (others => '0');
                     s_rsp_prio          <= (others => '0');
                     mstate              <= OUTPUT_RESPONSE;
@@ -803,7 +822,8 @@ begin
                   if(s_src_dst_sel = '0') then
                     
                     
-                    s_src_entry_port_mask_src            <= (others => '1');  -- changed
+                    s_src_entry_port_mask_src            <= s_urec_broadcast_mask; --ML changed (mar2013) again, to avoid broadast to NIC, old:
+                                                                                   --(others => '1');  -- changed
                     s_src_entry_drop_unmatched_src_ports <= '0';
 
                     ----------------------------------------------------------------------------
@@ -842,6 +862,7 @@ begin
                       -- so we drop
                       
                       s_rsp_drop          <= '1';
+                      s_rsp_bpdu          <= '0';
                       s_rsp_dst_port_mask <= (others => '0');
                       s_rsp_prio          <= (others => '0');
                       mstate              <= OUTPUT_RESPONSE;
@@ -888,7 +909,7 @@ begin
             ----------------------------------------------------------------------------     
             if(s_src_dst_sel = '0') then
               
-              s_src_entry_port_mask_src            <= (others => '1');
+              s_src_entry_port_mask_src            <= s_urec_broadcast_mask; --ML changed (mar2013) to avoid broadcast to NIC, old: (others => '1');
               s_src_entry_drop_unmatched_src_ports <= '0';
               ----------------------------------------------------------------------------
               --  DESTINATION MAC ENTRY SEARCH
@@ -916,6 +937,7 @@ begin
                 -- so we drop
                 
                 s_rsp_drop          <= '1';
+                s_rsp_bpdu          <= '0';
                 s_rsp_dst_port_mask <= (others => '0');
                 s_rsp_prio          <= (others => '0');
                 mstate              <= OUTPUT_RESPONSE;
@@ -958,6 +980,7 @@ begin
 
                   -- RETURN
                   s_rsp_drop <= '1';
+                  s_rsp_bpdu <= '0';
                   mstate     <= OUTPUT_RESPONSE;
 
                   -------------------------------------------       
@@ -977,7 +1000,7 @@ begin
                   ----------------------------------------------------------------------------     
                   if(s_src_dst_sel = '0') then
                     
-                    s_src_entry_port_mask_src            <= (others => '1');
+                    s_src_entry_port_mask_src            <= s_urec_broadcast_mask; --ML changed (mar2013) to avoid broadcast to NIC, old:(others => '1');
                     s_src_entry_drop_unmatched_src_ports <= '0';
                     ----------------------------------------------------------------------------
                     --  DESTINATION MAC ENTRY SEARCH
@@ -987,8 +1010,7 @@ begin
                     s_dst_entry_is_bpdu       <= '0';
 --                     s_dst_entry_port_mask_dst <= (others => '1');
                     s_dst_entry_port_mask_dst <= s_urec_broadcast_mask; -- ML(11/04/2013)
-                    
-                    
+                                        
                   end if;
 
 
@@ -1067,6 +1089,7 @@ begin
 
                 -- RETURN
                 s_rsp_drop          <= '1';
+                s_rsp_bpdu          <= '0';
                 s_rsp_dst_port_mask <= (others => '0');
                 s_rsp_prio          <= (others => '0');
 
@@ -1088,7 +1111,7 @@ begin
 
                 --evaluate the final priority of the packet
                 s_rsp_drop <= '0';
-
+                s_rsp_bpdu <= s_dst_entry_is_bpdu; --- ML (oct2012 - new, to be verified)
                 -------------------------------------------       
                 -- set response PRIORITY
                 ------------------------------------------- 
@@ -1193,7 +1216,7 @@ begin
   rsp_fifo_write_o   <= '1' when mstate = OUTPUT_RESPONSE else '0';
   -- response strobe
 
-  rsp_fifo_output_o <= s_rsp_dst_port_mask & s_rsp_drop & s_rsp_prio & s_port_id;
+ rsp_fifo_output_o <= s_rsp_bpdu & s_rsp_dst_port_mask & s_rsp_drop & s_rsp_prio & s_port_id;
 
   htab_src_dst_o <= s_src_dst_sel; -- ML (24/03/2013): aging bugfix
   htab_port_o    <= s_port_id;     -- ML (24/03/2013): aging bugfix

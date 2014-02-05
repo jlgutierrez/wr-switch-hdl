@@ -177,7 +177,7 @@ architecture rtl of mpm_read_path is
   type t_rport_core_state_array is array(integer range <>) of t_rport_core_state;
   type t_rport_io_state_array is array(integer range <>) of t_rport_io_state;
 
-  signal mem_req, mem_grant : std_logic_vector(g_num_ports-1 downto 0);
+  signal mem_req, mem_grant, mem_grant_sreg : std_logic_vector(g_num_ports-1 downto 0);
   signal ll_req, ll_grant   : std_logic_vector(g_num_ports-1 downto 0);
 
   signal io   : t_rport_io_state_array(g_num_ports-1 downto 0);
@@ -191,8 +191,27 @@ architecture rtl of mpm_read_path is
   signal fbm_data_reg : std_logic_vector(c_fbm_data_width-1 downto 0);
 
   signal muxed : std_logic_vector(g_page_addr_width-1 downto 0);
-
+  
+  -- ML: signals to implement hack-ish abort by reseting read_path
+  -- * shorter reset signal for FIFOS
+  -- * longer reset signal for logic (i.e. U_Core_Block)
+  -- * abort which is prolonged, used as reset and connected to flush in U_IO_Block
+  signal fifos_rst_n_core        : std_logic_vector (g_num_ports-1 downto 0); -- ML-added
+  signal logic_rst_n_core        : std_logic_vector (g_num_ports-1 downto 0); -- ML-added
+  signal rport_abort_d           : std_logic_vector (g_num_ports-1 downto 0); -- ML-added
 begin  -- rtl
+
+  --ML: process to register abort (produce resets of differnt width)
+  p_abort_reset : process(clk_io_i)
+  begin
+    if rising_edge(clk_io_i) then
+      if(rst_n_io_i = '0') then
+        rport_abort_d  <= (others =>'0');
+      else
+        rport_abort_d  <= rport_abort_i;
+      end if;
+    end if;
+  end process;
 
 -- I/O structure serialization/deserialization
   gen_serialize_ios : for i in 0 to g_num_ports-1 generate
@@ -215,27 +234,43 @@ begin  -- rtl
 
   end generate gen_serialize_ios;
 
-
   -- The actual round-robin arbiter for muxing memory accesses.
-  --p_mem_arbiter : process(clk_core_i)
-  --begin
-  --  if rising_edge(clk_core_i) then
-  --    if rst_n_core_i = '0' then
-  --      mem_grant <= (others => '0');
-  --    else
-  --      f_rr_arbitrate(mem_req, mem_grant, mem_grant);
-  --    end if;
-  --  end if;
-  --end process;
+--   p_mem_arbiter : process(clk_core_i)
+--   begin
+--    if rising_edge(clk_core_i) then
+--      if rst_n_core_i = '0' then
+--        mem_grant <= (others => '0');
+--      else
+--        f_rr_arbitrate(mem_req, mem_grant, mem_grant);
+--      end if;
+--    end if;
+--   end process;
 
-  U_Mem_Arbiter: gc_rr_arbiter
-    generic map (
-      g_size => g_num_ports)
-    port map (
-      clk_i   => clk_core_i,
-      rst_n_i => rst_n_core_i,
-      req_i   => mem_req,
-      grant_o => mem_grant);
+--   U_Mem_Arbiter: gc_rr_arbiter
+--     generic map (
+--       g_size => g_num_ports)
+--     port map (
+--       clk_i   => clk_core_i,
+--       rst_n_i => rst_n_core_i,
+--       req_i   => mem_req,
+--       grant_o => mem_grant);
+      
+
+  p_mem_arbiter : process(clk_core_i)
+  begin
+   if rising_edge(clk_core_i) then
+     if rst_n_core_i = '0' then
+       mem_grant                              <= (others => '0');
+       mem_grant_sreg(g_num_ports-1 downto 1) <= (others => '0');
+       mem_grant_sreg(0)                      <= '1';
+     else
+       -- spartan arbieter
+       mem_grant_sreg <= mem_grant_sreg(g_num_ports-2 downto 0) & mem_grant_sreg(g_num_ports-1); -- shift
+       mem_grant      <= mem_grant_sreg and mem_req;
+     end if;
+   end if;
+  end process;
+  
 
   gen_mux_inputs : for i in 0 to g_num_ports-1 generate
     rd_mux_a_in(c_fbm_addr_width * (i + 1) - 1 downto c_fbm_addr_width * i) <= core(i).fbm_addr;
@@ -267,7 +302,7 @@ begin  -- rtl
         g_width => c_line_size_width + c_fbm_addr_width,
         g_size  => 8)
       port map (
-        rst_n_a_i => rst_n_core_i,
+        rst_n_a_i => fifos_rst_n_core(i), --ML: abort by reset --rst_n_core_i,
         clk_wr_i  => clk_io_i,
         clk_rd_i  => clk_core_i,
         we_i      => io(i).pf_we,
@@ -284,7 +319,7 @@ begin  -- rtl
         g_size           => g_fifo_size,
         g_sideband_width => 0)
       port map (
-        rst_n_a_i => rst_n_core_i,
+        rst_n_a_i => fifos_rst_n_core(i), -- ML: abort by reset 
         clk_wr_i  => clk_core_i,
         clk_rd_i  => clk_io_i,
         we_i      => core(i).df_we,
@@ -296,20 +331,31 @@ begin  -- rtl
         full_o    => core(i).df_full,
         empty_o   => io(i).df_empty);
 
+    -- ML: producing reset triggerd by abort 
+    -- both rst_n signals are used in mpm_async*fifo, inside this modules resets are asynch
+    -- (this is why we can use io_reset and io_signal)
+    p_reg_anded_reset: process(clk_io_i)
+    begin
+      if rising_edge(clk_io_i) then 
+        fifos_rst_n_core(i) <= rst_n_io_i and (not rport_abort_i(i));
+        logic_rst_n_core(i) <= rst_n_io_i and (not rport_abort_i(i)) and (not rport_abort_d(i));
+      end if;
+    end process;
+--     fifos_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i));
+--     logic_rst_n_core(i) <= rst_n_core_i and (not rport_abort_i(i)) and (not rport_abort_d(i));
   end generate gen_fifos;
 
-
--- The arbiter for accessing the linked list
-  --p_ll_arbiter : process(clk_io_i)
-  --begin
-  --  if rising_edge(clk_io_i) then
-  --    if rst_n_io_i = '0' then
-  --      ll_grant <= (others => '0');
-  --    else
-  --      f_rr_arbitrate(ll_req, ll_grant, ll_grant);
-  --    end if;
-  --  end if;
-  --end process;
+  --The arbiter for accessing the linked list
+--   p_ll_arbiter : process(clk_io_i)
+--   begin
+--    if rising_edge(clk_io_i) then
+--      if rst_n_io_i = '0' then
+--        ll_grant <= (others => '0');
+--      else
+--        f_rr_arbitrate(ll_req, ll_grant, ll_grant);
+--      end if;
+--    end if;
+--   end process;
 
   gen_ll_access_arbiter : for i in 0 to g_num_ports-1 generate
     ll_req(i)           <= io(i).ll_req ; --and not io(i).ll_grant;
@@ -342,9 +388,7 @@ begin  -- rtl
     end if;
   end process;
 
-
   gen_io_core_blocks : for i in 0 to g_num_ports-1 generate
-
 
     U_Core_Block: mpm_rpath_core_block
       generic map (
@@ -354,8 +398,8 @@ begin  -- rtl
         g_page_size       => g_page_size,
         g_ratio           => g_ratio)
       port map (
-        clk_core_i    => clk_core_i,
-        rst_n_core_i  => rst_n_core_i,
+        clk_core_i    => clk_core_i, 
+        rst_n_core_i  => logic_rst_n_core(i), --ML: abort by reset  --rst_n_core_i,
         fbm_req_o     => mem_req(i),
         fbm_grant_i   => mem_grant(i),
         fbm_addr_o    => core(i).fbm_addr,
@@ -407,5 +451,4 @@ begin  -- rtl
     core(i).pf_pg_lines <= core(i).pf_q(c_fbm_addr_width + c_line_size_width-1 downto c_fbm_addr_width);
   end generate gen_io_core_blocks;
   
-
 end rtl;

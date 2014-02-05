@@ -58,12 +58,13 @@ module swc_core_wrapper_generic
    swc_core
      #(
        .g_prio_num                         (`c_prio_num),
+       .g_output_queue_num                 (`c_output_queue_num),
        .g_max_pck_size                     (`c_max_pck_size),
        .g_max_oob_size                     (`c_max_oob_size),
        .g_num_ports                        (`c_num_ports),
        .g_pck_pg_free_fifo_size            (`c_pck_pg_free_fifo_size),
        .g_input_block_cannot_accept_data   (`c_input_block_cannot_accept_data),
-       .g_output_block_per_prio_fifo_size  (`c_output_block_per_prio_fifo_size),
+       .g_output_block_per_queue_fifo_size (`c_output_block_per_queue_fifo_size),
 
        .g_wb_data_width                    (`c_wb_data_width),
        .g_wb_addr_width                    (`c_wb_addr_width),
@@ -74,7 +75,8 @@ module swc_core_wrapper_generic
        .g_mpm_page_size                    (`c_mpm_page_size),
        .g_mpm_ratio                        (`c_mpm_ratio),
        .g_mpm_fifo_size                    (`c_mpm_fifo_size),
-       .g_mpm_fetch_next_pg_in_advance     (`c_mpm_fetch_next_pg_in_advance)
+       .g_mpm_fetch_next_pg_in_advance     (`c_mpm_fetch_next_pg_in_advance),
+       .g_drop_outqueue_head_on_full       (`c_drop_outqueue_head_on_full)
        ) DUT_swc_core(
               .clk_i               (clk_i),
               .clk_mpm_core_i      (clk_mpm_core_i),

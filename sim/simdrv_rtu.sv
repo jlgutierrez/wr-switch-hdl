@@ -1,5 +1,6 @@
 
 `include "regs/rtu_regs.vh"
+// `include "regs/rtu_regs_old.vh"
 `include "eth_packet.svh"
 `include "simdrv_defs.svh"
 
@@ -52,14 +53,22 @@ class CRTUSimDriver;
    
    extern task set_bus(CBusAccessor _bus, int _base_addr);
    extern task add_hash_entry(rtu_filtering_entry_t ent);
-   extern task set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en);
-
-   extern task add_static_rule(bit[7:0] dmac[], bit[31:0] dpm);
+   extern task set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en, bit dbg = 0);
+   extern task add_static_rule(bit[7:0] dmac[], bit[31:0] dpm, bit[7:0] fid=0);
    extern task add_vlan_entry(int vlan_id, rtu_vlan_entry_t ent);
    extern task poll_ufifo();
    
-
-   
+  // RTU extension functions
+   extern task rx_add_ff_mac_single(int mac_id, bit valid, bit[47:0] mac);
+   extern task rx_add_ff_mac_range(int mac_id, bit valid, bit[47:0] mac_lower, bit[47:0] mac_upper);
+   extern task rx_set_port_mirror(bit[31:0] mirror_src_mask, bit[31:0] mirror_dst_mask, bit rx, bit tx);
+   extern task rx_set_hp_prio_mask(bit[7:0] hp_prio_mask);
+   extern task rx_read_cpu_port();
+   extern task rx_forward_on_fmatch_full();
+   extern task rx_drop_on_fmatch_full();
+   extern task rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_single, bit  mac_range, bit mac_br);
+   extern task rx_feature_dbg(bit f_fast_match, bit f_full_match);
+   extern task rx_fw_to_CPU(bit hp, bit unrec);
    //   extern task run();
    extern protected task htab_write(int hash, int bucket, rtu_filtering_entry_t ent);
    extern protected task mfifo_write(int addr, int size, bit[31:0] data[]);
@@ -279,18 +288,18 @@ task CRTUSimDriver::add_hash_entry(rtu_filtering_entry_t ent);
         
 endtask // CRTUSimDriver
 
-task CRTUSimDriver::set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en);
+task CRTUSimDriver::set_port_config(int port, bit pass_all, bit pass_bpdu, bit learn_en, bit dbg = 0);
    uint64_t rv, tmp;
    
    bus.read(base_addr + `ADDR_RTU_PSR, rv);
-   $display("PSel: %d supported ports, configuration for port %d:", (rv>>8) & 'hff, port);
+   if(dbg) $display("PSel: %d supported ports, configuration for port %d:", (rv>>8) & 'hff, port);
    
 
-   if(learn_en  == 1) begin tmp = tmp | `RTU_PCR_LEARN_EN;  $display("learn"); end;
-   if(pass_all  == 1) begin tmp = tmp | `RTU_PCR_PASS_ALL;  $display("pass all"); end;
-   if(pass_bpdu == 1) begin tmp = tmp | `RTU_PCR_PASS_BPDU; $display("pass bpdu"); end;
+   if(learn_en  == 1) begin tmp = tmp | `RTU_PCR_LEARN_EN; if(dbg)  $display("learn"); end;
+   if(pass_all  == 1) begin tmp = tmp | `RTU_PCR_PASS_ALL; if(dbg)  $display("pass all"); end;
+   if(pass_bpdu == 1) begin tmp = tmp | `RTU_PCR_PASS_BPDU;if(dbg)  $display("pass bpdu"); end;
  
-   tmp = `RTU_PCR_B_UNREC | tmp; $display("broadcast unrecognized");
+   tmp = `RTU_PCR_B_UNREC | tmp; if(dbg) $display("broadcast unrecognized");
  
    bus.write(base_addr + `ADDR_RTU_PSR, port);
    bus.write(base_addr + `ADDR_RTU_PCR, tmp);
@@ -329,14 +338,14 @@ function bit[15:0] CRTUSimDriver::mac_hash(bit[7:0] mac[], bit[7:0] fid);
 endfunction // mac_hash
 
 
-task CRTUSimDriver::add_static_rule(bit[7:0] dmac[], bit[31:0] dpm);
+task CRTUSimDriver::add_static_rule(bit[7:0] dmac[], bit[31:0] dpm,  bit[7:0] fid=0);
    rtu_filtering_entry_t ent;
 
    ent.mac 	      = dmac;
    ent.valid 	      = 1'b1;
 //   ent.end_of_bucket  = 1;
    ent.is_bpdu = 0;
-   ent.fid = 0;
+   ent.fid = fid;
    ent.port_mask_dst = dpm;   
    ent.port_mask_src = 32'hffffffff;
    ent.drop_when_source=0;
@@ -363,11 +372,209 @@ task CRTUSimDriver::add_vlan_entry(int vlan_id, rtu_vlan_entry_t ent);
           | (ent.prio_override ? `RTU_VTR1_PRIO_OVERRIDE : 0)
           | (ent.has_prio ? `RTU_VTR1_HAS_PRIO : 0)
           | ((ent.prio & 'h7) << `RTU_VTR1_PRIO_OFFSET)
-          | ((ent.fid & 'hff) << `RTU_VTR1_FID_OFFSET);
+          | ((ent.fid & 'hff) << `RTU_VTR1_FID_OFFSET)
+          | (vlan_id & `RTU_VTR1_VID) ;
    
       bus.write(base_addr + `ADDR_RTU_VTR2, vtr2);
       bus.write(base_addr + `ADDR_RTU_VTR1, vtr1);
- 
+   $display("[CRTUSimDriver::add_vlan_entry] drop=%1d, has_prio=%1d, prio=%1d,\
+prio_override=%1d, fid=%1d, vlan_id=%1d", ent.drop, ent.has_prio, ent.prio, 
+                                          ent.prio_override, ent.fid, vlan_id);
    
 endtask // CRTUSimDriver
 
+task CRTUSimDriver::rx_add_ff_mac_single(int mac_id, bit valid, bit[47:0] mac);
+   uint64_t mac_hi, mac_lo;
+
+
+   mac_lo = `RTU_RX_FF_MAC_R0_LO     & (mac[31:0]  << `RTU_RX_FF_MAC_R0_LO_OFFSET);
+   mac_hi = `RTU_RX_FF_MAC_R1_HI_ID  & (mac[47:32] << `RTU_RX_FF_MAC_R1_HI_ID_OFFSET) |
+            `RTU_RX_FF_MAC_R1_ID     & (mac_id     << `RTU_RX_FF_MAC_R1_ID_OFFSET)    |
+            `RTU_RX_FF_MAC_R1_TYPE   & (0          << `RTU_RX_FF_MAC_R1_TYPE_OFFSET)  |     
+            `RTU_RX_FF_MAC_R1_VALID  & (valid      << `RTU_RX_FF_MAC_R1_VALID_OFFSET);
+                
+   bus.write(base_addr + `ADDR_RTU_RX_FF_MAC_R0, mac_lo);
+   bus.write(base_addr + `ADDR_RTU_RX_FF_MAC_R1, mac_hi);
+ 
+   $display("RTU eXtension: set fast forward single mac (id=%d, valid=%d) of 0xd",mac_id, valid,mac);
+   
+endtask // CRTUSimDriver
+
+task CRTUSimDriver::rx_add_ff_mac_range(int mac_id, bit valid, bit[47:0] mac_lower, bit[47:0] mac_upper);
+   uint64_t mac_hi, mac_lo;
+   int m_mac_id; // modified mac id
+   
+   // writting lower boundary of the mac range
+   m_mac_id = (~(1 << 7) ) & mac_id; // lower range (highest bit is low)
+
+   mac_lo = `RTU_RX_FF_MAC_R0_LO     & (mac_lower[31:0]  << `RTU_RX_FF_MAC_R0_LO_OFFSET);
+   mac_hi = `RTU_RX_FF_MAC_R1_HI_ID  & (mac_lower[47:32] << `RTU_RX_FF_MAC_R1_HI_ID_OFFSET) |
+            `RTU_RX_FF_MAC_R1_ID     & (m_mac_id      << `RTU_RX_FF_MAC_R1_ID_OFFSET)    |
+            `RTU_RX_FF_MAC_R1_TYPE   & (1             << `RTU_RX_FF_MAC_R1_TYPE_OFFSET)  |     
+            `RTU_RX_FF_MAC_R1_VALID  & (valid         << `RTU_RX_FF_MAC_R1_VALID_OFFSET);
+                
+   bus.write(base_addr + `ADDR_RTU_RX_FF_MAC_R0, mac_lo);
+   bus.write(base_addr + `ADDR_RTU_RX_FF_MAC_R1, mac_hi);
+ 
+   // writting upper boundary of the mac range
+   m_mac_id = (1 << 7) | mac_id; // upper range high (highest bit is low)
+
+   mac_lo = `RTU_RX_FF_MAC_R0_LO     & (mac_upper[31:0]  << `RTU_RX_FF_MAC_R0_LO_OFFSET);
+   mac_hi = `RTU_RX_FF_MAC_R1_HI_ID  & (mac_upper[47:32] << `RTU_RX_FF_MAC_R1_HI_ID_OFFSET) |
+            `RTU_RX_FF_MAC_R1_ID     & (m_mac_id      << `RTU_RX_FF_MAC_R1_ID_OFFSET)    |
+            `RTU_RX_FF_MAC_R1_TYPE   & (1             << `RTU_RX_FF_MAC_R1_TYPE_OFFSET)  |     
+            `RTU_RX_FF_MAC_R1_VALID  & (valid         << `RTU_RX_FF_MAC_R1_VALID_OFFSET) ;
+                
+   bus.write(base_addr + `ADDR_RTU_RX_FF_MAC_R0, mac_lo);
+   bus.write(base_addr + `ADDR_RTU_RX_FF_MAC_R1, mac_hi);
+   
+   $display("RTU eXtension: set fast forward mac range: (id=%d, valid=%d):", mac_id, valid);
+   $display("\t lower_mac = 0x%x",mac_lower);
+   $display("\t upper_mac = 0x%x",mac_upper);
+
+endtask // CRTUSimDriver
+
+task CRTUSimDriver::rx_set_port_mirror(bit[31:0] mirror_src_mask, bit[31:0] mirror_dst_mask, bit rx, bit tx);
+   uint64_t mp_src_rx, mp_src_tx, mp_dst, mp_sel;
+
+   $display("RTU eXtension: set port mirroring:" );
+
+   mp_dst    = `RTU_RX_MP_R1_MASK  & (mirror_dst_mask<< `RTU_RX_MP_R1_MASK_OFFSET);
+   mp_src_tx = 0;
+   mp_src_rx = 0;
+
+   mp_sel    =  (0 << `RTU_RX_MP_R0_DST_SRC_OFFSET); // destinatioon
+   bus.write(base_addr + `ADDR_RTU_RX_MP_R0, mp_sel);
+   bus.write(base_addr + `ADDR_RTU_RX_MP_R1, mp_dst);
+
+   if(rx) begin
+     mp_src_rx = `RTU_RX_MP_R1_MASK  & (mirror_src_mask<< `RTU_RX_MP_R1_MASK_OFFSET); 
+     mp_sel    = 0;
+     mp_sel    =(1 << `RTU_RX_MP_R0_DST_SRC_OFFSET) | (0 << `RTU_RX_MP_R0_RX_TX_OFFSET); 
+     bus.write(base_addr + `ADDR_RTU_RX_MP_R0, mp_sel);   
+     bus.write(base_addr + `ADDR_RTU_RX_MP_R1, mp_src_rx);
+    
+   end;
+
+   if(tx) begin
+     mp_src_tx = `RTU_RX_MP_R1_MASK  & (mirror_src_mask<< `RTU_RX_MP_R1_MASK_OFFSET); 
+     mp_sel    = 0;
+     mp_sel    =(1 << `RTU_RX_MP_R0_DST_SRC_OFFSET) | (1 << `RTU_RX_MP_R0_RX_TX_OFFSET); 
+     bus.write(base_addr + `ADDR_RTU_RX_MP_R0, mp_sel);   
+     bus.write(base_addr + `ADDR_RTU_RX_MP_R1, mp_src_tx);   
+   end;
+
+   $display("\t mirror output port(s) mask                 (dst)    = 0x%x",mp_dst);
+   $display("\t ingress traffic mirror source port(s) mask (src_rx) = 0x%x",mp_src_rx);   
+   $display("\t egress  traffic mirror source port(s) mask (src_tx) = 0x%x",mp_src_tx);
+   
+   
+endtask // CRTUSimDriver
+
+task CRTUSimDriver::rx_set_hp_prio_mask(bit[7:0] hp_prio_mask);
+   uint64_t mask;
+
+   mask = `RTU_RX_CTR_PRIO_MASK  & (hp_prio_mask << `RTU_RX_CTR_PRIO_MASK_OFFSET);
+                
+   bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
+   $display("RTU eXtension: set hp priorities (for which priorities traffic is considered HP), mask=0x%x",hp_prio_mask );
+endtask // CRTUSimDriver
+
+task CRTUSimDriver::rx_read_cpu_port();
+   uint64_t mask;
+
+   bus.read(base_addr + `ADDR_RTU_CPU_PORT, mask);
+   $display("RTU eXtension: CPU port (to which link-limited traffic is forwarded) mask=0x%x",mask );
+endtask // CRTUSimDriver
+
+task CRTUSimDriver::rx_forward_on_fmatch_full();
+   uint64_t rd_mask, wr_mask;
+   bus.read(base_addr + `ADDR_RTU_RX_CTR, rd_mask);
+   $display("RTU eXtension: forward (broadcast) on full_match full");
+   wr_mask = `RTU_RX_CTR_AT_FMATCH_TOO_SLOW | rd_mask;
+   bus.write(base_addr + `ADDR_RTU_RX_CTR, wr_mask);
+endtask // CRTUSimDriver
+task CRTUSimDriver::rx_drop_on_fmatch_full();
+   uint64_t mask;
+   bus.read(base_addr + `ADDR_RTU_RX_CTR, mask);
+   mask = (~`RTU_RX_CTR_AT_FMATCH_TOO_SLOW) & mask;
+   bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
+   $display("RTU eXtension: drop on full_match full");
+endtask // CRTUSimDriver
+
+
+task CRTUSimDriver::rx_feature_ctrl(bit mr, bit mac_ptp, bit mac_ll, bit mac_single, bit  mac_range, bit mac_br);
+   uint64_t mask;
+   bus.read(base_addr + `ADDR_RTU_RX_CTR, mask);
+
+   mask = 'hFFFFFFC0 & mask; 
+   mask =(((mr          << `RTU_RX_CTR_MR_ENA_OFFSET)        & `RTU_RX_CTR_MR_ENA)        |     
+          ((mac_ptp     << `RTU_RX_CTR_FF_MAC_PTP_OFFSET)    & `RTU_RX_CTR_FF_MAC_PTP)    |  
+          ((mac_ll      << `RTU_RX_CTR_FF_MAC_LL_OFFSET)     & `RTU_RX_CTR_FF_MAC_LL)     | 
+          ((mac_single  << `RTU_RX_CTR_FF_MAC_SINGLE_OFFSET) & `RTU_RX_CTR_FF_MAC_SINGLE) |  
+          ((mac_range   << `RTU_RX_CTR_FF_MAC_RANGE_OFFSET)  & `RTU_RX_CTR_FF_MAC_RANGE)  |  
+          ((mac_br      << `RTU_RX_CTR_FF_MAC_BR_OFFSET)     & `RTU_RX_CTR_FF_MAC_BR)   ) |
+           mask;
+   bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
+   $display("RTU eXtension features:");
+   if(mr        ) $display("\t Port Mirroring                           - enabled"); 
+   else           $display("\t Port Mirroring                           - disabled"); 
+   if(mac_ptp   ) $display("\t PTP fast forward                         - enabled"); 
+   else           $display("\t PTP fast forward                         - disabled");
+   if(mac_br    ) $display("\t Broadcast fast forward                   - enabled"); 
+   else           $display("\t Broadcast fast forward                   - disabled");  
+   if(mac_ll    ) $display("\t Link-limited traffic (BPDU) fast forward - enabled"); 
+   else           $display("\t Link-limited traffic (BPDU) fast forward - disabled");
+   if(mac_single) $display("\t Single configured MACs fast forward      - enabled"); 
+   else           $display("\t Single configured MACs fast forward      - disabled"); 
+   if(mac_range ) $display("\t Range of configured MACs fast forward    - enabled"); 
+   else           $display("\t Range of configured MACs fast forward    - disabled"); 
+   
+endtask // CRTUSimDriver
+
+task CRTUSimDriver::rx_feature_dbg(bit f_fast_match, bit f_full_match);
+   uint64_t mask = 0;
+   bus.read(base_addr + `ADDR_RTU_RX_CTR, mask);
+   
+   if(f_fast_match & f_full_match)
+   begin
+     $display("RTU eXtension debugging features: FAILED (you want to sent all, cannot do that, use one feature at at time)"); 
+     return;
+   end
+   if(f_fast_match)
+     begin
+     mask = `RTU_RX_CTR_FORCE_FAST_MATCH_ENA | mask;
+     $display("RTU eXtension debugging features: set fast match only"); 
+     end
+   else if(f_full_match)
+     begin
+     mask = `RTU_RX_CTR_FORCE_FULL_MATCH_ENA | mask;
+     $display("RTU eXtension debugging features: set full match only"); 
+     end
+   else
+     begin
+     $display("RTU eXtension debugging features: FAILED (nothing to set)"); 
+     return;
+     end
+   
+   bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
+
+endtask 
+
+task CRTUSimDriver::rx_fw_to_CPU(bit hp, bit unrec);
+   uint64_t mask;
+   bus.read(base_addr + `ADDR_RTU_RX_CTR, mask);
+   mask = 'hFFF0FFFF & mask; 
+   /*$display("RTU eXtension features debugging: 2: cleared mask: 0x%x",mask);*/         
+   mask =(((hp    << `RTU_RX_CTR_HP_FW_CPU_ENA_OFFSET)    & `RTU_RX_CTR_HP_FW_CPU_ENA)   |
+          ((unrec << `RTU_RX_CTR_UREC_FW_CPU_ENA_OFFSET)  & `RTU_RX_CTR_UREC_FW_CPU_ENA))|
+           mask;
+//    $display("RTU eXtension features debugging: 1: written mask: 0x%x",mask);
+   bus.write(base_addr + `ADDR_RTU_RX_CTR, mask);
+   $display("RTU eXtension features [forward to CPU]:");
+   if(hp        ) $display("\t Forward HP to CPU                        - enabled"); 
+   else           $display("\t Forward HP to CPU                        - disabled"); 
+   if(unrec     ) $display("\t Forward unrecognized broadcast to CPU    - enabled"); 
+   else           $display("\t Forward unrecognized broadcast to CPU    - disabled");
+   
+endtask // CRTUSimDriver

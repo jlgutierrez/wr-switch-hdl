@@ -508,7 +508,18 @@ class NICPacketSink extends EthPacketSink;
    function int poll();
       return (nic.rx_queue.size() > 0) ? 1 :0; 
    endfunction // poll
-   
+
+  //ML stuff
+  function int permanent_stall_enable();
+    //empty
+    return 0;
+  endfunction  
+  //ML stuff
+  function int permanent_stall_disable();
+    // empty
+    return 0;
+  endfunction
+  
    task recv(ref EthPacket pkt, ref int result = _null);
       while(!nic.rx_queue.size()) #1ns;
       pkt = nic.rx_queue.pop_front();

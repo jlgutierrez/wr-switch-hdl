@@ -1,0 +1,261 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+
+-------------------------------------------------------------------------------
+-- Title      : Wishbone Register Block (slave)
+-- Project    : White Rabbit Time Aware Traffic Shaper
+-------------------------------------------------------------------------------
+-- File       : tatsu_wishbone_controller.wb
+-- Author     : Maciej Lipinski
+-- Company    : CERN BE-CO-HT
+-- Created    : 2013-03-01
+-- Last update: 2013-03-01
+-------------------------------------------------------------------------------
+-- Description: 
+-------------------------------------------------------------------------------
+--
+-- Copyright (c) 2013 CERN / BE-CO-HT
+--
+-- This source file is free software; you can redistribute it   
+-- and/or modify it under the terms of the GNU Lesser General   
+-- Public License as published by the Free Software Foundation; 
+-- either version 2.1 of the License, or (at your option) any   
+-- later version.                                               
+--
+-- This source is distributed in the hope that it will be       
+-- useful, but WITHOUT ANY WARRANTY; without even the implied   
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      
+-- PURPOSE.  See the GNU Lesser General Public License for more 
+-- details.                                                     
+--
+-- You should have received a copy of the GNU Lesser General    
+-- Public License along with this source; if not, download it   
+-- from http://www.gnu.org/licenses/lgpl-2.1l.html
+--
+-------------------------------------------------------------------------------
+
+peripheral {
+
+	name = "WR switch Time Aware Traffic Shaper controller";
+	description = "TATSU controller";
+	hdl_entity = "tatsu_wishbone_controller";
+	prefix = "tatsu";
+
+-- ECR
+	reg {
+		name = "TATSU Control Register/Status";
+		prefix = "TCR";
+		description = "General TATSU control and status register";
+		
+			field {
+				name = "Validate new settings, enable TATSU (if disabled)";
+				description = "1: validates settings and enables TATSU\
+				               0: does nothing";
+				prefix = "VALIDATE";
+				type = MONOSTABLE;
+			};
+
+			field {
+				name = "Stop TATSU";
+				description = "1: disables Time Aware Traffic Shapper\
+						0: does nothing ";
+				prefix = "DISABLE";
+				type = MONOSTABLE;
+			};
+			field {
+				name = "Drop no-HP at HP";
+				description = "Drop transmitted frame when frame with high priority awaits transmission\
+                                             1: Enable feature\
+						0: Disable feature";
+				prefix = "DROP_ENA";
+				type = BIT;
+				align = 8;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				
+			};
+			field {
+				name = "Min repeat value";
+				description = "Repeats the minimum repeat value which can be set";
+				prefix = "MIN_RPT";
+				type = SLV;
+				size = 8;
+				align = 8;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+
+			field {
+				name = "TATSU started";
+				description = "1: TATSU is running with the validated settings (the set time has been already reached, now we repeat)\
+				               0: TATSU is not running (probably waiting for the time";
+				prefix = "STARTED";
+				type = BIT;
+				align = 8;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Delayed start";
+				description = "1: The time indicated with the settings as a start has been missed (time adjustment at this particular time) so the start is attempted repeat_cycles later (if attemt successful, the STARTED bit is set)\
+				               0: Normal start";
+				prefix = "DELAYED";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Settings OK";
+				description = "1: The settings has been validated succesfully\
+				               0: If checked after asserting VALIDATE it indicates that settings where not accepted -- the error bit is probably set and indicaes what went wrokng)";
+				prefix = "STG_OK";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Settings Error";
+				description = "1: Indicates Shapers error - check other error bits for details\
+				               0: Shaper seems to be working OK";
+				prefix = "STG_ERR";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Settings Error: TAI value";
+				description = "1: Error triggered by wrong TAI value (probably you tried to set time in the past)\
+				               0: TAI value OK";
+				prefix = "STG_ERR_TAI";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Settings Error: cycle value";
+				description = "1: Error triggered by wrong cycle value\
+				               0: Cycle value OK";
+				prefix = "STG_ERR_CYC";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Settings Error: repeat value";
+				description = "1: Error triggered by wrong repeat value (too small or too big)\
+				               0: Repeat value OK";
+				prefix = "STG_ERR_RPT";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Internal Time Sync Error";
+				description = "1: Shaper stopped working due to the error with synchronizing internal counter with time soruce (tm_cycle_i), this is because the tm_time_valid_i was too long down)\
+				               0: Time Sync OK";
+				prefix = "STG_ERR_SNC";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+	};
+-- TSR
+	reg {
+		name = "TATSU Settings Register 0";
+		prefix = "TSR0";
+		description = "TATSU Settings register 0";
+			
+			field {
+				name = "Quanta";
+				description = "Window length (time measured in quanta=512 bits time)";
+				prefix = "QNT";
+				type = SLV;
+				size = 16;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+			field {
+				name = "Window Priorit Mask";
+				description = "Mask which indicates which priorities (Classe of Service) are allowed within the window\
+				              1 at bit N - indicates that traffic on priority N is allowed during Window\
+				              0 at bit N - indicates that traffic on priority N is blocked during Window";
+				prefix = "prio";
+				type = SLV;
+				size = 8;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+			field {
+				name = "Start time (hi_TAI)";
+				description = "Start time: high bits of the TAI value [39:32]";
+				prefix = "hTAI";
+				type = SLV;
+				size = 8;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+	};
+	reg {
+		name = "TATSU Settings Register 1";
+		prefix = "TSR1";
+		description = "TATSU Settings register 1";
+			
+
+			field {
+				name = "Start time (lo_TAI)";
+				description = "Start timeLow bits of the TAI value [31:0]";
+				prefix = "lTAI";
+				type = SLV;
+				size = 32;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+	};
+	reg {
+		name = "TATSU Settings Register 2";
+		prefix = "TSR2";
+		description = "TATSU Settings register 2";
+			
+
+			field {
+				name = "Start time (cycles)";
+				description = "Start time: cycles part of time";
+				prefix = "cyc";
+				type = SLV;
+				size = 28;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+	};
+ 	reg {
+		name = "TATSU Settings Register 3";
+		prefix = "TSR3";
+		description = "TATSU Settings register 3";
+			
+
+			field {
+				name = "Repeat time (cycle)";
+				description = "Repeat time: defines (in cycles units) how often the window shall be repeated";
+				prefix = "cyc";
+				type = SLV;
+				size = 28;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+	};
+ 	reg {
+		name = "TATSU Settings Register 4";
+		prefix = "TSR4";
+		description = "TATSU Settings register 4";
+			
+
+			field {
+				name = "Ports mask";
+				description = "Mask which indicated which ports shall be affected by the shaper";
+				prefix = "ports";
+				type = SLV;
+				size = 32;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+	};
+};

@@ -57,7 +57,7 @@
 
 `include "allocator/common.svh"
 
-//`define DBG_ALLOC //if defined, the allocation debugging is active: we track the number of allocated
+`define DBG_ALLOC //if defined, the allocation debugging is active: we track the number of allocated
                   //and de-allocated pages
 
 typedef struct {
@@ -223,15 +223,20 @@ module main_generic;
       //pkt.set_size(100);
       
       q.push_back(pkt);
+      //set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
 //      fork
 //        begin
           src[port].send(pkt);
 //        end
 //	begin
 //	  automatic int tmp_rtu_wait = (77*((global_seed*100)/3))%400 ;
-	  wait_cycles(tmp_rtu_wait);
-	  $display("rtu wait: %4d cycles",tmp_rtu_wait);
-          set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
+	  
+	  
+	  //wait_cycles(tmp_rtu_wait);
+	  //$display("rtu wait: %4d cycles",tmp_rtu_wait);
+	  
+	  
+         set_rtu_rsp(port,1 /*valid*/,drop /*drop*/,prio /*prio*/,mask /*mask*/); 
 //        end        
 //      join
       if(dbg) $display("Sent     @ port_%1d to mask=0x%x [with prio=%1d, drop=%1d ]!", port, mask, prio, drop);
@@ -424,8 +429,11 @@ module main_generic;
       EthPacketGenerator gen;
       int j;
       int n_ports = `c_num_ports;
-      int mask_opt=1;     
-      int n_packets =500;
+      //int mask_opt=0; // sent to "random" ports;     
+      int mask_opt=1;// send to the same port (one);     
+      //int mask_opt=2;// send to N+1 port (one);     
+      //int mask_opt=3;// send to port 0;     
+      int n_packets =200; //200
       // initialization
       initPckSrcAndSink(src, sink, n_ports);
       gen       = new;
@@ -434,108 +442,188 @@ module main_generic;
       
       @(posedge rst_n);
       @(posedge clk);
-      wait_cycles(500);
+      wait_cycles(600);
       
 //      for(j=0;j<30;j++)
 //        send_random_packet(src,txed, 0 /*port*/, 0 /*drop*/,7 /*prio*/, 1 /*mask*/);    
 
       //for(j=0;j<`c_num_ports;j++) begin
       
-      //U_wrf_sink[0].permanent_stall_enable();
+      U_wrf_sink[0].permanent_stall_enable();
 
-      
+      U_wrf_sink[0].settings.gen_random_stalls = 0;
+      U_wrf_sink[1].settings.gen_random_stalls = 0;
+      U_wrf_sink[2].settings.gen_random_stalls = 0;
+      U_wrf_sink[3].settings.gen_random_stalls = 0;
+      U_wrf_sink[4].settings.gen_random_stalls = 0;
+      U_wrf_sink[5].settings.gen_random_stalls = 0; 
+      U_wrf_sink[6].settings.gen_random_stalls = 0; 
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
        fork 
           begin
             automatic int  p = 0;
             automatic bit [`c_num_ports:0] mask;
+            automatic bit [`c_num_ports:0] prio;
             //automatic bit [`c_num_ports:0] mask; 
             for(int z=0; z<n_packets; z++) begin  
-              //if(mask_opt == 0)
+              if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
-             // else
-              //  mask = (1<<(p%(`c_num_ports)));	      
-              send_random_packet(src,txed, p, 0,7 , mask);  
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
+              else
+		$display("wrong mask_opt");
+
+              prio = (z%8);
+	      if     (prio == 7) prio = 7;
+	      else if(prio == 6) prio = 2;
+	      else               prio = 0;
+              send_random_packet(src,txed, p, 0, prio, mask);  
             end
           end
+      
           begin
             automatic int  p = 1;
             automatic bit [`c_num_ports:0] mask;
+	    automatic bit [`c_num_ports:0] prio;
             //automatic bit [`c_num_ports:0] mask; 
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
-              send_random_packet(src,txed, p, 0,7 , mask);  
+		$display("wrong mask_opt");
+              prio = (z%8);      
+	      if     (prio == 7) prio = 7;
+	      else if(prio == 6) prio = 2;
+	      else               prio = 0;
+              send_random_packet(src,txed, p, 0, prio , mask);  
             end
           end
-
+  
           begin
             automatic int  p = 2;
             automatic bit [`c_num_ports:0] mask;
+	    automatic bit [`c_num_ports:0] prio;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
-              send_random_packet(src,txed, p, 0,7 , mask);  
+		$display("wrong mask_opt");
+              mask = 4;
+	      prio = (z%8);
+              send_random_packet(src,txed, p, 0,prio , mask);  
             end
           end
 
           begin
             automatic int  p = 3;
             automatic bit [`c_num_ports:0] mask;
+	    automatic bit [`c_num_ports:0] prio;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
-              send_random_packet(src,txed, p, 0,7 , mask);  
+		$display("wrong mask_opt");
+	      prio = (z%8);
+              send_random_packet(src,txed, p, 0,prio , mask);  
             end
           end
           
           begin
             automatic int  p = 4;
             automatic bit [`c_num_ports:0] mask;
+	    automatic bit [`c_num_ports:0] prio;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
-              send_random_packet(src,txed, p, 0,7 , mask);  
+		$display("wrong mask_opt");
+	      prio = (z%8);
+              send_random_packet(src,txed, p, 0,prio , mask);  
             end
           end
           begin
             automatic int  p = 5;
             automatic bit [`c_num_ports:0] mask;
+	    automatic bit [`c_num_ports:0] prio;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
-              send_random_packet(src,txed, p, 0,7 , mask);  
+		$display("wrong mask_opt");
+	      prio = (z%8);
+              send_random_packet(src,txed, p, 0,prio , mask);  
             end
           end   
+          
           begin
             automatic int  p = 6;
             automatic bit [`c_num_ports:0] mask;
+	    automatic bit [`c_num_ports:0] prio;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
-              send_random_packet(src,txed, p, 0,7 , mask);  
+		$display("wrong mask_opt");
+	      prio = (z%8);
+              send_random_packet(src,txed, p, 0,prio , mask);  
             end
           end 
+  /*        
           begin
             automatic int  p = 7;
             automatic bit [`c_num_ports:0] mask;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end           
@@ -545,8 +633,14 @@ module main_generic;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end 
@@ -556,8 +650,14 @@ module main_generic;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end 
@@ -567,8 +667,14 @@ module main_generic;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end           
@@ -578,8 +684,14 @@ module main_generic;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end   
@@ -589,8 +701,14 @@ module main_generic;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end   
@@ -600,8 +718,14 @@ module main_generic;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end   
@@ -611,8 +735,14 @@ module main_generic;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
           end   
@@ -622,11 +752,18 @@ module main_generic;
             for(int z=0; z<n_packets; z++) begin  
               if(mask_opt == 0)
                 mask = mask^(1<<(z%(`c_num_ports)));
+              else if (mask_opt == 1)
+                mask = (1<<((p)%(`c_num_ports)));	      
+              else if (mask_opt == 2)
+                mask = (1<<((p+1)%(`c_num_ports)));	      
+              else if (mask_opt == 3)
+                mask = 1;
               else
-                mask = (1<<(p%(`c_num_ports)));	 
+		$display("wrong mask_opt");
               send_random_packet(src,txed, p, 0,7 , mask);  
             end
-          end             
+          end  
+*/          
        join_any
 //////////////////////////////////////////////////////////////////////////////////////////////////
       
@@ -644,13 +781,13 @@ module main_generic;
 */
 
    
-`define MMU DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit
+ `define MMU DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit
  `define MMUC DUT_xswcore_wrapper.DUT_swc_core.xswcore.memory_management_unit.alloc_core
 
-  wait_cycles(1000);        
-  // U_wrf_sink[0].permanent_stall_disable();
+  wait_cycles(7000);        
+   U_wrf_sink[0].permanent_stall_disable();
   
-  wait_cycles(40000); 
+  wait_cycles(80000); 
   
   transferReport(); // here we wait for all pcks to be received and then make statistics
   memoryLeakageReport();
@@ -788,22 +925,24 @@ module main_generic;
 
 
    
-   always @(posedge clk) if(`MMU.pg_alloc & `MMU.pg_done)
+   always @(posedge clk) if(`MMU.pg_alloc != 0 && `MMU.pg_done != 0)
 
      begin
      int address;  
      int usecnt;
+     int port;
      
-     usecnt = `MMU.pg_usecnt;
+     usecnt  = `MMU.pg_usecnt;
+     port    = `MMU.in_sel;
      
-    //     wait(`MMU.pg_addr_valid);
+     wait_cycles(2);     
+     address = `MMU.pg_addr_alloc;
      
-     address =  `MMU.pgaddr_alloc_o;
      pg_alloc_cnt[address][pg_alloc_cnt[address][0]+1]= usecnt;
      pg_alloc_cnt[address][0]++;
      
      alloc_table[address].usecnt[alloc_table[address].cnt]   = usecnt;
-        alloc_table[address].port[alloc_table[address].cnt]     = 0;//onehot2int(`MMU.in_sel;
+     alloc_table[address].port[alloc_table[address].cnt]     = port; 
      alloc_table[address].cnt++;
      
    end   

@@ -55,33 +55,40 @@ entity swc_pck_pg_free_module is
   generic( 
     g_page_addr_width       : integer ;--:= c_swc_page_addr_width;
     g_pck_pg_free_fifo_size : integer ;--:= c_swc_freeing_fifo_size
-    g_data_width            : integer
+    g_data_width            : integer ;
+    g_resource_num_width    : integer 
     );
   port (
     clk_i   : in std_logic;
     rst_n_i : in std_logic;
 
-    ib_force_free_i         : in  std_logic;
-    ib_force_free_done_o    : out std_logic;
-    ib_force_free_pgaddr_i  : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+    ib_force_free_i                 : in  std_logic;
+    ib_force_free_done_o            : out std_logic;
+    ib_force_free_pgaddr_i          : in  std_logic_vector(g_page_addr_width - 1 downto 0);
 
-    ob_free_i               : in  std_logic;
-    ob_free_done_o          : out std_logic;
-    ob_free_pgaddr_i        : in  std_logic_vector(g_page_addr_width - 1 downto 0);
+    ob_free_i                       : in  std_logic;
+    ob_free_done_o                  : out std_logic;
+    ob_free_pgaddr_i                : in  std_logic_vector(g_page_addr_width - 1 downto 0);
     
-    ll_read_addr_o          : out std_logic_vector(g_page_addr_width -1 downto 0);
-    ll_read_data_i          : in  std_logic_vector(g_data_width     - 1 downto 0);
-    ll_read_req_o           : out std_logic;
-    ll_read_valid_data_i    : in  std_logic;
+    ll_read_addr_o                  : out std_logic_vector(g_page_addr_width -1 downto 0);
+    ll_read_data_i                  : in  std_logic_vector(g_data_width     - 1 downto 0);
+    ll_read_req_o                   : out std_logic;
+    ll_read_valid_data_i            : in  std_logic;
 
-    mmu_free_o              : out std_logic;
-    mmu_free_done_i         : in  std_logic;
-    mmu_free_last_usecnt_i  : in  std_logic;
-    mmu_free_pgaddr_o       : out std_logic_vector(g_page_addr_width -1 downto 0);
+    mmu_resource_i                  : in std_logic_vector(g_resource_num_width -1 downto 0);
+
+    mmu_free_o                      : out std_logic;
+    mmu_free_done_i                 : in  std_logic;
+    mmu_free_last_usecnt_i          : in  std_logic;
+    mmu_free_pgaddr_o               : out std_logic_vector(g_page_addr_width -1 downto 0);
+    mmu_free_resource_o             : out std_logic_vector(g_resource_num_width -1 downto 0);
+    mmu_free_resource_valid_o       : out std_logic;
         
-    mmu_force_free_o        : out std_logic;
-    mmu_force_free_done_i   : in  std_logic;
-    mmu_force_free_pgaddr_o : out std_logic_vector(g_page_addr_width -1 downto 0)
+    mmu_force_free_o                : out std_logic;
+    mmu_force_free_done_i           : in  std_logic;
+    mmu_force_free_pgaddr_o         : out std_logic_vector(g_page_addr_width -1 downto 0);
+    mmu_force_free_resource_o       : out std_logic_vector(g_resource_num_width -1 downto 0);
+    mmu_force_free_resource_valid_o : out std_logic
 
        
     );
@@ -125,8 +132,16 @@ architecture syn of swc_pck_pg_free_module is
   signal ones               : std_logic_vector(g_page_addr_width - 1 downto 0);
     
   signal freeing_mode       : std_logic_vector(1 downto 0);
-  signal fifo_clear_n : std_logic;
-  signal eof : std_logic;
+  signal fifo_clear_n       : std_logic;
+  signal eof                : std_logic;
+
+  signal free_resource        : std_logic_vector(g_resource_num_width -1 downto 0);
+  signal free_resource_valid  : std_logic;
+
+  signal force_free_resource        : std_logic_vector(g_resource_num_width -1 downto 0);
+  signal force_free_resource_valid  : std_logic;
+
+
 begin  -- syn
 
 
@@ -219,6 +234,12 @@ fsm_force_free : process(clk_i, rst_n_i)
        mmu_free             <= '0';
        freeing_mode         <= (others => '0');
        eof                  <= '0';
+       
+       free_resource             <= (others => '0');
+       free_resource_valid       <= '0';
+       
+       force_free_resource       <= (others => '0');
+       force_free_resource_valid <= '0';
        --================================================
      else
 
@@ -231,6 +252,11 @@ fsm_force_free : process(clk_i, rst_n_i)
            mmu_force_free <= '0';
            mmu_free       <= '0';
            eof            <= '0';
+           free_resource             <= (others => '0');
+           free_resource_valid       <= '0';   
+           force_free_resource       <= (others => '0');
+           force_free_resource_valid <= '0';
+
            if(fifo_empty = '0') then
            
              fifo_rd <= '1';
@@ -309,6 +335,13 @@ fsm_force_free : process(clk_i, rst_n_i)
                  --current_page <= next_page;
                  ll_read_req  <= '1';
                  state        <= S_READ_NEXT_PAGE_ADDR; 
+
+                 -- the first page only
+                 if(free_resource_valid  = '0') then 
+                   free_resource       <= mmu_resource_i ;
+                   free_resource_valid <= '1';
+                 end if;               
+                 
                end if;              
              end if;
          
@@ -329,6 +362,12 @@ fsm_force_free : process(clk_i, rst_n_i)
                  --current_page <= next_page;
                  ll_read_req  <= '1';
                  state        <= S_READ_NEXT_PAGE_ADDR;
+                 
+                 -- the first page only
+                 if(free_resource_valid  = '0') then 
+                   free_resource       <= mmu_resource_i ;
+                   free_resource_valid <= '1';
+                 end if;
                end if;
                
              end if;
@@ -363,5 +402,11 @@ fsm_force_free : process(clk_i, rst_n_i)
  ib_force_free_done_o    <= ib_force_free_done;
  ob_free_done_o          <= ob_free_done;
 
-  
+ mmu_free_resource_o             <= free_resource;
+ mmu_free_resource_valid_o       <= free_resource_valid;
+
+ mmu_force_free_resource_o       <= force_free_resource;
+ mmu_force_free_resource_valid_o <= force_free_resource_valid;
+
+ 
 end syn;

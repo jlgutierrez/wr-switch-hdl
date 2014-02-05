@@ -10,7 +10,9 @@
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
--- Description: 
+-- Description: this module is used in :
+-- * old page allocator
+-- * output block as a queue scheduler (strick priority policy)
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN

@@ -61,6 +61,11 @@ entity wrsw_rt_subsystem is
     sel_clk_sys_o : out std_logic;      -- system clock selection: 0 = startup
                                         -- clock, 1 = PLL clock
 
+    -- WR timebase
+    tm_utc_o        : out std_logic_vector(39 downto 0);
+    tm_cycles_o     : out std_logic_vector(27 downto 0);
+    tm_time_valid_o : out std_logic;
+
     -- AD9516 signals
     pll_status_i  : in  std_logic;
     pll_mosi_o    : out std_logic;
@@ -79,15 +84,10 @@ architecture rtl of wrsw_rt_subsystem is
       g_tag_bits             : integer;
       g_num_ref_inputs       : integer;
       g_num_outputs          : integer;
-      g_with_period_detector : boolean;
       g_with_debug_fifo      : boolean;
       g_with_ext_clock_input : boolean;
-      g_with_undersampling   : boolean;
-      g_divide_input_by_2 : boolean;
+      g_divide_input_by_2 	 : boolean;
       g_reverse_dmtds        : boolean;
-      g_bb_ref_divider       : integer;
-      g_bb_feedback_divider  : integer;
-      g_bb_log2_gating       : integer;
       g_interface_mode       : t_wishbone_interface_mode;
       g_address_granularity  : t_wishbone_address_granularity);
     port (
@@ -144,7 +144,7 @@ architecture rtl of wrsw_rt_subsystem is
 -- 0x10300 - 0x10400: GPIO
 -- 0x10400 - 0x10500: Timer
 
-  constant c_NUM_GPIO_PINS : integer := 32;
+  constant c_NUM_GPIO_PINS : integer := 4;
   constant c_NUM_WB_SLAVES : integer := 7;
 
   constant c_SLAVE_DPRAM   : integer := 0;
@@ -283,12 +283,7 @@ begin  -- rtl
       g_reverse_dmtds        => true,
       g_with_ext_clock_input => true,
       g_divide_input_by_2    => false,
-      g_with_period_detector => false,
-      g_with_undersampling   => false,
-      g_with_debug_fifo      => true,
-      g_bb_ref_divider       => 8,
-      g_bb_feedback_divider  => 25,
-      g_bb_log2_gating       => 13)
+      g_with_debug_fifo      => true)
     port map (
       clk_sys_i       => clk_sys_i,
       rst_n_i         => rst_n_i,
@@ -327,10 +322,9 @@ begin  -- rtl
       pps_csync_o     => pps_csync_o,
       pps_out_o       => pps_ext_o,
       pps_valid_o     => pps_valid_o,
-      tm_utc_o        => open,
-      tm_cycles_o     => open,
-      tm_time_valid_o => open);
-
+      tm_utc_o        => tm_utc_o,
+      tm_cycles_o     => tm_cycles_o,
+      tm_time_valid_o => tm_time_valid_o);
 
   cpu_irq_vec(0)           <= cnx_master_in(2).int;
   cpu_irq_vec(31 downto 1) <= (others => '0');
@@ -338,7 +332,10 @@ begin  -- rtl
   U_SPI_Master : xwb_spi
     generic map (
       g_interface_mode      => PIPELINED,
-      g_address_granularity => BYTE)
+      g_address_granularity => BYTE,
+      g_divider_len         => 8,
+      g_max_char_len        => 24,
+      g_num_slaves          => 1)
     port map (
       clk_sys_i            => clk_sys_i,
       rst_n_i              => rst_n_i,
@@ -346,7 +343,6 @@ begin  -- rtl
       slave_o              => cnx_master_in(c_SLAVE_SPI),
       desc_o               => open,
       pad_cs_o(0)          => pll_cs_n_o,
-      pad_cs_o(7 downto 1) => dummy(7 downto 1),
       pad_sclk_o           => pll_sck_o,
       pad_mosi_o           => pll_mosi_o,
       pad_miso_i           => pll_miso_i);
@@ -355,7 +351,7 @@ begin  -- rtl
     generic map (
       g_interface_mode         => PIPELINED,
       g_address_granularity    => BYTE,
-      g_num_pins               => 32,
+      g_num_pins               => c_NUM_GPIO_PINS,
       g_with_builtin_tristates => false)
     port map (
       clk_sys_i  => clk_sys_i,

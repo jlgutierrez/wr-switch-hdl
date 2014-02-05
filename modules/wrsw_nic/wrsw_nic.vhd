@@ -11,8 +11,8 @@ entity wrsw_nic is
     (
       g_interface_mode      : t_wishbone_interface_mode      := CLASSIC;
       g_address_granularity : t_wishbone_address_granularity := WORD;
-      g_src_cyc_on_stall    : boolean := false
-      );
+      g_src_cyc_on_stall    : boolean := false;
+      g_port_mask_bits      : integer := 32); --should be num_ports+1
   port (
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
@@ -47,7 +47,7 @@ entity wrsw_nic is
 -- "Fake" RTU interface
 -------------------------------------------------------------------------------
 
-    rtu_dst_port_mask_o : out std_logic_vector(31 downto 0);
+    rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
     rtu_prio_o          : out std_logic_vector(2 downto 0);
     rtu_drop_o          : out std_logic;
     rtu_rsp_valid_o     : out std_logic;
@@ -66,7 +66,7 @@ entity wrsw_nic is
     wb_dat_o   : out std_logic_vector(c_wishbone_data_width-1 downto 0);
     wb_ack_o   : out std_logic;
     wb_stall_o : out std_logic;
-    wb_irq_o   : out std_logic
+    wb_int_o   : out std_logic
 
     );
 
@@ -78,7 +78,8 @@ architecture rtl of wrsw_nic is
     generic (
       g_interface_mode      : t_wishbone_interface_mode;
       g_address_granularity : t_wishbone_address_granularity;
-      g_src_cyc_on_stall    : boolean);
+      g_src_cyc_on_stall    : boolean := false;
+      g_port_mask_bits      : integer := 32);
     port (
       clk_sys_i           : in  std_logic;
       rst_n_i             : in  std_logic;
@@ -86,7 +87,7 @@ architecture rtl of wrsw_nic is
       snk_o               : out t_wrf_sink_out;
       src_i               : in  t_wrf_source_in;
       src_o               : out t_wrf_source_out;
-      rtu_dst_port_mask_o : out std_logic_vector(31 downto 0);
+      rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
       rtu_prio_o          : out std_logic_vector(2 downto 0);
       rtu_drop_o          : out std_logic;
       rtu_rsp_valid_o     : out std_logic;
@@ -111,7 +112,8 @@ begin
     generic map (
       g_interface_mode      => g_interface_mode,
       g_address_granularity => g_address_granularity,
-      g_src_cyc_on_stall    => g_src_cyc_on_stall)
+      g_src_cyc_on_stall    => g_src_cyc_on_stall,
+      g_port_mask_bits      => g_port_mask_bits)
     port map (
       clk_sys_i           => clk_sys_i,
       rst_n_i             => rst_n_i,
@@ -158,6 +160,6 @@ begin
   wb_dat_o   <= wb_out.dat;
   wb_ack_o   <= wb_out.ack;
   wb_stall_o <= wb_out.stall;
-  wb_irq_o   <= wb_out.int;
+  wb_int_o   <= wb_out.int;
   
 end rtl;

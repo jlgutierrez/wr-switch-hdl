@@ -22,6 +22,12 @@
 -- - Set use count (set_usecnt_i = 1): sets the use count value for the given page.
 --   Used to define the reference count for pages pre-allocated in advance by
 --   the input blocks.
+--   
+--   It is implemented as a queue:
+--   * queue head is the rd_ptr - it indicates the address in the memory of the next empty page
+--   * queue tail is the wr_ptr - it indicates the address in the memory where the freed page can be
+--                                stored
+--   
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
@@ -134,8 +140,14 @@ architecture syn of swc_page_allocator_new is
 
   signal real_nomem, out_nomem : std_logic;
 
-  signal rd_ptr, wr_ptr : unsigned(g_page_addr_width-1 downto 0);
-  signal free_pages     : unsigned(g_page_addr_width downto 0);
+  -- queue head
+  signal rd_ptr           : unsigned(g_page_addr_width-1 downto 0);
+
+  -- queue tail
+  signal wr_ptr           : unsigned(g_page_addr_width-1 downto 0);
+  
+  -- diff between head and tail
+  signal free_pages       : unsigned(g_page_addr_width downto 0);
 
   signal q_write , q_read : std_logic;
   signal pending_free     : std_logic;
@@ -164,7 +176,9 @@ architecture syn of swc_page_allocator_new is
 begin  -- syn
   ram_ones <= (others => '1');
 
-
+  -- memeory in which list of addresses of available pages is stored
+  -- rd_ptr points to the address of next available page_addr
+  -- wr_ptr points to the address where a freed page can be written
   U_Queue_RAM : swc_rd_wr_ram
     generic map (
       g_data_width => g_page_addr_width,
@@ -208,7 +222,7 @@ begin  -- syn
   --    db_i   => std_logic_vector(rd_ptr),
   --    qb_o   => q_output_addr);
 
-
+  -- stores usecnts of pages, the addres is the page_addr (not ptr)
   U_UseCnt_RAM : swc_rd_wr_ram
     generic map (
       g_data_width => g_usecount_width,
@@ -269,6 +283,10 @@ begin  -- syn
   --    ab_i   => std_logic_vector(rd_ptr),
   --    db_i   => f_gen_dummy_vec('0', g_usecount_width));
 
+
+  -- keeps track of write and read pointers (wr_ptr and rd_ptr) and the number of available
+  -- free pages (free_pages). 
+  -- indicates when we run out of pages
   p_pointers : process(clk_i)
   begin
     if rising_edge(clk_i) then
@@ -312,6 +330,7 @@ begin  -- syn
     end if;
   end process;
 
+  -- registers control signals (alloc/free/force_free)-- creates strobes
   p_delay_alloc : process(clk_i)
   begin
     if rising_edge(clk_i) then
@@ -329,6 +348,7 @@ begin  -- syn
 
   pgaddr_o <= q_output_addr;
 
+  -- generates done signal
   p_gen_done : process(clk_i)
   begin
     if rising_edge(clk_i) then
@@ -347,7 +367,7 @@ begin  -- syn
   done_o <= done_int;                   -- and not(free_d0 or alloc_d0);
 --  q_write <= (not initializing) when (free_d0 = '1' and unsigned(usecnt_rddata) = 1) or (force_free_i = '1' and done_int = '0') else '0';
 
-
+  -- generate non_memory output
   p_gen_nomem_output : process(clk_i)
   begin
     if rising_edge(clk_i) then

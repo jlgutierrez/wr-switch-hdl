@@ -131,10 +131,18 @@ begin  -- rtl
     port map (
       clk_i    => clk_core_i,
       rst_n_i  => '1',
+--       data_i   => rst_n_io, --rst_n_i,
       data_i   => rst_n_i,
       synced_o => rst_n_core);
 
   rst_n_io <= rst_n_i;
+
+--   p_sync_res: process(clk_io_i)
+--   begin
+--     if rising_edge(clk_io_i) then
+--       rst_n_io <= rst_n_i;
+--     end if;
+--   end process;
 
   U_Write_Path : mpm_write_path
     generic map (

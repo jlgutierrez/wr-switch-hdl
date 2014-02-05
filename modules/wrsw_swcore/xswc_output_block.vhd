@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-11-03
--- Last update: 2012-07-10
+-- Last update: 2012-03-16
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -39,8 +39,11 @@
 -- 2012-01-19  2.0      twlostow added buffer-FIFO
 -- 2012-02-02  3.0      mlipinsk generic-azed
 -- 2012-02-16  4.0      mlipinsk adapted to the new (async) MPM
+-- 2012-04-19  4.1      mlipinsk adapted to muti-resource MMU implementation
+-- 2012-04-20  4.2      mlipinsk added dropping of frames from queues which are full
 -------------------------------------------------------------------------------
 -- TODO:
+-- 1) mpm_dsel_i - needs to be made it generic
 -- 2) mpm_abort_o - implement
 -------------------------------------------------------------------------------
 
@@ -61,18 +64,20 @@ entity xswc_output_block is
   generic (
 
     g_max_pck_size_width              : integer;  --:= c_swc_max_pck_size_width  
-    g_output_block_per_prio_fifo_size : integer;  --:= c_swc_output_fifo_size
-    g_prio_width                      : integer;  --:= c_swc_prio_width;, c_swc_output_prio_num_width
-    g_prio_num                        : integer;  --:= c_swc_output_prio_num
-    -- new stuff
+    g_output_block_per_queue_fifo_size : integer;  --:= c_swc_output_fifo_size
+    g_queue_num_width                 : integer;  --
+    g_queue_num                       : integer;  --
+    g_prio_num_width                  : integer;  --                      
     g_mpm_page_addr_width             : integer;  --:= c_swc_page_addr_width;
     g_mpm_data_width                  : integer;  --:= c_swc_page_addr_width;
     g_mpm_partial_select_width        : integer;
     g_mpm_fetch_next_pg_in_advance    : boolean := false;
+    g_mmu_resource_num_width          : integer;
     g_wb_data_width                   : integer;
     g_wb_addr_width                   : integer;
     g_wb_sel_width                    : integer;
-    g_wb_ob_ignore_ack                : boolean := true
+    g_wb_ob_ignore_ack                : boolean := true;
+    g_drop_outqueue_head_on_full      : boolean := true
     );
   port (
     clk_i   : in std_logic;
@@ -83,9 +88,10 @@ entity xswc_output_block is
 -------------------------------------------------------------------------------
 
     pta_transfer_data_valid_i : in  std_logic;
-    pta_pageaddr_i            : in  std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-    pta_prio_i                : in  std_logic_vector(g_prio_width - 1 downto 0);
---    pta_pck_size_i            : in   std_logic_vector(g_max_pck_size_width - 1 downto 0);
+    pta_pageaddr_i            : in  std_logic_vector(g_mpm_page_addr_width    - 1 downto 0);
+    pta_prio_i                : in  std_logic_vector(g_prio_num_width         - 1 downto 0);
+    pta_broadcast_i           : in  std_logic;
+    pta_resource_i            : in  std_logic_vector(g_mmu_resource_num_width - 1 downto 0);
     pta_transfer_data_ack_o   : out std_logic;
 
 -------------------------------------------------------------------------------
@@ -95,6 +101,7 @@ entity xswc_output_block is
     mpm_d_i            : in  std_logic_vector (g_mpm_data_width -1 downto 0);
     mpm_dvalid_i       : in  std_logic;
     mpm_dlast_i        : in  std_logic;
+    mpm_dsel_i         : in  std_logic_vector (g_mpm_partial_select_width -1 downto 0);
     mpm_dreq_o         : out std_logic;
     mpm_abort_o        : out std_logic;
     mpm_pg_addr_o      : out std_logic_vector (g_mpm_page_addr_width -1 downto 0);
@@ -121,36 +128,39 @@ end xswc_output_block;
 
 architecture behavoural of xswc_output_block is
   
-  constant c_per_prio_fifo_size_width : integer := integer(CEIL(LOG2(real(g_output_block_per_prio_fifo_size-1))));  -- c_swc_output_fifo_addr_width
+  constant c_per_queue_fifo_size_width : integer := integer(CEIL(LOG2(real(g_output_block_per_queue_fifo_size-1))));  -- c_swc_output_fifo_addr_width
 
   signal pta_transfer_data_ack : std_logic;
 
-  signal wr_addr : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
-  signal rd_addr : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal wr_addr : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal rd_addr : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
 
 -- drop_imp:  
---   signal drop_addr             : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
---   signal ram_rd_addr           : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
---   signal drop_index            : std_logic_vector(g_prio_width - 1 downto 0);
---   signal drop_array            : std_logic_vector(g_prio_num - 1 downto 0);
+  signal dp_addr             : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal ram_rd_addr           : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal ram_rd_addr_d0        : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+  signal drop_index            : std_logic_vector(g_queue_num_width - 1 downto 0);
+  signal drop_array            : std_logic_vector(g_queue_num       - 1 downto 0);
 
-  signal wr_prio         : std_logic_vector(g_prio_width - 1 downto 0);
-  signal rd_prio         : std_logic_vector(g_prio_width - 1 downto 0);
-  signal not_full_array  : std_logic_vector(g_prio_num - 1 downto 0);
-  signal full_array      : std_logic_vector(g_prio_num - 1 downto 0);
-  signal not_empty_array : std_logic_vector(g_prio_num - 1 downto 0);
-  signal read_array      : std_logic_vector(g_prio_num - 1 downto 0);
-  signal read            : std_logic_vector(g_prio_num - 1 downto 0);
-  signal write_array     : std_logic_vector(g_prio_num - 1 downto 0);
-  signal write           : std_logic_vector(g_prio_num - 1 downto 0);
+  signal write_index        : std_logic_vector(g_queue_num_width - 1 downto 0);
+  signal read_index        : std_logic_vector(g_queue_num_width - 1 downto 0);
+  signal not_full_array  : std_logic_vector(g_queue_num - 1 downto 0);
+  signal full_array      : std_logic_vector(g_queue_num - 1 downto 0);
+  signal not_empty_array : std_logic_vector(g_queue_num - 1 downto 0);
+  signal read_array      : std_logic_vector(g_queue_num - 1 downto 0);
+  signal read_array_d0   : std_logic_vector(g_queue_num - 1 downto 0);
+  signal read            : std_logic_vector(g_queue_num - 1 downto 0);
+  signal write_array     : std_logic_vector(g_queue_num - 1 downto 0);
+  signal write           : std_logic_vector(g_queue_num - 1 downto 0);
   signal wr_en           : std_logic;
   signal rd_data_valid   : std_logic;
   signal drop_data_valid : std_logic;
-  signal zeros           : std_logic_vector(g_prio_num - 1 downto 0);
+  signal drop_data_valid_raw : std_logic;
+  signal zeros           : std_logic_vector(g_queue_num - 1 downto 0);
 
-  subtype t_head_and_head is std_logic_vector(c_per_prio_fifo_size_width - 1 downto 0);
+  subtype t_head_and_head is std_logic_vector(c_per_queue_fifo_size_width - 1 downto 0);
 
-  type t_addr_array is array (g_prio_num - 1 downto 0) of t_head_and_head;
+  type t_addr_array is array (g_queue_num - 1 downto 0) of t_head_and_head;
 
   signal wr_array : t_addr_array;
   signal rd_array : t_addr_array;
@@ -203,9 +213,9 @@ architecture behavoural of xswc_output_block is
   signal s_send_pck     : t_send_pck;
   signal s_prep_to_send : t_prep_to_send;
 
-  signal wr_data : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-  signal rd_data : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
-
+  signal wr_data    : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+  signal rd_data    : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
+ 
 
   signal ppfm_free        : std_logic;
   signal ppfm_free_pgaddr : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
@@ -228,6 +238,7 @@ architecture behavoural of xswc_output_block is
   signal src_cyc_int   : std_logic;
   signal src_stb_int   : std_logic;
   signal src_we_int    : std_logic;
+  signal src_sel_int   : std_logic_vector(1 downto 0);
   signal out_dat_err   : std_logic;
   -- source in
   signal src_ack_int   : std_logic;
@@ -243,9 +254,9 @@ architecture behavoural of xswc_output_block is
   signal mpm_pg_addr  : std_logic_vector (g_mpm_page_addr_width -1 downto 0);
   signal mpm_pg_valid : std_logic;
 
-  signal mpm2wb_dat_int, mpm2wb_dat_int_pre : std_logic_vector (g_wb_data_width -1 downto 0);
-  signal mpm2wb_sel_int                     : std_logic_vector (g_wb_sel_width -1 downto 0);
-  signal mpm2wb_adr_int, mpm2wb_adr_int_pre : std_logic_vector (g_wb_addr_width -1 downto 0);
+  signal mpm2wb_dat_int : std_logic_vector (g_wb_data_width -1 downto 0);
+  signal mpm2wb_sel_int : std_logic_vector (g_wb_sel_width -1 downto 0);
+  signal mpm2wb_adr_int : std_logic_vector (g_wb_addr_width -1 downto 0);
 
   signal src_out_int : t_wrf_source_out;
   signal tmp_sel     : std_logic_vector(g_wb_sel_width - 1 downto 0);
@@ -258,11 +269,11 @@ architecture behavoural of xswc_output_block is
   signal not_set_next_pg_addr : std_logic;
 
   signal wr_en_reg   : std_logic;
-  signal wr_addr_reg : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
+  signal wr_addr_reg : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
   signal wr_data_reg : std_logic_vector(g_mpm_page_addr_width - 1 downto 0);
 
-  signal rd_addr_reg : std_logic_vector(g_prio_width + c_per_prio_fifo_size_width -1 downto 0);
-
+  signal rd_addr_reg : std_logic_vector(g_queue_num_width + c_per_queue_fifo_size_width -1 downto 0);
+ 
   signal cycle_frozen     : std_logic;
   signal cycle_frozen_cnt : unsigned(5 downto 0);
 
@@ -274,7 +285,27 @@ architecture behavoural of xswc_output_block is
     return tmp;
   end f_slv_resize;
   
+  -- supresses rd_data_valid after new rd_addr is provided, otherwise we would read
+  -- old data but update new counters in the PRIO_QUEUE_CTRL. We always want to read data
+  -- from updated address, even if we need to wait one cycle. This is because, if the address
+  -- changes, it means that queue with higher priority was received (so we want to send it as soon
+  -- as possible. If we just read old data (from old address), the data with the higher priority
+  -- would need to wait for the frame to be sent out (this increases the switch latency)
+  signal rd_data_valid_supress : std_logic;
+  signal rd_data_valid_raw     : std_logic;
+  
+  -- indicates that there is full queue(s) and it is OK to drop frame (it is not OK if i.e.
+  -- some other frame is being dropped (memory free))
+  signal drop_ready             : std_logic;
 
+  function f_onehot_decode(x : std_logic_vector) return std_logic_vector is
+    variable tmp : std_logic_vector(2**x'length-1 downto 0);
+  begin
+    tmp                          := (others => '0');
+    tmp(to_integer(unsigned(x))) := '1';
+
+    return tmp;
+  end function f_onehot_decode;
   
 begin  --  behavoural
 
@@ -309,135 +340,97 @@ begin  --  behavoural
   ram_zeros <= (others => '0');
   ram_ones  <= (others => '1');
 
-  wr_prio <= not pta_prio_i;
-
-  wr_data <= pta_pageaddr_i;
-
-  wr_addr <= wr_prio & wr_array(0) when wr_prio = "000" else
-             wr_prio & wr_array(1) when wr_prio = "001" else
-             wr_prio & wr_array(2) when wr_prio = "010" else
-             wr_prio & wr_array(3) when wr_prio = "011" else
-             wr_prio & wr_array(4) when wr_prio = "100" else
-             wr_prio & wr_array(5) when wr_prio = "101" else
-             wr_prio & wr_array(6) when wr_prio = "110" else
-             wr_prio & wr_array(7) when wr_prio = "111" else
-             (others => 'X');
+--  write_index <= pta_prio_i;
   
-  rd_addr <= rd_prio & rd_array(0) when rd_prio = "000" else
-             rd_prio & rd_array(1) when rd_prio = "001" else
-             rd_prio & rd_array(2) when rd_prio = "010" else
-             rd_prio & rd_array(3) when rd_prio = "011" else
-             rd_prio & rd_array(4) when rd_prio = "100" else
-             rd_prio & rd_array(5) when rd_prio = "101" else
-             rd_prio & rd_array(6) when rd_prio = "110" else
-             rd_prio & rd_array(7) when rd_prio = "111" else
-             (others => 'X');
-
--- drop_imp:
---   drop_addr <= drop_index & rd_array(0) when drop_index = "000" else
---                drop_index & rd_array(1) when drop_index = "001" else
---                drop_index & rd_array(2) when drop_index = "010" else
---                drop_index & rd_array(3) when drop_index = "011" else
---                drop_index & rd_array(4) when drop_index = "100" else
---                drop_index & rd_array(5) when drop_index = "101" else
---                drop_index & rd_array(6) when drop_index = "110" else
---                drop_index & rd_array(7) when drop_index = "111" else
---                (others => 'X');   
-
---  ram_rd_addr <= rd_addr when (mpm_pg_valid = '1') else drop_addr;
+  -- here we map the RTU+resource info into output queues
+  write_index <= f_map_rtu_rsp_and_mmu_res_to_out_queue(pta_prio_i,
+                                                     pta_broadcast_i,
+                                                     full_array,
+                                                     g_queue_num);
   
-  RD_ENCODE : swc_prio_encoder
+  wr_data    <= pta_pageaddr_i;
+  wr_addr    <= write_index & wr_array(to_integer(unsigned(write_index)));
+  wr_en      <= write(to_integer(unsigned(write_index))) and not_full_array(to_integer(unsigned(write_index))); 
+
+  rd_addr    <= read_index  & rd_array(to_integer(unsigned(read_index)));
+  dp_addr    <= drop_index  & rd_array(to_integer(unsigned(drop_index)));
+
+  
+
+  drop_ready <= '1' when (  g_drop_outqueue_head_on_full = true  and -- dropping is enagbled
+                            drop_array                  /= zeros and -- one of queues is full and we 
+                                                                     -- decide to drop frame from there
+                          ( ppfm_free                    = '0'   or  -- we are not corrently freeing 
+                                                                     -- other frame, in such case no sense to drop unless
+                           (ppfm_free='1' and ppfm_free_done_i='1')))-- the previous freeing is done
+           else '0';
+  ram_rd_addr <= dp_addr when (drop_ready = '1') else rd_addr;
+  
+  write_array <= f_onehot_decode(write_index);
+
+  -- here we instantiate a module responsible for output queue scheduling (policy)
+  OUTPUT_SCHEDULER: swc_output_queue_scheduler
     generic map (
-      g_num_inputs  => g_prio_num,
-      g_output_bits => g_prio_width)
+      g_queue_num       => g_queue_num,
+      g_queue_num_width => g_queue_num_width)
     port map (
-      in_i     => not_empty_array,
-      onehot_o => read_array,
-      out_o    => rd_prio);
+      clk_i               => clk_i,
+      rst_n_i             => rst_n_i,
+      not_empty_array_i   => not_empty_array, -- vector with '1' bit corresponding to non_empty queue
+      read_queue_index_o  => read_index,      -- decision which queue read now (unsigned)
+      read_queue_onehot_o => read_array,      -- the above decision in vector form
+      full_array_i        => full_array,      -- indicates which queue(s) is full (vector)
+      drop_queue_index_o  => drop_index,      -- indicate from from which queue the oldest entry shall be dropped (unsinged)
+      drop_queue_onehot_o => drop_array       -- the above in vector form
+      );
 
-  write_array <= "00000001" when wr_prio = "000" else
-                 "00000010" when wr_prio = "001" else
-                 "00000100" when wr_prio = "010" else
-                 "00001000" when wr_prio = "011" else
-                 "00010000" when wr_prio = "100" else
-                 "00100000" when wr_prio = "101" else
-                 "01000000" when wr_prio = "110" else
-                 "10000000" when wr_prio = "111" else
-                 "00000000";
+  pta_transfer_data_ack_o <= not_full_array(to_integer(unsigned(write_index)));
   
-  wr_en <= write(0) and not_full_array(0) when wr_prio = "000" else
-           write(1) and not_full_array(1) when wr_prio = "001" else
-           write(2) and not_full_array(2) when wr_prio = "010" else
-           write(3) and not_full_array(3) when wr_prio = "011" else
-           write(4) and not_full_array(4) when wr_prio = "100" else
-           write(5) and not_full_array(5) when wr_prio = "101" else
-           write(6) and not_full_array(6) when wr_prio = "110" else
-           write(7) and not_full_array(7) when wr_prio = "111" else
-           '0';
-  -- I don't like this                 
-  pta_transfer_data_ack_o <= not_full_array(0) when wr_prio = "000" else
-                             not_full_array(1) when wr_prio = "001" else
-                             not_full_array(2) when wr_prio = "010" else
-                             not_full_array(3) when wr_prio = "011" else
-                             not_full_array(4) when wr_prio = "100" else
-                             not_full_array(5) when wr_prio = "101" else
-                             not_full_array(6) when wr_prio = "110" else
-                             not_full_array(7) when wr_prio = "111" else
-                             '0';
-  
-  prio_ctrl : for i in 0 to g_prio_num - 1 generate
-    
+  --------------------------------------------------------------------------------------------------
+  --  generating control for each output queue
+  --------------------------------------------------------------------------------------------------
+  queue_ctrl : for i in 0 to g_queue_num - 1 generate
+  --------------------------------------------------------------------------------------------------  
     write(i) <= write_array(i) and pta_transfer_data_valid_i;
-    read(i)  <= read_array(i) and mpm_pg_valid;
--- drop_imp:
---     read(i)         <= (read_array(i)  and mpm_pg_valid) or (drop_array(i) and not mpm_pg_valid);    
+    read(i)  <= drop_array(i)                     when (drop_data_valid = '1') else
+               (read_array(i) and mpm_pg_valid);
 
-    PRIO_QUEUE_CTRL : swc_ob_prio_queue
+    QUEUE_CTRL : swc_ob_prio_queue
       generic map(
-        g_per_prio_fifo_size_width => c_per_prio_fifo_size_width  -- c_swc_output_fifo_addr_width
+        g_per_queue_fifo_size_width => c_per_queue_fifo_size_width  -- c_swc_output_fifo_addr_width
         )
       port map (
         clk_i       => clk_i,
         rst_n_i     => rst_n_i,
-        write_i     => write(i),
-        read_i      => read(i),
-        not_full_o  => not_full_array(i),
-        not_empty_o => not_empty_array(i),
-        wr_en_o     => open,            --wr_en_array(i),
-        wr_addr_o   => wr_array(i),
-        rd_addr_o   => rd_array(i)
+        write_i     => write(i),         -- strobe to indicate we wrote one entry (increment head)
+        read_i      => read(i),          -- strobe to indicate we read  one entry (increment tail)
+        not_full_o  => not_full_array(i),-- indicates we can add entries (tail < head-1
+        not_empty_o => not_empty_array(i),-- tail != head
+        wr_en_o     => open,             --wr_en_array(i),
+        wr_addr_o   => wr_array(i),      -- head (which is used to create addresse to which we write in RAM)
+        rd_addr_o   => rd_array(i)       -- tail (which is used to create addresse from which we aread from RAM) 
         );
--- drop_imp:
---  full_array(i) <= not not_full_array(i);
-  end generate prio_ctrl;
+    full_array(i) <= not not_full_array(i);
+  --------------------------------------------------------------------------------------------------
+  end generate queue_ctrl ;
+  --------------------------------------------------------------------------------------------------
 
--- drop_imp:
---   DROP_ENCODE : swc_prio_encoder
---     generic map (
---       g_num_inputs  => g_prio_num,
---       g_output_bits => g_prio_width)
---     port map (
---       in_i     => full_array,
---       onehot_o => drop_array,
---       out_o    => drop_index);
-
-  PRIO_QUEUE : swc_rd_wr_ram
+  PRIO_QUEUE: swc_rd_wr_ram
     generic map (
       g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
-      g_size       => (g_prio_num * g_output_block_per_prio_fifo_size))
+      g_size       => (g_queue_num * g_output_block_per_queue_fifo_size))
     port map (
       clk_i => clk_i,
       we_i  => wr_en_reg,
       wa_i  => wr_addr_reg,
       wd_i  => wr_data_reg,
-      ra_i  => rd_addr,
+      ra_i  => ram_rd_addr, --rd_addr,
       rd_o  => rd_data);
-
-
+    
   --PRIO_QUEUE : generic_dpram
   --  generic map (
   --    g_data_width => g_mpm_page_addr_width,  -- + g_max_pck_size_width,
-  --    g_size       => (g_prio_num * g_output_block_per_prio_fifo_size)
+  --    g_size       => (g_queue_num * g_output_block_per_queue_fifo_size)
   --    )
   --  port map (
   --    -- Port A -- writing
@@ -482,37 +475,47 @@ begin  --  behavoural
   begin
     if rising_edge(clk_i) then
       if(rst_n_i = '0') then
-        rd_data_valid   <= '0';
-        drop_data_valid <= '0';
+        rd_data_valid_raw     <= '0';
+        drop_data_valid_raw   <= '0';
+        read_array_d0         <= (others =>'0');
+        ram_rd_addr_d0        <= (others =>'0');
       else
         
-        if(not_empty_array = zeros) then
-          rd_data_valid <= '0';
+        --if(not_empty_array = zeros) then
+        if(read_array = zeros) then
+          rd_data_valid_raw <= '0';
         else
-          rd_data_valid <= '1';
+          rd_data_valid_raw <= '1';
         end if;
--- drop_imp :
---        if(full_array = zeros) then
---          drop_data_valid <= '0';
---        else
---          drop_data_valid <= '1';
---       end if;       
+
+        read_array_d0     <= read_array;
+        ram_rd_addr_d0    <= ram_rd_addr;   
+   
+        if(drop_array /= zeros and g_drop_outqueue_head_on_full = true) then
+          drop_data_valid_raw <= '1';
+        else
+          drop_data_valid_raw <= '0';
+       end if;       
       end if;
     end if;
   end process;
 
+  -- we need one cycle to read new data from the new address
+  -- after read array (so the rd_addr) changes
+  -- rd_data_valid_supress <= '1' when (read_array_d0 /=read_array) else '0';
+  rd_data_valid_supress <= '1' when (ram_rd_addr_d0 /=ram_rd_addr) else '0';
   --==================================================================================================
   -- FSM to prepare next pck to be send
   --==================================================================================================
-  -- This state machine takes data, if available) from the output queue. The data is only the 
+  -- This state machine takes data (if available) from the output queue. The data is only the 
   -- pckfirst_page address (this is all we need).
-  -- It dane makes the page available for the MPM, once it's set to the MPM, the FSM waits until
+  -- It then makes the page available for the MPM, once it's set to the MPM, the FSM waits until
   -- the MPM is ready to set pckstart_page for the next pck (in current implementation, this can
   -- happen when reading the last word). The pckstart_page is made available to the MPM, and 
   -- so again and again...
   -- The fun starts when the Endpoint requests retry of sending. we need to abort the current 
   -- MPM readout (currently not implemented in the MPM) and set again the same pckstart_page
-  -- (this needs we need to put aside and remember the page which we've already read from the 
+  -- (this requires that we need to put aside and remember the page which we've already read from the 
   -- output queue, if any). once, done, we need to come to the rememberd pckstart_page.
   -- 
   -- REMARK:
@@ -637,6 +640,11 @@ begin  --  behavoural
       end if;
     end if;
   end process p_prep_to_send_fsm;
+   
+  -- this is to prevent reading in the cycle following read_array change. 
+  -- In other words, we need to give memory one cycle to update output (read) data after changing input address
+  rd_data_valid    <= rd_data_valid_raw   and (not rd_data_valid_supress) and (not drop_data_valid_raw);
+  drop_data_valid  <= drop_data_valid_raw and (not rd_data_valid_supress); 
 
   next_page_set_in_advance : if (g_mpm_fetch_next_pg_in_advance = true) generate
     set_next_pg_addr     <= '1' when (rd_data_valid = '1' and mpm_pg_req_i = '1' and mpm_pg_valid = '0') else '0';
@@ -680,14 +688,17 @@ begin  --  behavoural
         --========================================
       else
         -- default values
-        start_free_pck <= '0';
-        request_retry  <= '0';
+        if(start_free_pck = '1' and ppfm_free = '1') then
+          start_free_pck <= '0';
+        end if;
+        
 
         case s_send_pck is
           --===========================================================================================
           when S_IDLE =>
             --===========================================================================================   
-
+            request_retry  <= '0';
+            
             if(s_prep_to_send = S_NEWPCK_PAGE_READY and src_i.err = '0' and src_i.stall = '0') then
               src_out_int.cyc  <= '1';
               s_send_pck       <= S_DATA;
@@ -776,8 +787,10 @@ begin  --  behavoural
             --===========================================================================================
           when S_RETRY =>
             --===========================================================================================        
+            request_retry   <= '1';
             if(s_prep_to_send = S_RETRY_READY) then
               src_out_int.cyc  <= '1';
+              request_retry    <= '0';
               s_send_pck       <= S_DATA;
               pck_start_pgaddr <= mpm_pg_addr;
             end if;
@@ -829,14 +842,14 @@ begin  --  behavoural
         ppfm_free        <= '0';
         ppfm_free_pgaddr <= (others => '0');
       else
-        if(start_free_pck = '1') then
+        if(start_free_pck = '1' and ppfm_free = '0') then
           ppfm_free        <= '1';
           ppfm_free_pgaddr <= start_free_pck_addr;
 -- drop_imp:          
---         elsif(drop_data_valid = '1') then
---           ppfm_free         <= '1';
---           ppfm_free_pgaddr  <= rd_data(g_mpm_page_addr_width - 1 downto 0);
-        elsif(ppfm_free_done_i = '1') then
+         elsif(drop_data_valid = '1' and ppfm_free = '0') then
+           ppfm_free         <= '1';
+           ppfm_free_pgaddr  <= rd_data(g_mpm_page_addr_width - 1 downto 0);
+        elsif(ppfm_free_done_i = '1' and ppfm_free = '1') then
           ppfm_free        <= '0';
           ppfm_free_pgaddr <= (others => '0');
         end if;
@@ -858,23 +871,9 @@ begin  --  behavoural
                  (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else  -- the status indicates error       
                  '0';
 
-  mpm2wb_adr_int_pre <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
-  mpm2wb_dat_int_pre <= mpm_d_i(g_wb_data_width -1 downto 0);
-
-  p_decode_sel : process(mpm2wb_dat_int_pre, mpm2wb_adr_int_pre)
-  begin
-    if(mpm2wb_adr_int_pre = c_WRF_USER) then
-      mpm2wb_dat_int(15 downto 8) <= mpm2wb_dat_int_pre(15 downto 8);
-      mpm2wb_dat_int(7 downto 0)  <= (others => 'X');
-      mpm2wb_adr_int              <= mpm2wb_dat_int_pre(7 downto 6);
-      mpm2wb_sel_int              <= mpm2wb_dat_int_pre(5 downto 4);
-    else
-      mpm2wb_dat_int <= mpm2wb_dat_int_pre;
-      mpm2wb_adr_int <= mpm2wb_adr_int_pre;
-      mpm2wb_sel_int <= (others => '1');
-    end if;
-  end process;
-
+  mpm2wb_adr_int <= mpm_d_i(g_mpm_data_width -1 downto g_mpm_data_width - g_wb_addr_width);
+  mpm2wb_sel_int <= '1' & mpm_dsel_i;   -- TODO: something generic
+  mpm2wb_dat_int <= mpm_d_i(g_wb_data_width -1 downto 0);
 
   -- source out
   src_o              <= src_out_int;

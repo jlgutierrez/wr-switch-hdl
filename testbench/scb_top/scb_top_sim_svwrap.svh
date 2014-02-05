@@ -45,16 +45,20 @@ module scb_top_sim_svwrap
    clk_ref_i,
    rst_n_i,
    cpu_irq,
-   clk_swc_mpm_core_i
+   clk_swc_mpm_core_i,
+   ep_ctrl_i,
+   ep_failure_type
    );
 
    parameter g_num_ports = 6;
    
-
+   reg [15:0] tx_data_invalid[g_num_ports];
+   reg [ 1:0] tx_k_invalid[g_num_ports];
    
    input clk_sys_i, clk_ref_i,rst_n_i,clk_swc_mpm_core_i;
+   input bit[g_num_ports-1:0] ep_ctrl_i;
    output cpu_irq;
-
+   input [15:0] ep_failure_type;
 
    wire [g_num_ports-1:0] rbclk;
    
@@ -130,7 +134,7 @@ module scb_top_sim_svwrap
               .g_with_rx_buffer (0),
               .g_with_timestamper    (1),
               .g_with_dpi_classifier (1),
-              .g_with_vlans          (0),
+              .g_with_vlans          (1),
               .g_with_rtu            (0)
               ) DUT (
                      .clk_ref_i (clk_ref_phys[i]),
@@ -188,7 +192,36 @@ module scb_top_sim_svwrap
                      .wb_adr_i(U_ep_wb.master.adr[7:0]),
                      .wb_dat_i(U_ep_wb.master.dat_o),
                      .wb_dat_o(U_ep_wb.master.dat_i),
-                     .wb_ack_o (U_ep_wb.master.ack)
+                     .wb_ack_o (U_ep_wb.master.ack),
+
+                      // new stuff
+                     .pfilter_pclass_o    (), 
+                     .pfilter_drop_o      (), 
+                     .pfilter_done_o      (), 
+                     .fc_tx_pause_req_i      (1'b0), 
+                     .fc_tx_pause_delay_i    (16'b0), 
+                     .fc_tx_pause_ready_o    (), 
+                     .inject_req_i        (1'b0), 
+                     .inject_ready_o      (), 
+                     .inject_packet_sel_i (3'b0), 
+                     .inject_user_value_i (16'b0), 
+                     .led_link_o          (), 
+                     .led_act_o           (), 
+                     .link_kill_i         ((~ep_ctrl_i[i])), 
+//                     .link_kill_i         (1'b0), 
+                     .link_up_o           () 
+
+//                      .tru_status_o(),        
+//                      .tru_ctrlRd_o(),        
+//                      .tru_rx_pck_o(),        
+//                      .tru_rx_pck_class_o(),  
+//    
+//                      .tru_ctrlWr_i(ep_ctrl_i[i]),            
+//                      .tru_tx_pck_i(1'b0),            
+//                      .tru_tx_pck_class_i(8'b0),      
+//                      .tru_pauseSend_i(1'b0),         
+//                      .tru_pauseTime_i(16'b0),         
+//                      .tru_outQueueBlockMask_i(8'b0)
                      );
 
            initial begin
@@ -214,25 +247,31 @@ module scb_top_sim_svwrap
            end // for (i=0; i<g_num_ports; i++)
       endgenerate
 
-
    generate
       genvar j;
-
-
-      
+       
+     
       for(j=0;j<g_num_ports;j++) begin
          assign rbclk[j] = clk_ref_phys[j];
          
+         ///////////////// nasty hack by Maciej /////////////////
+         // causing sync error in the Switch 
+//          assign td[18 * j + 15 : 18 * j]      = ep_ctrl_i[j] ? phys_out[j].tx_data :  'h00BC;
+//          assign td[18 * j + 17 : 18 * j + 16] = ep_ctrl_i[j] ? phys_out[j].tx_k    : 2'b01;
+         assign td[18 * j + 15 : 18 * j]      = ep_ctrl_i[j] ? phys_out[j].tx_data : tx_data_invalid[j];
+         assign td[18 * j + 17 : 18 * j + 16] = ep_ctrl_i[j] ? phys_out[j].tx_k    : tx_k_invalid[j];
          
-         assign td[18 * j + 15 : 18 * j] = phys_out[j].tx_data;
-         assign td[18 * j + 17 : 18 * j + 16] = phys_out[j].tx_k;
+         // causing transmission error in the driving simulation
+         assign phys_in[j].tx_enc_err         = ~ep_ctrl_i[j];
+         ///////////////////////////////////////////////////////
 
          assign phys_in[j].ref_clk    = clk_ref_phys[j];
          assign phys_in[j].rx_data    = rd[18 * j + 15 : 18 * j];
          assign phys_in[j].rx_k       = rd[18 * j + 17 : 18 * j + 16];
          assign phys_in[j].rx_clk     = clk_ref_i;
-         assign phys_in[j].tx_enc_err = 0;
+//          assign phys_in[j].tx_enc_err = 0;
          assign phys_in[j].rx_enc_err = 0;
+         
  
          always@(posedge clk_ref_i) begin : gen_disparity
             if(phys_out[j].rst)
@@ -245,7 +284,34 @@ module scb_top_sim_svwrap
                                           phys_out[j].tx_data);
          end
          
-      end
+
+         always@(posedge clk_sys_i) begin
+            integer jj;
+            if(ep_ctrl_i[j] == 1) begin 
+              tx_data_invalid[j] = 'h00BC;
+              tx_k_invalid[j]    = 2'b01 ;  
+              jj = 0;               
+            end
+            else begin
+              if(ep_failure_type == 1) begin
+                $display("Link failure type: 1 [generate some random noise, starting with data='h00BC, k = 'b01]");
+                while(jj++<100) begin
+                  tx_data_invalid[j] = 'h00BC + jj;
+                  tx_k_invalid[j]    = 2'b01 & jj;
+                  @(posedge clk_sys_i);
+                end
+                tx_data_invalid[j] = 'h00BC;
+                tx_k_invalid[j]    = 2'b01 ;              
+              end
+              else begin //including 0
+                $display("Link failure type: 0 [simply off the link: data='h00BC, k = 'b01]");
+                tx_data_invalid[j] = 'h00BC;
+                tx_k_invalid[j]    = 2'b01 ;
+              end
+            end;
+         end 
+
+      end 
    endgenerate
 
    

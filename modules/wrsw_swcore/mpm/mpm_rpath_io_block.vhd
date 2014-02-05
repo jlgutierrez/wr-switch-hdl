@@ -115,7 +115,7 @@ architecture behavioral of mpm_rpath_io_block is
 
 
   -- Page fetcher signals
-  type   t_page_fetch_state is (FIRST_PAGE, NEXT_LINK, WAIT_LAST_ACK, WAIT_ACK);
+  type   t_page_fetch_state is (FIRST_PAGE, NEXT_LINK, WAIT_LAST_ACK, WAIT_ACK, NASTY_WAIT);
   signal page_state : t_page_fetch_state;
   signal cur_page   : std_logic_vector(g_page_addr_width-1 downto 0);
   signal cur_ll     : t_ll_entry;
@@ -144,15 +144,14 @@ architecture behavioral of mpm_rpath_io_block is
   -- next packet.
   signal fetch_abort    : std_logic;
   
-  
-
--- Datapath signals
+  -- Datapath signals
   signal df_we_d0      : std_logic;
   signal last_page     : std_logic;
   signal words_total   : unsigned(c_word_count_width-1 downto 0);
+  signal dsel_words_total   : unsigned(c_word_count_width-1 downto 0);
   signal words_xmitted : unsigned(c_word_count_width-1 downto 0);
 
-  signal last_int, d_valid_int, df_rd_int : std_logic;
+  signal last_int, d_valid_int, df_rd_int : std_logic; --dsel--
   signal pf_we_int                          : std_logic;
 
   signal ll_req_int, ll_grant_d0, ll_grant_d1 : std_logic;
@@ -166,17 +165,54 @@ architecture behavioral of mpm_rpath_io_block is
   signal min_pck_size_reached : std_logic;
   
   signal d_counter_equal : std_logic;
-begin  -- behavioral
-
-
-
+  signal pre_fetch       : std_logic;
+  signal supress_pre_fetch       : std_logic;
   
-  fetch_abort <= '0';                   -- FIXME: add support for ABORT
+  -- indicates the count (word number) from which the last page starts,
+  -- this is to activate output req_page signal only on last page
+  signal last_pg_start_ptr  : unsigned(c_word_count_width-1 downto 0);
+  signal allow_rport_pg_req : std_logic;
+
+  -- signals to make the abort
+  signal abort_wait_cnt   : unsigned(4 downto 0);
+  signal rport_abort_d : std_logic;
+  signal long_rst_at_abort : std_logic;
+  
+  constant wait_at_abort : integer := 3; -- keeps the long_rst_at_abort HIGH for
+                                         -- (2 + wait_at_abort) cycles
+                                         -- the number (2) was derived experimentally (lowest 
+                                         -- working)
+begin  -- behavioral
+  
+  -- process to generate long abort signal. it is needed to make sure
+  -- that all the other parts of MPM's read_path reset and clear properly
+  -- 
+  p_gen_abort_d : process(clk_io_i)
+  begin
+    if rising_edge(clk_io_i) then
+      if rst_n_io_i = '0' then
+        rport_abort_d <= '0';
+        abort_wait_cnt<= (others =>'0');
+      else
+        if(rport_abort_i = '1') then
+          rport_abort_d <= '1';
+          abort_wait_cnt <= to_unsigned(wait_at_abort, abort_wait_cnt'length);
+        elsif(abort_wait_cnt = to_unsigned(0, abort_wait_cnt'length)) then
+          rport_abort_d  <= '0';
+        else
+          abort_wait_cnt <= abort_wait_cnt - 1;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- this signal resets all the process (async) on abort
+  long_rst_at_abort <= '1' when (rport_abort_i = '1' or rport_abort_d ='1') else '0';
 
   p_gen_page_ack : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
-      if rst_n_io_i = '0' then
+      if rst_n_io_i = '0' or long_rst_at_abort = '1' then
         fetch_ack <= '0';
       else
         fetch_ack <= pf_we_int;
@@ -193,43 +229,49 @@ begin  -- behavioral
   --             when dvalid=LOW and not yet the last word)
   --counters_equal <= '1' when (words_total = words_xmitted) else '0';
   counters_equal <= '1' when (words_total = words_xmitted and rport_dreq_i = '1') else '0';
-  -- ML
 
   wait_next_valid_ll_read <= '1' when ((words_total <  words_xmitted+2) and 
                                        last_int   = '0'               and 
                                        page_state  /= FIRST_PAGE        and
+                                       pre_fetch  = '0'               and
                                        fetch_first  = '0' )             else '0';
   min_pck_size_reached  <= '0' when (start_cnt < to_unsigned(g_min_packet_size, start_cnt'length ) ) else '1';
-  
   
   p_count_words : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
-      if rst_n_io_i = '0' or (last_int = '1' and d_valid_int = '1') then
-        words_total     <= (others => '0');
+      if rst_n_io_i = '0' or (last_int = '1' and d_valid_int = '1') 
+                                 or long_rst_at_abort = '1' then  -- ML: abort by reset
+        -- ML : pre-fetching
+        if(pre_fetch = '1') then
+          words_total      <= resize(fetch_pg_words, words_total'length);
+        else
+          words_total     <= (others => '0');
+        end if;
+        -----
         words_xmitted   <= to_unsigned(1, words_xmitted'length);
         -- ML
         -- last_int      <= '0'; 
         d_counter_equal <= '0';
       else
-
         if(df_rd_int = '1') then
           words_xmitted <= words_xmitted + 1;
         end if;
 
-        if(fetch_ack = '1') then
-       --   if(fetch_first = '1') then
-       --     words_total      <= resize(fetch_pg_words, words_total'length);
-       --   else
+        if(fetch_ack = '1' and pre_fetch = '0') then
+        --if(fetch_valid = '1') then
+          --if(fetch_first = '1') then -- ML : prefetching
+          if(fetch_first = '1' ) then
+            words_total      <= resize(fetch_pg_words, words_total'length);
+          else
             words_total      <= words_total      + fetch_pg_words;
-       --   end if;
+          end if;
         end if;
 
         -- ML:
         -- last_int      <= counters_equal;
         d_counter_equal    <= counters_equal;
-        ---------
-        
+        ---------        
       end if;
     end if;
   end process;
@@ -245,7 +287,7 @@ begin  -- behavioral
   p_gen_d_valid : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
-      if rst_n_io_i = '0' then
+      if rst_n_io_i = '0' or long_rst_at_abort = '1' then  -- ML: abort by reset
         d_valid_int <= '0';
       else
         
@@ -255,13 +297,37 @@ begin  -- behavioral
     end if;
   end process;
 
-  df_flush_o <= last_int;-- counters_equal;
+  p_gen_pre_fetch : process(clk_io_i)
+  begin
+    if rising_edge(clk_io_i) then
+      if rst_n_io_i = '0'  or long_rst_at_abort = '1' then -- ML: abort by reset
+        pre_fetch         <= '0';
+        supress_pre_fetch <= '0';
+      else
+        
+        if(fetch_last = '1' and rport_pg_valid_i = '1' and  last_int = '0' and supress_pre_fetch = '0') then
+          pre_fetch <= '1';
+        elsif(pre_fetch='1' and last_int = '1') then
+          pre_fetch <= '0';
+        end if;
+        
+        if(page_state  = FIRST_PAGE and last_int = '1' and pre_fetch = '0' and rport_pg_valid_i = '0') then
+          supress_pre_fetch <= '1';
+        elsif(rport_pg_valid_i = '1') then
+          supress_pre_fetch <= '0';
+        end if;
+
+      end if;
+    end if;
+  end process;
+
+  df_flush_o <= last_int or long_rst_at_abort;-- counters_equal;
   
   rport_dvalid_o <= d_valid_int;
 
   rport_dlast_o  <= last_int;
   rport_d_o      <= df_d_i;
-  rport_dsel_o   <= (others => '1');
+  rport_dsel_o   <= (others =>'1'); --dsel--
   rport_pg_req_o <= rport_pg_req;
 -------------------------------------------------------------------------------
 -- Page fetcher logic
@@ -275,13 +341,13 @@ begin  -- behavioral
   cur_ll.valid     <= ll_data_i(g_ll_data_width-1);
   -- 1: number of the words in page (1 = 1 word .. g_page_size-1 = full page)
   cur_ll.size      <= ll_data_i(c_page_size_width-1 downto 0);
-  
+
   fetch_valid <= fvalid_int and not fetch_ack;
 
   p_count_down_start : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
-      if rst_n_io_i = '0' or rport_pg_req = '1' then
+      if rst_n_io_i = '0' or rport_pg_req = '1' or long_rst_at_abort = '1' then -- ML: abort by reset
         start_cnt <= to_unsigned(0, start_cnt'length);
       else
         if(fetch_first = '1' ) then
@@ -290,11 +356,27 @@ begin  -- behavioral
       end if;
     end if;  
   end process;
+  
+--   p_delay_pg_req : process(clk_io_i)
+--   begin
+--     if rising_edge(clk_io_i) then
+--       if rst_n_io_i = '0'  then
+--         allow_rport_pg_req <= '0';
+--       else
+--         if(words_xmitted >= last_pg_start_ptr	) then
+--           allow_rport_pg_req <='1';
+--         elsif(page_state = NEXT_LINK ) then
+--           allow_rport_pg_req <='0';
+--         end if;
+-- 
+--       end if;
+--     end if;  
+--   end process;
 
   p_page_fsm : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
-      if rst_n_io_i = '0' then
+      if rst_n_io_i = '0' or long_rst_at_abort = '1' then -- ML: abort by reset
         page_state <= FIRST_PAGE;
 
         fvalid_int     <= '0';
@@ -304,6 +386,8 @@ begin  -- behavioral
         ll_grant_d1 <= '0';
         wait_first_fetched <='1';
         fetch_first     <= '0';
+        last_pg_start_ptr <= (others => '0');
+        fetch_last     <= '0';
       else
 
         ll_grant_d0 <= ll_grant_i;
@@ -311,7 +395,7 @@ begin  -- behavioral
 
         if((cur_ll.valid = '1' or min_pck_size_reached = '1' or page_state = WAIT_ACK or page_state = WAIT_LAST_ACK) and fetch_first = '1') then
           wait_first_fetched <='0';
-        elsif(fetch_first = '1' and (df_empty_i = '0' or min_pck_size_reached = '0')) then
+        elsif(fetch_first = '1' and (df_empty_i = '0' or min_pck_size_reached = '0') and  pre_fetch = '0') then
           wait_first_fetched <='1';
         end if;
 
@@ -327,7 +411,10 @@ begin  -- behavioral
               ll_addr_o      <= rport_pg_addr_i;
               page_state     <= NEXT_LINK;
               fetch_first    <= '1';
-            else
+--          ML:  start pre-fetching well in advance even if the payload is more-or-less equal to 
+--               page-size-multiple (always starts in the middle of pre-last page)
+            elsif(words_xmitted + to_unsigned(g_page_size/2, words_total'length) >= last_pg_start_ptr and
+                  pre_fetch = '0' ) then  --ML not to start prefatching next page one already done so
               rport_pg_req <= '1';
             end if;
 
@@ -335,10 +422,7 @@ begin  -- behavioral
 -- current page
           when NEXT_LINK =>
             
-            if(fetch_abort = '1') then
-              page_state <= FIRST_PAGE;
-              ll_req_int   <= '0';
-            elsif(ll_grant_d1 = '1' and cur_ll.valid = '1') then
+            if(ll_grant_d1 = '1' and cur_ll.valid = '1') then
               cur_page  <= cur_ll.next_page;
               ll_addr_o <= cur_ll.next_page;
 
@@ -349,7 +433,18 @@ begin  -- behavioral
                 fetch_pg_addr  <= cur_page;
                 fvalid_int     <= '1';
                 fetch_last     <= '1';
+                
+                -- remember the total up to before the last page starts
+                if(fetch_first = '1') then -- this is first and last page
+                  last_pg_start_ptr <= resize(unsigned(cur_ll.size), words_total'length );
+                else
+                  last_pg_start_ptr <= words_total;
+                end if;
+                
               else
+              
+                last_pg_start_ptr <= (others =>'0');
+                
                 page_state <= WAIT_ACK;
                 
                 fetch_pg_words <= to_unsigned(g_page_size, fetch_pg_words'length);
@@ -357,7 +452,11 @@ begin  -- behavioral
                 fetch_pg_addr  <= cur_page;
                 fetch_pg_addr  <= cur_page;
                 fvalid_int     <= '1';
-                fetch_last     <= '0';
+                if(fetch_first = '1') then -- prefetching conditin
+                  fetch_last     <= '1';
+                else                       -- normal condition
+                  fetch_last     <= '0';
+                end if;
               end if;
               ll_req_int <= '0';
             else
@@ -365,23 +464,34 @@ begin  -- behavioral
             end if;
 
           when WAIT_ACK =>
-            if(fetch_abort = '1') then
-              page_state <= FIRST_PAGE;
-            elsif(fetch_ack = '1') then
-              ll_req_int    <= '1';
+            if(fetch_ack = '1') then
+              --ll_req_int    <= '1';
               fetch_first <= '0';
               fvalid_int  <= '0';
-
-
-              page_state <= NEXT_LINK;
+              if(pre_fetch = '1' and last_int = '0') then
+                ll_req_int    <= '0';
+                page_state     <= NASTY_WAIT;
+              else
+                ll_req_int    <= '1';
+                page_state <= NEXT_LINK;
+              end if;
             end if;
 
           when WAIT_LAST_ACK =>
             if(fetch_ack = '1') then
-              rport_pg_req <= '1';
+--               if(words_xmitted >= last_pg_start_ptr) then -- ML: to delay req -- only during last page
+--                 rport_pg_req <= '1';
+--               else
+--                 rport_pg_req <= '0';
+--               end if;
+              
               fetch_first    <= '0';
               fvalid_int     <= '0';
               page_state     <= FIRST_PAGE;
+            end if;
+          when NASTY_WAIT =>
+            if(last_int = '1') then
+              page_state <= NEXT_LINK;
             end if;
             
         end case;
@@ -390,6 +500,5 @@ begin  -- behavioral
   end process;
 
   ll_req_o <= ll_req_int and not (ll_grant_i or ll_grant_d0 or ll_grant_d1);
-
   
 end behavioral;

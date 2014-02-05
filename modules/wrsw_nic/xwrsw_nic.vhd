@@ -17,8 +17,8 @@ entity xwrsw_nic is
     (
       g_interface_mode      : t_wishbone_interface_mode      := CLASSIC;
       g_address_granularity : t_wishbone_address_granularity := WORD;
-      g_src_cyc_on_stall    : boolean := false
-    );
+      g_src_cyc_on_stall    : boolean := false;
+      g_port_mask_bits      : integer := 32); --should be num_ports+1
   port (
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
@@ -37,7 +37,7 @@ entity xwrsw_nic is
 -- "Fake" RTU interface
 -------------------------------------------------------------------------------
 
-    rtu_dst_port_mask_o : out std_logic_vector(31 downto 0);
+    rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
     rtu_prio_o          : out std_logic_vector(2 downto 0);
     rtu_drop_o          : out std_logic;
     rtu_rsp_valid_o     : out std_logic;
@@ -59,7 +59,8 @@ architecture rtl of xwrsw_nic is
     generic (
       g_desc_mode            : string;
       g_num_descriptors      : integer;
-      g_num_descriptors_log2 : integer);
+      g_num_descriptors_log2 : integer;
+      g_port_mask_bits       : integer := 32);
     port (
       clk_sys_i             : in  std_logic;
       rst_n_i               : in  std_logic;
@@ -129,9 +130,9 @@ architecture rtl of xwrsw_nic is
     port (
       rst_n_i          : in  std_logic;
       clk_sys_i        : in  std_logic;
-      wb_adr_i        : in  std_logic_vector(6 downto 0);
-      wb_dat_i        : in  std_logic_vector(31 downto 0);
-      wb_dat_o        : out std_logic_vector(31 downto 0);
+      wb_adr_i         : in  std_logic_vector(6 downto 0);
+      wb_dat_i         : in  std_logic_vector(31 downto 0);
+      wb_dat_o         : out std_logic_vector(31 downto 0);
       wb_cyc_i         : in  std_logic;
       wb_sel_i         : in  std_logic_vector(3 downto 0);
       wb_stb_i         : in  std_logic;
@@ -162,14 +163,15 @@ architecture rtl of xwrsw_nic is
   end component;
 
   component nic_tx_fsm
-    generic (
-      g_cyc_on_stall  : boolean);
+    generic(
+      g_port_mask_bits  : integer := 32;
+      g_cyc_on_stall    : boolean := false);
     port (
       clk_sys_i               : in  std_logic;
       rst_n_i                 : in  std_logic;
       src_o                   : out t_wrf_source_out;
       src_i                   : in  t_wrf_source_in;
-      rtu_dst_port_mask_o     : out std_logic_vector(31 downto 0);
+      rtu_dst_port_mask_o     : out std_logic_vector(g_port_mask_bits-1 downto 0);
       rtu_prio_o              : out std_logic_vector(2 downto 0);
       rtu_drop_o              : out std_logic;
       rtu_rsp_valid_o         : out std_logic;
@@ -287,7 +289,7 @@ begin  -- rtl
   wb_out.err <= '0';
   wb_out.rty <= '0';
 
-  nic_reset_n <= rst_n_i and (not regs_fromwb.reset_wr_o);
+  nic_reset_n <= rst_n_i and (not regs_fromwb.cr_sw_rst_o);
 
   regs_towb <= regs_towb_tx or regs_towb_rx or regs_towb_main;
 
@@ -295,15 +297,15 @@ begin  -- rtl
     port map (
       rst_n_i   => rst_n_i,
       clk_sys_i => clk_sys_i,
-      wb_adr_i => wb_in.adr(6 downto 0),
-      wb_dat_i => wb_in.dat,
-      wb_dat_o => wb_rdata_slave,
+      wb_adr_i  => wb_in.adr(6 downto 0),
+      wb_dat_i  => wb_in.dat,
+      wb_dat_o  => wb_rdata_slave,
       wb_cyc_i  => wb_cyc_slave,
       wb_sel_i  => wb_in.sel,
       wb_stb_i  => wb_in.stb,
       wb_we_i   => wb_in.we,
       wb_ack_o  => wb_ack_slave,
-      wb_stall_o => wb_out.stall,
+      wb_stall_o=> wb_out.stall,
       wb_int_o  => wb_out.int,
 
 
@@ -399,8 +401,8 @@ begin  -- rtl
     generic map (
       g_desc_mode            => "rx",
       g_num_descriptors      => c_nic_num_rx_descriptors,
-      g_num_descriptors_log2 => c_nic_num_rx_descriptors_log2)
-
+      g_num_descriptors_log2 => c_nic_num_rx_descriptors_log2,
+      g_port_mask_bits       => g_port_mask_bits)
     port map (
       clk_sys_i => clk_sys_i,
       rst_n_i   => nic_reset_n,
@@ -465,7 +467,8 @@ begin  -- rtl
     generic map (
       g_desc_mode            => "tx",
       g_num_descriptors      => c_nic_num_tx_descriptors,
-      g_num_descriptors_log2 => c_nic_num_tx_descriptors_log2)
+      g_num_descriptors_log2 => c_nic_num_tx_descriptors_log2,
+      g_port_mask_bits       => g_port_mask_bits)
     port map (
       clk_sys_i      => clk_sys_i,
       rst_n_i        => nic_reset_n,
@@ -494,7 +497,8 @@ begin  -- rtl
 
   U_TX_FSM : nic_tx_fsm
     generic map(
-      g_cyc_on_stall => g_src_cyc_on_stall)
+      g_cyc_on_stall    => g_src_cyc_on_stall,
+      g_port_mask_bits  => g_port_mask_bits)
     port map (
       clk_sys_i => clk_sys_i,
       rst_n_i   => nic_reset_n,

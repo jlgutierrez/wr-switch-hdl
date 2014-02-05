@@ -36,9 +36,6 @@ top = peripheral {
       * With EMPTY set to 0, the frame can now be copied from the NIC's memory and stats can be updated \
       * Set READY bit to 1 \
    \
-   Todo \
-   ~~~~ \
-      * Descriptors in RAM, not as registers. wbgen2 doesn't support this yet. Working on it. \
    Known issues \
    ~~~~~~~~~~~ \
       * Only 32-bit aligned addresses are supported";
@@ -65,6 +62,16 @@ top = peripheral {
 				 type = BIT;
 				 access_bus = READ_WRITE;
 				 access_dev = READ_ONLY;
+      };
+
+      field {
+        name = "Software Reset";
+        description = "write 1: reset the NIC, zero all registers and reset the state of the module \
+                       write 0: no effect";
+        prefix = "sw_rst";
+        size = 1;
+        align = 31;
+        type = MONOSTABLE;
       };
    };
 
@@ -145,18 +152,6 @@ top = peripheral {
 			};
    };
 
-
-   reg {
-      name = "SW_Reset";
-      description = "Writing to this register resets the NIC, zeroing all registers and resetting the state of the module";
-      prefix = "reset";
-      field {
-				 name = "Software reset";
-				 type = PASS_THROUGH;
-				 size = 32;
-      };
-   };
-	 
 	 irq {
       name = "Receive Complete";
       prefix = "rcomp";

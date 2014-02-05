@@ -94,6 +94,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use ieee.math_real.CEIL;
 
 use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
@@ -112,7 +113,16 @@ entity swc_page_allocator is
     g_num_ports      : integer := 7;--:= c_swc_num_ports
 
     -- number of bits of the user count value
-    g_usecount_width: integer := 4 --g_use_count_bits 
+    g_usecount_width: integer := 4; --g_use_count_bits ;
+
+    --- management
+    g_page_size             : integer := 64;
+    g_max_pck_size          : integer := 759; -- in 16 bit words (1518 [octets])/(2 [octets])
+    g_special_res_num_pages : integer := 256;
+    g_resource_num          : integer := 3;   -- this include: unknown, special and x* normal , so
+                                              -- g_resource_num = 2+x
+    g_resource_num_width    : integer := 2;
+    g_num_dbg_vector_width  : integer 
     );
 
   port (
@@ -167,7 +177,36 @@ entity swc_page_allocator is
                                         -- multiport scheduler can optimize
                                         -- it's performance
 
-    nomem_o : out std_logic
+
+    nomem_o : out std_logic;
+
+    --------------------------- resource management ----------------------------------
+    -- resource number
+    resource_i                    : in  std_logic_vector(g_resource_num_width-1 downto 0);
+    
+    -- outputed when freeing
+    resource_o                    : out std_logic_vector(g_resource_num_width-1 downto 0);
+
+    -- used only when freeing page, 
+    -- if HIGH then the input resource_i value will be used
+    -- if LOW  then the value read from memory will be used (stored along with usecnt)
+    free_resource_valid_i         : in std_logic;
+    
+    -- number of pages added to the resurce
+    rescnt_page_num_i             : in  std_logic_vector(g_page_addr_width   -1 downto 0);
+
+    -- valid when (done_o and usecnt_i) = HIGH
+    -- set_usecnt_succeeded_o = LOW ->> indicates that the usecnt was not set and the resources
+    --                                were not moved from unknown to resource_o because there is
+    --                                not enough resources
+    -- set_usecnt_succeeded_o = HIGH->> indicates that usecnt_i requres was handled successfully    
+    set_usecnt_succeeded_o        : out std_logic;
+    
+
+    res_full_o                    : out std_logic_vector(g_resource_num      -1 downto 0);
+    res_almost_full_o             : out std_logic_vector(g_resource_num      -1 downto 0);
+
+    dbg_o                         : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0)
     );
 
 end swc_page_allocator;
@@ -183,18 +222,14 @@ architecture syn of swc_page_allocator is
     tmp(to_integer(unsigned(x))) := '1';
 
     return tmp;
-  end function;
-
-
-
-
+  end function f_onehot_decode;
 
   constant c_l1_bitmap_size     : integer := g_num_pages/32;
   constant c_l1_bitmap_addrbits : integer := g_page_addr_width - 5;
 
   type t_state is (IDLE, ALLOC_LOOKUP_L1, ALLOC_LOOKUP_L0_UPDATE,
                    FREE_CHECK_USECNT, FREE_RELEASE_PAGE, FREE_DECREASE_UCNT,
-                   SET_UCNT, NASTY_WAIT, DUMMY  --, FORCE_FREE_RELEASE_PAGE
+                   SET_UCNT,NOT_SET_UCNT, NASTY_WAIT, DUMMY  --, FORCE_FREE_RELEASE_PAGE
                    );
 
   -- this represents high part of the page address (bit mapping)
@@ -229,6 +264,13 @@ architecture syn of swc_page_allocator is
   signal usecnt_mem_rddata : std_logic_vector(g_usecount_width-1 downto 0);
   signal usecnt_mem_wrdata : std_logic_vector(g_usecount_width-1 downto 0);
 
+  signal rescnt_mem_rddata : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal rescnt_mem_wrdata : std_logic_vector(g_resource_num_width-1 downto 0);
+
+  signal mem_rddata : std_logic_vector(g_resource_num_width+g_usecount_width-1 downto 0);
+  signal mem_wrdata : std_logic_vector(g_resource_num_width+g_usecount_width-1 downto 0);
+  
+
   signal pgaddr_to_free : std_logic_vector(g_page_addr_width -1 downto 0);
 
   signal page_freeing_in_last_operation : std_logic;
@@ -244,7 +286,20 @@ architecture syn of swc_page_allocator is
   signal first_addr : std_logic;
   signal ones       : std_logic_vector(c_l1_bitmap_addrbits-1 downto 0);
 
---  signal tmp_dbg_alloc : std_logic;
+  signal done       : std_logic;
+  
+  signal free_last_usecnt  : std_logic;
+
+-------------------------- resource management
+
+  signal res_mgr_alloc           : std_logic;
+  signal res_mgr_free            : std_logic;
+  signal res_mgr_res_num         : std_logic_vector(g_resource_num_width-1 downto 0);
+  signal res_mgr_rescnt_set      : std_logic;
+  signal set_usecnt_succeeded    : std_logic;
+  signal res_almost_full         : std_logic_vector(g_resource_num      -1 downto 0);
+-----------------------------
+
 begin  -- syn
 
   ones <= (others => '1');
@@ -274,32 +329,6 @@ begin  -- syn
       onehot_o => l0_mask,
       out_o    => l0_first_free);
 
-
-  --L0_LUT : generic_dpram
-  --  generic map (
-  --    g_data_width => 32,
-  --    --      g_addr_bits => c_l1_bitmap_addrbits,
-  --    g_size       => c_l1_bitmap_size,
-  --    g_dual_clock => false,
-  --    g_addr_conflict_resolution => "read_first")
-  --  port map (
-  --    clka_i => clk_i,
-  --    clkb_i => clk_i,
-
-  --    aa_i   => l0_wr_addr,
-  --    da_i   => l0_wr_data,
-  --    qa_o   => open,
-  --    bwea_i => x"0",
-  --    wea_i  => l0_wr,
-
-  --    ab_i   => l0_rd_addr,
-  --    db_i   => x"00000000",
-  --    qb_o   => l0_rd_data,
-  --    bweb_i => x"0",
-  --    web_i  => '0');
-
-
-
   L0_LUT: swc_rd_wr_ram
     generic map (
       g_data_width => 32,
@@ -313,46 +342,27 @@ begin  -- syn
       wd_i  => l0_wr_data,
       ra_i  => l0_rd_addr,
       rd_o  => l0_rd_data);
---  L0_UCNTMEM : generic_dpram
---    generic map (
---      g_data_width => g_usecount_width,
-----      g_addr_bits => g_page_addr_width,
---      g_size       => g_num_pages,
---      g_dual_clock => false,
---      g_addr_conflict_resolution => "read_first")
---    port map (
---      clka_i => clk_i,
---      clkb_i => clk_i,
-      
---      da_i   => usecnt_mem_wrdata,
---      aa_i   => usecnt_mem_wraddr,
---      qa_o   => open,
---      wea_i  => usecnt_mem_wr,
---      bwea_i => ones((g_usecount_width+7)/8 -1 downto 0),--ones((g_usecount_width+7)/8 -1 downto 0),
-
---      ab_i   => usecnt_mem_rdaddr,
---      qb_o   => usecnt_mem_rddata,
---      db_i   => ones(g_usecount_width-1 downto 0),
---      bweb_i => ones((g_usecount_width+7)/8-1 downto 0), --ones((g_usecount_width+7)/8-1 downto 0),
---      web_i  => '0'
---      );
 
   L0_UCNTMEM: swc_rd_wr_ram
     generic map (
-      g_data_width => g_usecount_width,
+      g_data_width => g_resource_num_width+g_usecount_width,
       g_size       => g_num_pages)
     port map (
       clk_i => clk_i,
       rst_n_i => rst_n_i,
       we_i  => usecnt_mem_wr,
       wa_i  => usecnt_mem_wraddr,
-      wd_i  => usecnt_mem_wrdata,
+      wd_i  => mem_wrdata,
       ra_i  => usecnt_mem_rdaddr,
-      rd_o  => usecnt_mem_rddata);
+      rd_o  => mem_rddata);
+
+
+  usecnt_mem_rddata <= mem_rddata(g_usecount_width-1 downto 0);
+  rescnt_mem_rddata <= mem_rddata(g_resource_num_width+g_usecount_width-1 downto g_usecount_width);
+  
+  mem_wrdata        <= rescnt_mem_wrdata & usecnt_mem_wrdata ;
 
   fsm : process(clk_i, rst_n_i)
---  variable l:line;
---  file fout:text open write_mode is "dupa.txt";--"stdout" ;
     
     variable cnt                 : integer := -1;
     variable usecnt_mem_rdaddr_v : integer := 0;
@@ -367,13 +377,14 @@ begin  -- syn
         --usecnt_mem_rdaddr <= (others => '0');
         usecnt_mem_wraddr              <= (others => '0');
         free_blocks                    <= to_unsigned(g_num_pages, free_blocks'length);
-        done_o                         <= '0';
+        done                           <= '0';
         l0_wr_addr                     <= (others => '0');
         l0_rd_addr                     <= (others => '0');
         l0_wr_data                     <= (others => '0');
         pgaddr_valid_o                 <= '0';
         nomem                          <= '0';
         usecnt_mem_wrdata              <= (others => '0');
+        rescnt_mem_wrdata              <= (others => '0');
         pgaddr_o                       <= (others => '0');
         tmp_page                       <= (others => '0');  -- used for symulation debugging, don't remove
         --tmp_pgs           <= (others => '0');
@@ -384,7 +395,7 @@ begin  -- syn
         was_reset                      <= '1';
         first_addr                     <= '1';
         
-
+        set_usecnt_succeeded           <= '0';
         
       elsif(was_reset = '1') then
         
@@ -400,8 +411,6 @@ begin  -- syn
           l0_wr_data <= (others => '1'); -- tom
           l0_wr_addr <= std_logic_vector(unsigned(l0_wr_addr) + 1);
         end if;
-        
-        
 
       else
         -- main finite state machine
@@ -410,16 +419,15 @@ begin  -- syn
           -- idle state: wait for alloc/release requests
           when IDLE =>
 
-            done_o         <= '0';
+            done           <= '0';
             idle_o         <= '1';
             l0_wr          <= '0';
             pgaddr_valid_o <= '0';
             usecnt_mem_wr  <= '0';
-
             page_freeing_in_last_operation <= '0';
             --usecnt_mem_rdaddr <= pgaddr_i;
             usecnt_mem_wraddr              <= pgaddr_i;
-
+            set_usecnt_succeeded           <= '0';
             -- check if we have any free blocks and drive the nomem_o line.
             -- last address (all '1') reserved for end-of-page marker in
             -- linked list
@@ -442,7 +450,7 @@ begin  -- syn
               l0_rd_addr <= l1_first_free;
               idle_o     <= '0';
               state      <= ALLOC_LOOKUP_L1;
-              done_o     <= '1';
+              done       <= '1';
             end if;
 
             -- got page release request
@@ -466,7 +474,7 @@ begin  -- syn
                 l0_rd_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
                 --usecnt_mem_rdaddr <= pgaddr_i;
                 usecnt_mem_wraddr <= pgaddr_i;
-                done_o            <= '1';  -- assert the done signal early enough
+                done              <= '1';  -- assert the done signal early enough
                                         -- so the multiport allocator will also
                                         -- take 3 cycles per request
 
@@ -490,7 +498,7 @@ begin  -- syn
               l0_rd_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
               --usecnt_mem_rdaddr <= pgaddr_i;
               usecnt_mem_wraddr <= pgaddr_i;
-              done_o            <= '1';  -- assert the done signal early enough
+              done              <= '1';  -- assert the done signal early enough
                                         -- so the multiport allocator will also
                                         -- take 3 cycles per request
             end if;
@@ -498,10 +506,22 @@ begin  -- syn
             if(set_usecnt_i = '1') then
               
               idle_o            <= '0';
-              state             <= SET_UCNT;
-              usecnt_mem_wrdata <= usecnt_i;
-              usecnt_mem_wraddr <= pgaddr_i;
-              done_o            <= '1';  -- assert the done signal early enough
+               
+              -- check if we have enough resources !!!!
+              if(res_almost_full(to_integer(unsigned(resource_i))) = '1') then
+                -- not enough to accommodate max size frame, sorry we cannot serve the request
+                state                <= NOT_SET_UCNT;       
+                set_usecnt_succeeded <= '0';
+              else
+                -- enough resources
+                state                <= SET_UCNT;              
+                usecnt_mem_wrdata    <= usecnt_i;
+                rescnt_mem_wrdata    <= resource_i;
+                usecnt_mem_wraddr    <= pgaddr_i;
+                set_usecnt_succeeded <= '1';
+
+              end if;
+              done              <= '1';  -- assert the done signal early enough
                                          -- so the multiport allocator will also
                                          -- take 3 cycles per request
             end if;
@@ -509,7 +529,7 @@ begin  -- syn
           when DUMMY =>
             
             state  <= FREE_RELEASE_PAGE;
-            done_o <= '0';
+            done   <= '0';
             
           when NASTY_WAIT =>
             
@@ -523,7 +543,7 @@ begin  -- syn
             l0_rd_addr        <= pgaddr_i(g_page_addr_width-1 downto 5);
             --usecnt_mem_rdaddr <= pgaddr_i;
             usecnt_mem_wraddr <= pgaddr_i;
-            done_o            <= '1';   -- assert the done signal early enough
+            done              <= '1';   -- assert the done signal early enough
             -- so the multiport allocator will also
             -- take 3 cycles per request
 
@@ -538,7 +558,7 @@ begin  -- syn
 
             -- drive "done" output early, so the arbiter will now that it can initiate
             -- another operation in the next cycle.
-            done_o <= '0';
+            done   <= '0';
             
             
           when ALLOC_LOOKUP_L0_UPDATE =>
@@ -562,6 +582,7 @@ begin  -- syn
             pgaddr_o          <= l1_first_free & l0_first_free;
             usecnt_mem_wraddr <= l1_first_free & l0_first_free;
             usecnt_mem_wrdata <= usecnt_i;
+            rescnt_mem_wrdata <= resource_i;
             usecnt_mem_wr     <= '1';
             pgaddr_valid_o    <= '1';
             free_blocks       <= free_blocks-1;
@@ -570,12 +591,12 @@ begin  -- syn
             --if(l1_first_free & l0_first_free = x"0E5")
             --    fprint(fout, l, "==> Allocate page %d  ,  usecnt %d, free blocks: %d \n", fo(l1_first_free & l0_first_free),fo(usecnt_i), fo(free_blocks-1));
             -- tmp_pgs(to_integer(unsigned(l1_first_free & l0_first_free))) <= '1';
-            --    done_o <= '0';
+            --    done   <= '0';
 
           when FREE_CHECK_USECNT =>
             -- use count = 1 - release the page
 
-            done_o <= '0';
+            done   <= '0';
 
             -- last user, free page
             if(usecnt_mem_rddata = std_logic_vector(to_unsigned(1, usecnt_mem_rddata'length))) then
@@ -599,33 +620,42 @@ begin  -- syn
 --            l1_bitmap         <= l1_bitmap or f_onehot_decode(pgaddr_i(g_page_addr_width-1 downto 5));
             free_blocks       <= free_blocks+ 1;
             usecnt_mem_wrdata <= (others => '0');
+            rescnt_mem_wrdata <= (others => '0');
             usecnt_mem_wr     <= '1';
             state             <= IDLE;
-            done_o            <= '0';
+            done              <= '0';
 
           --       fprint(fout, l, "<== Release page: %d, free blocks: %d  \n",fo(tmp_page),fo(free_blocks+ 1));
           --tmp_pgs(to_integer(unsigned(tmp_page))) <= '0';
           when FREE_DECREASE_UCNT =>
 
             usecnt_mem_wrdata <= std_logic_vector(unsigned(usecnt_mem_rddata) - 1);
+            rescnt_mem_wrdata <= rescnt_mem_rddata;
             usecnt_mem_wr     <= '1';
             state             <= IDLE;
 
             --   fprint(fout, l, "     Free page: %d (usecnt = %d)\n",fo(tmp_page),fo(std_logic_vector(unsigned(usecnt_mem_rddata) - 1)));
 
-            
           when SET_UCNT =>
             
-            usecnt_mem_wrdata <= usecnt_i;
-            usecnt_mem_wr     <= '1';
-            state             <= IDLE;
-            done_o            <= '0';
+            usecnt_mem_wrdata    <= usecnt_i;
+            rescnt_mem_wrdata    <= resource_i;
+            usecnt_mem_wr        <= '1';
+            state                <= IDLE;
+            done                 <= '0';
+            set_usecnt_succeeded <= '0';
 
             --    fprint(fout, l, "     Usecnt set: %d (usecnt = %d)\n",fo(tmp_page),fo(usecnt_i));
-            
+
+          when NOT_SET_UCNT =>
+
+            state                <= IDLE;
+            done                 <= '0';          
+            set_usecnt_succeeded <= '0';
+                        
           when others =>
             state  <= IDLE;
-            done_o <= '0';
+            done   <= '0';
             
         end case;
         --usecnt_mem_rdaddr <= pgaddr_i;
@@ -641,10 +671,50 @@ begin  -- syn
   -- so that the data is available at the end of the first stata after IDLE
   usecnt_mem_rdaddr <= pgaddr_i;
 
-  nomem_o <= nomem;
-
-  free_last_usecnt_o <= '1' when (state             = FREE_CHECK_USECNT and 
+  free_last_usecnt<= '1' when (state             = FREE_CHECK_USECNT and 
                               usecnt_mem_rddata = std_logic_vector(to_unsigned(1, usecnt_mem_rddata'length ))) else
-                    '0';
+                     '0';
 
+  nomem_o                 <= nomem;
+  done_o                  <= done;
+  free_last_usecnt_o      <= free_last_usecnt;
+  resource_o              <= rescnt_mem_rddata;
+  set_usecnt_succeeded_o  <= set_usecnt_succeeded;
+  res_almost_full_o       <= res_almost_full;
+  --------------------------------------------------------------------------------------------------
+  --                               Resource Manager logic and instantiation
+  --------------------------------------------------------------------------------------------------
+
+  res_mgr_alloc           <= alloc_i and done;
+  res_mgr_free            <= ((free_i and free_last_usecnt) or force_free_i) and done;
+  res_mgr_res_num         <= rescnt_mem_rddata  when (free_resource_valid_i='0' and (free_i='1' or force_free_i='1')) else 
+                             resource_i;
+  res_mgr_rescnt_set      <= set_usecnt_i and done and set_usecnt_succeeded;
+  
+  ------ resource management 
+  RESOURCE_MANAGEMENT: swc_alloc_resource_manager
+  generic map(
+    g_num_ports              => g_num_ports,
+    g_max_pck_size           => g_max_pck_size,
+    g_page_size              => g_page_size,
+    g_total_num_pages        => g_num_pages,
+    g_total_num_pages_width  => g_page_addr_width,
+    g_special_res_num_pages  => g_special_res_num_pages,
+    g_resource_num           => g_resource_num,
+    g_resource_num_width     => g_resource_num_width,
+    g_num_dbg_vector_width   => g_num_dbg_vector_width
+    )
+  port map (
+    clk_i                    => clk_i,
+    rst_n_i                  => rst_n_i,
+    resource_i               => res_mgr_res_num,
+    alloc_i                  => res_mgr_alloc,
+    free_i                   => res_mgr_free,
+    rescnt_set_i             => res_mgr_rescnt_set,
+    rescnt_page_num_i        => rescnt_page_num_i,
+    res_full_o               => res_full_o,
+    res_almost_full_o        => res_almost_full,
+    dbg_o                    => dbg_o
+    );
+  
 end syn;

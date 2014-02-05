@@ -13,6 +13,9 @@ NET "fpga_clk_aux_n_i"  LOC=B10;
 NET "fpga_clk_dmtd_p_i"  LOC=L23; 
 NET "fpga_clk_dmtd_n_i"  LOC=M22;
 
+NET "sensors_scl_b" LOC=G13;
+NET "sensors_sda_b" LOC=H14;
+
 #EBI BUS
 #NET "cpu_clk_i" LOC="";
 NET "cpu_cs_n_i" LOC="H34";
@@ -96,7 +99,7 @@ NET "pll_sck_o"  LOC="AE16";
 NET "pll_mosi_o"  LOC="AH19";  
 NET "pll_miso_i"  LOC="AJ19";  
 NET "pll_reset_n_o" LOC="AL16";
-NET "pll_status_i" LOC="AE18";
+NET "pll_status_i" LOC="K13";
 NET "pll_sync_n_o" LOC="AG18";
 
 NET "uart_txd_o" LOC="E11";
@@ -137,18 +140,20 @@ NET "gtx16_19_clk_n_i" IOSTANDARD="LVPECL_25";
 NET "gtx16_19_clk_p_i" IOSTANDARD="LVPECL_25";
 
     
-#NET "gtx_rxp_i[0]" LOC="AP5"; # gtx0
-#NET "gtx_rxn_i[0]" LOC="AP6";
-#NET "gtx_txp_o[0]" LOC="AP1"; 
-#NET "gtx_txn_o[0]" LOC="AP2";
-#NET "gtx_rxp_i[1]" LOC="AM5"; # gtx1
-#NET "gtx_rxn_i[1]" LOC="AM6";
-#NET "gtx_txp_o[1]" LOC="AN3";
-#NET "gtx_txn_o[1]" LOC="AN4";
-#NET "gtx_rxp_i[2]" LOC="AL3"; # gtx2
-#NET "gtx_rxn_i[2]" LOC="AL4";
-#NET "gtx_txp_o[2]" LOC="AM1";
-#NET "gtx_txn_o[2]" LOC="AM2";
+#NET "gtx_rxp_i[17]" LOC="AP5"; # gtx0
+#NET "gtx_rxn_i[17]" LOC="AP6";
+#NET "gtx_txp_o[17]" LOC="AP1"; 
+#NET "gtx_txn_o[17]" LOC="AP2";
+
+#NET "gtx_rxp_i[16]" LOC="AM5"; # gtx1
+#NET "gtx_rxn_i[16]" LOC="AM6";
+#NET "gtx_txp_o[16]" LOC="AN3";
+#NET "gtx_txn_o[16]" LOC="AN4";
+
+#NET "gtx_rxp_i[15]" LOC="AL3"; # gtx2
+#NET "gtx_rxn_i[15]" LOC="AL4";
+#NET "gtx_txp_o[15]" LOC="AM1";
+#NET "gtx_txn_o[15]" LOC="AM2";
 NET "gtx_rxp_i[14]" LOC="AJ3";
 NET "gtx_rxn_i[14]" LOC="AJ4";
 
@@ -258,12 +263,18 @@ NET "led_act_o[12]" LOC="AC29";
 NET "led_act_o[13]" LOC="AC32";  
 NET "led_act_o[14]" LOC="AD31";  
 
-
+#NET "led_act_o[15]" LOC="AE32";
+#NET "led_act_o[16]" LOC="AC28";
+#NET "led_act_o[17]" LOC="AG33";
 
 NET "mbl_scl_b[0]" LOC="AF31"; 
 NET "mbl_sda_b[0]" LOC="AG32"; 
 NET "mbl_scl_b[1]" LOC="AC25"; 
 NET "mbl_sda_b[1]" LOC="AG31"; 
+
+NET "clk_dmtd_divsel_o" LOC="AN15";
+NET "mb_fan1_pwm_o" LOC="C12";
+NET "mb_fan2_pwm_o" LOC="D12";
 
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/20
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/01/22
@@ -340,9 +351,9 @@ TIMESPEC TS_gtx16_19_clk_n_i = PERIOD "gtx16_19_clk_n_i" 8 ns HIGH 50%;
 NET "gtx16_19_clk_p_i" TNM_NET = gtx16_19_clk_p_i;
 TIMESPEC TS_gtx16_19_clk_p_i = PERIOD "gtx16_19_clk_p_i" 8 ns HIGH 50%;
 
-NET "pll_status_i" CLOCK_DEDICATED_ROUTE = FALSE;
+#NET "pll_status_i" CLOCK_DEDICATED_ROUTE = FALSE;
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/04/25
-INST "cmp_wb_cpu_bridge/gen_sync_chains_nosim.sync_ffs_wr/sync0" TNM = Ignore_sync_ffs;
+#INST "cmp_wb_cpu_bridge/gen_sync_chains_nosim.sync_ffs_wr/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[0].U_Endpoint_X/U_Wrapped_Endpoint/gen_leds.U_Led_Ctrl/U_Sync_Activity/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[0].U_Endpoint_X/U_Wrapped_Endpoint/U_EP_TSU/rx_done_gen/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[0].U_Endpoint_X/U_Wrapped_Endpoint/U_EP_TSU/sync_ffs_rx_f/sync0" TNM = Ignore_sync_ffs;
@@ -613,7 +624,8 @@ INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[14].U_Endpoint_X/U_Wra
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[14].U_Endpoint_X/U_Wrapped_Endpoint/U_PCS_1000BASEX/U_MDIO_WB/mdio_wr_spec_tx_cal_sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[14].U_Endpoint_X/U_Wrapped_Endpoint/U_Rx_Path/U_early_addr_match/U_sync_done/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/gen_network_stuff.gen_endpoints_and_phys[14].U_Endpoint_X/U_Wrapped_Endpoint/U_WB_SLAVE/ep_tscr_cs_done_sync0" TNM = Ignore_sync_ffs;
-INST "U_Real_Top/gen_network_stuff.U_RTU/U_Wrapped_RTU/U_WB_Slave/rtu_gcr_g_ena_sync0" TNM = Ignore_sync_ffs;
+INST "U_Real_Top/gen_network_stuff.U_RTU/U_WB_Slave/rtu_gcr_g_ena_sync0" TNM = Ignore_sync_ffs;
+#INST "U_Real_Top/gen_network_stuff.U_RTU/U_Wrapped_RTU/U_WB_Slave/rtu_gcr_g_ena_sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_PPS_Gen/WRAPPED_PPSGEN/Uwb_slave/ppsg_cr_cnt_en_sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_PPS_Gen/WRAPPED_PPSGEN/Uwb_slave/ppsg_cr_cnt_rst_sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_PPS_Gen/WRAPPED_PPSGEN/Uwb_slave/ppsg_cr_cnt_set_sync0" TNM = Ignore_sync_ffs;
@@ -639,37 +651,21 @@ INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DM
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/U_sync_tag_strobe/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/U_sync_tag_strobe/sync0" TNM = Ignore_sync_ffs;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_feedback_dmtds[0].DMTD_FB/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_feedback_dmtds[0].DMTD_FB/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[0].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[0].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[1].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[1].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[2].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[2].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[3].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[3].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[4].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[4].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[5].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[5].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[6].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[6].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[7].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[7].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[8].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[8].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[9].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[9].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[10].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[10].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[11].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[11].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[12].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[13].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/clk_i_d3" TNM = Ignore_DMTD;
-INST "U_Real_Top/U_RT_Subsystem/U_SoftPLL/U_Wrapped_Softpll/gen_ref_dmtds[14].DMTD_REF/Mshreg_clk_i_d3" TNM = Ignore_DMTD;
 
 TIMESPEC TS_ignore1 = FROM Ignore_DMTD TIG;
 TIMESPEC TS_ignore2 = TO Ignore_DMTD TIG;

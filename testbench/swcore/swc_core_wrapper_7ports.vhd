@@ -252,12 +252,13 @@ begin
 U_xswc_core: xswc_core
   generic map(
     g_prio_num                         => 8,
+    g_output_queue_num                 => 8,
     g_max_pck_size                     => 10 * 1024,
     g_max_oob_size                     => 3,
     g_num_ports                        => 7,
     g_pck_pg_free_fifo_size            => ((65536/64)/2) ,
     g_input_block_cannot_accept_data   => "drop_pck",
-    g_output_block_per_prio_fifo_size  => 64,
+    g_output_block_per_queue_fifo_size => 64,
     
     g_wb_data_width                    => 16,
     g_wb_addr_width                    => 2,
@@ -268,7 +269,8 @@ U_xswc_core: xswc_core
     g_mpm_page_size                    => 64,
     g_mpm_ratio                        => 2,
     g_mpm_fifo_size                    => 4,
-    g_mpm_fetch_next_pg_in_advance     => false
+    g_mpm_fetch_next_pg_in_advance     => false,
+    g_drop_outqueue_head_on_full       => true
   )
   port map(
     clk_i               => clk_i,

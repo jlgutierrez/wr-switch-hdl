@@ -140,7 +140,8 @@ package wrsw_components_pkg is
     generic (
       g_interface_mode      : t_wishbone_interface_mode;
       g_address_granularity : t_wishbone_address_granularity;
-      g_src_cyc_on_stall    : boolean := false);
+      g_src_cyc_on_stall    : boolean := false;
+      g_port_mask_bits      : integer := 32); --should be num_ports+1
     port (
       clk_sys_i           : in  std_logic;
       rst_n_i             : in  std_logic;
@@ -148,7 +149,7 @@ package wrsw_components_pkg is
       snk_o               : out t_wrf_sink_out;
       src_i               : in  t_wrf_source_in;
       src_o               : out t_wrf_source_out;
-      rtu_dst_port_mask_o : out std_logic_vector(31 downto 0);
+      rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
       rtu_prio_o          : out std_logic_vector(2 downto 0);
       rtu_drop_o          : out std_logic;
       rtu_rsp_valid_o     : out std_logic;
@@ -182,6 +183,9 @@ package wrsw_components_pkg is
       pps_p_o             : out std_logic;
       pps_raw_i           : in  std_logic;
       sel_clk_sys_o       : out std_logic;
+      tm_utc_o            : out std_logic_vector(39 downto 0);
+      tm_cycles_o         : out std_logic_vector(27 downto 0);
+      tm_time_valid_o     : out std_logic;
       pll_status_i        : in  std_logic;
       pll_mosi_o          : out std_logic;
       pll_miso_i          : in  std_logic;
@@ -211,12 +215,13 @@ package wrsw_components_pkg is
   component xswc_core is
     generic( 
       g_prio_num                         : integer ;
+      g_output_queue_num                 : integer ;
       g_max_pck_size                     : integer ;
       g_max_oob_size                     : integer ;
       g_num_ports                        : integer ;
       g_pck_pg_free_fifo_size            : integer ;
       g_input_block_cannot_accept_data   : string  ;
-      g_output_block_per_prio_fifo_size  : integer ;
+      g_output_block_per_queue_fifo_size : integer ;
 
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;
@@ -227,7 +232,10 @@ package wrsw_components_pkg is
       g_mpm_page_size                    : integer ;
       g_mpm_ratio                        : integer ;
       g_mpm_fifo_size                    : integer ;
-      g_mpm_fetch_next_pg_in_advance     : boolean
+      g_mpm_fetch_next_pg_in_advance     : boolean ;
+      g_drop_outqueue_head_on_full       : boolean ;
+      g_num_global_pause                 : integer ;
+      g_num_dbg_vector_width             : integer := 8
       );
    port (
       clk_i          : in std_logic;
@@ -239,9 +247,14 @@ package wrsw_components_pkg is
   
       src_i          : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
       src_o          : out t_wrf_source_out_array(g_num_ports-1 downto 0);
-      
+    
+      global_pause_i            : in  t_global_pause_request_array(g_num_global_pause-1 downto 0);
+      perport_pause_i           : in  t_pause_request_array(g_num_ports-1 downto 0);
+      shaper_drop_at_hp_ena_i   : in  std_logic := '0';
+      dbg_o                      : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0);
       rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
-      rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0)
+      rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0);
+      rtu_abort_o    : out std_logic_vector(g_num_ports  - 1 downto 0)
       );
   end component;
   component xwrsw_rtu
@@ -259,8 +272,77 @@ package wrsw_components_pkg is
       req_full_o : out std_logic_vector(g_num_ports-1 downto 0);
       rsp_o      : out t_rtu_response_array(g_num_ports-1 downto 0);
       rsp_ack_i  : in  std_logic_vector(g_num_ports-1 downto 0);
+      -------- new stuff for TRU --------
+      tru_req_o  : in  t_tru_request;
+      ru_resp_i  : out t_tru_response;  
+      rtu2tru_o  : out t_rtu2tru;
+      tru_enabled_i: in std_logic;
+     -----------------------------------
       wb_i       : in  t_wishbone_slave_in;
       wb_o       : out t_wishbone_slave_out);
+  end component;
+
+  component xwrsw_rtu_new
+    generic (
+      g_interface_mode                  : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity             : t_wishbone_address_granularity := BYTE;
+      g_handle_only_single_req_per_port : boolean                        := FALSE;
+      g_prio_num                        : integer;
+      g_num_ports                       : integer;
+      g_cpu_port_num                    : integer := -1;
+      g_match_req_fifo_size             : integer := 32;  
+      g_port_mask_bits                  : integer;
+      g_rmon_events_bits_pp             : integer := 8);
+    port (
+      clk_sys_i   : in std_logic;
+      rst_n_i     : in std_logic;
+      req_i       : in  t_rtu_request_array(g_num_ports-1 downto 0);
+      req_full_o  : out std_logic_vector(g_num_ports-1 downto 0);
+      rsp_o       : out t_rtu_response_array(g_num_ports-1 downto 0);
+      rsp_ack_i   : in  std_logic_vector(g_num_ports-1 downto 0);
+      rq_abort_i   : in  std_logic_vector(g_num_ports-1 downto 0);
+      rsp_abort_i  : in  std_logic_vector(g_num_ports-1 downto 0);
+      tru_req_o   : out  t_tru_request;
+      tru_resp_i  : in   t_tru_response;  
+      rtu2tru_o   : out  t_rtu2tru;
+      tru_enabled_i: in std_logic;
+      rmon_events_o : out std_logic_vector(g_num_ports*g_rmon_events_bits_pp-1 downto 0);
+      wb_i        : in  t_wishbone_slave_in;
+      wb_o        : out t_wishbone_slave_out
+      );
+  end component;  
+
+  component xwrsw_pstats
+    generic(
+      g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity : t_wishbone_address_granularity := BYTE;
+      g_nports : integer := 2;
+      g_cnt_pp : integer := 16;
+      g_cnt_pw : integer := 4);
+    port(
+      rst_n_i : in std_logic;
+      clk_i   : in std_logic;
+  
+      events_i : in std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
+  
+      wb_i : in  t_wishbone_slave_in;
+      wb_o : out t_wishbone_slave_out );
+  end component;
+
+  component xwrsw_hwdu
+    generic (
+      g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity : t_wishbone_address_granularity := BYTE;
+      g_nregs   : integer := 1;
+      g_rwidth  : integer := 32);
+    port(
+      rst_n_i : in std_logic;
+      clk_i   : in std_logic;
+  
+      dbg_regs_i  : in std_logic_vector(g_nregs*g_rwidth-1 downto 0);
+      dbg_chps_id_o : out std_logic_vector(7 downto 0);  
+      wb_i : in  t_wishbone_slave_in;
+      wb_o : out t_wishbone_slave_out);
   end component;
 
   component xwrsw_hwiu
@@ -280,5 +362,22 @@ package wrsw_components_pkg is
       wb_i : in  t_wishbone_slave_in;
       wb_o : out t_wishbone_slave_out);
   end component;
+
+  --TEMP
+  component dummy_rmon
+    generic(
+      g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity : t_wishbone_address_granularity := BYTE;
+      g_nports  : integer := 8;
+      g_cnt_pp  : integer := 2);
+    port(
+      rst_n_i : in std_logic;
+      clk_i   : in std_logic;
+      events_i  : in std_logic_vector(g_nports*g_cnt_pp-1 downto 0);
   
+      wb_i : in  t_wishbone_slave_in;
+      wb_o : out t_wishbone_slave_out);
+  end component;
+
+ 
 end wrsw_components_pkg;

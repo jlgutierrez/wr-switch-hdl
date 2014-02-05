@@ -28,13 +28,12 @@ library work;
 use work.nic_constants_pkg.all;
 use work.nic_descriptors_pkg.all;
 
-
-
 entity nic_descriptor_manager is
   generic (
     g_desc_mode            : string := "tx";
     g_num_descriptors      : integer;
-    g_num_descriptors_log2 : integer);
+    g_num_descriptors_log2 : integer;
+    g_port_mask_bits       : integer := 32);  --worth using only in TX mode
   port (
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
@@ -77,7 +76,7 @@ end nic_descriptor_manager;
 
 architecture behavioral of nic_descriptor_manager is
 
-  type t_desc_arb_state is (ARB_DISABLED, ARB_START_SCAN, ARB_CHECK_EMPTY, ARB_FETCH, ARB_GRANT, ARB_UPDATE, ARB_WRITE_DESC);
+  type t_desc_arb_state is (ARB_START_SCAN, ARB_CHECK_EMPTY, ARB_FETCH, ARB_GRANT, ARB_UPDATE, ARB_WRITE_DESC);
 
 
   signal state : t_desc_arb_state;
@@ -85,15 +84,8 @@ architecture behavioral of nic_descriptor_manager is
   signal granted_desc_tx : t_tx_descriptor;
   signal granted_desc_rx : t_rx_descriptor;
 
-  signal granted_desc_idx : unsigned(g_num_descriptors_log2-1 downto 0);
-  signal desc_idx_d0      : unsigned(g_num_descriptors_log2-1 downto 0);
   signal desc_idx         : unsigned(g_num_descriptors_log2-1 downto 0);
   signal desc_subreg      : unsigned(1 downto 0);
-  signal cntr             : unsigned(1 downto 0);
-
-  signal check_count : unsigned(g_num_descriptors_log2 downto 0);
-  signal stupid_hack : std_logic;
-
 
   impure function f_write_marshalling(index : integer)
     return std_logic_vector is
@@ -112,6 +104,15 @@ begin  -- behavioral
 
   cur_desc_idx_o <= std_logic_vector(desc_idx);
 
+  --GD can do that, those outputs are validated by desc_grant_o
+  --and nic_rx_fsm stores it in internal register too
+  GEN_TXDESC_CUR: if g_desc_mode = "tx" generate
+    txdesc_current_o <= granted_desc_tx;
+  end generate;
+  GEN_RXDESC_CUR: if g_desc_mode = "rx" generate
+    rxdesc_current_o <= granted_desc_rx;
+  end generate;
+
   p_rxdesc_arbiter : process(clk_sys_i, rst_n_i)
     variable tmp_desc_rx : t_rx_descriptor;
     variable tmp_desc_tx : t_tx_descriptor;
@@ -121,7 +122,7 @@ begin  -- behavioral
       if(rst_n_i = '0') then
         desc_write_done_o <= '0';
         desc_grant_o      <= '0';
-        state             <= ARB_DISABLED;
+        state             <= ARB_START_SCAN;
         desc_idx          <= (others => '0');
         desc_subreg       <= (others => '0');
         dtbl_wr_o         <= '0';
@@ -130,36 +131,24 @@ begin  -- behavioral
       else
         
         case state is
-          when ARB_DISABLED =>
-            desc_idx    <= (others => '0');
-            desc_subreg <= (others => '0');
-
-            if(enable_i = '1') then
---              dtbl_rd_o <= '1';
-              state       <= ARB_START_SCAN;
-              desc_idx    <= (others => '0');
-              check_count <= (others => '0');
-            end if;
-            
 
           when ARB_START_SCAN =>
-
-            if(enable_i = '0') then
-              state <= ARB_DISABLED;
+            desc_subreg <= (others => '0');
+            dtbl_wr_o <= '0';
+            if(enable_i = '1') then
+              state <= ARB_CHECK_EMPTY;
             else
-              -- wait until the current descriptor is read from the memorry
-              state     <= ARB_CHECK_EMPTY;
---            dtbl_rd_o <='1';
-              dtbl_wr_o <= '0';
+              desc_idx    <= (others => '0');
             end if;
 
           when ARB_CHECK_EMPTY =>
-            p_unmarshall_rx_descriptor(dtbl_data_i, 1, tmp_desc_rx);
-            p_unmarshall_tx_descriptor(dtbl_data_i, 1, tmp_desc_tx);
+            dtbl_wr_o <= '0';
+            tmp_desc_rx := f_unmarshall_rx_descriptor(dtbl_data_i, 1);
+            tmp_desc_tx := f_unmarshall_tx_descriptor(dtbl_data_i, 1);
+            granted_desc_tx <= tmp_desc_tx;
+            granted_desc_rx <= tmp_desc_rx;
 
             if((tmp_desc_rx.empty = '1' and g_desc_mode = "rx") or (tmp_desc_tx.ready = '1' and g_desc_mode = "tx")) then
-              granted_desc_tx <= tmp_desc_tx;
-              granted_desc_rx <= tmp_desc_rx;
               desc_subreg     <= "01";
               state           <= ARB_FETCH;
               bna_o           <= '0';
@@ -168,21 +157,22 @@ begin  -- behavioral
             end if;
 
           when ARB_FETCH =>
+            dtbl_wr_o <= '0';
             case desc_subreg is
               when "10" =>              -- ignore the timestamps for RX
                                         -- descriptors (they're
                                         -- write-only by the NIC)
-                p_unmarshall_tx_descriptor(dtbl_data_i, 2, tmp_desc_tx);
+                tmp_desc_tx := f_unmarshall_tx_descriptor(dtbl_data_i, 2);
                 granted_desc_tx.len    <= tmp_desc_tx.len;
                 granted_desc_tx.offset <= tmp_desc_tx.offset;
 
 
               when "11" =>
-                p_unmarshall_tx_descriptor(dtbl_data_i, 3, tmp_desc_tx);  -- TX
-                granted_desc_tx.dpm <= tmp_desc_tx.dpm;
+                tmp_desc_tx := f_unmarshall_tx_descriptor(dtbl_data_i, 3);  -- TX
+                granted_desc_tx.dpm(g_port_mask_bits-1 downto 0) <= tmp_desc_tx.dpm(g_port_mask_bits-1 downto 0);
 
 
-                p_unmarshall_rx_descriptor(dtbl_data_i, 3, tmp_desc_rx);  -- RX
+                tmp_desc_rx := f_unmarshall_rx_descriptor(dtbl_data_i, 3);  -- RX
                 granted_desc_rx.len    <= tmp_desc_rx.len;
                 granted_desc_rx.offset <= tmp_desc_rx.offset;
 
@@ -193,15 +183,11 @@ begin  -- behavioral
             desc_subreg <= desc_subreg + 1;
 
           when ARB_GRANT =>
+            dtbl_wr_o <= '0';
+            desc_subreg <= "11";
 
             if(desc_request_next_i = '1') then
               desc_grant_o <= '1';
-
-              if(g_desc_mode = "tx") then
-                txdesc_current_o <= granted_desc_tx;
-              elsif (g_desc_mode = "rx") then
-                rxdesc_current_o <= granted_desc_rx;
-              end if;
 
               state <= ARB_UPDATE;
             end if;
@@ -209,51 +195,34 @@ begin  -- behavioral
             desc_write_done_o <= '0';
             
           when ARB_UPDATE =>
+            dtbl_wr_o <= '0';
             desc_grant_o <= '0';
+            desc_subreg <= "11";
 
             if(desc_write_i = '1') then
-
               if(g_desc_mode = "rx") then
                 granted_desc_rx <= rxdesc_new_i;
               elsif(g_desc_mode = "tx") then
                 granted_desc_tx <= txdesc_new_i;
               end if;
 
-              desc_subreg <= (others => '0');
---              dtbl_rd_o <= '0';
               state       <= ARB_WRITE_DESC;
-              cntr        <= "00";
             end if;
 
           when ARB_WRITE_DESC =>
-            cntr <= cntr + 1;
-            --  fprint(output,l, "WriteDesc %b %b\n",fo(cntr),fo(f_write_marshalling(1)));  
-            case cntr is
-              when "00" =>
-                desc_subreg <= "00";
-                dtbl_data_o <= f_write_marshalling(1);
-                dtbl_wr_o   <= '1';
-              when "01" =>
-                desc_subreg <= "01";
-                dtbl_data_o <= f_write_marshalling(2);
-                dtbl_wr_o   <= '1';
-              when "10" =>
-                desc_subreg <= "10";
-                dtbl_data_o <= f_write_marshalling(3);
-                dtbl_wr_o   <= '1';
-              when "11" =>
-                dtbl_wr_o   <= '0';
-                desc_subreg <= (others => '0');
-
-                state <= ARB_START_SCAN;
-
-                if(desc_reload_current_i = '0') then
-                  desc_idx <= desc_idx + 1;
-                end if;
-
-                desc_write_done_o <= '1';
-              when others => null;
-            end case;
+            dtbl_data_o <= f_write_marshalling(to_integer(desc_subreg));
+            if(desc_subreg = "10") then
+              dtbl_wr_o   <= '0';
+              desc_subreg <= "00";
+              state       <= ARB_START_SCAN;
+              if(desc_reload_current_i = '0') then
+                desc_idx <= desc_idx + 1;
+              end if;
+              desc_write_done_o <= '1';
+            else
+              dtbl_wr_o <= '1';
+              desc_subreg <= desc_subreg + 1;
+            end if;
             
           when others => null;
         end case;

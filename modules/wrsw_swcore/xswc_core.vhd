@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-29
--- Last update: 2012-07-10
+-- Last update: 2012-03-18
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -57,23 +57,27 @@ entity xswc_core is
   generic( 
 
     g_prio_num                         : integer ;--:= c_swc_output_prio_num; [works only for value of 8, output_block-causes problem]
-    g_max_pck_size                     : integer ;--:= c_swc_max_pck_size
+    g_output_queue_num                 : integer ;
+    g_max_pck_size                     : integer ;-- in 16bits words --:= c_swc_max_pck_size
     g_max_oob_size                     : integer ;
     g_num_ports                        : integer ;--:= c_swc_num_ports
     g_pck_pg_free_fifo_size            : integer ; --:= c_swc_freeing_fifo_size (in pck_pg_free_module.vhd)
     g_input_block_cannot_accept_data   : string  ;--:= "drop_pck"; --"stall_o", "rty_o" -- (xswc_input_block) Don't CHANGE !
-    g_output_block_per_prio_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
+    g_output_block_per_queue_fifo_size  : integer ; --:= c_swc_output_fifo_size    (xswc_output_block)
 
     -- new
     g_wb_data_width                    : integer ;
     g_wb_addr_width                    : integer ;
     g_wb_sel_width                     : integer ;
     g_wb_ob_ignore_ack                 : boolean := true ;
-    g_mpm_mem_size                     : integer ;
-    g_mpm_page_size                    : integer ;
+    g_mpm_mem_size                     : integer ; -- in 16bits words 
+    g_mpm_page_size                    : integer ; -- in 16bits words 
     g_mpm_ratio                        : integer ;
     g_mpm_fifo_size                    : integer ;
-    g_mpm_fetch_next_pg_in_advance     : boolean 
+    g_mpm_fetch_next_pg_in_advance     : boolean ;
+    g_drop_outqueue_head_on_full       : boolean ;
+    g_num_global_pause                 : integer := 2;
+    g_num_dbg_vector_width             : integer := 8
     );
   port (
     clk_i          : in std_logic;
@@ -93,13 +97,34 @@ entity xswc_core is
 
     src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
     src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
+
+-------------------------------------------------------------------------------
+-- I/F with Traffich shaper
+-------------------------------------------------------------------------------     
     
+    global_pause_i            : in  t_global_pause_request_array(g_num_global_pause-1 downto 0);
+    
+    shaper_drop_at_hp_ena_i   : in  std_logic := '0';
+
+-------------------------------------------------------------------------------
+-- I/F with Tx PAUSE triggers (i.e. Endpoints)
+-------------------------------------------------------------------------------   
+
+    perport_pause_i           : in  t_pause_request_array(g_num_ports-1 downto 0);
+
+-------------------------------------------------------------------------------
+-- Debug vector
+-------------------------------------------------------------------------------      
+  
+   dbg_o                      : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0);
+   
 -------------------------------------------------------------------------------
 -- I/F with Routing Table Unit (RTU)
 -------------------------------------------------------------------------------      
     
-    rtu_rsp_i          : in t_rtu_response_array(g_num_ports  - 1 downto 0);
-    rtu_ack_o          : out std_logic_vector(g_num_ports  - 1 downto 0)
+    rtu_rsp_i                 : in t_rtu_response_array(g_num_ports  - 1 downto 0);
+    rtu_ack_o                 : out std_logic_vector(g_num_ports  - 1 downto 0);
+    rtu_abort_o               : out std_logic_vector(g_num_ports  - 1 downto 0)
 
     );
 end xswc_core;
@@ -107,6 +132,7 @@ end xswc_core;
 architecture rtl of xswc_core is
    constant c_usecount_width        : integer := integer(CEIL(LOG2(real(g_num_ports+1))));
    constant c_prio_width            : integer := integer(CEIL(LOG2(real(g_prio_num-1)))); -- g_prio_width
+   constant c_output_queue_num_width: integer := integer(CEIL(LOG2(real(g_output_queue_num-1))));
    constant c_max_pck_size_width    : integer := integer(CEIL(LOG2(real(g_max_pck_size-1)))); -- c_swc_max_pck_size_width 
    constant c_max_oob_size_width    : integer := integer(CEIL(LOG2(real(g_max_oob_size + 1))));
 
@@ -116,10 +142,19 @@ architecture rtl of xswc_core is
    constant c_mpm_partial_sel_width : integer := integer(g_wb_sel_width-1);
    constant c_mpm_page_size_width   : integer := integer(CEIL(LOG2(real(g_mpm_page_size-1))));
 
-
-
    constant c_ll_addr_width         : integer := c_mpm_page_addr_width;
    constant c_ll_data_width         : integer := c_mpm_page_addr_width + c_max_oob_size_width + 3;
+
+   -- resource management -----------------------
+   constant c_res_mmu_max_pck_size            : integer := 759; -- in 16 bit words (1518 [octets])/(2 [octets])
+   constant c_res_mmu_special_res_num_pages   : integer := 256; 
+   constant c_res_mmu_resource_num            : integer := 3;   -- (1) unknown; (2) special; (3) normal
+   constant c_res_mmu_resource_num_width      : integer := 2;
+   ----------------------------------------------
+   constant c_hwdu_input_block_width          : integer := 16;
+   constant c_hwdu_mmu_width                  : integer := 10*3;
+   constant c_hwdu_output_block_width         : integer := 8;
+
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Memory Management Unit<<
    ----------------------------------------------------------------------------------------------------
@@ -127,7 +162,8 @@ architecture rtl of xswc_core is
    signal ib_page_alloc_req   : std_logic_vector(g_num_ports - 1 downto 0);
    signal ib_pageaddr_output  : std_logic_vector(g_num_ports * c_mpm_page_addr_width - 1 downto 0);
    signal ib_set_usecnt       : std_logic_vector(g_num_ports - 1 downto 0);
-   signal ib_usecnt           : std_logic_vector(g_num_ports * c_usecount_width - 1 downto 0);
+   signal ib_usecnt_set       : std_logic_vector(g_num_ports * c_usecount_width - 1 downto 0);
+   signal ib_usecnt_alloc     : std_logic_vector(g_num_ports * c_usecount_width - 1 downto 0);
    
    -- Memory Management Unit -> Input Block 
    signal mmu_page_alloc_done  : std_logic_vector(g_num_ports - 1 downto 0);
@@ -156,7 +192,8 @@ architecture rtl of xswc_core is
    signal ib_pageaddr_to_pta  : std_logic_vector(g_num_ports * c_mpm_page_addr_width - 1 downto 0);
    signal ib_mask             : std_logic_vector(g_num_ports * g_num_ports - 1 downto 0);
    signal ib_prio             : std_logic_vector(g_num_ports * c_prio_width - 1 downto 0);
-   signal ib_pck_size         : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
+--    signal ib_pck_size         : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
+   signal ib_hp               : std_logic_vector(g_num_ports  -1 downto 0);
    
    -- Pck Transfer Arbiter -> Input Block       
    signal pta_transfer_ack    : std_logic_vector(g_num_ports - 1 downto 0);  
@@ -169,7 +206,10 @@ architecture rtl of xswc_core is
    signal pta_data_valid             : std_logic_vector(g_num_ports -1 downto 0);
    signal pta_pageaddr               : std_logic_vector(g_num_ports * c_mpm_page_addr_width- 1 downto 0);
    signal pta_prio                   : std_logic_vector(g_num_ports * c_prio_width         - 1 downto 0);
-   signal pta_pck_size               : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
+--    signal pta_pck_size               : std_logic_vector(g_num_ports * c_max_pck_size_width - 1 downto 0);
+
+   signal pta2ob_hp                  : std_logic_vector(g_num_ports -1 downto 0);
+   signal pta2ob_resource            : std_logic_vector(g_num_ports *c_res_mmu_resource_num_width -1 downto 0);
 
    -- Input Block -> Pck Transfer Arbiter
    signal ob_ack                    : std_logic_vector(g_num_ports -1 downto 0);
@@ -265,8 +305,10 @@ architecture rtl of xswc_core is
    signal mmu_free_done         : std_logic_vector(g_num_ports-1 downto 0);   
    signal mmu2ppfm_free_last_usecnt : std_logic_vector(g_num_ports-1 downto 0);   
   
-   ---- end tmp      
-
+   -- output_traffic_shaper -> output_block
+   signal ots2ob_output_masks   : t_classes_array(g_num_ports-1 downto 0);
+ 
+   -- 
    type t_tap_ib_array is array(0 to g_num_ports-1) of std_logic_vector(49+62 downto 0);
    type t_tap_ob_array is array(0 to g_num_ports-1) of std_logic_vector(15 downto 0);
    signal tap_mpm : std_logic_vector(61 downto 0);
@@ -291,6 +333,35 @@ architecture rtl of xswc_core is
 
   signal CONTROL0 : std_logic_vector(35 downto 0);
    signal tap : std_logic_vector(127 downto 0);
+
+
+   signal ppfm2mmu_free_resource              : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width -1 downto 0);
+   signal ppfm2mmu_free_resource_valid        : std_logic_vector(g_num_ports                              -1 downto 0);
+   signal ppfm2mmu_force_free_resource        : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width -1 downto 0);
+   signal ppfm2mmu_force_free_resource_valid  : std_logic_vector(g_num_ports                              -1 downto 0);
+
+   signal mmu2ppfm_resource                   : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width   -1 downto 0);
+   ----------------------------------------------------------------------------------------------------
+   -- signals connecting >>Input Block (IB) << with >>Page allocator (MMU)<< -- resource management 
+   ----------------------------------------------------------------------------------------------------   
+
+   signal mmu2ib_resource             : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width   -1 downto 0);
+   signal ib2mmu_resource             : std_logic_vector(g_num_ports*c_res_mmu_resource_num_width   -1 downto 0);
+   signal ib2mmu_rescnt_page_num      : std_logic_vector(g_num_ports*c_mpm_page_addr_width          -1 downto 0);
+   signal mmu2ib_res_full             : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
+   signal mmu2ib_res_almost_full      : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
+   signal mmu2ib_set_usecnt_succeeded : std_logic_vector(g_num_ports                                -1 downto 0);
+   
+   type t_hwdu_input_block_array is array(0 to g_num_ports-1) of std_logic_vector(c_hwdu_input_block_width-1 downto 0);
+   type t_hwdu_output_block_array is array(0 to g_num_ports-1) of std_logic_vector(c_hwdu_output_block_width-1 downto 0);
+   
+   signal hwdu_input_block            : t_hwdu_input_block_array;
+   signal hwdu_output_block           : t_hwdu_output_block_array;
+   signal hwdu_mmu                    : std_logic_vector(c_hwdu_mmu_width                           -1 downto 0);
+   
+   signal dbg_pckstart_pageaddr : std_logic_vector(g_num_ports*c_mpm_page_addr_width - 1 downto 0);
+   signal dbg_pckinter_pageaddr : std_logic_vector(g_num_ports*c_mpm_page_addr_width - 1 downto 0);
+   
   begin --rtl
    
   --chipscope_icon_1: chipscope_icon
@@ -324,7 +395,10 @@ architecture rtl of xswc_core is
         g_page_size                        => g_mpm_page_size,
         g_partial_select_width             => c_mpm_partial_sel_width,
         g_ll_data_width                    => c_ll_data_width,
-        g_port_index => i
+        g_port_index                       => i, 
+        -- resource management
+        g_resource_num                     => c_res_mmu_resource_num,
+        g_resource_num_width               => c_res_mmu_resource_num_width
       )
       port map (
         clk_i                    => clk_i,
@@ -345,10 +419,19 @@ architecture rtl of xswc_core is
                 
         mmu_set_usecnt_o         => ib_set_usecnt(i),
         mmu_set_usecnt_done_i    => mmu_set_usecnt_done(i),
-        mmu_usecnt_o             => ib_usecnt((i + 1) * c_usecount_width -1 downto i * c_usecount_width),
+        mmu_usecnt_set_o         => ib_usecnt_set((i + 1) * c_usecount_width -1 downto i * c_usecount_width),
+        mmu_usecnt_alloc_o       => ib_usecnt_alloc((i + 1) * c_usecount_width -1 downto i * c_usecount_width),
         mmu_nomem_i              => mmu_nomem,
         mmu_pageaddr_o           => ib_pageaddr_output((i + 1) * c_mpm_page_addr_width - 1 downto i * c_mpm_page_addr_width),
                 
+        -- resource management         
+--        mmu_resource_i           => mmu2ib_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
+        mmu_resource_o           => ib2mmu_resource          ((i+1)*c_res_mmu_resource_num_width -1 downto i*c_res_mmu_resource_num_width),
+        mmu_rescnt_page_num_o    => ib2mmu_rescnt_page_num   ((i+1)*c_mpm_page_addr_width        -1 downto i*c_mpm_page_addr_width),
+        mmu_set_usecnt_succeeded_i => mmu2ib_set_usecnt_succeeded(i),
+        mmu_res_full_i           => mmu2ib_res_full          ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
+        mmu_res_almost_full_i    => mmu2ib_res_almost_full   ((i+1)*c_res_mmu_resource_num       -1 downto i*c_res_mmu_resource_num),
+        
         -------------------------------------------------------------------------------
         -- I/F with Pck's Pages Freeing Module (PPFM)
         -------------------------------------------------------------------------------      
@@ -359,9 +442,11 @@ architecture rtl of xswc_core is
         -------------------------------------------------------------------------------
         -- I/F with Routing Table Unit (RTU)
         -------------------------------------------------------------------------------      
-        rtu_rsp_ack_o            => rtu_ack_o(i),        
-	rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
+        rtu_rsp_ack_o            => rtu_ack_o(i),    
+        rtu_rsp_abort_o          => rtu_abort_o(i),    
+        rtu_rsp_valid_i          => rtu_rsp_i(i).valid,
         rtu_dst_port_mask_i      => rtu_rsp_i(i).port_mask(g_num_ports  - 1 downto 0),
+        rtu_hp_i                 => rtu_rsp_i(i).hp, --'0', -- TODO: add stuff to RTU
         rtu_drop_i               => rtu_rsp_i(i).drop,
         rtu_prio_i               => rtu_rsp_i(i).prio(c_prio_width - 1 downto 0),
 
@@ -397,29 +482,39 @@ architecture rtl of xswc_core is
         pta_pageaddr_o           => ib_pageaddr_to_pta((i + 1) * c_mpm_page_addr_width-1 downto i * c_mpm_page_addr_width),
         pta_mask_o               => ib_mask           ((i + 1) * g_num_ports          -1 downto i * g_num_ports),
         pta_prio_o               => ib_prio           ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
-        pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
-
-        tap_out_o => tap_ib(i)
+--         pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
+--         pta_resource_o           => open,
+        pta_hp_o                 => ib_hp (i),
+        dbg_hwdu_o               => hwdu_input_block(i),
+        tap_out_o                => tap_ib(i),
+        
+        dbg_pckstart_pageaddr_o  => dbg_pckstart_pageaddr((i+1)*c_mpm_page_addr_width-1 downto i*c_mpm_page_addr_width),
+        dbg_pckinter_pageaddr_o  => dbg_pckinter_pageaddr((i+1)*c_mpm_page_addr_width-1 downto i*c_mpm_page_addr_width)
         );
         
         
---    OUTPUT_BLOCK: swc_output_block 
-    OUTPUT_BLOCK: xswc_output_block
+    OUTPUT_BLOCK: xswc_output_block_new 
+--    OUTPUT_BLOCK: xswc_output_block
       generic map( 
         g_max_pck_size_width               => c_max_pck_size_width,
-        g_output_block_per_prio_fifo_size  => g_output_block_per_prio_fifo_size,
-        g_prio_width                       => c_prio_width,
-        g_prio_num                         => g_prio_num,
+        g_output_block_per_queue_fifo_size => g_output_block_per_queue_fifo_size,
+        g_queue_num_width                  => c_output_queue_num_width,
+        g_queue_num                        => g_output_queue_num,
+        
+        g_prio_num_width                   => c_prio_width,
         
         g_mpm_page_addr_width              => c_mpm_page_addr_width,
         g_mpm_data_width                   => c_mpm_data_width,
         g_mpm_partial_select_width         => c_mpm_partial_sel_width,
         g_mpm_fetch_next_pg_in_advance     => g_mpm_fetch_next_pg_in_advance,
 
+        g_mmu_resource_num_width           => c_res_mmu_resource_num_width,
+
         g_wb_data_width                    => g_wb_data_width,
         g_wb_addr_width                    => g_wb_addr_width,
         g_wb_sel_width                     => g_wb_sel_width,
-        g_wb_ob_ignore_ack                 => g_wb_ob_ignore_ack
+        g_wb_ob_ignore_ack                 => g_wb_ob_ignore_ack,
+        g_drop_outqueue_head_on_full       => g_drop_outqueue_head_on_full
       )
       port map (
         clk_i                    => clk_i,
@@ -430,6 +525,9 @@ architecture rtl of xswc_core is
         pta_transfer_data_valid_i=> pta_data_valid(i),
         pta_pageaddr_i           => pta_pageaddr((i + 1) * c_mpm_page_addr_width-1 downto i * c_mpm_page_addr_width),
         pta_prio_i               => pta_prio    ((i + 1) * c_prio_width         -1 downto i * c_prio_width),
+        
+        pta_hp_i                 => pta2ob_hp(i),
+--         pta_resource_i           => pta2ob_resource((i + 1) * c_res_mmu_resource_num_width -1 downto i * c_res_mmu_resource_num_width),
 --        pta_pck_size_i           => pta_pck_size((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
         pta_transfer_data_ack_o  => ob_ack(i),
         -------------------------------------------------------------------------------
@@ -439,6 +537,7 @@ architecture rtl of xswc_core is
         mpm_d_i                  => mpm2ob_d((i+1)*c_mpm_data_width-1 downto i*c_mpm_data_width),
         mpm_dvalid_i             => mpm2ob_dvalid(i),
         mpm_dlast_i              => mpm2ob_dlast(i),
+--dsel--        mpm_dsel_i               => mpm2ob_dsel((i+1)*c_mpm_partial_sel_width -1 downto i*c_mpm_partial_sel_width),
         mpm_dreq_o               => ob2mpm_dreq(i),
         mpm_abort_o              => ob2mpm_abort(i),
         mpm_pg_addr_o            => ob2mpm_pg_addr((i+1)*c_mpm_page_addr_width -1 downto i*c_mpm_page_addr_width),
@@ -452,50 +551,77 @@ architecture rtl of xswc_core is
         ppfm_free_pgaddr_o       => ob_free_pgaddr((i + 1) * c_mpm_page_addr_width    -1 downto i * c_mpm_page_addr_width),
 
         -------------------------------------------------------------------------------
+        --: output traffic shaper (PAUSE + time-aware-shaper)
+        -------------------------------------------------------------------------------  
+        ots_output_mask_i         => ots2ob_output_masks(i),
+        ots_output_drop_at_rx_hp_i=> shaper_drop_at_hp_ena_i,
+
+        -------------------------------------------------------------------------------
         -- pWB : output (goes to the Endpoint)
         -------------------------------------------------------------------------------  
 
         src_i                    => src_i(i),
         src_o                    => src_o(i),
-
-        tap_out_o => tap_ob(i)
+        dbg_hwdu_o               => hwdu_output_block(i),
+        tap_out_o                => tap_ob(i)
       );        
         
   end generate gen_blocks;
 
+  OUTPUT_TRAFFIC_SHAPER: swc_output_traffic_shaper
+    generic map (
+      g_num_ports                     => g_num_ports,
+      g_num_global_pause              => g_num_global_pause)
+    port map(
+      rst_n_i                         => rst_n_i,
+      clk_i                           => clk_i,
+--       shaper_request_i                => shaper_request_i,
+--       shaper_ports_i                  => shaper_ports_i,
+--       pause_requests_i                => pause_requests_i,
+      global_pause_i                  => global_pause_i,
+      perport_pause_i                 => perport_pause_i,                
+      output_masks_o                  => ots2ob_output_masks
+    );
 
   PCK_PAGES_FREEEING_MODULE: swc_multiport_pck_pg_free_module
     generic map( 
-      g_num_ports             => g_num_ports,
-      g_page_addr_width       => c_mpm_page_addr_width,
-      g_pck_pg_free_fifo_size => g_pck_pg_free_fifo_size,
-      g_data_width            => c_ll_data_width
+      g_num_ports                     => g_num_ports,
+      g_page_addr_width               => c_mpm_page_addr_width,
+      g_pck_pg_free_fifo_size         => g_pck_pg_free_fifo_size,
+      g_data_width                    => c_ll_data_width,
+      g_resource_num_width            => c_res_mmu_resource_num_width
       )
     port map(
-      clk_i                   => clk_i,
-      rst_n_i                 => rst_n_i,
+      clk_i                           => clk_i,
+      rst_n_i                         => rst_n_i,
   
-      ib_force_free_i         => ib_force_free,
-      ib_force_free_done_o    => ppfm_force_free_done_to_ib,
-      ib_force_free_pgaddr_i  => ib_force_free_pgaddr,
+      ib_force_free_i                 => ib_force_free,
+      ib_force_free_done_o            => ppfm_force_free_done_to_ib,
+      ib_force_free_pgaddr_i          => ib_force_free_pgaddr,
   
-      ob_free_i               => ob_free,
-      ob_free_done_o          => ppfm_free_done_to_ob,
-      ob_free_pgaddr_i        => ob_free_pgaddr,
+      ob_free_i                       => ob_free,
+      ob_free_done_o                  => ppfm_free_done_to_ob,
+      ob_free_pgaddr_i                => ob_free_pgaddr,
       
-      ll_read_addr_o          => fp2ll_addr, --ppfm_read_addr,
-      ll_read_data_i          => ll2fp_data, --ll_data,
-      ll_read_req_o           => fp2ll_rd_req, --ppfm_read_req,
-      ll_read_valid_data_i    => ll2fp_read_done, --ll_read_valid_data,
+      ll_read_addr_o                  => fp2ll_addr, --ppfm_read_addr,
+      ll_read_data_i                  => ll2fp_data, --ll_data,
+      ll_read_req_o                   => fp2ll_rd_req, --ppfm_read_req,
+      ll_read_valid_data_i            => ll2fp_read_done, --ll_read_valid_data,
       
-      mmu_force_free_o        => ppfm_force_free,
-      mmu_force_free_done_i   => mmu_force_free_done,
-      mmu_force_free_pgaddr_o => ppfm_force_free_pgaddr,
+      mmu_resource_i                  => mmu2ppfm_resource,
+
+      mmu_force_free_o                => ppfm_force_free,
+      mmu_force_free_done_i           => mmu_force_free_done,
+      mmu_force_free_pgaddr_o         => ppfm_force_free_pgaddr,
+      mmu_free_resource_o             => ppfm2mmu_free_resource,
+      mmu_free_resource_valid_o       => ppfm2mmu_free_resource_valid,
       
-      mmu_free_o              => ppfm_free,
-      mmu_free_done_i         => mmu_free_done,
-      mmu_free_pgaddr_o       => ppfm_free_pgaddr,
-      mmu_free_last_usecnt_i  => mmu2ppfm_free_last_usecnt
+      mmu_free_o                      => ppfm_free,
+      mmu_free_done_i                 => mmu_free_done,
+      mmu_free_pgaddr_o               => ppfm_free_pgaddr,
+      mmu_free_last_usecnt_i          => mmu2ppfm_free_last_usecnt,
+      mmu_force_free_resource_o       => ppfm2mmu_force_free_resource,
+      mmu_force_free_resource_valid_o => ppfm2mmu_force_free_resource_valid
 
       );
 
@@ -543,7 +669,15 @@ architecture rtl of xswc_core is
       g_page_addr_width         => c_mpm_page_addr_width,
       g_num_ports               => g_num_ports,
       g_page_num                => c_mpm_page_num,
-      g_usecount_width          => c_usecount_width
+      g_usecount_width          => c_usecount_width,
+      -- management
+      g_with_RESOURCE_MGR       => false, --true,
+      g_max_pck_size            => c_res_mmu_max_pck_size,
+      g_page_size               => g_mpm_page_size,
+      g_special_res_num_pages   => c_res_mmu_special_res_num_pages,
+      g_resource_num            => c_res_mmu_resource_num,
+      g_resource_num_width      => c_res_mmu_resource_num_width,
+      g_num_dbg_vector_width    => c_hwdu_mmu_width
     )
     port map (
       rst_n_i                    => rst_n_i,   
@@ -555,7 +689,10 @@ architecture rtl of xswc_core is
       
       set_usecnt_i               => ib_set_usecnt,
       set_usecnt_done_o          => mmu_set_usecnt_done,
-      usecnt_i                   => ib_usecnt,
+      
+      usecnt_set_i               => ib_usecnt_set,
+      usecnt_alloc_i             => ib_usecnt_alloc,
+      
       pgaddr_usecnt_i            => ib_pageaddr_output,  
             
       free_i                     => ppfm_free,
@@ -567,8 +704,23 @@ architecture rtl of xswc_core is
       force_free_done_o          => mmu_force_free_done,
       pgaddr_force_free_i        => ppfm_force_free_pgaddr,
       
+      nomem_o                    => mmu_nomem,
+      --------------------------- resource management ----------------------------------
+      resource_i                 => ib2mmu_resource,
+      resource_o                 => mmu2ppfm_resource,
+
+      free_resource_i            => ppfm2mmu_free_resource,
+      free_resource_valid_i      => ppfm2mmu_free_resource_valid,
+      force_free_resource_i      => ppfm2mmu_force_free_resource,
+      force_free_resource_valid_i=> ppfm2mmu_force_free_resource_valid,
+
+      rescnt_page_num_i          => ib2mmu_rescnt_page_num,
+      set_usecnt_succeeded_o     => mmu2ib_set_usecnt_succeeded, 
       
-      nomem_o                    => mmu_nomem
+      res_full_o                 => mmu2ib_res_full,
+      res_almost_full_o          => mmu2ib_res_almost_full,
+
+      dbg_o                      => hwdu_mmu
 --      tap_out_o => tap_alloc
       );
        
@@ -619,7 +771,7 @@ architecture rtl of xswc_core is
     generic map(
       g_page_addr_width    => c_mpm_page_addr_width,
       g_prio_width         => c_prio_width,    
-      g_max_pck_size_width => c_max_pck_size_width,
+--       g_max_pck_size_width => c_max_pck_size_width,
       g_num_ports          => g_num_ports
       )
     port map(
@@ -632,7 +784,8 @@ architecture rtl of xswc_core is
       ob_ack_i                   => ob_ack,
       ob_pageaddr_o              => pta_pageaddr,
       ob_prio_o                  => pta_prio,
-      ob_pck_size_o              => pta_pck_size,
+--       ob_pck_size_o              => pta_pck_size,
+      ob_hp_o                    => pta2ob_hp,
       -------------------------------------------------------------------------------
       -- I/F with Input Block (IB)
       ------------------------------------------------------------------------------- 
@@ -642,9 +795,18 @@ architecture rtl of xswc_core is
       ib_pageaddr_i              => ib_pageaddr_to_pta,
       ib_mask_i                  => ib_mask,
       ib_prio_i                  => ib_prio,
-      ib_pck_size_i              => ib_pck_size
+--       ib_pck_size_i              => ib_pck_size
+      ib_hp_i                    => ib_hp
       );  
 
+  dbg_o(31 downto 0) <= "00" & hwdu_mmu;
 
+  hwdu_gen: for i in 0 to (g_num_ports-1) generate --19 ports for 18-port switch
+    dbg_o((i+1)*c_hwdu_input_block_width+32-1 downto 
+              i*c_hwdu_input_block_width+32)          <= hwdu_input_block(i);
+
+    dbg_o((i+1)*c_hwdu_output_block_width+(g_num_ports*c_hwdu_input_block_width)+32-1 downto
+              i*c_hwdu_output_block_width+(g_num_ports*c_hwdu_input_block_width)+32) <= hwdu_output_block(i);
+  end generate hwdu_gen;
 
 end rtl;

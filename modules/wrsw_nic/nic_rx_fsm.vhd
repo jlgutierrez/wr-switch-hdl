@@ -109,7 +109,6 @@ architecture behavioral of NIC_RX_FSM is
   signal cur_rx_desc : t_rx_descriptor;
 
   signal state           : t_rx_fsm_state;
-  signal rx_avail        : unsigned(c_nic_buf_size_log2-1 downto 0);
   signal rx_length       : unsigned(c_nic_buf_size_log2-1 downto 0);
   signal rx_dreq_mask    : std_logic;
   signal rx_rdreg_toggle : std_logic;
@@ -206,7 +205,6 @@ begin
         rx_newpacket          <= '0';
         rx_dreq_mask          <= '0';
         rx_buf_addr           <= (others => '0');
-        rx_avail              <= (others => '0');
         buf_wr_o              <= '0';
         increase_addr         <= '0';
         
@@ -262,10 +260,9 @@ begin
 
             -- rx_buf_addr is in 32-bit word, but the offsets and lengths in
             -- the descriptors are in bytes to make driver developer's life
-            -- easier. 
+            -- easier.
             rx_buf_addr <= unsigned(cur_rx_desc.offset(c_nic_buf_size_log2-1 downto 2));
 
-            rx_avail  <= unsigned(cur_rx_desc.len);
             rx_length <= (others => '0');
 
             oob_sreg     <= "001";
@@ -283,6 +280,7 @@ begin
             
           when RX_DATA =>
 
+            buf_wr_o          <= '0';
             -- increase the address 1 cycle after committing the data to the memory
             if(increase_addr = '1') then
               rx_buf_addr   <= rx_buf_addr + 1;
@@ -290,116 +288,113 @@ begin
             end if;
 
             -- check if we still have enough space in the buffer
-            if(fab_in.dvalid = '1' and rx_avail(rx_avail'length-1 downto 1) = to_unsigned(0, rx_avail'length-1)) then
+            if(fab_in.dvalid = '1' and rx_length(rx_length'length-1 downto 1) = unsigned(cur_rx_desc.len(rx_length'length-1 downto 1))) then
               -- no space? drop an error
               cur_rx_desc.error <= '1';
-              buf_wr_o          <= '0';
               state             <= RX_UPDATE_DESC;
-            end if;
+						else
 
-            -- got an abort/error/end-of-frame?
-            if(wrf_terminate = '1') then
+            	-- got an abort/error/end-of-frame?
+            	if(wrf_terminate = '1') then
+            	  -- check if the ends with an error and eventually indicate it.
+            	  -- For the NIC, there's no difference between an abort and an RX
+            	  -- error.
+            	  cur_rx_desc.error <= fab_in.error;
 
-              -- check if the ends with an error and eventually indicate it.
-              -- For the NIC, there's no difference between an abort and an RX
-              -- error.
-              cur_rx_desc.error <= fab_in.error;
+            	  -- make sure the remaining packet data is written into the buffer
+            	  state <= RX_MEM_FLUSH;
 
-              -- make sure the remaining packet data is written into the buffer
-              state <= RX_MEM_FLUSH;
+            	  -- disable the WRF sink data flow, so we won't get another
+            	  -- packet before we are done with the memory flush and RX descriptor update
+            	  rx_dreq_mask <= '0';
+            	end if;
+							---------------------------------------
 
-              -- disable the WRF sink data flow, so we won't get another
-              -- packet before we are done with the memory flush and RX descriptor update
-              rx_dreq_mask <= '0';
-            end if;
+            	-- got a valid payload word?
+            	if(fab_in.dvalid = '1' and wrf_is_payload = '1') then
+            	  -- check if it's a byte or a word transfer and update the length
+            	  -- and buffer space counters accordingly
+            	  if(fab_in.bytesel = '1') then
+            	    rx_length <= rx_length + 1;
+            	  else
+            	    rx_length <= rx_length + 2;
+            	  end if;
 
-            -- got a valid payload word?
-            if(fab_in.dvalid = '1' and wrf_is_payload = '1') then
-              -- check if it's a byte or a word transfer and update the length
-              -- and buffer space counters accordingly
-              if(fab_in.bytesel = '1') then
-                rx_avail  <= rx_avail - 1;
-                rx_length <= rx_length + 1;
-              else
-                rx_avail  <= rx_avail - 2;
-                rx_length <= rx_length + 2;
-              end if;
+            	  -- pack two 16-bit words received from the fabric I/F into one
+            	  -- 32-bit buffer word
 
-              -- pack two 16-bit words received from the fabric I/F into one
-              -- 32-bit buffer word
+            	  if(c_nic_buf_little_endian = false) then
+            	    -- CPU is big-endian
+            	    if(rx_rdreg_toggle = '0') then
+            	      -- 1st word
+            	      rx_buf_data(31 downto 16) <= fab_in.data;
+            	    else
+            	      -- 2nd word
+            	      rx_buf_data(15 downto 0) <= fab_in.data;
+            	    end if;
+            	  else
+            	    -- CPU is little endian
+            	    if(rx_rdreg_toggle = '0') then
+            	      -- 1st word
+            	      rx_buf_data(15 downto 8) <= fab_in.data(7 downto 0);
+            	      rx_buf_data(7 downto 0)  <= fab_in.data(15 downto 8);
+            	    else
+            	      -- 2nd word
+            	      rx_buf_data(31 downto 24) <= fab_in.data(7 downto 0);
+            	      rx_buf_data(23 downto 16) <= fab_in.data(15 downto 8);
+            	    end if;
+            	  end if;
 
-              if(c_nic_buf_little_endian = false) then
-                -- CPU is big-endian
-                if(rx_rdreg_toggle = '0') then
-                  -- 1st word
-                  rx_buf_data(31 downto 16) <= fab_in.data;
-                else
-                  -- 2nd word
-                  rx_buf_data(15 downto 0) <= fab_in.data;
-                end if;
-              else
-                -- CPU is little endian
-                
-                if(rx_rdreg_toggle = '0') then
-                  -- 1st word
-                  rx_buf_data(15 downto 8) <= fab_in.data(7 downto 0);
-                  rx_buf_data(7 downto 0)  <= fab_in.data(15 downto 8);
-                else
-                  -- 2nd word
-                  rx_buf_data(31 downto 24) <= fab_in.data(7 downto 0);
-                  rx_buf_data(23 downto 16) <= fab_in.data(15 downto 8);
-                end if;
-              end if;
+            	  -- toggle the current word
+            	  rx_rdreg_toggle <= not rx_rdreg_toggle;
+            	end if;
+							---------------------------------------
 
-              -- toggle the current word
-              rx_rdreg_toggle <= not rx_rdreg_toggle;
-            end if;
+            	-- got a valid OOB word?
+            	if(fab_in.dvalid = '1' and wrf_is_oob = '1') then
 
-
-            -- got a valid OOB word?
-            if(fab_in.dvalid = '1' and wrf_is_oob = '1') then
-
-              -- oob_sreg is a shift register, where each bit represents one of
-              -- 3 RX OOB words
-              oob_sreg <= oob_sreg(oob_sreg'length-2 downto 0) & '0';
+            	  -- oob_sreg is a shift register, where each bit represents one of
+            	  -- 3 RX OOB words
+            	  oob_sreg <= oob_sreg(oob_sreg'length-2 downto 0) & '0';
 
 
-              -- check which word we've just received and put its contents into
-              -- the descriptor
+            	  -- check which word we've just received and put its contents into
+            	  -- the descriptor
 
-              if(oob_sreg (0) = '1') then  -- 1st OOB word
-                cur_rx_desc.port_id      <= '0' & fab_in.data(4 downto 0);
-                cur_rx_desc.ts_incorrect <= fab_in.data(11);
-              end if;
+            	  if(oob_sreg (0) = '1') then  -- 1st OOB word
+            	    cur_rx_desc.port_id      <= '0' & fab_in.data(4 downto 0);
+            	    cur_rx_desc.ts_incorrect <= fab_in.data(11);
+            	  end if;
 
-              if(oob_sreg (1) = '1') then  -- 2nd OOB word
-                cur_rx_desc.ts_f                <= fab_in.data(15 downto 12);
-                cur_rx_desc.ts_r (27 downto 16) <= fab_in.data(11 downto 0);
-              end if;
+            	  if(oob_sreg (1) = '1') then  -- 2nd OOB word
+            	    cur_rx_desc.ts_f                <= fab_in.data(15 downto 12);
+            	    cur_rx_desc.ts_r (27 downto 16) <= fab_in.data(11 downto 0);
+            	  end if;
 
-              if(oob_sreg (2) = '1') then  -- 3rd OOB word
-                cur_rx_desc.ts_r(15 downto 0) <= fab_in.data;
-                cur_rx_desc.got_ts            <= '1';
-              end if;
-            end if;
+            	  if(oob_sreg (2) = '1') then  -- 3rd OOB word
+            	    cur_rx_desc.ts_r(15 downto 0) <= fab_in.data;
+            	    cur_rx_desc.got_ts            <= '1';
+            	  end if;
+            	end if;
+							---------------------------------------
 
+            	-- we've got 2 valid word of the payload in rx_buf_data, write them to the
+            	-- memory
+            	if(rx_rdreg_toggle = '1' and fab_in.dvalid = '1' and (wrf_is_oob = '1' or wrf_is_payload = '1') and wrf_terminate = '0') then
+            	  increase_addr <= '1';
+            	  buf_wr_o      <= '1';
 
-            -- we've got 2 valid word of the payload in rx_buf_data, write them to the
-            -- memory
-            if(rx_rdreg_toggle = '1' and fab_in.dvalid = '1' and (wrf_is_oob = '1' or wrf_is_payload = '1') and wrf_terminate = '0') then
-              increase_addr <= '1';
-              buf_wr_o      <= '1';
-
-              -- check if we are synchronized with the memory write arbiter,
-              -- which grants us the memory acces every 2 clock cycles.
-              -- If we're out of the "beat"  (for example when the RX traffic
-              -- was throttled by the WRF source), we need to resynchronize ourselves.
-              if(buf_grant_i = '1') then
-                state <= RX_MEM_RESYNC;
-              end if;
-            else
-              -- nothing to write
-              buf_wr_o <= '0';
+            	  -- check if we are synchronized with the memory write arbiter,
+            	  -- which grants us the memory acces every 2 clock cycles.
+            	  -- If we're out of the "beat"  (for example when the RX traffic
+            	  -- was throttled by the WRF source), we need to resynchronize ourselves.
+            	  if(buf_grant_i = '1') then
+            	    state <= RX_MEM_RESYNC;
+            	  end if;
+            	--else
+            	  -- nothing to write
+            	  --buf_wr_o <= '0';
+            	end if;
             end if;
 
 
@@ -469,7 +464,7 @@ begin
 -------------------------------------------------------------------------------
 -- helper process for producing the RX fabric data request signal (combinatorial)
 -------------------------------------------------------------------------------  
-  gen_rx_dreq : process(rx_dreq_mask, buf_grant_i, rx_rdreg_toggle, fab_in, regs_i)
+  gen_rx_dreq : process(rx_dreq_mask, buf_grant_i, rx_rdreg_toggle, fab_in, regs_i, state)
   begin
 -- make sure we don't have any incoming data when the reception is masked (e.g.
 -- the NIC is updating the descriptors of finishing the memory write. 

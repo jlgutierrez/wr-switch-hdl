@@ -55,7 +55,14 @@ entity swc_multiport_page_allocator is
     g_page_addr_width : integer := 10;    --:= c_swc_page_addr_width;
     g_num_ports       : integer := 7;     --:= c_swc_num_ports
     g_page_num        : integer := 1024;  --:= c_swc_packet_mem_num_pages
-    g_usecount_width  : integer := 3      --:= c_swc_usecount_width
+    g_usecount_width  : integer := 3;      --:= c_swc_usecount_width
+    --- resource manager
+    g_max_pck_size                     : integer ;
+    g_page_size                        : integer ; 
+    g_special_res_num_pages            : integer ;
+    g_resource_num                     : integer ; -- this include 1 for unknown
+    g_resource_num_width               : integer ;
+    g_num_dbg_vector_width             : integer   
     );
   port (
     rst_n_i : in std_logic;
@@ -83,7 +90,32 @@ entity swc_multiport_page_allocator is
 
     nomem_o : out std_logic;
 
-    tap_out_o : out std_logic_vector(62 + 49 downto 0)
+    --------------------------- resource management ----------------------------------
+    -- resource number
+    resource_i             : in  std_logic_vector(g_num_ports * g_resource_num_width-1 downto 0);
+    
+    -- outputed when freeing
+    resource_o             : out std_logic_vector(g_num_ports * g_resource_num_width-1 downto 0);
+
+    -- used only when freeing page, 
+    -- if HIGH then the input resource_i value will be used
+    -- if LOW  then the value read from memory will be used (stored along with usecnt)
+    free_resource_i             : in  std_logic_vector(g_num_ports * g_resource_num_width - 1 downto 0);
+    free_resource_valid_i       : in  std_logic_vector(g_num_ports                        - 1 downto 0);
+    force_free_resource_i       : in  std_logic_vector(g_num_ports * g_resource_num_width - 1 downto 0);
+    force_free_resource_valid_i : in  std_logic_vector(g_num_ports                        - 1 downto 0);
+    
+    -- number of pages added to the resurce
+    rescnt_page_num_i      : in  std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
+
+    -- indicates whether the resources where re-located to the proper resource, if not, then the
+    -- whole usecnt operation is abandoned
+    set_usecnt_succeeded_o : out std_logic_vector(g_num_ports                     -1 downto 0);
+    res_full_o             : out std_logic_vector(g_num_ports * g_resource_num    -1 downto 0);
+    res_almost_full_o      : out std_logic_vector(g_num_ports * g_resource_num    -1 downto 0);
+    dbg_o                  : out std_logic_vector(g_num_dbg_vector_width - 1 downto 0)  
+
+--     tap_out_o : out std_logic_vector(62 + 49 downto 0)
     );
 
 end swc_multiport_page_allocator;
@@ -349,32 +381,47 @@ begin  -- syn
     end if;
   end process;
 
-  tap_out_o <= f_slv_resize
-               (
-                 dbg_q_write &
-                 dbg_q_read &
-                 dbg_initializing &
-                 alloc_i &
-                 free_i &
-                 force_free_i &
-                 set_usecnt_i &
 
-                 alloc_done&
-                 free_done &
-                 force_free_done&         -- 56
-                 set_usecnt_done &        -- 48
-                 pg_alloc &               -- 47
-                 pg_free &                -- 46
-                 pg_free_last_usecnt &    -- 45
-                 pg_force_free &          -- 44
-                 pg_set_usecnt &          -- 43
-                 pg_usecnt &              -- 40
-                 pg_addr &                -- 30
-                 pg_addr_alloc &          -- 20
-                 pg_done &                -- 19
-                 pg_nomem &               -- 18
-                 dbg_double_free &        -- 17
-                 dbg_double_force_free ,  --  16
-                 50 + 62);
+  --------------------------------------------------------------------------------------------------
+  --                               Resource Manager logic and instantiation
+  --------------------------------------------------------------------------------------------------
+  -- dummy
+  set_usecnt_succeeded_o <= (others => '1');
+  res_full_o             <= (others => '0');
+  res_almost_full_o      <= (others => '0');
+  resource_o             <= (others => '0');
+
+
+
+
+  --------------------------------------------------------------------------------------------------
+
+--   tap_out_o <= f_slv_resize
+--                (
+--                  dbg_q_write &
+--                  dbg_q_read &
+--                  dbg_initializing &
+--                  alloc_i &
+--                  free_i &
+--                  force_free_i &
+--                  set_usecnt_i &
+-- 
+--                  alloc_done&
+--                  free_done &
+--                  force_free_done&         -- 56
+--                  set_usecnt_done &        -- 48
+--                  pg_alloc &               -- 47
+--                  pg_free &                -- 46
+--                  pg_free_last_usecnt &    -- 45
+--                  pg_force_free &          -- 44
+--                  pg_set_usecnt &          -- 43
+--                  pg_usecnt &              -- 40
+--                  pg_addr &                -- 30
+--                  pg_addr_alloc &          -- 20
+--                  pg_done &                -- 19
+--                  pg_nomem &               -- 18
+--                  dbg_double_free &        -- 17
+--                  dbg_double_force_free ,  --  16
+--                  50 + 62);
 
 end syn;
