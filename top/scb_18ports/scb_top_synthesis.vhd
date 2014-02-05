@@ -176,7 +176,6 @@ architecture Behavioral of scb_top_synthesis is
 
   attribute maxskew: string;
   attribute maxskew of clk_dmtd : signal is "0.5ns";
-  attribute buffer_type                    : string;
   -----------------------------------------------------------------------------
   -- Component declarations
   -----------------------------------------------------------------------------
@@ -211,11 +210,6 @@ architecture Behavioral of scb_top_synthesis is
   signal clk_gtx8_11  : std_logic;
   signal clk_gtx12_15 : std_logic;
   signal clk_gtx16_19 : std_logic;
-
-  attribute buffer_type of clk_dmtd       : signal is "BUFG";
-  attribute buffer_type of clk_ref        : signal is "BUFG";
-  attribute buffer_type of clk_aux        : signal is "BUFG";
-  attribute buffer_type of clk_sys        : signal is "BUFG";
 
   signal clk_gtx : std_logic_vector(c_NUM_PHYS-1 downto 0);
 
