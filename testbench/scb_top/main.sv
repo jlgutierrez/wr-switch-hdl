@@ -3684,14 +3684,14 @@ module main;
       rtu.enable();
       $display(">>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
       ///TRU
-      tru = new(cpu_acc, 'h58000,g_num_ports,1 /*enable debugging*/);      
+      tru = new(cpu_acc, 'h56000,g_num_ports,1 /*enable debugging*/);      
       init_tru(tru);
       
-      tatsu=new(cpu_acc, 'h59000);
+      tatsu=new(cpu_acc, 'h57000);
       if(g_tatsu_config == 1)
         tatsu.drop_at_HP_enable();
       
-      hwdu=new(cpu_acc, 'h71000);
+      hwdu=new(cpu_acc, 'h59000);
       hwdu.dump_mpm_page_utilization(1);
 
       fork
