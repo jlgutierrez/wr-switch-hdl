@@ -35,9 +35,10 @@ entity wrsw_hwiu is
     rst_n_i : in std_logic;
     clk_i   : in std_logic;
 
-    dbg_regs_i : in std_logic_vector(g_ndbg_regs*32-1 downto 0) := (others => '0');
+    dbg_regs_i    : in std_logic_vector(g_ndbg_regs*32-1 downto 0) := (others => '0');
+    dbg_chps_id_o : out std_logic_vector(7 downto 0);
 
-    wb_adr_i   : in  std_logic_vector(0 downto 0);
+    wb_adr_i   : in  std_logic_vector(1 downto 0);
     wb_dat_i   : in  std_logic_vector(31 downto 0);
     wb_dat_o   : out std_logic_vector(31 downto 0);
     wb_cyc_i   : in  std_logic;
@@ -63,7 +64,8 @@ architecture behav of wrsw_hwiu is
       rst_n_i : in std_logic;
       clk_i   : in std_logic;
 
-      dbg_regs_i : in std_logic_vector(g_ndbg_regs*32-1 downto 0);
+      dbg_regs_i    : in std_logic_vector(g_ndbg_regs*32-1 downto 0);
+      dbg_chps_id_o : out std_logic_vector(7 downto 0);
 
       wb_i : in  t_wishbone_slave_in;
       wb_o : out t_wishbone_slave_out);
@@ -86,14 +88,15 @@ begin
       rst_n_i => rst_n_i,
       clk_i   => clk_i,
 
-      dbg_regs_i => dbg_regs_i,
+      dbg_regs_i    => dbg_regs_i,
+      dbg_chps_id_o => dbg_chps_id_o,
 
       wb_i => wb_in,
       wb_o => wb_out
     );
 
-  wb_in.adr(0)           <= wb_adr_i(0);
-  wb_in.adr(31 downto 0) <= (others => '0');
+  wb_in.adr(1 downto 0)           <= wb_adr_i;
+  wb_in.adr(31 downto 2) <= (others => '0');
   wb_in.dat              <= wb_dat_i;
   wb_in.cyc              <= wb_cyc_i;
   wb_in.stb              <= wb_stb_i;

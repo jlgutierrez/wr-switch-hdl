@@ -41,7 +41,8 @@ entity xwrsw_hwiu is
     rst_n_i : in std_logic;
     clk_i   : in std_logic;
 
-    dbg_regs_i : in std_logic_vector(g_ndbg_regs*32-1 downto 0) := (others => '0');
+    dbg_regs_i    : in std_logic_vector(g_ndbg_regs*32-1 downto 0) := (others => '0');
+    dbg_chps_id_o : out std_logic_vector(7 downto 0);
 
     wb_i : in  t_wishbone_slave_in;
     wb_o : out t_wishbone_slave_out);
@@ -53,7 +54,7 @@ architecture behav of xwrsw_hwiu is
     port (
       rst_n_i    : in  std_logic;
       clk_sys_i  : in  std_logic;
-      wb_adr_i   : in  std_logic_vector(0 downto 0);
+      wb_adr_i   : in  std_logic_vector(1 downto 0);
       wb_dat_i   : in  std_logic_vector(31 downto 0);
       wb_dat_o   : out std_logic_vector(31 downto 0);
       wb_cyc_i   : in  std_logic;
@@ -113,7 +114,7 @@ begin
     port map(
       rst_n_i    => rst_n_i,
       clk_sys_i  => clk_i,
-      wb_adr_i   => wb_in.adr(0 downto 0),
+      wb_adr_i   => wb_in.adr(1 downto 0),
       wb_dat_i   => wb_in.dat,
       wb_dat_o   => wb_out.dat,
       wb_cyc_i   => wb_in.cyc,
@@ -182,5 +183,7 @@ begin
       end if;
     end if;
   end process;
+
+ dbg_chps_id_o <= wb_regs_out.chps_id_o;
 
 end behav;
