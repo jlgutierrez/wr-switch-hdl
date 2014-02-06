@@ -259,7 +259,7 @@ begin  -- rtl
 
   U_UART : xwb_simple_uart
     generic map (
-      g_with_virtual_uart   => false,
+      g_with_virtual_uart   => true,
       g_with_physical_uart  => true,
       g_interface_mode      => PIPELINED,
       g_address_granularity => BYTE)
