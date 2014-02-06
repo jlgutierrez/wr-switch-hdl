@@ -28,7 +28,9 @@ entity scb_top_bare is
     g_with_TATSU      : boolean := false;
     g_with_HWDU       : boolean := false;
     g_with_HWIU       : boolean := false;
-    g_with_PSTATS     : boolean := true
+    g_with_PSTATS     : boolean := true;
+    g_with_muxed_CS   : boolean := false;
+    g_inj_per_EP      : std_logic_vector(17 downto 0) := (others=>'0')
     );
   port (
     sys_rst_n_i : in std_logic;         -- global reset
@@ -227,6 +229,15 @@ architecture rtl of scb_top_bare is
       return 0;
     end if;
   end f_bool2int;
+
+  function f_logic2bool(x : std_logic) return boolean is
+  begin
+    if(x = '1') then
+      return true;
+    else
+      return false;
+    end if;
+  end f_logic2bool;
 
   constant c_cnx_endpoint_addr : t_wishbone_address_array(c_MAX_PORTS-1 downto 0) :=
     f_gen_endpoint_addresses;
@@ -590,7 +601,7 @@ begin
           g_with_rtu            => true,
           g_with_leds           => true,
           g_with_dmtd           => false,
-          g_with_packet_injection => true,
+          g_with_packet_injection => f_logic2bool(g_inj_per_EP(i)),
           g_use_new_rxcrc       => true,
           g_use_new_txcrc       => true)
         port map (
@@ -1056,24 +1067,24 @@ begin
   clk_sys_o         <= clk_sys;
 
 
---   
---  CS_ICON : chipscope_icon
---   port map (
---    CONTROL0 => CONTROL0);
---  CS_ILA : chipscope_ila
---   port map (
---     CONTROL => CONTROL0,
---     CLK     => clk_sys, --phys_i(0).rx_clk,
---     TRIG0   => T0,
---     TRIG1   => T1,
---     TRIG2   => T2,
---     TRIG3   => T3);
---
---     T0   <= TRIG0(to_integer(unsigned(dbg_chps_id)));
---     T1   <= TRIG1(to_integer(unsigned(dbg_chps_id)));
---     T2   <= TRIG2(to_integer(unsigned(dbg_chps_id)));
---     T3   <= TRIG3(to_integer(unsigned(dbg_chps_id)));
-
+  gen_muxed_CS: if g_with_muxed_CS = true generate
+    CS_ICON : chipscope_icon
+     port map (
+      CONTROL0 => CONTROL0);
+    CS_ILA : chipscope_ila
+     port map (
+       CONTROL => CONTROL0,
+       CLK     => clk_sys, --phys_i(0).rx_clk,
+       TRIG0   => T0,
+       TRIG1   => T1,
+       TRIG2   => T2,
+       TRIG3   => T3);
+  
+       T0   <= TRIG0(to_integer(unsigned(dbg_chps_id)));
+       T1   <= TRIG1(to_integer(unsigned(dbg_chps_id)));
+       T2   <= TRIG2(to_integer(unsigned(dbg_chps_id)));
+       T3   <= TRIG3(to_integer(unsigned(dbg_chps_id)));
+  end generate;
 
   ----------------------------- dbg_id0
   TRIG0(0)(15    downto   0) <= phys_i(0).rx_data;            
