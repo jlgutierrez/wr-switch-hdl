@@ -12,7 +12,8 @@ entity wrsw_nic is
       g_interface_mode      : t_wishbone_interface_mode      := CLASSIC;
       g_address_granularity : t_wishbone_address_granularity := WORD;
       g_src_cyc_on_stall    : boolean := false;
-      g_port_mask_bits      : integer := 32); --should be num_ports+1
+      g_port_mask_bits      : integer := 32; --should be num_ports+1
+      g_rx_untagging        : boolean := false);
   port (
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
@@ -79,7 +80,8 @@ architecture rtl of wrsw_nic is
       g_interface_mode      : t_wishbone_interface_mode;
       g_address_granularity : t_wishbone_address_granularity;
       g_src_cyc_on_stall    : boolean := false;
-      g_port_mask_bits      : integer := 32);
+      g_port_mask_bits      : integer := 32;
+      g_rx_untagging        : boolean := false);
     port (
       clk_sys_i           : in  std_logic;
       rst_n_i             : in  std_logic;
@@ -113,7 +115,8 @@ begin
       g_interface_mode      => g_interface_mode,
       g_address_granularity => g_address_granularity,
       g_src_cyc_on_stall    => g_src_cyc_on_stall,
-      g_port_mask_bits      => g_port_mask_bits)
+      g_port_mask_bits      => g_port_mask_bits,
+      g_rx_untagging        => g_rx_untagging)
     port map (
       clk_sys_i           => clk_sys_i,
       rst_n_i             => rst_n_i,

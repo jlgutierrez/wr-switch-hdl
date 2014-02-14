@@ -58,6 +58,8 @@ class CSimDrv_NIC;
    int tx_irq_enabled;
    int tx_queue_active 	= 0;
 
+   protected uint16_t untag_tab[256];
+
    spinlock_t tx_lock;
 
    EthPacket rx_queue[$], tx_queue[$];
@@ -411,6 +413,21 @@ class CSimDrv_NIC;
    endtask // automatic
    
    
+   task vlan_egress_untag(int vid, int untag);
+     uint64_t wval=0;
+     if(untag>0)
+       untag_tab[(vid>>4)] = untag_tab[(vid>>4)] | (1<<('h000F & vid));
+     else
+       untag_tab[(vid>>4)] = untag_tab[(vid>>4)] & !  (1<<('h000F & vid));
+
+     wval = (untag_tab[(vid>>4)] << 10) | ('h000003FF & (vid>>4));
+
+     $display("[vlan_egress_untag], write offset: %d, data: 0x%x (val=0x%x)", 
+         (vid>>4),untag_tab[(vid>>4)], wval);
+         
+     writel(`ADDR_NIC_VCR1, wval);
+   endtask
+       // vlan_egress_untag
 
    
    task automatic nic_irq_handler();

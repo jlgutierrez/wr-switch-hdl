@@ -549,7 +549,8 @@ begin
       generic map (
         g_interface_mode      => PIPELINED,
         g_address_granularity => BYTE,
-        g_port_mask_bits      => c_NUM_PORTS+1)
+        g_port_mask_bits      => c_NUM_PORTS+1,
+        g_rx_untagging        => true)
       port map (
         clk_sys_i           => clk_sys,
         rst_n_i             => rst_n_sys,
