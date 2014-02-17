@@ -2686,10 +2686,11 @@ module main;
     g_set_untagging     = 2; // untagging
   end
 */
-   /** ***************************   test scenario 79   ********************** **/   /*
-
+   /** ***************************   test scenario 79   ********************** **/   
+   /*
+    testing hw-supported injectin
    */
-///*
+/*
   initial begin
     portUnderTest        = 18'b101000000000000101; // we send pcks (Markers) in other place
                          // tx  ,rx ,opt
@@ -2713,6 +2714,112 @@ module main;
     rx_forward_on_fmatch_full = 1; 
     mac_br               = 0;
     g_is_qvlan           = 0;
+  end
+*/
+ /** ***************************   test scenario 80  ************************************* **/ 
+  /*
+   * snake !!!!!!!!!!!!! (need to uncomment/commeent)
+   * 
+   **/
+/*
+  initial begin
+
+                     //      mask     , fid  , prio,has_p,overr, drop , vid, valid
+   sim_vlan_tab[ 0] = '{'{32'hFFFFFFFF, 8'h0 , 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
+   sim_vlan_tab[ 1] = '{'{32'h00000003, 8'h1 , 3'h0, 1'b0, 1'b0, 1'b0}, 1,  1'b1 };
+   sim_vlan_tab[ 2] = '{'{32'h0000000C, 8'h2 , 3'h0, 1'b0, 1'b0, 1'b0}, 2,  1'b1 };
+   sim_vlan_tab[ 3] = '{'{32'h00000030, 8'h3 , 3'h0, 1'b0, 1'b0, 1'b0}, 3,  1'b1 };
+   sim_vlan_tab[ 4] = '{'{32'h000000C0, 8'h4 , 3'h0, 1'b0, 1'b0, 1'b0}, 4,  1'b1 };
+   sim_vlan_tab[ 5] = '{'{32'h00000300, 8'h5 , 3'h0, 1'b0, 1'b0, 1'b0}, 5,  1'b1 };
+   sim_vlan_tab[ 6] = '{'{32'h00000C00, 8'h6 , 3'h0, 1'b0, 1'b0, 1'b0}, 6,  1'b1 };
+   sim_vlan_tab[ 7] = '{'{32'h00003000, 8'h7 , 3'h0, 1'b0, 1'b0, 1'b0}, 7,  1'b1 };
+   sim_vlan_tab[ 8] = '{'{32'h0000C000, 8'h8 , 3'h0, 1'b0, 1'b0, 1'b0}, 8,  1'b1 };
+   sim_vlan_tab[ 9] = '{'{32'h00030000, 8'h9 , 3'h0, 1'b0, 1'b0, 1'b0}, 9,  1'b1 };
+   sim_vlan_tab[10] = '{'{32'h000C0000, 8'h10, 3'h0, 1'b0, 1'b0, 1'b0}, 10, 1'b1 };
+   sim_vlan_tab[11] = '{'{32'h00300000, 8'h11, 3'h0, 1'b0, 1'b0, 1'b0}, 11, 1'b1 };
+   sim_vlan_tab[12] = '{'{32'h00C00000, 8'h12, 3'h0, 1'b0, 1'b0, 1'b0}, 12, 1'b1 };
+   sim_vlan_tab[13] = '{'{32'h03000000, 8'h13, 3'h0, 1'b0, 1'b0, 1'b0}, 13, 1'b1 };
+   sim_vlan_tab[14] = '{'{32'h0C000000, 8'h14, 3'h0, 1'b0, 1'b0, 1'b0}, 14, 1'b1 };
+   sim_vlan_tab[15] = '{'{32'h30000000, 8'h15, 3'h0, 1'b0, 1'b0, 1'b0}, 15, 1'b1 };
+   sim_vlan_tab[16] = '{'{32'hC0000000, 8'h16, 3'h0, 1'b0, 1'b0, 1'b0}, 16, 1'b1 };
+   sim_vlan_tab[17] = '{'{32'h00000000, 8'h17, 3'h0, 1'b0, 1'b0, 1'b0}, 17, 1'b0 };
+   sim_vlan_tab[18] = '{'{32'h00000000, 8'h18, 3'h0, 1'b0, 1'b0, 1'b0}, 18, 1'b0 };  
+
+    portUnderTest        = 18'b100000000000000001;
+                  // tx  ,rx ,opt
+    trans_paths[ 0]='{0  ,17 , 1 }; // port 0:
+    trans_paths[17]='{17 ,0  , 1 }; // port 17
+    
+    g_enable_pck_gaps    = 0;
+    g_min_pck_gap        = 0;
+    g_max_pck_gap        = 400;
+    repeat_number        = 10000;//2700; //10
+    tries_number         = 1;  
+//     g_force_payload_size = 225-18; // header = 14 bytes | CRC = 4 bytes
+    g_force_payload_size = 249-18; // header = 14 bytes | CRC = 4 bytes
+
+//     g_force_payload_size = 207;//47;// 0;//300;//46;//42; //250;//42; 
+//     g_force_payload_size = 482;// should be 500 in spirent
+    rx_forward_on_fmatch_full = 1; 
+    mac_br               = 1;
+    g_is_qvlan           = 0;
+    g_ignore_rx_test_check = 0;
+    g_simple_allocator_unicast_check = 1;
+    
+    g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
+    
+    g_set_untagging     = 2; // untagging
+  end
+*/
+ /** ***************************   test scenario 81  ************************************* **/ 
+  /*
+   * snake -> check all sizes of frames
+   * 
+   **/
+///*
+  initial begin
+
+                     //      mask     , fid  , prio,has_p,overr, drop , vid, valid
+   sim_vlan_tab[ 0] = '{'{32'hFFFFFFFF, 8'h0 , 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
+   sim_vlan_tab[ 1] = '{'{32'h00000003, 8'h1 , 3'h0, 1'b0, 1'b0, 1'b0}, 1,  1'b1 };
+   sim_vlan_tab[ 2] = '{'{32'h0000000C, 8'h2 , 3'h0, 1'b0, 1'b0, 1'b0}, 2,  1'b1 };
+   sim_vlan_tab[ 3] = '{'{32'h00000030, 8'h3 , 3'h0, 1'b0, 1'b0, 1'b0}, 3,  1'b1 };
+   sim_vlan_tab[ 4] = '{'{32'h000000C0, 8'h4 , 3'h0, 1'b0, 1'b0, 1'b0}, 4,  1'b1 };
+   sim_vlan_tab[ 5] = '{'{32'h00000300, 8'h5 , 3'h0, 1'b0, 1'b0, 1'b0}, 5,  1'b1 };
+   sim_vlan_tab[ 6] = '{'{32'h00000C00, 8'h6 , 3'h0, 1'b0, 1'b0, 1'b0}, 6,  1'b1 };
+   sim_vlan_tab[ 7] = '{'{32'h00003000, 8'h7 , 3'h0, 1'b0, 1'b0, 1'b0}, 7,  1'b1 };
+   sim_vlan_tab[ 8] = '{'{32'h0000C000, 8'h8 , 3'h0, 1'b0, 1'b0, 1'b0}, 8,  1'b1 };
+   sim_vlan_tab[ 9] = '{'{32'h00030000, 8'h9 , 3'h0, 1'b0, 1'b0, 1'b0}, 9,  1'b1 };
+   sim_vlan_tab[10] = '{'{32'h000C0000, 8'h10, 3'h0, 1'b0, 1'b0, 1'b0}, 10, 1'b1 };
+   sim_vlan_tab[11] = '{'{32'h00300000, 8'h11, 3'h0, 1'b0, 1'b0, 1'b0}, 11, 1'b1 };
+   sim_vlan_tab[12] = '{'{32'h00C00000, 8'h12, 3'h0, 1'b0, 1'b0, 1'b0}, 12, 1'b1 };
+   sim_vlan_tab[13] = '{'{32'h03000000, 8'h13, 3'h0, 1'b0, 1'b0, 1'b0}, 13, 1'b1 };
+   sim_vlan_tab[14] = '{'{32'h0C000000, 8'h14, 3'h0, 1'b0, 1'b0, 1'b0}, 14, 1'b1 };
+   sim_vlan_tab[15] = '{'{32'h30000000, 8'h15, 3'h0, 1'b0, 1'b0, 1'b0}, 15, 1'b1 };
+   sim_vlan_tab[16] = '{'{32'hC0000000, 8'h16, 3'h0, 1'b0, 1'b0, 1'b0}, 16, 1'b1 };
+   sim_vlan_tab[17] = '{'{32'h00000000, 8'h17, 3'h0, 1'b0, 1'b0, 1'b0}, 17, 1'b0 };
+   sim_vlan_tab[18] = '{'{32'h00000000, 8'h18, 3'h0, 1'b0, 1'b0, 1'b0}, 18, 1'b0 };  
+
+    portUnderTest        = 18'b100000000000000001;
+                  // tx  ,rx ,opt
+    trans_paths[ 0]='{0  ,17 , 2000 }; // port 0:
+    trans_paths[17]='{17 ,0  , 2000 }; // port 17
+    
+    g_enable_pck_gaps    = 0;
+    repeat_number        = 100000;//2700; //10
+    tries_number         = 1;  
+
+    g_force_payload_size = 1600; // goes along with opt=2000 to test different frame sizes
+    g_payload_range_min  = 64-18;
+    g_payload_range_max  = 1500-18;
+
+    rx_forward_on_fmatch_full = 1; 
+    mac_br               = 1;
+    g_is_qvlan           = 0;
+    
+    g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
+    
+    g_set_untagging     = 2; // untagging
   end
 //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2763,7 +2870,7 @@ module main;
   
       tmpl           = new;
 
-      if(opt == 0 || opt == 200 || opt == 201 || opt == 666 || opt == 667 || opt == 1000)
+      if(opt == 0 || opt == 200 || opt == 201 || opt == 666 || opt == 667 || opt == 1000 || opt == 2000)
         tmpl.src       = '{srcPort, 2,3,4,5,6};
       else if(opt == 101 | opt == 102)
         tmpl.src       = '{0,0,0,0,0,0};
@@ -2772,7 +2879,7 @@ module main;
       else
         tmpl.src       = '{srcPort, 2,3,4,5,6};
 
-      if(opt==0 || opt == 200 || opt == 202 || opt == 1000 )
+      if(opt==0 || opt == 200 || opt == 202 || opt == 1000 || opt == 2000)
         tmpl.dst       = '{dstPort, 'h50, 'hca, 'hfe, 'hba, 'hbe};
       else if(opt==1)
         tmpl.dst       = '{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF};      
@@ -2830,7 +2937,9 @@ module main;
   // 
       gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
       gen.set_template(tmpl);
-      if(g_force_payload_size < 42)
+      if(g_force_payload_size >= 1520) // more than max
+          gen.set_size(64, 1500);
+      else if(g_force_payload_size < 42)
         begin
         if(opt == 101 ||  opt == 102 || opt == 900 || opt == 901)
           gen.set_size(64, 65);
@@ -2853,7 +2962,12 @@ module main;
               
               pkt  = gen.gen();
 
-              if(g_force_payload_size >= 42) // min size of frame is 64, 
+              if(g_force_payload_size >= 1520) // more than max
+                if(opt == 2000)
+                  pkt.set_size((g_payload_range_min + i)%g_payload_range_max);
+                else
+                  $faltal("wrong g_force_payload_size with wrong opt param");
+              else if(g_force_payload_size >= 42) // min size of frame is 64, 
                 if(opt == 1000)
                   pkt.set_size(g_force_payload_size + i%2);
                 else
@@ -3118,20 +3232,7 @@ module main;
 
    
 //    `ifdef `snake_test
-//      scb_snake_sim_svwrap
-//        #(
-//          .g_num_ports(g_num_ports)
-//          ) DUT (
-//               .clk_sys_i(clk_sys),
-//               .clk_ref_i(clk_ref),
-//               .rst_n_i(rst_n),
-//               .cpu_irq(cpu_irq),
-//               .clk_swc_mpm_core_i(clk_swc_mpm_core),
-//               .ep_ctrl_i(ep_ctrl),
-//               .ep_failure_type(ep_failure_type)
-//               );
-//    `else
-     scb_top_sim_svwrap
+     scb_snake_sim_svwrap
        #(
          .g_num_ports(g_num_ports)
          ) DUT (
@@ -3143,6 +3244,19 @@ module main;
               .ep_ctrl_i(ep_ctrl),
               .ep_failure_type(ep_failure_type)
               );
+//    `else
+//      scb_top_sim_svwrap
+//        #(
+//          .g_num_ports(g_num_ports)
+//          ) DUT (
+//               .clk_sys_i(clk_sys),
+//               .clk_ref_i(clk_ref),
+//               .rst_n_i(rst_n),
+//               .cpu_irq(cpu_irq),
+//               .clk_swc_mpm_core_i(clk_swc_mpm_core),
+//               .ep_ctrl_i(ep_ctrl),
+//               .ep_failure_type(ep_failure_type)
+//               );
 //    `endif
      
 
@@ -4401,27 +4515,15 @@ module main;
          end
       join_none
 
-//       for(q=z; q<g_max_ports; z++)
-//         fork
-//           forever begin
-//             automatic int zz=z;
-//             if(portUnderTest[zz]) 
-//               begin 
-//                 if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.alloc_done_o[zz])
-//                   mmu_alloc_cnt[zz]++;
-//                 if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.set_usecnt_done_o[zz])
-//                   mmu_usecnt_cnt[zz]++;              
-//                 if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.free_done_o[zz])
-//                   mmu_free_cnt[zz]++; 
-//                 if(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.force_free_done_o[zz])
-//                   mmu_f_free_cnt[zz]++;
-//               end   //if
-//             @(posedge clk_sys);
-//             end  //thread
-//          join_none;//fork     
-       
-
    end 
+
+  /* ***************************************************************************************
+   *           Page allocator and resource manager debugging
+   * ***************************************************************************************
+   * this stuff is used to debug allocator and resource manager - it is very slow and has 
+   * static tables which causes simulation to crash if we run it tooo long 
+   * uncomment only if debugging allocator
+   * ***************************************************************************************
      
    initial begin
      int q =0;
@@ -4445,7 +4547,6 @@ module main;
      end //forever
    end //initial begin
         
-  
 
    initial begin 
      int l = 0;
@@ -4507,20 +4608,15 @@ module main;
      while(!rst_n) @(posedge clk_sys);    
      while(txrx_done != portUnderTest || g_transition_scenario != 0) @(posedge clk_sys);
      wait_cycles(1000);
-//      while(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages < (1024-2*(g_num_ports+1))) @(posedge clk_sys);
      while(DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.MEMORY_MANAGEMENT_UNIT.ALLOC_CORE.free_pages < 985) @(posedge clk_sys);
      wait_cycles(1000);
      dump_results(
                 DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.dbg_pckstart_pageaddr,
                 DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.dbg_pckinter_pageaddr);     
-//      for(l=0;l<19;l++)
-//        $display("[p%2d] Pre-allocated pckstart_pageaddr=0x%3p | pckinter_pageaddr=0x%3p", l,
-//                DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.dbg_pckstart_pageaddr[((l+1)*10):(l*10)],
-//                DUT.U_Top.U_Wrapped_SCBCore.gen_network_stuff.U_Swcore.dbg_pckinter_pageaddr[((l+1)*10):(l*10)]
-//                );  
+
      $stop;  
    end //initla begin
-
+   */
 
 endmodule // main
 
