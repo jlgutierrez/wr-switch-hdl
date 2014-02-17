@@ -808,7 +808,7 @@ begin  --  behavoural
               src_out_int.stb <= '1';                           
             elsif(src_i.stall = '1' and mpm_dvalid_i = '1') then
               s_send_pck <= S_FLUSH_STALL;
-            elsif(mpm_dlast_i = '1')then
+            elsif(mpm_dlast_i = '1' and mpm_dvalid_i = '1')then
               s_send_pck <= S_FINISH_CYCLE;  -- we free page in EOF
             end if;
 
