@@ -360,3 +360,6 @@ NET "gtx16_19_clk_p_i" TNM_NET = gtx16_19_clk_p_i;
 TIMESPEC TS_gtx16_19_clk_p_i = PERIOD "gtx16_19_clk_p_i" 8 ns HIGH 50%;
 
 #NET "pll_status_i" CLOCK_DEDICATED_ROUTE = FALSE; 
+#Created by Constraints Editor (xc6vlx240t-ff1156-1) - 2014/02/17
+TIMESPEC ts_ignore_xclk1 = FROM "fpga_clk_ref_p_i" TO "U_swcore_pll_clkout0" 20 ns DATAPATHONLY;
+TIMESPEC ts_ignore_xclk2 = FROM "U_swcore_pll_clkout0" TO "fpga_clk_ref_p_i" 20 ns DATAPATHONLY;
