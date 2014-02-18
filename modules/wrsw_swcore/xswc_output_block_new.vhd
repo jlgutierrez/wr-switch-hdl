@@ -303,6 +303,8 @@ architecture behavoural of xswc_output_block_new is
 
   signal send_FSM : std_logic_vector(3 downto 0);
   signal prep_FSM : std_logic_vector(3 downto 0);
+  
+  signal scr_i_rty :std_logic;
 
   -- In theory stall is making sure the proper gap is there,but in case... two cycles
   -- are needed between falling and rising edge of cyc output signal in order for EP
@@ -795,7 +797,7 @@ begin  --  behavoural
               src_out_int.stb <= '0';
             elsif(out_dat_err = '1') then
               s_send_pck <= S_FINISH_CYCLE;  -- to make sure that the error word was sent
-            elsif(src_i.rty = '1') then
+            elsif(scr_i_rty = '1') then
               src_out_int.cyc <= '0';
               src_out_int.stb <= '0';
               request_retry   <= '1';
@@ -986,9 +988,9 @@ begin  --  behavoural
                  (f_unmarshall_wrf_status(src_out_int.dat).error = '1') else  -- the status indicates error       
                  '0';
   drop_at_retry <= '1' when (c_always_drop_at_retry     = true  and 
-                             src_i.rty                  = '1') else
+                             scr_i_rty                  = '1') else
                    '1' when (c_always_drop_at_retry     = false and 
-                             src_i.rty                  = '1' and 
+                             scr_i_rty                  = '1' and 
                               not_empty_and_shaped_array = zeros) else
                    '0' ;
 
@@ -1012,7 +1014,9 @@ begin  --  behavoural
       mpm2wb_sel_int <= (others => '1');
     end if;
   end process;
-
+  
+  scr_i_rty <= '0';--src_i.rty;
+  
   -- source out
   src_o              <= src_out_int;
   -------------- PPFM ----------------------
