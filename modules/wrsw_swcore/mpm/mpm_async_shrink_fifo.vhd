@@ -121,6 +121,9 @@ architecture rtl of mpm_async_shrink_fifo is
   signal empty_wide, empty_narrow : std_logic;
   signal line_flushed             : std_logic;
   
+  type t_check is array (0 to g_ratio-1) of std_logic_vector(g_width -1  downto 0);
+  signal q_int_decoded: t_check;
+
 begin  -- rtl
 
 
@@ -151,6 +154,8 @@ begin  -- rtl
         we_i  => we_i,
         ra_i  => rd_addr,
         rd_o  => q_comb(g_width*(i+1) -1 downto g_width*i));
+
+      q_int_decoded (i) <= d_i(g_width*(i+1) -1 downto g_width*i);
   end generate gen_mem_cells;
 
   U_CTRL : mpm_async_fifo_ctrl

@@ -129,6 +129,10 @@ architecture rtl of mpm_async_grow_fifo is
   signal full_int         : std_logic;
   signal side_comb        : std_logic_vector(g_sideband_width-1 downto 0);
   
+  type t_check is array (0 to g_ratio-1) of std_logic_vector(g_width -1  downto 0);
+
+  signal q_int_decoded: t_check;
+
 begin  -- rtl
 
   -- Genrate g_ratio memory cells, which are written sequentially (each memory
@@ -137,6 +141,8 @@ begin  -- rtl
   gen_mem_cells : for i in 0 to g_ratio-1 generate
 
     wr_cell(i) <= wr_sreg(i) and we_i;
+
+    q_int_decoded(i) <= q_int(g_width*(i+1) -1 downto g_width*i);
 
     U_Mem : mpm_fifo_mem_cell
       generic map (
@@ -206,13 +212,15 @@ begin  -- rtl
   p_output_reg : process(clk_rd_i)
   begin
   	if rising_edge(clk_rd_i) then
-        q_o    <= q_int;
-        side_o <= side_comb;
+-- 	if rd_i = '1' then
+	  q_o    <= q_int;
+	  side_o <= side_comb;
+-- 	end if;
     end if;
   end process;
 
   -- full flag is only active when there's no space left in the highest memory
   -- cell
-  full_o <= full_int and wr_sreg(wr_sreg'left);
+  full_o <= full_int and (wr_sreg(wr_sreg'left) or (wr_sreg(wr_sreg'left - 1) and we_i));
   
 end rtl;
