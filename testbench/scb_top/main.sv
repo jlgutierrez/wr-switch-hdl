@@ -2721,7 +2721,7 @@ module main;
    * snake !!!!!!!!!!!!! (need to uncomment/commeent)
    * 
    **/
-/*
+///*
   initial begin
 
                      //      mask     , fid  , prio,has_p,overr, drop , vid, valid
@@ -2770,13 +2770,13 @@ module main;
     
     g_set_untagging     = 2; // untagging
   end
-*/
+//*/
  /** ***************************   test scenario 81  ************************************* **/ 
   /*
    * snake -> check all sizes of frames
    * 
    **/
-///*
+/*
   initial begin
 
                      //      mask     , fid  , prio,has_p,overr, drop , vid, valid
@@ -2811,25 +2811,27 @@ module main;
 
     g_force_payload_size = 1600; // goes along with opt=2000 to test different frame sizes
     g_payload_range_min  = 64-18;
-    g_payload_range_max  = 1500-18;
+    g_payload_range_max  = 1518-18;
 
     rx_forward_on_fmatch_full = 1; 
     mac_br               = 1;
+//     mac_single           = 1;
     g_is_qvlan           = 0;
     
     g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
     
     g_set_untagging     = 2; // untagging
   end
-//*/
+*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-   always #2.66ns clk_swc_mpm_core <=~clk_swc_mpm_core;
-//    always #4ns clk_swc_mpm_core <=~clk_swc_mpm_core;
+//   always #2.66ns clk_swc_mpm_core <=~clk_swc_mpm_core;
+
+   always #4.2ns clk_swc_mpm_core <=~clk_swc_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
    always #8ns clk_ref <= ~clk_ref;
    
@@ -2964,7 +2966,7 @@ module main;
 
               if(g_force_payload_size >= 1520) // more than max
                 if(opt == 2000)
-                  pkt.set_size((g_payload_range_min + i)%g_payload_range_max);
+                  pkt.set_size(g_payload_range_min + i%(g_payload_range_max-g_payload_range_min));
                 else
                   $faltal("wrong g_force_payload_size with wrong opt param");
               else if(g_force_payload_size >= 42) // min size of frame is 64, 
@@ -3778,6 +3780,7 @@ module main;
       rtu.rx_add_ff_mac_single(0/*ID*/,1/*valid*/,'h1150cafebabe /*MAC*/);
       rtu.rx_add_ff_mac_single(1/*ID*/,1/*valid*/,'h111111111111 /*MAC*/);
       rtu.rx_add_ff_mac_single(2/*ID*/,1/*valid*/,'h0180C200000F /*MAC*/);
+      rtu.rx_add_ff_mac_single(3/*ID*/,1/*valid*/,'h0050cafebabe /*MAC*/);
       rtu.rx_add_ff_mac_range (0/*ID*/,1/*valid*/,'h0050cafebabe /*MAC_lower*/,'h0850cafebabe/*MAC_upper*/);
 //       rtu.rx_set_port_mirror  ('h00000002 /*mirror_src_mask*/,'h00000080 /*mirror_dst_mask*/,1/*rx*/,1/*tx*/);
       rtu.rx_set_port_mirror  (mirror_src_mask, mirror_dst_mask,mr_rx, mr_tx);
