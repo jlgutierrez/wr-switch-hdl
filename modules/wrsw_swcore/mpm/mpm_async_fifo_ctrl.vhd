@@ -92,13 +92,14 @@ architecture rtl of mpm_async_fifo_ctrl is
 
   type t_counter_block is record
     bin, bin_next, gray, gray_next : t_counter;
-    bin_x, gray_x, gray_xm                       : t_counter;
+    bin_x, gray_x, gray_xm         : t_counter;
   end record;
 
 
-  signal rcb, wcb            : t_counter_block;
-  signal full_int, empty_int : std_logic;
-  signal going_full          : std_logic;
+  signal rcb, wcb                         : t_counter_block;
+  signal wr_count                         : t_counter;
+  signal full_int, empty_int, almost_full : std_logic;
+  signal going_full                       : std_logic;
   
 begin  -- rtl
 
@@ -138,16 +139,16 @@ begin  -- rtl
   begin
     if rising_edge(clk_wr_i) then
       rcb.gray_xm <= rcb.gray;
-      rcb.gray_x <= rcb.gray_xm;
+      rcb.gray_x  <= rcb.gray_xm;
     end if;
   end process;
 
- 
+
   p_sync_write_ptr : process(clk_rd_i)
   begin
     if rising_edge(clk_rd_i) then
       wcb.gray_xm <= wcb.gray;
-      wcb.gray_x <= wcb.gray_xm;
+      wcb.gray_x  <= wcb.gray_xm;
     end if;
   end process;
 
@@ -181,6 +182,21 @@ begin  -- rtl
     end if;
   end process;
 
+  p_gen_almost_full : process(clk_wr_i, rst_n_a_i)
+  begin
+    if rst_n_a_i = '0' then
+      wr_count    <= (others => '0');
+      almost_full <= '0';
+    elsif rising_edge(clk_wr_i) then
+      wr_count <= wcb.bin_x - rcb.bin;
+      if(wr_count >= g_size - 2) then
+        almost_full <= '1';
+      else
+        almost_full <= '0';
+      end if;
+    end if;
+  end process;
+
   p_register_full : process(clk_wr_i, rst_n_a_i)
   begin
     if rst_n_a_i = '0' then
@@ -192,7 +208,7 @@ begin  -- rtl
 
   full_o       <= full_int;
   empty_o      <= empty_int;
-  going_full_o <= going_full;
+  going_full_o <= almost_full;
 
   wr_addr_o <= std_logic_vector(wcb.bin(wcb.bin'left-1 downto 0));
   rd_addr_o <= std_logic_vector(rcb.bin(rcb.bin'left-1 downto 0));

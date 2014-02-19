@@ -212,15 +212,13 @@ begin  -- rtl
   p_output_reg : process(clk_rd_i)
   begin
   	if rising_edge(clk_rd_i) then
--- 	if rd_i = '1' then
 	  q_o    <= q_int;
 	  side_o <= side_comb;
--- 	end if;
     end if;
   end process;
 
   -- full flag is only active when there's no space left in the highest memory
   -- cell
-  full_o <= full_int and (wr_sreg(wr_sreg'left) or (wr_sreg(wr_sreg'left - 1) and we_i));
+  full_o <= full_int;
   
 end rtl;
