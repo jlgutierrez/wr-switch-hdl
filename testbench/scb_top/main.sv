@@ -2751,8 +2751,8 @@ module main;
     trans_paths[17]='{17 ,0  , 1 }; // port 17
     
     g_enable_pck_gaps    = 0;
-    g_min_pck_gap        = 0;
-    g_max_pck_gap        = 400;
+    g_min_pck_gap        = 100;
+    g_max_pck_gap        = 120;
     repeat_number        = 10000;//2700; //10
     tries_number         = 1;  
 //     g_force_payload_size = 225-18; // header = 14 bytes | CRC = 4 bytes
@@ -2763,12 +2763,12 @@ module main;
     rx_forward_on_fmatch_full = 1; 
     mac_br               = 1;
     g_is_qvlan           = 0;
-    g_ignore_rx_test_check = 0;
+    g_ignore_rx_test_check = 1;
     g_simple_allocator_unicast_check = 1;
-    
+/*    
     g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
     
-    g_set_untagging     = 2; // untagging
+    g_set_untagging     = 2; // untagging*/
   end
 //*/
  /** ***************************   test scenario 81  ************************************* **/ 
