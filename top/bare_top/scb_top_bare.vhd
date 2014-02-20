@@ -143,7 +143,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"04_02_14_00"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"20_02_14_00"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 13;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;

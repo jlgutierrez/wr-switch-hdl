@@ -443,7 +443,7 @@ begin  -- syn
         for i in 0 to g_num_ports-1 loop
           
           -- input
-          if(ports(i).grant_ib_d(0) = '1') then
+          if(ports(i).grant_ib_d(0) = '1' and pg_nomem ='0') then
             grant_ib_d0(i) <= '1';
           elsif(pg_rsp_vec(i)='1' and (alloc_done(i) ='1' or set_usecnt_done(i) ='1')) then
             grant_ib_d0(i) <= '0';
@@ -558,6 +558,8 @@ begin  -- syn
   --------------------------------------------------------------------------------------------------
   gen_no_RESOURCE_MGR: if (g_with_RESOURCE_MGR = false) generate -- so we don't want resource gnr
     set_usecnt_succeeded_o <= (others => '1');
+--     res_full_o             <= (others => pg_res_full);        -- (others => '0');
+--     res_almost_full_o      <= (others => pg_res_almost_full); -- (others => '0');
     res_full_o             <= (others => '0');
     res_almost_full_o      <= (others => '0');
     resource_o             <= (others => '0');
