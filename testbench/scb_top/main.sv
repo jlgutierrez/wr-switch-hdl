@@ -2721,7 +2721,7 @@ module main;
    * snake !!!!!!!!!!!!! (need to uncomment/commeent)
    * 
    **/
-///*
+/*
   initial begin
 
                      //      mask     , fid  , prio,has_p,overr, drop , vid, valid
@@ -2765,12 +2765,12 @@ module main;
     g_is_qvlan           = 0;
     g_ignore_rx_test_check = 1;
     g_simple_allocator_unicast_check = 1;
-/*    
+    
     g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
     
-    g_set_untagging     = 2; // untagging*/
+    g_set_untagging     = 2; // untagging
   end
-//*/
+*/
  /** ***************************   test scenario 81  ************************************* **/ 
   /*
    * snake -> check all sizes of frames
@@ -2823,15 +2823,49 @@ module main;
     g_set_untagging     = 2; // untagging
   end
 */
+   /** ***************************   test scenario 81  ************************************* **/ 
+  /*
+    * send frames from port 0 to 1:
+    * - vlan on ports 0 & 1
+    * - tag/untagg
+    * - send broadcast 
+    * - enable FastForward for broadcast
+    * - 
+   **/
+///*
+  initial begin
+    portUnderTest        = 18'b000000000000000011;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,1 , 1 };
+    trans_paths[1]       = '{1  ,0 , 1 };
+    repeat_number        = 10000;
+    tries_number         = 1;
+    g_enable_pck_gaps    = 0;
+    g_force_payload_size = 249-18; // header = 14 bytes | CRC = 4 bytes
+    
+    
+    sim_vlan_tab[ 0] = '{'{32'hFFFFFFFF, 8'h0 , 3'h0, 1'b0, 1'b0, 1'b0}, 0,  1'b1 };
+    sim_vlan_tab[ 1] = '{'{32'h00000003, 8'h1 , 3'h0, 1'b0, 1'b0, 1'b0}, 1,  1'b1 };
+    g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
+    
+    rx_forward_on_fmatch_full = 1; 
+    mac_br               = 1;
+    mac_single           = 1;
+    g_is_qvlan           = 0;
+    g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
+    g_set_untagging     = 2; // untagging
+
+  end
+//*/
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 
-//   always #2.66ns clk_swc_mpm_core <=~clk_swc_mpm_core;
-
-   always #4.2ns clk_swc_mpm_core <=~clk_swc_mpm_core;
+  always #2.66ns clk_swc_mpm_core <=~clk_swc_mpm_core;
+//   always #3.11ns clk_swc_mpm_core <=~clk_swc_mpm_core;
+//    always #4.2ns clk_swc_mpm_core <=~clk_swc_mpm_core;
    always #8ns clk_sys <= ~clk_sys;
    always #8ns clk_ref <= ~clk_ref;
    
@@ -3234,20 +3268,7 @@ module main;
 
    
 //    `ifdef `snake_test
-     scb_snake_sim_svwrap
-       #(
-         .g_num_ports(g_num_ports)
-         ) DUT (
-              .clk_sys_i(clk_sys),
-              .clk_ref_i(clk_ref),
-              .rst_n_i(rst_n),
-              .cpu_irq(cpu_irq),
-              .clk_swc_mpm_core_i(clk_swc_mpm_core),
-              .ep_ctrl_i(ep_ctrl),
-              .ep_failure_type(ep_failure_type)
-              );
-//    `else
-//      scb_top_sim_svwrap
+//      scb_snake_sim_svwrap
 //        #(
 //          .g_num_ports(g_num_ports)
 //          ) DUT (
@@ -3259,6 +3280,19 @@ module main;
 //               .ep_ctrl_i(ep_ctrl),
 //               .ep_failure_type(ep_failure_type)
 //               );
+//    `else
+     scb_top_sim_svwrap
+       #(
+         .g_num_ports(g_num_ports)
+         ) DUT (
+              .clk_sys_i(clk_sys),
+              .clk_ref_i(clk_ref),
+              .rst_n_i(rst_n),
+              .cpu_irq(cpu_irq),
+              .clk_swc_mpm_core_i(clk_swc_mpm_core),
+              .ep_ctrl_i(ep_ctrl),
+              .ep_failure_type(ep_failure_type)
+              );
 //    `endif
      
 
@@ -3779,7 +3813,7 @@ module main;
       
       rtu.rx_add_ff_mac_single(0/*ID*/,1/*valid*/,'h1150cafebabe /*MAC*/);
       rtu.rx_add_ff_mac_single(1/*ID*/,1/*valid*/,'h111111111111 /*MAC*/);
-      rtu.rx_add_ff_mac_single(2/*ID*/,1/*valid*/,'h0180C200000F /*MAC*/);
+      rtu.rx_add_ff_mac_single(2/*ID*/,1/*valid*/,'h0150cafebabe /*MAC*/);
       rtu.rx_add_ff_mac_single(3/*ID*/,1/*valid*/,'h0050cafebabe /*MAC*/);
       rtu.rx_add_ff_mac_range (0/*ID*/,1/*valid*/,'h0050cafebabe /*MAC_lower*/,'h0850cafebabe/*MAC_upper*/);
 //       rtu.rx_set_port_mirror  ('h00000002 /*mirror_src_mask*/,'h00000080 /*mirror_dst_mask*/,1/*rx*/,1/*tx*/);
