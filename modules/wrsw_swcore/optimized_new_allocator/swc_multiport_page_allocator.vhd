@@ -402,36 +402,36 @@ begin  -- syn
   end process;
 
 
---   p_arbitrate : process(clk_i)
---   begin
---     if rising_edge(clk_i) then
---       if rst_n_i = '0'then
---         arb_grant <= (others => '0');
---       else
---         f_rr_arbitrate(arb_req, arb_grant, arb_grant);
---       end if;
---     end if;
---   end process;
-
- p_arbitrate : process(clk_i)
-    variable seed1, seed2 : positive;   -- Seed values for random generator
-    variable rand         : real;  -- Random real-number value in range 0 to 1.0
+  p_arbitrate : process(clk_i)
   begin
     if rising_edge(clk_i) then
       if rst_n_i = '0'then
         arb_grant <= (others => '0');
       else
-        UNIFORM(seed1, seed2, rand);
-
-        if(rand < 0.05) then
-          f_rr_arbitrate(arb_req, arb_grant, arb_grant);
-        else
-          arb_grant <= (others => '0');
-        end if;
-        
+        f_rr_arbitrate(arb_req, arb_grant, arb_grant);
       end if;
     end if;
   end process;
+
+--  p_arbitrate : process(clk_i)
+--     variable seed1, seed2 : positive;   -- Seed values for random generator
+--     variable rand         : real;  -- Random real-number value in range 0 to 1.0
+--   begin
+--     if rising_edge(clk_i) then
+--       if rst_n_i = '0'then
+--         arb_grant <= (others => '0');
+--       else
+--         UNIFORM(seed1, seed2, rand);
+-- 
+--         if(rand < 0.05) then
+--           f_rr_arbitrate(arb_req, arb_grant, arb_grant);
+--         else
+--           arb_grant <= (others => '0');
+--         end if;
+--         
+--       end if;
+--     end if;
+--   end process;
 
   p_req_vec_reg : process(clk_i)
   begin
