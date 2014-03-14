@@ -558,10 +558,11 @@ begin  -- syn
   --------------------------------------------------------------------------------------------------
   gen_no_RESOURCE_MGR: if (g_with_RESOURCE_MGR = false) generate -- so we don't want resource gnr
     set_usecnt_succeeded_o <= (others => '1');
---     res_full_o             <= (others => pg_res_full);        -- (others => '0');
---     res_almost_full_o      <= (others => pg_res_almost_full); -- (others => '0');
-    res_full_o             <= (others => '0');
-    res_almost_full_o      <= (others => '0');
+    gen_full_res_out : for i in 0 to g_num_ports-1 generate
+      res_full_o       ((i+1)*g_resource_num      -1 downto i*g_resource_num)       <= pg_res_full;
+      res_almost_full_o((i+1)*g_resource_num      -1 downto i*g_resource_num)       <= pg_res_almost_full;
+    end generate gen_full_res_out;
+
     resource_o             <= (others => '0');
     
     pg_resource_in         <= (others => '0');
