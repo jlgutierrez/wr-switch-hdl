@@ -125,8 +125,8 @@ package rtu_private_pkg is
   constant c_ff_range_macs_number :	 integer := 1; -- not implemented
   
 ------------------ new stuff ------------------------
-  constant c_bpd_range_lower  : std_logic_vector := x"0180C2000000";
-  constant c_bpd_range_upper  : std_logic_vector := x"0180C200000F";
+  constant c_bpd_range_lower  : std_logic_vector(47 downto 0) := x"0180C2000000";
+--   constant c_bpd_range_upper  : std_logic_vector := x"0180C200000F";
 
   type t_mac_array is array(integer range <>) of std_logic_vector(47 downto 0);
   type t_rtu_special_traffic_config is record
@@ -166,6 +166,8 @@ package rtu_private_pkg is
   end record;
 
   function f_mac_in_range(in_mac, in_mac_lower, in_mac_upper   : std_logic_vector(47 downto 0)
+                                                     ) return std_logic;
+  function f_mac_reserved(in_mac: std_logic_vector(47 downto 0)
                                                      ) return std_logic;
   function f_fast_match_mac_lookup(match_config : t_rtu_special_traffic_config;
                                      in_mac       : std_logic_vector(47 downto 0)
@@ -553,6 +555,19 @@ package body rtu_private_pkg is
 
      return ret;
    end function f_mac_in_range;
+
+   function f_mac_reserved(in_mac : std_logic_vector(47 downto 0)
+                                                    ) return std_logic is
+     variable ret : std_logic;
+   begin
+     
+     ret := '0';
+     if(in_mac(47 downto 8) = c_bpd_range_lower(47 downto 8)) then
+       ret :='1';
+     end if;
+
+     return ret;
+   end function f_mac_reserved;
 
    function f_fast_match_mac_lookup(match_config : t_rtu_special_traffic_config;
                                      in_mac       : std_logic_vector(47 downto 0)

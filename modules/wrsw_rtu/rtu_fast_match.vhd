@@ -212,7 +212,7 @@ begin
                                         rtu_str_config_i.ff_mac_ptp_ena = '0')   else -- stuff disabled
                       traffic_ptp when (rtu_str_config_i.ff_mac_ll_ena  = '0' and 
                                         rtu_str_config_i.ff_mac_ptp_ena = '1')   else -- stuff disabled 
-                      f_mac_in_range(rtu_req_stage_0.dmac,c_bpd_range_lower,c_bpd_range_upper) or traffic_ptp;
+                      f_mac_reserved(rtu_req_stage_0.dmac) or traffic_ptp;
 
   traffic_br       <= '0' when (rtu_str_config_i.ff_mac_br_ena ='0')   else -- stuff disabled
                       '1' when (rtu_req_stage_0.dmac = x"FFFFFFFFFFFF")     else
