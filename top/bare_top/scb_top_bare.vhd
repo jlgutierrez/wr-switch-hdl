@@ -273,6 +273,11 @@ architecture rtl of scb_top_bare is
   signal endpoint_snk_out : t_wrf_sink_out_array(c_NUM_PORTS downto 0);
   signal endpoint_snk_in  : t_wrf_sink_in_array(c_NUM_PORTS downto 0);
 
+  signal swc_src_out : t_wrf_source_out_array(c_NUM_PORTS downto 0);
+  signal swc_src_in  : t_wrf_source_in_array(c_NUM_PORTS downto 0);
+  signal swc_snk_out : t_wrf_sink_out_array(c_NUM_PORTS downto 0);
+  signal swc_snk_in  : t_wrf_sink_in_array(c_NUM_PORTS downto 0);
+
   signal dummy_snk_in  : t_wrf_sink_in_array(c_NUM_PORTS downto 0);
   signal dummy_src_in  : t_wrf_source_in_array(c_NUM_PORTS downto 0);
   signal dummy_src_out : t_wrf_source_out_array(c_NUM_PORTS downto 0);
@@ -697,6 +702,27 @@ begin
 
     end generate gen_endpoints_and_phys;
 
+    GEN_TIMING: for I in 0 to c_NUM_PORTS generate
+      -- improve timing
+      U_WRF_RXREG_X: xwrf_reg
+        port map (
+          rst_n_i => rst_n_periph,
+          clk_i   => clk_sys,
+          snk_i   => endpoint_src_out(i),
+          snk_o   => endpoint_src_in(i),
+          src_o   => swc_snk_in(i),
+          src_i   => swc_snk_out(i));
+
+      U_WRF_TXREG_X: xwrf_reg
+        port map(
+          rst_n_i => rst_n_periph,
+          clk_i   => clk_sys,
+          snk_i   => swc_src_out(i),
+          snk_o   => swc_src_in(i),
+          src_o   => endpoint_snk_in(i),
+          src_i   => endpoint_snk_out(i));
+    end generate;
+
     gen_terminate_unused_eps : for i in c_NUM_PORTS to c_MAX_PORTS-1 generate
       cnx_endpoint_in(i).ack   <= '1';
       cnx_endpoint_in(i).stall <= '0';
@@ -741,10 +767,10 @@ begin
         clk_mpm_core_i => clk_aux_i,
         rst_n_i        => rst_n_periph,
 
-        src_i => endpoint_snk_out,
-        src_o => endpoint_snk_in,
-        snk_i => endpoint_src_out,
-        snk_o => endpoint_src_in,
+        src_i => swc_src_in,
+        src_o => swc_src_out,
+        snk_i => swc_snk_in,
+        snk_o => swc_snk_out,
 
         shaper_drop_at_hp_ena_i   => shaper_drop_at_hp_ena,
         
