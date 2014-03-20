@@ -250,6 +250,7 @@ architecture Behavioral of scb_top_synthesis is
       g_with_TRU        : boolean;
       g_with_TATSU      : boolean;
       g_with_HWDU       : boolean;
+      g_with_HWIU       : boolean;
       g_with_PSTATS     : boolean;
       g_with_muxed_CS   : boolean;
       g_inj_per_EP      : std_logic_vector(17 downto 0));
@@ -612,7 +613,8 @@ begin
       g_without_network => false,
       g_with_TRU        => false,
       g_with_TATSU      => false,
-      g_with_HWDU       => true,
+      g_with_HWDU       => false,
+      g_with_HWIU       => true,
       g_with_PSTATS     => true,
       g_with_muxed_CS   => false,
       g_inj_per_EP      => "00" & x"0003")  --only first two ports have injection engine
