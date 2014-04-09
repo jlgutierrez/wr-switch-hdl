@@ -4,18 +4,18 @@
 -------------------------------------------------------------------------------
 -- File       : wrsw_rtu_components_pkg.vhd
 -- Author     : Maciej Lipinski
--- Company    : CERN BE-Co-HT
+-- Company    : CERN BE-CO-HT
 -- Created    : 2010-05-09
 -- Last update: 2012-01-25
 -- Platform   : FPGA-generic
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
+-- Description:
 -- Routing Table Unit components
--- 
 --
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Maciej Lipinski / CERN
+-- Copyright (c) 2010 - 2012 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

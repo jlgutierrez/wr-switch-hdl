@@ -2,11 +2,11 @@
 -- Title      : Topology Resolution Unit (wrapper)
 -- Project    : WhiteRabbit switch
 -------------------------------------------------------------------------------
--- File       : tru_port_wrapper.vhd
+-- File       : wrsw_tru.vhd
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-CO-HT
 -- Created    : 2012-08-28
--- Last update: 2012-09-13
+-- Last update: 2012-09-14
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -17,7 +17,7 @@
 -- (currently not supported but can be useful)
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2012 Maciej Lipinski / CERN
+-- Copyright (c) 2012 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

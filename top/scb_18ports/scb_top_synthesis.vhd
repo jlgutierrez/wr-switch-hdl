@@ -1,3 +1,39 @@
+-------------------------------------------------------------------------------
+-- Title      : WR Switch 18-ports top level
+-- Project    : White Rabbit Switch
+-------------------------------------------------------------------------------
+-- File       : scb_top_synthesis.vhd
+-- Author     : Tomasz Wlostowski, Maciej Lipinski, Grzegorz Daniluk
+-- Company    : CERN BE-CO-HT
+-- Created    : 2012-02-21
+-- Last update: 2014-03-20
+-- Platform   : FPGA-generic
+-- Standard   : VHDL
+-------------------------------------------------------------------------------
+-- Description:
+-- WR Switch 18-port version top synthesis level.
+-------------------------------------------------------------------------------
+--
+-- Copyright (c) 2012 - 2014 CERN / BE-CO-HT
+--
+-- This source file is free software; you can redistribute it
+-- and/or modify it under the terms of the GNU Lesser General
+-- Public License as published by the Free Software Foundation;
+-- either version 2.1 of the License, or (at your option) any
+-- later version.
+--
+-- This source is distributed in the hope that it will be
+-- useful, but WITHOUT ANY WARRANTY; without even the implied
+-- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+-- PURPOSE.  See the GNU Lesser General Public License for more
+-- details.
+--
+-- You should have received a copy of the GNU Lesser General
+-- Public License along with this source; if not, download it
+-- from http://www.gnu.org/licenses/lgpl-2.1.html
+--
+-------------------------------------------------------------------------------
+
 library ieee;
 use ieee.STD_LOGIC_1164.all;
 use ieee.numeric_std.all;

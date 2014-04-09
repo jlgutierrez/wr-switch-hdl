@@ -2,11 +2,11 @@
 -- Title      : Topology Resolution Unit: Link Aggregation protocol, marker, distribution
 -- Project    : WhiteRabbit switch
 -------------------------------------------------------------------------------
--- File       : tru_trans_lacp_dist.vhd
+-- File       : tru_trans_lacp_colect.vhd
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-CO-HT
 -- Created    : 2012-09-10
--- Last update: 2012-09-13
+-- Last update: 2013-03-05
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -20,7 +20,7 @@
 -- 
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2012 Maciej Lipinski / CERN
+-- Copyright (c) 2012 - 2013 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

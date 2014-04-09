@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-10-28
--- Last update: 2012-03-16
+-- Last update: 2013-11-15
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -48,7 +48,7 @@
 --      when already receving new pck (to prevent stalling)
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Maciej Lipinski / CERN
+-- Copyright (c) 2010 - 2013 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

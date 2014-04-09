@@ -20,7 +20,7 @@
 -- 
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2012 Maciej Lipinski / CERN
+-- Copyright (c) 2012 - 2013 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

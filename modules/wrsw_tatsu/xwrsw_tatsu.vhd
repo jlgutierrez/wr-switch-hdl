@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-CO-HT
 -- Created    : 2013-02-28
--- Last update: 2012-02-28
+-- Last update: 2013-03-12
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -48,7 +48,7 @@
 -- 
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2013 Maciej Lipinski / CERN
+-- Copyright (c) 2013 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

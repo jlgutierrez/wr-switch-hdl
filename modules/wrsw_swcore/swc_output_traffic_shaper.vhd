@@ -16,7 +16,7 @@
 -- * time-aware-shaping (allow only chosen output queues for given time)
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2013 Maciej Lipinski / CERN
+-- Copyright (c) 2013 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

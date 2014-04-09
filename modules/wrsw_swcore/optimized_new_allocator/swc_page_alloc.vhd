@@ -24,7 +24,7 @@
 --   the input blocks.
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
+-- Copyright (c) 2010  - 2013 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

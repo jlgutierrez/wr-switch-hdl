@@ -6,7 +6,7 @@
 -- Author       : Tomasz Włostowski
 -- Company      : CERN BE-CO-HT
 -- Created      : 2012-01-30
--- Last update  : 2012-01-30
+-- Last update  : 2014-02-18
 -- Platform     : FPGA-generic
 -- Standard     : VHDL'93
 -- Dependencies : mpm_fifo_mem_cell, mpm_async_fifo_ctrl, genram_pkg
@@ -17,7 +17,7 @@
 -- An additional sideband channel (side_i/side_o) is provided for passing auxillary data.
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2012 CERN
+-- Copyright (c) 2012 - 2014 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

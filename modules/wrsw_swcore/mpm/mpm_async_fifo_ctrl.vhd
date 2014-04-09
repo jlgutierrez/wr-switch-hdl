@@ -6,7 +6,7 @@
 -- Author       : Tomasz Włostowski
 -- Company      : CERN BE-CO-HT
 -- Created      : 2012-01-30
--- Last update  : 2012-01-30
+-- Last update  : 2014-02-19
 -- Platform     : FPGA-generic
 -- Standard     : VHDL'93
 -- Dependencies : genram_pkg
@@ -16,7 +16,7 @@
 -- P. Alfke & Generic FIFO project by Rudolf Usselmann.
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2012 CERN
+-- Copyright (c) 2012 - 2014 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

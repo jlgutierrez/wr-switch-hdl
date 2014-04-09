@@ -40,7 +40,7 @@
 -- > that for dropping we use also strict scheduling but reverse order compared to the sending     <
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2012  Maciej Lipinski / CERN
+-- Copyright (c) 2012 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

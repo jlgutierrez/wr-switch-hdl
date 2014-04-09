@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2013-10-23
+-- Last update: 2014-03-14
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -43,7 +43,7 @@
 -- done_o   _ _ _ _|-|_ _ _ _
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
+-- Copyright (c) 2010 - 2014 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

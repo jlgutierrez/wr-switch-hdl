@@ -6,7 +6,7 @@
 -- Author     : Tomasz Wlostowski
 -- Company    : CERN BE-Co-HT
 -- Created    : 2010-04-08
--- Last update: 2012-03-15
+-- Last update: 2014-03-14
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -32,7 +32,7 @@
 --   max_time= 2*num_ports + 2 (time needed for handling by core) + 1 (arbitration)
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2010 Tomasz Wlostowski, Maciej Lipinski / CERN
+-- Copyright (c) 2010 - 2014 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

@@ -4,7 +4,7 @@
 -------------------------------------------------------------------------------
 -- File       : rtu_fast_match.vhd
 -- Author     : Maciej Lipinski
--- Company    : CERN BE-Co-HT
+-- Company    : CERN BE-CO-HT
 -- Created    : 2012-10-30
 -- Last update: 2012-11-06
 -- Platform   : FPGA-generic
@@ -32,7 +32,7 @@
 -- The request (valid up of the input rtu_req) shall be a strobe
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2012 Maciej Lipinski / CERN
+-- Copyright (c) 2012 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   

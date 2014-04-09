@@ -6,7 +6,7 @@
 -- Author     : Maciej Lipinski
 -- Company    : CERN BE-CO-HT
 -- Created    : 2012-08-28
--- Last update: 2012-08-13
+-- Last update: 2013-02-06
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'87
 -------------------------------------------------------------------------------
@@ -19,7 +19,7 @@
 -- e.g. bad connection) from affecting TRU.
 -------------------------------------------------------------------------------
 --
--- Copyright (c) 2012 Maciej Lipinski / CERN
+-- Copyright (c) 2012 - 2013 CERN / BE-CO-HT
 --
 -- This source file is free software; you can redistribute it   
 -- and/or modify it under the terms of the GNU Lesser General   
