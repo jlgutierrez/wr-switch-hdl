@@ -642,7 +642,7 @@ begin
           g_with_dmtd           => false,
           g_with_packet_injection => f_logic2bool(g_inj_per_EP(i)),
           g_use_new_rxcrc       => true,
-          g_use_new_txcrc       => true)
+          g_use_new_txcrc       => false)
         port map (
           clk_ref_i  => clk_ref_i,
           clk_sys_i  => clk_sys,
