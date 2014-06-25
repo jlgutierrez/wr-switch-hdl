@@ -421,7 +421,7 @@ begin
           when READ_LS =>
             rd_en   <= '1';
             IRQ_we  <= '0';
-            IRQ_adr <= std_logic_vector(IRQ_port_adr);
+            IRQ_adr <= std_logic_vector(IRQ_port_adr+1);
             if(rd_irq = '0') then
               IRQ_cyc  <= '0';
               rd_state <= WRITE_LS;
