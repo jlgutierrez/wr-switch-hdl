@@ -100,6 +100,40 @@ peripheral {
     };
   };
 
+	reg {
+		name = "PSTATS info register";
+		description = "Various information about Pstats module";
+		prefix = "INFO";
+
+		field {
+			name = "Version";
+			prefix = "VER";
+			size = 8;
+			type = SLV;
+			access_bus = READ_ONLY;
+			access_dev = WRITE_ONLY;
+		};
+
+		field {
+			name = "Counters per word";
+			prefix = "CPW";
+			size = 8;
+			type = SLV;
+			access_bus = READ_ONLY;
+			access_dev = WRITE_ONLY;
+		};
+
+		field {
+			name = "Counters per port";
+			prefix = "CPP";
+			size = 16;
+			type = SLV;
+			access_bus = READ_ONLY;
+			access_dev = WRITE_ONLY;
+		};
+
+	};
+
 
   irq {
     name = "Port0 IRQ";

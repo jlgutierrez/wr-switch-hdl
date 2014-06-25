@@ -171,6 +171,7 @@ architecture behav of wrsw_pstats is
   ----------------------------------------------------------
   ----------------------------------------------------------
 
+  constant c_pstats_ver     : integer := 1;
   constant c_adr_mem_sz     : integer := f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw);
   constant c_adr_psel_sz    : integer := f_log2_size(g_nports);
   constant c_portirq_sz     : integer := (g_cnt_pp+g_cnt_pw-1)/g_cnt_pw;
@@ -275,6 +276,9 @@ begin
       regs_o           => wb_regs_out
     );
 
+  wb_regs_in.info_ver_i <= std_logic_vector(to_unsigned(c_pstats_ver, 8));
+  wb_regs_in.info_cpw_i <= std_logic_vector(to_unsigned(g_cnt_pw, 8));
+  wb_regs_in.info_cpp_i <= std_logic_vector(to_unsigned(g_cnt_pp, 16));
   wb_regs_in.cr_rd_en_i   <= rd_en;
   wb_regs_in.l1_cnt_val_i <= rd_val;
   wb_regs_in.l2_cnt_val_i <= L2_rd_val;
