@@ -441,8 +441,10 @@ begin  -- behavioral
             end if;
 
           when TX_END_PACKET =>
-            src_stb_int <= '0';
             src_o.sel   <= "11";
+						if( src_i.stall='0') then
+							src_stb_int <= '0';
+						end if;
 
             if( src_i.stall='0' and ack_count = 0) then
               state     <= TX_UPDATE_DESCRIPTOR;
