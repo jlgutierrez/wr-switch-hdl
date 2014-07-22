@@ -206,6 +206,7 @@ package wrsw_top_pkg is
       clk_dmtd_i          : in  std_logic;
       clk_rx_i            : in  std_logic_vector(g_num_rx_clocks-1 downto 0);
       clk_ext_i           : in  std_logic;
+      clk_ext_mul_i       : in  std_logic;
       rst_n_i             : in  std_logic;
       rst_n_o             : out std_logic;
       wb_i                : in  t_wishbone_slave_in;
@@ -232,7 +233,8 @@ package wrsw_top_pkg is
       pll_sck_o           : out std_logic;
       pll_cs_n_o          : out std_logic;
       pll_sync_n_o        : out std_logic;
-      pll_reset_n_o       : out std_logic);
+      pll_reset_n_o       : out std_logic;
+      spll_dbg_o          : out std_logic_vector(5 downto 0));
   end component;
   
   component chipscope_icon

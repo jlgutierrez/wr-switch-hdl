@@ -81,6 +81,8 @@ entity scb_top_bare is
     -- for re-phasing the 10 MHz input as well as clocking the 
     clk_aux_i : in std_logic;
 
+		clk_ext_mul_i	:	in std_logic;
+
     -- Muxed system clock
     clk_sys_o : out std_logic;
 
@@ -170,7 +172,9 @@ entity scb_top_bare is
     ---------------------------------------------------------------------------
 
     mb_fan1_pwm_o : out std_logic;
-    mb_fan2_pwm_o : out std_logic
+    mb_fan2_pwm_o : out std_logic;
+
+    spll_dbg_o  : out std_logic_vector(5 downto 0)
     );
 end scb_top_bare;
 
@@ -536,6 +540,7 @@ begin
       clk_dmtd_i          => clk_dmtd_i,
       clk_rx_i            => clk_rx_vec,
       clk_ext_i           => pll_status_i,  -- FIXME: UGLY HACK
+			clk_ext_mul_i				=> clk_ext_mul_i,
       rst_n_i             => rst_n_sys,
       rst_n_o             => rst_n_periph,
       wb_i                => cnx_master_out(c_SLAVE_RT_SUBSYSTEM),
@@ -566,7 +571,8 @@ begin
       pll_sck_o     => pll_sck_o,
       pll_cs_n_o    => pll_cs_n_o,
       pll_sync_n_o  => pll_sync_n_o,
-      pll_reset_n_o => pll_reset_n_o);
+      pll_reset_n_o => pll_reset_n_o,
+      spll_dbg_o    => spll_dbg_o);
 
   U_IRQ_Controller : xwb_vic
     generic map (

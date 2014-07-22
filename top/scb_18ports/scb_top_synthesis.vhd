@@ -180,7 +180,10 @@ entity scb_top_synthesis is
     sensors_sda_b: inout std_logic;
 
     mb_fan1_pwm_o : out std_logic;
-    mb_fan2_pwm_o : out std_logic
+    mb_fan2_pwm_o : out std_logic;
+
+		dbg_clk_ext_o	:	out std_logic;
+    spll_dbg_o    : out std_logic_vector(5 downto 0)
   );
 
 end scb_top_synthesis;
@@ -194,6 +197,20 @@ architecture Behavioral of scb_top_synthesis is
     -- Clock out ports
     clk_aux_o          : out    std_logic
    );
+  end component;
+
+  component ext_pll_10_to_100 is
+  port (
+    clk_ext_i           : in  std_logic;
+    clk_ext_100_o       : out std_logic;
+    rst_a_i             : in  std_logic);
+  end component;
+
+  component ext_pll_100_to_62m is
+  port(
+    clk_ext_100_i : in  std_logic;
+    clk_ext_mul_o : out std_logic;
+    rst_a_i       : in  std_logic);
   end component;
 
 
@@ -278,6 +295,9 @@ architecture Behavioral of scb_top_synthesis is
   attribute buffer_type of clk_aux  : signal is "BUFG";
   attribute buffer_type of clk_sys  : signal is "BUFG";
 
+	signal local_reset, ext_pll_reset : std_logic;
+	signal clk_ext, clk_ext_mul	:	 std_logic;
+  signal clk_ext_100 : std_logic;
   component scb_top_bare
     generic (
       g_num_ports       : integer;
@@ -296,6 +316,7 @@ architecture Behavioral of scb_top_synthesis is
       clk_ref_i           : in  std_logic;
       clk_dmtd_i          : in  std_logic;
       clk_aux_i           : in  std_logic;
+			clk_ext_mul_i				:	in	std_logic;
       clk_sys_o           : out std_logic;
       cpu_wb_i            : in  t_wishbone_slave_in;
       cpu_wb_o            : out t_wishbone_slave_out;
@@ -334,7 +355,8 @@ architecture Behavioral of scb_top_synthesis is
       i2c_sda_o       : out std_logic_vector(2 downto 0);
       i2c_sda_i       : in  std_logic_vector(2 downto 0) := "111";
       mb_fan1_pwm_o   : out std_logic;
-      mb_fan2_pwm_o   : out std_logic
+      mb_fan2_pwm_o   : out std_logic;
+      spll_dbg_o    : out std_logic_vector(5 downto 0)
       );
   end component;
 
@@ -508,6 +530,36 @@ begin
       CLKIN    => clk_25mhz);
 
 
+	-- Make 62.5MHz from 10MHz for locking ext clock in new SoftPLL
+	U_CLKEXT_BUF: IBUFG
+		port map (
+			I => pll_status_i,
+			O => clk_ext);
+
+  U_Ext_PLL1: ext_pll_10_to_100
+    port map(
+      clk_ext_i => clk_ext,
+      clk_ext_100_o => clk_ext_100,
+      rst_a_i   => ext_pll_reset);
+
+  U_Ext_PLL2: ext_pll_100_to_62m
+    port map(
+      clk_ext_100_i => clk_ext_100,
+      clk_ext_mul_o => clk_ext_mul,
+      rst_a_i => ext_pll_reset);
+
+	dbg_clk_ext_o	<= clk_ext_mul;
+
+	local_reset <= not sys_rst_n_i;
+	U_Extend_EXT_Reset: gc_extend_pulse
+		generic map (
+			g_width => 1000)
+		port map(
+			clk_i 		 => clk_sys,
+			rst_n_i 	 => sys_rst_n_i,
+			pulse_i		 => local_reset,
+			extended_o => ext_pll_reset);
+
   ------------------------------------------------    
   cmp_wb_cpu_bridge : wb_cpu_bridge
     --generic map(
@@ -661,6 +713,7 @@ begin
       clk_dmtd_i          => clk_dmtd,
       clk_sys_o           => clk_sys,
       clk_aux_i           => clk_aux,
+			clk_ext_mul_i				=> clk_ext_mul,
       cpu_wb_i            => top_master_out,
       cpu_wb_o            => top_master_in,
       cpu_irq_n_o         => cpu_irq_n_o,
@@ -672,7 +725,7 @@ begin
       dac_main_sync_n_o   => dac_main_sync_n_o,
       dac_main_sclk_o     => dac_main_sclk_o,
       dac_main_data_o     => dac_main_data_o,
-      pll_status_i        => pll_status_i,
+      pll_status_i        => clk_ext,
       pll_mosi_o          => pll_mosi_o,
       pll_miso_i          => pll_miso_i,
       pll_sck_o           => pll_sck_o,
@@ -697,7 +750,8 @@ begin
       i2c_sda_o       => i2c_sda_out,
       i2c_sda_i       => i2c_sda_in,
       mb_fan1_pwm_o   => mb_fan1_pwm_o,
-      mb_fan2_pwm_o   => mb_fan2_pwm_o);
+      mb_fan2_pwm_o   => mb_fan2_pwm_o,
+      spll_dbg_o      => spll_dbg_o);
 
   i2c_scl_in(1 downto 0) <= mbl_scl_b(1 downto 0);
   i2c_sda_in(1 downto 0) <= mbl_sda_b(1 downto 0);

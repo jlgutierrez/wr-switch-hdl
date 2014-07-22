@@ -53,6 +53,7 @@ entity wrsw_rt_subsystem is
     clk_dmtd_i : in std_logic;
     clk_rx_i   : in std_logic_vector(g_num_rx_clocks-1 downto 0);
     clk_ext_i  : in std_logic;
+		clk_ext_mul_i	:	in std_logic;
 
     rst_n_i : in  std_logic;
     rst_n_o : out std_logic;
@@ -106,7 +107,10 @@ entity wrsw_rt_subsystem is
     pll_sck_o     : out std_logic;
     pll_cs_n_o    : out std_logic;
     pll_sync_n_o  : out std_logic;
-    pll_reset_n_o : out std_logic
+    pll_reset_n_o : out std_logic;
+
+    -- Debug
+    spll_dbg_o  : out std_logic_vector(5 downto 0)
     );
 end wrsw_rt_subsystem;
 
@@ -121,6 +125,8 @@ architecture rtl of wrsw_rt_subsystem is
       g_with_ext_clock_input : boolean;
       g_divide_input_by_2 	 : boolean;
       g_reverse_dmtds        : boolean;
+    	g_ref_clock_rate			 : integer;
+    	g_ext_clock_rate			 : integer;
       g_interface_mode       : t_wishbone_interface_mode;
       g_address_granularity  : t_wishbone_address_granularity);
     port (
@@ -130,7 +136,9 @@ architecture rtl of wrsw_rt_subsystem is
       clk_fb_i        : in  std_logic_vector(g_num_outputs-1 downto 0);
       clk_dmtd_i      : in  std_logic;
       clk_ext_i       : in  std_logic;
-      sync_p_i        : in  std_logic;
+    	clk_ext_mul_i		: in std_logic;
+    	pps_csync_p1_i	: in std_logic;
+    	pps_ext_a_i			: in std_logic;
       dac_dmtd_data_o : out std_logic_vector(15 downto 0);
       dac_dmtd_load_o : out std_logic;
       dac_out_data_o  : out std_logic_vector(15 downto 0);
@@ -138,9 +146,10 @@ architecture rtl of wrsw_rt_subsystem is
       dac_out_load_o  : out std_logic;
       out_enable_i    : in  std_logic_vector(g_num_outputs-1 downto 0);
       out_locked_o    : out std_logic_vector(g_num_outputs-1 downto 0);
+    	out_status_o		: out std_logic_vector(4*g_num_outputs-1 downto 0);
       slave_i         : in  t_wishbone_slave_in;
       slave_o         : out t_wishbone_slave_out;
-      debug_o         : out std_logic_vector(3 downto 0);
+      debug_o         : out std_logic_vector(5 downto 0);
       dbg_fifo_irq_o  : out std_logic);
   end component;
 
@@ -225,6 +234,7 @@ architecture rtl of wrsw_rt_subsystem is
   signal dac_out_load, dac_dmtd_load : std_logic;
 
   signal clk_rx_vec : std_logic_vector(g_num_rx_clocks-1 downto 0);
+	signal pps_csync	:	std_logic;
 
   function f_pick (
     cond     : boolean;
@@ -316,15 +326,19 @@ begin  -- rtl
       g_reverse_dmtds        => true,
       g_with_ext_clock_input => true,
       g_divide_input_by_2    => false,
-      g_with_debug_fifo      => true)
+      g_with_debug_fifo      => true,
+			g_ref_clock_rate			 => 62500000,
+			g_ext_clock_rate			 => 10000000)
     port map (
       clk_sys_i       => clk_sys_i,
       rst_n_i         => rst_n_i,
       clk_ref_i       => clk_rx_vec,
       clk_fb_i(0)     => clk_ref_i,
-      clk_ext_i       => clk_ext_i,
-      sync_p_i        => pps_ext_i,
       clk_dmtd_i      => clk_dmtd_i,
+      clk_ext_i       => clk_ext_i,
+			clk_ext_mul_i		=> clk_ext_mul_i,
+			pps_csync_p1_i	=> pps_csync,
+      pps_ext_a_i     => pps_ext_i,
       dac_dmtd_data_o => dac_dmtd_data,
       dac_dmtd_load_o => dac_dmtd_load,
       dac_out_data_o  => dac_out_data,
@@ -334,8 +348,7 @@ begin  -- rtl
       out_locked_o    => open,
       slave_i         => cnx_master_out(c_SLAVE_SOFTPLL),
       slave_o         => cnx_master_in(c_SLAVE_SOFTPLL),
-      debug_o         => open);
-
+      debug_o         => spll_dbg_o);
   
   U_PPS_Gen : xwr_pps_gen
     generic map (
@@ -352,12 +365,14 @@ begin  -- rtl
       slave_i         => cnx_master_out(c_SLAVE_PPSGEN),
       slave_o         => cnx_master_in(c_SLAVE_PPSGEN),
       pps_in_i        => pps_ext_i,
-      pps_csync_o     => pps_csync_o,
+      pps_csync_o     => pps_csync,
       pps_out_o       => pps_ext_o,
       pps_valid_o     => pps_valid_o,
       tm_utc_o        => tm_utc_o,
       tm_cycles_o     => tm_cycles_o,
       tm_time_valid_o => tm_time_valid_o);
+
+	pps_csync_o	<= pps_csync;
 
   cpu_irq_vec(0)           <= cnx_master_in(2).int;
   cpu_irq_vec(31 downto 1) <= (others => '0');
