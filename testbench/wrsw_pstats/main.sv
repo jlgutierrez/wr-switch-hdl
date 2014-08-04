@@ -1,7 +1,7 @@
 `include "pstats_gen.sv"
 `include "if_wb_master.svh"
 
-`define TRIG_WIDTH 17
+`define TRIG_WIDTH 38
 `define NPORTS 8
 
 module main;
@@ -93,6 +93,11 @@ module main;
 
           acc.write('h0, 'h000002);
           acc.read('h4, dat);
+          acc.read('h8, dat);
+          acc.write('h0, 'h000001);
+          acc.read('h4, dat);
+          acc.read('h8, dat);
+
           acc.write('h2c, 'h01);
           acc.write('h0, 'h000102);
           acc.read('h4, dat);
@@ -150,6 +155,7 @@ module main;
         //  acc.write('h0, 'h040001);
         //  acc.read('h4, dat);
         //end
+
       //end 
 
       //#500ns

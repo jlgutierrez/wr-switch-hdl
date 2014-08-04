@@ -17,7 +17,7 @@ module pstats_gen (rst_n_i, clk_i, trig_o);
     fork
     begin
       stop = 1'b1;
-      #21496us
+      #43496us
 //      #236us
       stop = 1'b0;
     end
