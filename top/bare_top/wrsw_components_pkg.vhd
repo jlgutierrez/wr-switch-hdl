@@ -366,22 +366,6 @@ package wrsw_components_pkg is
       wb_o : out t_wishbone_slave_out );
   end component;
 
-  component xwrsw_hwdu
-    generic (
-      g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
-      g_address_granularity : t_wishbone_address_granularity := BYTE;
-      g_nregs   : integer := 1;
-      g_rwidth  : integer := 32);
-    port(
-      rst_n_i : in std_logic;
-      clk_i   : in std_logic;
-  
-      dbg_regs_i  : in std_logic_vector(g_nregs*g_rwidth-1 downto 0);
-      dbg_chps_id_o : out std_logic_vector(7 downto 0);  
-      wb_i : in  t_wishbone_slave_in;
-      wb_o : out t_wishbone_slave_out);
-  end component;
-
   component xwrsw_hwiu
     generic (
       g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;

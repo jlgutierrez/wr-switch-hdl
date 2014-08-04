@@ -307,7 +307,6 @@ architecture Behavioral of scb_top_synthesis is
       g_without_network : boolean;
       g_with_TRU        : boolean;
       g_with_TATSU      : boolean;
-      g_with_HWDU       : boolean;
       g_with_HWIU       : boolean;
       g_with_PSTATS     : boolean;
       g_with_muxed_CS   : boolean;
@@ -703,7 +702,6 @@ begin
       g_without_network => false,
       g_with_TRU        => false,
       g_with_TATSU      => false,
-      g_with_HWDU       => false,
       g_with_HWIU       => true,
       g_with_PSTATS     => true,
       g_with_muxed_CS   => false,

@@ -261,7 +261,6 @@ package wrsw_top_pkg is
       g_without_network : boolean;
       g_with_TRU        : boolean  := false;
       g_with_TATSU      : boolean  := false;
-      g_with_HWDU       : boolean  := false;
       g_with_HWIU       : boolean  := false;
       g_with_PSTATS     : boolean := true;
       g_with_muxed_CS   : boolean := false;

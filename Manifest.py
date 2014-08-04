@@ -7,7 +7,6 @@ modules = { "local" : [
 				"modules/wrsw_tru",
 				"modules/wrsw_tatsu",
 				"modules/wrsw_pstats",
-        "modules/wrsw_hwdu",
         "modules/wrsw_hwiu",
 				"platform/virtex6/chipscope",
 				"platform/xilinx"],

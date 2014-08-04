@@ -59,7 +59,6 @@ entity scb_top_bare is
     g_without_network : boolean := false;
     g_with_TRU        : boolean := false;
     g_with_TATSU      : boolean := false;
-    g_with_HWDU       : boolean := false;
     g_with_HWIU       : boolean := false;
     g_with_PSTATS     : boolean := true;
     g_with_muxed_CS   : boolean := false;
@@ -189,7 +188,7 @@ architecture rtl of scb_top_bare is
   constant c_DBG_V_SWCORE  : integer := (3*10) + 2 +         -- 3 resources, each has with of CNT of 10 bits +2 to make it 32
                                         (g_num_ports+1)*16  + -- states of input blocks (including NIC)
                                         (g_num_ports+1)*8;   -- states of output blocks (including NIC)
-  constant c_DBG_N_REGS    : integer := 1 + integer(ceil(real(c_DBG_V_SWCORE)/real(32))); -- 32-bits debug registers which go to HWDU
+  constant c_DBG_N_REGS    : integer := 1 + integer(ceil(real(c_DBG_V_SWCORE)/real(32))); -- 32-bits debug registers which go to HWIU
   constant c_TRU_EVENTS    : integer := 1;
   constant c_ALL_EVENTS    : integer := c_TRU_EVENTS + c_RTU_EVENTS + c_epevents_sz;
   constant c_DUMMY_RMON    : boolean := false; -- define TRUE to enable dummy_rmon module for debugging PSTAT
@@ -212,13 +211,13 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_TRU          : integer := 9;
   constant c_SLAVE_TATSU        : integer := 10;
   constant c_SLAVE_PSTATS       : integer := 11;
-  constant c_SLAVE_HWDU         : integer := 12;
+  constant c_SLAVE_HWIU         : integer := 12;
   --constant c_SLAVE_DUMMY        : integer := 13;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
       --x"00070000",                      -- Dummy counters
-      x"00059000",                      -- HWDU / HWIU
+      x"00059000",                      -- HWIU
       x"00058000",                      -- PStats counters
       x"00057000",                      -- TATSU
       x"00056000",                      -- TRU
@@ -1061,37 +1060,18 @@ begin
         clk_i         => clk_sys,
         dbg_regs_i    => dbg_n_regs,
         dbg_chps_id_o => dbg_chps_id,
-        wb_i          => cnx_master_out(c_SLAVE_HWDU),
-        wb_o          => cnx_master_in(c_SLAVE_HWDU));
+        wb_i          => cnx_master_out(c_SLAVE_HWIU),
+        wb_o          => cnx_master_in(c_SLAVE_HWIU));
   end generate;
 
-  gen_HWDU: if(g_with_HWDU = true) generate
-    U_HWDU : xwrsw_hwdu
-      generic map(
-        g_interface_mode      => PIPELINED,
-        g_address_granularity => BYTE,
-        g_nregs               => c_DBG_N_REGS)
-      port map(
-        rst_n_i => rst_n_periph,
-        clk_i   => clk_sys,
-
-        dbg_regs_i  => dbg_n_regs,
-        dbg_chps_id_o => dbg_chps_id,
-        wb_i  => cnx_master_out(c_SLAVE_HWDU),
-        wb_o  => cnx_master_in(c_SLAVE_HWDU));
-
-        dbg_n_regs(  32-1 downto 0)                 <= c_GW_VERSION;
---         dbg_n_regs(2*32-1 downto c_DBG_V_SWCORE+32) <= (others=>'0');
-    end generate;
-
-    gen_no_HWDU: if(g_with_HWDU = false and g_with_HWIU = false) generate
-      cnx_master_in(c_SLAVE_HWDU).ack   <= '1';
-      cnx_master_in(c_SLAVE_HWDU).dat   <= c_GW_VERSION;--x"deadbeef";
-      cnx_master_in(c_SLAVE_HWDU).err   <= '0';
-      cnx_master_in(c_SLAVE_HWDU).stall <= '0';
-      cnx_master_in(c_SLAVE_HWDU).rty   <= '0';
-      dbg_chps_id                       <= (others =>'0');
-    end generate;
+  gen_no_HWIU: if(g_with_HWIU = false) generate
+    cnx_master_in(c_SLAVE_HWIU).ack   <= '1';
+    cnx_master_in(c_SLAVE_HWIU).dat   <= c_GW_VERSION;
+    cnx_master_in(c_SLAVE_HWIU).err   <= '0';
+    cnx_master_in(c_SLAVE_HWIU).stall <= '0';
+    cnx_master_in(c_SLAVE_HWIU).rty   <= '0';
+    dbg_chps_id                       <= (others =>'0');
+  end generate;
 
   -----------------------------------------------------------------------------
   -- PWM Controlle for mini-backplane fan drive
