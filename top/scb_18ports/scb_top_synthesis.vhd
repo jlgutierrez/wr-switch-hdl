@@ -180,10 +180,8 @@ entity scb_top_synthesis is
     sensors_sda_b: inout std_logic;
 
     mb_fan1_pwm_o : out std_logic;
-    mb_fan2_pwm_o : out std_logic;
+    mb_fan2_pwm_o : out std_logic
 
-		dbg_clk_ext_o	:	out std_logic;
-    spll_dbg_o    : out std_logic_vector(5 downto 0)
   );
 
 end scb_top_synthesis;
@@ -548,7 +546,6 @@ begin
       clk_ext_mul_o => clk_ext_mul,
       rst_a_i => ext_pll_reset);
 
-	dbg_clk_ext_o	<= clk_ext_mul;
 
 	local_reset <= not sys_rst_n_i;
 	U_Extend_EXT_Reset: gc_extend_pulse
@@ -751,7 +748,7 @@ begin
       i2c_sda_i       => i2c_sda_in,
       mb_fan1_pwm_o   => mb_fan1_pwm_o,
       mb_fan2_pwm_o   => mb_fan2_pwm_o,
-      spll_dbg_o      => spll_dbg_o);
+      spll_dbg_o      => open);
 
   i2c_scl_in(1 downto 0) <= mbl_scl_b(1 downto 0);
   i2c_sda_in(1 downto 0) <= mbl_sda_b(1 downto 0);
