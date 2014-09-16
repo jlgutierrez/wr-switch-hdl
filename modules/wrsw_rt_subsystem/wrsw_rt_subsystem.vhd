@@ -39,6 +39,7 @@ use ieee.std_logic_1164.all;
 
 use work.gencores_pkg.all;
 use work.wishbone_pkg.all;
+use work.wrs_sdb_pkg.all;
 
 
 entity wrsw_rt_subsystem is
@@ -189,6 +190,9 @@ architecture rtl of wrsw_rt_subsystem is
   constant c_NUM_GPIO_PINS : integer := 4;
   constant c_NUM_WB_SLAVES : integer := 7;
 
+  constant c_MASTER_CPU    : integer := 0;
+  constant c_MASTER_LM32   : integer := 1;
+
   constant c_SLAVE_DPRAM   : integer := 0;
   constant c_SLAVE_UART    : integer := 1;
   constant c_SLAVE_SOFTPLL : integer := 2;
@@ -197,23 +201,6 @@ architecture rtl of wrsw_rt_subsystem is
   constant c_SLAVE_TIMER   : integer := 5;
   constant c_SLAVE_PPSGEN  : integer := 6;
 
-  constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
-    (x"00010500",
-     x"00010400",
-     x"00010300",
-     x"00010200",
-     x"00010100",
-     x"00010000",
-     x"00000000");
-
-  constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
-    (x"000fff00",
-     x"000fff00",
-     x"000fff00",
-     x"000fff00",
-     x"000fff00",
-     x"000fff00",
-     x"000f0000");
 
 
   signal cnx_slave_in   : t_wishbone_slave_in_array(1 downto 0);
@@ -254,17 +241,18 @@ begin  -- rtl
 
   clk_rx_vec(g_num_rx_clocks-1 downto 0) <= clk_rx_i;
 
-  cnx_slave_in(0) <= wb_i;
-  wb_o            <= cnx_slave_out(0);
+  cnx_slave_in(c_MASTER_CPU) <= wb_i;
+  wb_o                       <= cnx_slave_out(c_MASTER_CPU);
 
-  U_Intercon : xwb_crossbar
-    generic map (
+  U_Intercon : xwb_sdb_crossbar
+    generic map(
       g_num_masters => 2,
       g_num_slaves  => c_NUM_WB_SLAVES,
       g_registered  => true,
-      g_address     => c_cnx_base_addr,
-      g_mask        => c_cnx_base_mask)
-    port map (
+      g_wraparound  => true,
+      g_layout      => c_rtbar_layout,
+      g_sdb_addr    => c_rtbar_sdb_address)
+    port map(
       clk_sys_i => clk_sys_i,
       rst_n_i   => rst_n_i,
       slave_i   => cnx_slave_in,
@@ -279,8 +267,8 @@ begin  -- rtl
       clk_sys_i => clk_sys_i,
       rst_n_i   => cpu_reset_n,
       irq_i     => cpu_irq_vec,
-      dwb_o     => cnx_slave_in(1),
-      dwb_i     => cnx_slave_out(1),
+      dwb_o     => cnx_slave_in(c_MASTER_LM32),
+      dwb_i     => cnx_slave_out(c_MASTER_LM32),
       iwb_o     => cpu_iwb_out,
       iwb_i     => cpu_iwb_in);
 

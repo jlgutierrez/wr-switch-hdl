@@ -48,6 +48,7 @@ use work.wrsw_top_pkg.all;
 use work.wrsw_shared_types_pkg.all;
 use work.wrsw_tru_pkg.all;
 use work.wrsw_tatsu_pkg.all;
+use work.wrs_sdb_pkg.all;
 
 library UNISIM;
 use UNISIM.vcomponents.all;
@@ -214,48 +215,6 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_HWIU         : integer := 12;
   --constant c_SLAVE_DUMMY        : integer := 13;
 
-  constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
-    (
-      --x"00070000",                      -- Dummy counters
-      x"00059000",                      -- HWIU
-      x"00058000",                      -- PStats counters
-      x"00057000",                      -- TATSU
-      x"00056000",                      -- TRU
-      x"00055000",                      -- PWM Controller
-      x"00054000",                      -- I2C (0, 1, Sensors)
-      x"00053000",                      -- GPIO
-      x"00060000",                      -- RTU
-      x"00051000",                      -- TXTsu
-      x"00050000",                      -- VIC
-      x"00030000",                      -- Endpoint 0 (following endpoints will
-                                        -- be at 0x30000 + N * 0x400)
-      x"00020000",                      -- NIC
-      x"00000000");                     -- RT Subsys 
-
-  constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
-    (--x"000ff000",
-     x"000ff000",
-     x"000ff000",
-     x"000ff000",
-     x"000ff000",
-     x"000ff000",
-     x"000ff000",
-     x"000ff000",
-     x"000f0000",
-     x"000ff000",
-     x"000ff000",
-     x"000f0000",
-     x"000f0000",
-     x"000e0000");
-
-  function f_gen_endpoint_addresses return t_wishbone_address_array is
-    variable tmp : t_wishbone_address_array(c_MAX_PORTS-1 downto 0);
-  begin
-    for i in 0 to c_MAX_PORTS-1 loop
-      tmp(i) := std_logic_vector(to_unsigned(i * 1024, c_wishbone_address_width));
-    end loop;  -- i
-    return tmp;
-  end f_gen_endpoint_addresses;
 
   function f_bool2int(x : boolean) return integer is
   begin
@@ -275,10 +234,6 @@ architecture rtl of scb_top_bare is
     end if;
   end f_logic2bool;
 
-  constant c_cnx_endpoint_addr : t_wishbone_address_array(c_MAX_PORTS-1 downto 0) :=
-    f_gen_endpoint_addresses;
-  constant c_cnx_endpoint_mask : t_wishbone_address_array(c_MAX_PORTS-1 downto 0) :=
-    (others => x"0000FC00");
 
   signal cnx_slave_in  : t_wishbone_slave_in_array(0 downto 0);
   signal cnx_slave_out : t_wishbone_slave_out_array(0 downto 0);
@@ -491,13 +446,14 @@ begin
 
 
 
-  U_Intercon : xwb_crossbar
+  U_Intercon : xwb_sdb_crossbar
     generic map (
       g_num_masters => 1,
       g_num_slaves  => c_NUM_WB_SLAVES,
       g_registered  => true,
-      g_address     => c_cnx_base_addr,
-      g_mask        => c_cnx_base_mask)
+      g_wraparound  => true,
+      g_layout      => c_layout,
+      g_sdb_addr    => c_sdb_address)
     port map (
       clk_sys_i => clk_sys,
       rst_n_i   => rst_n_sys,
@@ -612,13 +568,14 @@ begin
     rtu_rsp(c_NUM_PORTS).hp <= '0';
     fc_rx_pause(c_NUM_PORTS)       <= c_zero_pause; -- no pause for NIC  
     
-    U_Endpoint_Fanout : xwb_crossbar
+    U_Endpoint_Fanout : xwb_sdb_crossbar
       generic map (
         g_num_masters => 1,
         g_num_slaves  => c_MAX_PORTS,
         g_registered  => true,
-        g_address     => c_cnx_endpoint_addr,
-        g_mask        => c_cnx_endpoint_mask)
+        g_wraparound  => true,
+        g_layout      => c_epbar_layout,
+        g_sdb_addr    => c_epbar_sdb_address)
       port map (
         clk_sys_i  => clk_sys,
         rst_n_i    => rst_n_sys,
