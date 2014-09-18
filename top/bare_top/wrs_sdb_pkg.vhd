@@ -39,6 +39,7 @@ use ieee.std_logic_1164.all;
 use work.wishbone_pkg.all;
 use work.wrcore_pkg.all;
 use work.endpoint_pkg.all;
+use work.synthesis_descriptor.all;
 
 package wrs_sdb_pkg is
 
@@ -225,7 +226,7 @@ package wrs_sdb_pkg is
     f_xwb_bridge_layout_sdb(true, c_epbar_layout, c_epbar_sdb_address);
 
   -- WRS main crossbar
-  constant c_layout : t_sdb_record_array(12 downto 0) :=
+  constant c_layout : t_sdb_record_array(12+4 downto 0) :=
     (0  => f_sdb_embed_bridge(c_rtbar_bridge_sdb,   x"00000000"), --RT subsystem
      1  => f_sdb_embed_device(c_xwrsw_nic_sdb,      x"00020000"), --NIC
      2  => f_sdb_embed_bridge(c_epbar_bridge_sdb,   x"00030000"), --Endpoints
@@ -238,7 +239,11 @@ package wrs_sdb_pkg is
      9  => f_sdb_embed_device(c_xwrsw_tru_sdb,      x"00056000"), --TRU
      10 => f_sdb_embed_device(c_xwrsw_tatsu_sdb,    x"00057000"), --TATSU
      11 => f_sdb_embed_device(c_xwrsw_pstats_sdb,   x"00058000"), --PSTATS
-     12 => f_sdb_embed_device(c_xwrsw_hwiu_sdb,     x"00059000"));--HWIU
+     12 => f_sdb_embed_device(c_xwrsw_hwiu_sdb,     x"00059000"), --HWIU
+     13 => f_sdb_embed_repo_url(c_sdb_repo_url),
+     14 => f_sdb_embed_synthesis(c_sdb_top_syn_info),
+     15 => f_sdb_embed_synthesis(c_sdb_general_cores_syn_info),
+     16 => f_sdb_embed_synthesis(c_sdb_wr_cores_syn_info));
   constant c_sdb_address  : t_wishbone_address := x"00070000";
 
 end wrs_sdb_pkg;

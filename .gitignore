@@ -12,3 +12,4 @@ fifo_generator_v6_1
 *.xdl
 build_wb.sh
 doc/
+synthesis_descriptor.vhd
