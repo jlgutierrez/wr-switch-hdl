@@ -80,7 +80,7 @@ entity scb_top_bare is
     -- for re-phasing the 10 MHz input as well as clocking the 
     clk_aux_i : in std_logic;
 
-		clk_ext_mul_i	:	in std_logic;
+		clk_ext_mul_i	:	in std_logic :='0';
 
     -- Muxed system clock
     clk_sys_o : out std_logic;
