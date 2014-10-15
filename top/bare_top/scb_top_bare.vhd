@@ -450,6 +450,8 @@ architecture rtl of scb_top_bare is
   signal ep_dbg_tx_pcs_rd_array : t_ep_dbg_tx_pcs_array(g_num_ports-1 downto 0);
   signal dbg_chps_id          : std_logic_vector(7 downto 0);
   
+  signal ep_port_status        : std_logic_vector(g_num_ports-1 downto 0);
+  
 begin
 
 
@@ -571,6 +573,7 @@ begin
       pll_cs_n_o    => pll_cs_n_o,
       pll_sync_n_o  => pll_sync_n_o,
       pll_reset_n_o => pll_reset_n_o,
+      clk_rx_status_i => ep_port_status,
       spll_dbg_o    => spll_dbg_o);
 
   U_IRQ_Controller : xwb_vic
@@ -737,6 +740,8 @@ begin
       ---------------------------
 
       clk_rx_vec(i) <= phys_i(i).rx_clk;
+
+      ep_port_status(i) <=  ep2tru(i).status;
 
     end generate gen_endpoints_and_phys;
 

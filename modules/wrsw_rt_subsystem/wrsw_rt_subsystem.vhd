@@ -53,7 +53,7 @@ entity wrsw_rt_subsystem is
     clk_dmtd_i : in std_logic;
     clk_rx_i   : in std_logic_vector(g_num_rx_clocks-1 downto 0);
     clk_ext_i  : in std_logic;
-		clk_ext_mul_i	:	in std_logic;
+    clk_ext_mul_i : in std_logic;
 
     rst_n_i : in  std_logic;
     rst_n_o : out std_logic;
@@ -109,6 +109,10 @@ entity wrsw_rt_subsystem is
     pll_sync_n_o  : out std_logic;
     pll_reset_n_o : out std_logic;
 
+    -- bit per rx clock, indicates whether the clocks are OK (UP) or not reliabie (DOWN)
+    -- used for switchover between them
+    clk_rx_status_i : in  std_logic_vector(g_num_rx_clocks-1 downto 0) :=(others=>'0'); 
+
     -- Debug
     spll_dbg_o  : out std_logic_vector(5 downto 0)
     );
@@ -149,6 +153,7 @@ architecture rtl of wrsw_rt_subsystem is
     	out_status_o		: out std_logic_vector(4*g_num_outputs-1 downto 0);
       slave_i         : in  t_wishbone_slave_in;
       slave_o         : out t_wishbone_slave_out;
+      clk_rx_status_i : in  std_logic_vector(g_num_ref_inputs-1 downto 0) :=(others=>'0');
       debug_o         : out std_logic_vector(5 downto 0);
       dbg_fifo_irq_o  : out std_logic);
   end component;
@@ -348,6 +353,7 @@ begin  -- rtl
       out_locked_o    => open,
       slave_i         => cnx_master_out(c_SLAVE_SOFTPLL),
       slave_o         => cnx_master_in(c_SLAVE_SOFTPLL),
+      clk_rx_status_i => clk_rx_status_i,
       debug_o         => spll_dbg_o);
   
   U_PPS_Gen : xwr_pps_gen

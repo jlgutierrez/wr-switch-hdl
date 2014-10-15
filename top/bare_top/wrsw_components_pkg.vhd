@@ -229,7 +229,8 @@ package wrsw_components_pkg is
       pll_sck_o           : out std_logic;
       pll_cs_n_o          : out std_logic;
       pll_sync_n_o        : out std_logic;
-      pll_reset_n_o       : out std_logic);
+      pll_reset_n_o       : out std_logic;
+      clk_rx_status_i     : in  std_logic_vector(g_num_rx_clocks-1 downto 0) :=(others=>'0'));
   end component;
 
   component chipscope_icon
