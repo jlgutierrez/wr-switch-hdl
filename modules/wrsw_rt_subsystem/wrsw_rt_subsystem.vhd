@@ -291,7 +291,7 @@ begin  -- rtl
 
   U_DPRAM : xwb_dpram
     generic map (
-      g_size                  => 16384,
+      g_size                  => 90112/4, --16384,
       g_init_file             => "",
       g_slave1_interface_mode => PIPELINED,
       g_slave2_interface_mode => PIPELINED,
