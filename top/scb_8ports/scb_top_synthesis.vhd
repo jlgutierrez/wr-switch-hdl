@@ -70,10 +70,6 @@ entity scb_top_synthesis is
     fpga_clk_dmtd_p_i : in std_logic;
     fpga_clk_dmtd_n_i : in std_logic;
 
-    -- 250/10 MHz aux clock for Swcore/rephasing AD9516 in master mode
-    -- (from the AD9516 PLL output QDRII_200CLK)
-    fpga_clk_aux_p_i : in std_logic;
-    fpga_clk_aux_n_i : in std_logic;
 
     -- 10MHz out clock generated from oserdes
     clk_aux_p_o  : out std_logic;
@@ -278,7 +274,6 @@ architecture Behavioral of scb_top_synthesis is
   signal clk_gtx8_11  : std_logic;
   signal clk_gtx12_15 : std_logic;
   signal clk_gtx16_19 : std_logic;
-  signal clk_aux_unused : std_logic;
 
   signal clk_gtx : std_logic_vector(c_NUM_PHYS-1 downto 0);
 
@@ -482,15 +477,6 @@ begin
       I  => fpga_clk_ref_p_i,
       IB => fpga_clk_ref_n_i);
 
-  U_Buf_CLK_Sys : IBUFGDS
-    generic map (
-      DIFF_TERM  => true,
-      IOSTANDARD => "LVDS_25")
-    port map (
-      --O  => clk_aux,
-      O  => clk_aux_unused,
-      I  => fpga_clk_aux_p_i,
-      IB => fpga_clk_aux_n_i);
 
 
   U_Buf_CLK_DMTD : IBUFGDS

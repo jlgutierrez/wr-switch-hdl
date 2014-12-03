@@ -7,9 +7,6 @@ NET "fpga_clk_25mhz_n_i"  LOC=K23;
 NET "fpga_clk_ref_p_i"  LOC=J9; 
 NET "fpga_clk_ref_n_i"  LOC=H9;
 
-NET "fpga_clk_aux_p_i"  LOC=A10; 
-NET "fpga_clk_aux_n_i"  LOC=B10;
-
 NET "fpga_clk_dmtd_p_i"  LOC=L23; 
 NET "fpga_clk_dmtd_n_i"  LOC=M22;
 
@@ -297,10 +294,6 @@ TIMESPEC TS_fpga_clk_ref_n_i = PERIOD "fpga_clk_ref_n_i" 16 ns HIGH 50%;
 NET "fpga_clk_ref_p_i" TNM_NET = fpga_clk_ref_p_i;
 TIMESPEC TS_fpga_clk_ref_p_i = PERIOD "fpga_clk_ref_p_i" 16 ns HIGH 50%;
 
-NET "fpga_clk_aux_n_i" TNM_NET = fpga_clk_aux_n_i;
-TIMESPEC TS_fpga_clk_aux_n_i = PERIOD "fpga_clk_aux_n_i" 5 ns HIGH 50%;
-NET "fpga_clk_aux_p_i" TNM_NET = fpga_clk_aux_p_i;
-TIMESPEC TS_fpga_clk_aux_p_i = PERIOD "fpga_clk_aux_p_i" 5 ns HIGH 50%;
 #Created by Constraints Editor (xc6vlx130t-ff1156-1) - 2012/03/19
 
 #NET "gen_phys[0].U_PHY/rx_rec_clk_bufin" TNM_NET = gen_phys[0].U_PHY/rx_rec_clk_bufin;
