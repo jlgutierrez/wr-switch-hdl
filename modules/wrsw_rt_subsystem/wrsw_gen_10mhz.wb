@@ -1,0 +1,98 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+-- White-Rabbit 10 MHz Clock Generation
+-- author: Grzegorz Daniluk <grzegorz.daniluk@cern.ch>
+--
+-- Use wbgen2 to generate code, documentation and more.
+-- wbgen2 is available at:
+-- http://www.ohwr.org/projects/wishbone-gen
+--
+
+peripheral {
+  name = "WR Switch aux clock generation module";
+  decription = "The module allows gerating WR-aligned clock of a given \
+frequency, duty cycle and phase. By default it is configured to generate 10MHz \
+signal.";
+  hdl_entity = "gen10_wishbone_slave";
+  prefix = "gen10";
+
+  reg {
+    name = "Period Register";
+    prefix = "PR";
+
+    field {
+      name = "Half period width";
+      description = "Defined as a number of 2ns cycles.";
+      prefix = "HP_WIDTH";
+      size = 16;
+      type = PASS_THROUGH;
+      access_dev = READ_ONLY;
+      access_bus = READ_WRITE;
+    };
+  };
+
+  reg {
+    name = "Duty Cycle Register";
+    prefix = "DCR";
+
+    field {
+      name = "Low state width";
+      description = "Defined as a number of 2ns cycles. \
+Used together with PR register can be used to generate a square wave with a duty \
+cycle different than 0,5.";
+      prefix = "LOW_WIDTH";
+      size = 16;
+      type = PASS_THROUGH;
+      access_dev = READ_ONLY;
+      access_bus = READ_WRITE;
+    };
+  };
+
+  reg {
+    name = "Coarse Shift Register";
+    prefix = "CSR";
+    
+    field {
+      name = "Coarse shift value in 2ns cycles.";
+      description = "MUST be not larger than the required clock period";
+      size = 16;
+      type = PASS_THROUGH;
+      access_dev = READ_ONLY;
+      access_bus = READ_WRITE;
+    };
+  };
+
+  reg {
+    name = "Precise Shift Register";
+    prefix = "PSR";
+
+    field {
+      name = "Required precise shift value in taps fed to IODelay";
+      prefix = "SET_VAL";
+      size = 5;
+      type = PASS_THROUGH;
+      access_dev = READ_ONLY;
+      access_bus = WRITE_ONLY;
+    };
+
+    field {
+      name = "Current precise shift read from IODelay";
+      prefix = "CUR_VAL";
+			align = 16;
+      size = 5;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+
+		field {
+			name = "IOdelay locked";
+			prefix = "LCK";
+			align = 31;
+			size = 1;
+			type = BIT;
+			access_dev = WRITE_ONLY;
+			access_bus = READ_ONLY;
+		};
+  };
+
+}

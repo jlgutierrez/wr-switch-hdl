@@ -13,6 +13,9 @@ NET "fpga_clk_aux_n_i"  LOC=B10;
 NET "fpga_clk_dmtd_p_i"  LOC=L23; 
 NET "fpga_clk_dmtd_n_i"  LOC=M22;
 
+NET "clk_aux_p_o" LOC=B20;
+NET "clk_aux_n_o" LOC=C19;
+
 NET "sensors_scl_b" LOC=G13;
 NET "sensors_sda_b" LOC=H14;
 

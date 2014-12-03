@@ -55,6 +55,8 @@ entity wrsw_rt_subsystem is
     clk_rx_i   : in std_logic_vector(g_num_rx_clocks-1 downto 0);
     clk_ext_i  : in std_logic;
 		clk_ext_mul_i	:	in std_logic;
+    clk_aux_p_o  : out std_logic;
+    clk_aux_n_o  : out std_logic;
 
     rst_n_i : in  std_logic;
     rst_n_o : out std_logic;
@@ -177,6 +179,20 @@ architecture rtl of wrsw_rt_subsystem is
       tm_time_valid_o : out std_logic);
   end component;
 
+  component xwrsw_gen_10mhz
+    generic (
+      g_interface_mode      : t_wishbone_interface_mode      := PIPELINED;
+      g_address_granularity : t_wishbone_address_granularity := WORD);
+    port (
+      rst_n_i     : in std_logic;
+      clk_i       : in std_logic;
+      pps_i       : in  std_logic;
+      pps_valid_i : in  std_logic;
+      clk_aux_p_o : out std_logic;
+      clk_aux_n_o : out std_logic;
+      slave_i     : in  t_wishbone_slave_in;
+      slave_o     : out t_wishbone_slave_out);
+  end component;
 
 
 -- interconnect layout:
@@ -188,7 +204,7 @@ architecture rtl of wrsw_rt_subsystem is
 -- 0x10400 - 0x10500: Timer
 
   constant c_NUM_GPIO_PINS : integer := 4;
-  constant c_NUM_WB_SLAVES : integer := 7;
+  constant c_NUM_WB_SLAVES : integer := 8;
 
   constant c_MASTER_CPU    : integer := 0;
   constant c_MASTER_LM32   : integer := 1;
@@ -200,7 +216,7 @@ architecture rtl of wrsw_rt_subsystem is
   constant c_SLAVE_GPIO    : integer := 4;
   constant c_SLAVE_TIMER   : integer := 5;
   constant c_SLAVE_PPSGEN  : integer := 6;
-
+  constant c_SLAVE_GEN10   : integer := 7;
 
 
   signal cnx_slave_in   : t_wishbone_slave_in_array(1 downto 0);
@@ -222,6 +238,7 @@ architecture rtl of wrsw_rt_subsystem is
 
   signal clk_rx_vec : std_logic_vector(g_num_rx_clocks-1 downto 0);
 	signal pps_csync	:	std_logic;
+  signal pps_valid  : std_logic;
 
   function f_pick (
     cond     : boolean;
@@ -355,12 +372,13 @@ begin  -- rtl
       pps_in_i        => pps_ext_i,
       pps_csync_o     => pps_csync,
       pps_out_o       => pps_ext_o,
-      pps_valid_o     => pps_valid_o,
+      pps_valid_o     => pps_valid,
       tm_utc_o        => tm_utc_o,
       tm_cycles_o     => tm_cycles_o,
       tm_time_valid_o => tm_time_valid_o);
 
 	pps_csync_o	<= pps_csync;
+  pps_valid_o <= pps_valid;
 
   cpu_irq_vec(0)           <= cnx_master_in(2).int;
   cpu_irq_vec(31 downto 1) <= (others => '0');
@@ -400,8 +418,6 @@ begin  -- rtl
       gpio_in_i  => gpio_in,
       gpio_oen_o => open);
 
-
-
   U_Timer : xwb_tics
     generic map (
       g_interface_mode      => PIPELINED,
@@ -413,6 +429,20 @@ begin  -- rtl
       slave_i   => cnx_master_out(c_SLAVE_TIMER),
       slave_o   => cnx_master_in(c_SLAVE_TIMER),
       desc_o    => open);
+  
+   U_GEN_10_MHZ: xwrsw_gen_10mhz
+    generic map (
+      g_interface_mode      => PIPELINED,
+      g_address_granularity => BYTE)
+    port map (
+      rst_n_i     => rst_n_i,
+      clk_i       => clk_ref_i,
+      pps_i       => pps_csync,
+      pps_valid_i => pps_valid,
+      clk_aux_p_o => clk_aux_p_o,
+      clk_aux_n_o => clk_aux_n_o,
+      slave_i     => cnx_master_out(c_SLAVE_GEN10),
+      slave_o     => cnx_master_in(c_SLAVE_GEN10));
 
   sel_clk_sys_o <= gpio_out(0);
   pll_reset_n_o <= gpio_out(1);

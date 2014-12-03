@@ -83,6 +83,9 @@ entity scb_top_bare is
 
 		clk_ext_mul_i	:	in std_logic;
 
+    clk_aux_p_o  : out std_logic; -- going to CLK2 SMC on the front pannel, by
+    clk_aux_n_o  : out std_logic; -- default it's 10MHz, but is configurable
+
     -- Muxed system clock
     clk_sys_o : out std_logic;
 
@@ -496,6 +499,8 @@ begin
       clk_rx_i            => clk_rx_vec,
       clk_ext_i           => pll_status_i,  -- FIXME: UGLY HACK
 			clk_ext_mul_i				=> clk_ext_mul_i,
+      clk_aux_p_o         => clk_aux_p_o,
+      clk_aux_n_o         => clk_aux_n_o,
       rst_n_i             => rst_n_sys,
       rst_n_o             => rst_n_periph,
       wb_i                => cnx_master_out(c_SLAVE_RT_SUBSYSTEM),
@@ -1068,7 +1073,6 @@ begin
   clk_sel_o         <= '0';
   clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
   clk_sys_o         <= clk_sys;
-
 
   gen_muxed_CS: if g_with_muxed_CS = true generate
     CS_ICON : chipscope_icon

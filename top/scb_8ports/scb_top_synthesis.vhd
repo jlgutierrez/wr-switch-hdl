@@ -75,6 +75,10 @@ entity scb_top_synthesis is
     fpga_clk_aux_p_i : in std_logic;
     fpga_clk_aux_n_i : in std_logic;
 
+    -- 10MHz out clock generated from oserdes
+    clk_aux_p_o  : out std_logic;
+    clk_aux_n_o  : out std_logic;
+
     -------------------------------------------------------------------------------
     -- Atmel EBI bus
     -------------------------------------------------------------------------------
@@ -318,6 +322,8 @@ architecture Behavioral of scb_top_synthesis is
       clk_dmtd_i          : in  std_logic;
       clk_aux_i           : in  std_logic;
 			clk_ext_mul_i				:	in	std_logic;
+      clk_aux_p_o         : out std_logic;
+      clk_aux_n_o         : out std_logic;
       clk_sys_o           : out std_logic;
       cpu_wb_i            : in  t_wishbone_slave_in;
       cpu_wb_o            : out t_wishbone_slave_out;
@@ -715,6 +721,8 @@ begin
       clk_sys_o           => clk_sys,
       clk_aux_i           => clk_aux,
 			clk_ext_mul_i				=> clk_ext_mul,
+      clk_aux_p_o         => clk_aux_p_o,
+      clk_aux_n_o         => clk_aux_n_o,
       cpu_wb_i            => top_master_out,
       cpu_wb_o            => top_master_in,
       cpu_irq_n_o         => cpu_irq_n_o,

@@ -188,16 +188,33 @@ package wrs_sdb_pkg is
         date      => x"20140916",
         name      => "WRSW HWIU          ")));
 
+  constant c_xwrsw_gen_10mhz : t_sdb_device := (
+    abi_class     => x"0000",
+    abi_ver_major => x"01",
+    abi_ver_minor => x"01",
+    wbd_endian    => c_sdb_endian_big,
+    wbd_width     => x"7",
+    sdb_component => (
+      addr_first  => x"0000000000000000",
+      addr_last   => x"00000000000000ff",
+      product     => (
+        vendor_id => x"000000000000CE42",  -- CERN
+        device_id => x"4765feb0",          -- echo -n "xwrsw_gen_10mhz" | md5sum - | cut -c1-8
+        version   => x"00000001",
+        date      => x"20141120",
+        name      => "WRSW GEN 10MHz     ")));
+
   -- RT subsystem crossbar
-  constant c_rtbar_layout : t_sdb_record_array(6 downto 0) :=
+  constant c_rtbar_layout : t_sdb_record_array(7 downto 0) :=
     (0 => f_sdb_embed_device(f_xwb_dpram(16384),   x"00000000"),
      1 => f_sdb_embed_device(c_wrc_periph1_sdb,    x"00010000"), --UART
      2 => f_sdb_embed_device(c_xwr_softpll_ng_sdb, x"00010100"), --SoftPLL
      3 => f_sdb_embed_device(c_xwb_spi_sdb,        x"00010200"), --SPI
      4 => f_sdb_embed_device(c_xwb_gpio_port_sdb,  x"00010300"), --GPIO
      5 => f_sdb_embed_device(c_xwb_tics_sdb,       x"00010400"), --TICS
-     6 => f_sdb_embed_device(c_xwr_pps_gen_sdb,    x"00010500"));--PPSgen
-  constant c_rtbar_sdb_address : t_wishbone_address := x"00010600";
+     6 => f_sdb_embed_device(c_xwr_pps_gen_sdb,    x"00010500"), --PPSgen
+     7 => f_sdb_embed_device(c_xwrsw_gen_10mhz,    x"00010600"));--GEN 10MHz
+  constant c_rtbar_sdb_address : t_wishbone_address := x"00010800";
   constant c_rtbar_bridge_sdb : t_sdb_bridge :=
     f_xwb_bridge_layout_sdb(true, c_rtbar_layout, c_rtbar_sdb_address);
 
