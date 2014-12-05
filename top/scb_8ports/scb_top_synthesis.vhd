@@ -74,6 +74,8 @@ entity scb_top_synthesis is
     -- 10MHz out clock generated from oserdes
     clk_aux_p_o  : out std_logic;
     clk_aux_n_o  : out std_logic;
+    clk_500_o    : out std_logic;
+    clk_sys_dbg_o: out std_logic;
 
     -------------------------------------------------------------------------------
     -- Atmel EBI bus
@@ -319,6 +321,7 @@ architecture Behavioral of scb_top_synthesis is
 			clk_ext_mul_i				:	in	std_logic;
       clk_aux_p_o         : out std_logic;
       clk_aux_n_o         : out std_logic;
+      clk_500_o           : out std_logic;
       clk_sys_o           : out std_logic;
       cpu_wb_i            : in  t_wishbone_slave_in;
       cpu_wb_o            : out t_wishbone_slave_out;
@@ -384,6 +387,7 @@ architecture Behavioral of scb_top_synthesis is
   signal TRIG3   : std_logic_vector(31 downto 0);
 begin
 
+  clk_sys_dbg_o <= clk_sys;
 
   --chipscope_icon_1 : chipscope_icon
   --  port map (
@@ -709,6 +713,7 @@ begin
 			clk_ext_mul_i				=> clk_ext_mul,
       clk_aux_p_o         => clk_aux_p_o,
       clk_aux_n_o         => clk_aux_n_o,
+      clk_500_o           => clk_500_o,
       cpu_wb_i            => top_master_out,
       cpu_wb_o            => top_master_in,
       cpu_irq_n_o         => cpu_irq_n_o,

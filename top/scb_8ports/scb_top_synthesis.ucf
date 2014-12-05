@@ -12,17 +12,19 @@ NET "fpga_clk_dmtd_n_i"  LOC=M22;
 
 NET "clk_aux_p_o" LOC=B20;
 NET "clk_aux_n_o" LOC=C19;
+NET "clk_500_o"   LOC=AM33;
+NET "clk_sys_dbg_o" LOC=AL33;
 
 NET "sensors_scl_b" LOC=G13;
 NET "sensors_sda_b" LOC=H14;
 
-NET "dbg_clk_ext_o" LOC=AM33;
-NET "spll_dbg_o<0>" LOC=AL33;
-NET "spll_dbg_o<1>" LOC=AE29;
-NET "spll_dbg_o<2>" LOC=AE28;
-NET "spll_dbg_o<3>" LOC=AM32;
-NET "spll_dbg_o<4>" LOC=AN32;
-NET "spll_dbg_o<5>" LOC=AP33;
+#NET "dbg_clk_ext_o" LOC=AM33;
+#NET "spll_dbg_o<0>" LOC=AL33;
+#NET "spll_dbg_o<1>" LOC=AE29;
+#NET "spll_dbg_o<2>" LOC=AE28;
+#NET "spll_dbg_o<3>" LOC=AM32;
+#NET "spll_dbg_o<4>" LOC=AN32;
+#NET "spll_dbg_o<5>" LOC=AP33;
 
 #EBI BUS
 #NET "cpu_clk_i" LOC="";

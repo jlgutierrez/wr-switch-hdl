@@ -207,6 +207,7 @@ package wrsw_components_pkg is
       clk_aux_i           : in  std_logic;
       clk_aux_p_o         : out std_logic;
       clk_aux_n_o         : out std_logic;
+      clk_500_o           : out std_logic;
       rst_n_i             : in  std_logic;
       rst_n_o             : out std_logic;
       wb_i                : in  t_wishbone_slave_in;

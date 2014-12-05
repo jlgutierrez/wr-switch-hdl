@@ -60,6 +60,7 @@ entity xwrsw_gen_10mhz is
 
     clk_aux_p_o  : out std_logic;
     clk_aux_n_o  : out std_logic;
+    clk_500_o    : out std_logic;
 
     slave_i   : in  t_wishbone_slave_in := cc_dummy_slave_in;
     slave_o   : out t_wishbone_slave_out);
@@ -122,6 +123,7 @@ architecture behav of xwrsw_gen_10mhz is
   constant c_HALF   : integer := 25;-- default high/low width for 10MHz
 
   signal clk_500    : std_logic;
+  signal clk_500_buf: std_logic;
   signal clk_fb     : std_logic;
   signal clk_fb_buf : std_logic;
   signal rst        : std_logic;
@@ -217,6 +219,13 @@ begin
     O => clk_fb_buf,
     I => clk_fb);
 
+  U_BUFG_500: BUFG
+  port map(
+    O => clk_500_buf,
+    I => clk_500);
+
+  clk_500_o <= '0'; --clk_500_buf;
+
   U_10MHZ_SERDES: oserdes_8_to_1
   generic map(
     dev_w => c_DATA_W)
@@ -224,14 +233,14 @@ begin
     DATA_OUT_FROM_DEVICE => sd_data,
     DATA_OUT_TO_PINS_P   => sd_out_p,
     DATA_OUT_TO_PINS_N   => sd_out_n,
-    DELAY_RESET          => wb_regs_out.psr_set_val_wr_o,
+    DELAY_RESET          => wb_regs_out.ior_tap_set_wr_o,
     DELAY_DATA_CE        => (others=>'0'),
     DELAY_DATA_INC       => (others=>'0'),
-    DELAY_TAP_IN         => wb_regs_out.psr_set_val_o,
-    DELAY_TAP_OUT        => wb_regs_in.psr_cur_val_i,
-    DELAY_LOCKED         => wb_regs_in.psr_lck_i,
+    DELAY_TAP_IN         => wb_regs_out.ior_tap_set_o,
+    DELAY_TAP_OUT        => wb_regs_in.ior_tap_cur_i,
+    DELAY_LOCKED         => wb_regs_in.ior_lck_i,
     REF_CLOCK            => clk_i,
-    CLK_IN               => clk_500,
+    CLK_IN               => clk_500_buf,
     CLK_DIV_IN           => clk_i,
     IO_RESET             => rst);
 

@@ -62,12 +62,16 @@ cycle different than 0,5.";
   };
 
   reg {
-    name = "Precise Shift Register";
-    prefix = "PSR";
+    name = "IODelay Register";
+		description = "IODelay may be used if generated signal is in phase with 500MHz \
+clock from AD9516 fed to the flip-flop. In that situation clock signal on CLK2 \
+output will be jittering by 2ns. Phase shifting it with IODelay eliminates \
+this problem.";
+    prefix = "IOR";
 
     field {
-      name = "Required precise shift value in taps fed to IODelay";
-      prefix = "SET_VAL";
+      name = "Required delay value";
+      prefix = "TAP_SET";
       size = 5;
       type = PASS_THROUGH;
       access_dev = READ_ONLY;
@@ -75,9 +79,9 @@ cycle different than 0,5.";
     };
 
     field {
-      name = "Current precise shift read from IODelay";
-      prefix = "CUR_VAL";
-			align = 16;
+      name = "Current delay value read from IODelay";
+      prefix = "TAP_CUR";
+			align = 8;
       size = 5;
       type = SLV;
       access_dev = WRITE_ONLY;

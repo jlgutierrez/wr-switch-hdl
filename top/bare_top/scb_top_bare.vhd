@@ -86,6 +86,8 @@ entity scb_top_bare is
     clk_aux_p_o  : out std_logic; -- going to CLK2 SMC on the front pannel, by
     clk_aux_n_o  : out std_logic; -- default it's 10MHz, but is configurable
 
+    clk_500_o    :  out std_logic;
+
     -- Muxed system clock
     clk_sys_o : out std_logic;
 
@@ -501,6 +503,7 @@ begin
 			clk_ext_mul_i				=> clk_ext_mul_i,
       clk_aux_p_o         => clk_aux_p_o,
       clk_aux_n_o         => clk_aux_n_o,
+      clk_500_o           => clk_500_o,
       rst_n_i             => rst_n_sys,
       rst_n_o             => rst_n_periph,
       wb_i                => cnx_master_out(c_SLAVE_RT_SUBSYSTEM),

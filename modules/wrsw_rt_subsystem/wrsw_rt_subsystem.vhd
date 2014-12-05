@@ -57,6 +57,7 @@ entity wrsw_rt_subsystem is
 		clk_ext_mul_i	:	in std_logic;
     clk_aux_p_o  : out std_logic;
     clk_aux_n_o  : out std_logic;
+    clk_500_o   : out std_logic;
 
     rst_n_i : in  std_logic;
     rst_n_o : out std_logic;
@@ -190,6 +191,7 @@ architecture rtl of wrsw_rt_subsystem is
       pps_valid_i : in  std_logic;
       clk_aux_p_o : out std_logic;
       clk_aux_n_o : out std_logic;
+      clk_500_o   : out std_logic;
       slave_i     : in  t_wishbone_slave_in;
       slave_o     : out t_wishbone_slave_out);
   end component;
@@ -436,11 +438,12 @@ begin  -- rtl
       g_address_granularity => BYTE)
     port map (
       rst_n_i     => rst_n_i,
-      clk_i       => clk_ref_i,
+      clk_i       => clk_sys_i,
       pps_i       => pps_csync,
       pps_valid_i => pps_valid,
       clk_aux_p_o => clk_aux_p_o,
       clk_aux_n_o => clk_aux_n_o,
+      clk_500_o   => clk_500_o,
       slave_i     => cnx_master_out(c_SLAVE_GEN10),
       slave_o     => cnx_master_in(c_SLAVE_GEN10));
 
