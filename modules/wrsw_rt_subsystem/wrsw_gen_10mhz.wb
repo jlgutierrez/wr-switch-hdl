@@ -99,4 +99,30 @@ this problem.";
 		};
   };
 
+	reg {
+		name = "PPS IODelay Register";
+		description = "Used to control IODelay attached to 1-PPS signal generated \
+from the switch. It can be used to preciesly align 1-PPS with CLK2 out.";
+		prefix = "PPS_IOR";
+
+    field {
+      name = "Required delay value";
+      prefix = "TAP_SET";
+      size = 5;
+      type = PASS_THROUGH;
+      access_dev = READ_ONLY;
+      access_bus = WRITE_ONLY;
+    };
+
+    field {
+      name = "Current delay value read from IODelay";
+      prefix = "TAP_CUR";
+			align = 8;
+      size = 5;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+	};
+
 }

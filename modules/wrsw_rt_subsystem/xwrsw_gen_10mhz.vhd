@@ -62,6 +62,12 @@ entity xwrsw_gen_10mhz is
     clk_aux_n_o  : out std_logic;
     clk_500_o    : out std_logic;
 
+    -- can be wired to IODelay component in top module for precise 1-PPS
+    -- alignment with clk_aux
+    ppsdel_tap_i    : in  std_logic_vector(4 downto 0) := (others=>'0');
+    ppsdel_tap_o    : out std_logic_vector(4 downto 0);
+    ppsdel_tap_wr_o : out std_logic;
+
     slave_i   : in  t_wishbone_slave_in := cc_dummy_slave_in;
     slave_o   : out t_wishbone_slave_out);
   attribute maxdelay : string;
@@ -74,7 +80,7 @@ architecture behav of xwrsw_gen_10mhz is
     port (
       rst_n_i    : in     std_logic;
       clk_sys_i  : in     std_logic;
-      wb_adr_i   : in     std_logic_vector(1 downto 0);
+      wb_adr_i   : in     std_logic_vector(2 downto 0);
       wb_dat_i   : in     std_logic_vector(31 downto 0);
       wb_dat_o   : out    std_logic_vector(31 downto 0);
       wb_cyc_i   : in     std_logic;
@@ -167,7 +173,7 @@ begin
     port map (
       rst_n_i   => rst_n_i,
       clk_sys_i => clk_i,
-      wb_adr_i  => wb_in.adr(1 downto 0),
+      wb_adr_i  => wb_in.adr(2 downto 0),
       wb_dat_i  => wb_in.dat,
       wb_dat_o  => wb_out.dat,
       wb_cyc_i  => wb_in.cyc,
@@ -178,6 +184,11 @@ begin
       wb_stall_o=> wb_out.stall,
       regs_i    => wb_regs_in,
       regs_o    => wb_regs_out);
+
+  wb_regs_in.pps_ior_tap_cur_i <= ppsdel_tap_i;
+  ppsdel_tap_o    <= wb_regs_out.pps_ior_tap_set_o;
+  ppsdel_tap_wr_o <= wb_regs_out.pps_ior_tap_set_wr_o;
+
 
   process(clk_i)
   begin

@@ -223,6 +223,9 @@ package wrsw_components_pkg is
       pps_p_o             : out std_logic;
       pps_raw_i           : in  std_logic;
       sel_clk_sys_o       : out std_logic;
+      ppsdel_tap_i        : in  std_logic_vector(4 downto 0) := (others=>'0');
+      ppsdel_tap_o        : out std_logic_vector(4 downto 0);
+      ppsdel_tap_wr_o     : out std_logic;
       tm_utc_o            : out std_logic_vector(39 downto 0);
       tm_cycles_o         : out std_logic_vector(27 downto 0);
       tm_time_valid_o     : out std_logic;

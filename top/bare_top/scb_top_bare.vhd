@@ -387,6 +387,10 @@ architecture rtl of scb_top_bare is
   signal tm_utc              : std_logic_vector(39 downto 0);
   signal tm_cycles           : std_logic_vector(27 downto 0);
   signal tm_time_valid       : std_logic;
+  signal pps_o_predelay      : std_logic;
+  signal ppsdel_tap_out      : std_logic_vector(4 downto 0);
+  signal ppsdel_tap_in       : std_logic_vector(4 downto 0);
+  signal ppsdel_tap_wr_in    : std_logic;
   signal shaper_request      : t_global_pause_request;
   signal shaper_drop_at_hp_ena : std_logic;
   signal   fc_rx_pause       : t_pause_request_array(g_num_ports+1-1 downto 0);
@@ -520,9 +524,13 @@ begin
       pps_csync_o => pps_csync,
       pps_valid_o => pps_valid,
       pps_ext_i   => pps_i,
-      pps_ext_o   => pps_o,
+      pps_ext_o   => pps_o_predelay,
 
       sel_clk_sys_o => sel_clk_sys,
+
+      ppsdel_tap_i    => ppsdel_tap_out,
+      ppsdel_tap_o    => ppsdel_tap_in,
+      ppsdel_tap_wr_o => ppsdel_tap_wr_in,
 
       tm_utc_o            => tm_utc, 
       tm_cycles_o         => tm_cycles, 
@@ -536,6 +544,32 @@ begin
       pll_sync_n_o  => pll_sync_n_o,
       pll_reset_n_o => pll_reset_n_o,
       spll_dbg_o    => spll_dbg_o);
+
+  U_DELAY_PPS: IODELAYE1
+    generic map (
+      CINVCTRL_SEL           => FALSE,
+      DELAY_SRC              => "O",
+      HIGH_PERFORMANCE_MODE  => TRUE,
+      IDELAY_TYPE            => "FIXED",
+      IDELAY_VALUE           => 0,
+      ODELAY_TYPE            => "VAR_LOADABLE",
+      ODELAY_VALUE           => 0,
+      REFCLK_FREQUENCY       => 200.0,
+      SIGNAL_PATTERN         => "DATA")
+    port map (
+      DATAOUT                => pps_o,
+      DATAIN                 => '0',
+      C                      => clk_sys,
+      CE                     => '0',
+      INC                    => '0',
+      IDATAIN                => '0',
+      ODATAIN                => pps_o_predelay,
+      RST                    => ppsdel_tap_wr_in,
+      T                      => '0',
+      CNTVALUEIN             => ppsdel_tap_in,
+      CNTVALUEOUT            => ppsdel_tap_out,
+      CLKIN                  => '0',
+      CINVCTRL               => '0');
 
   U_IRQ_Controller : xwb_vic
     generic map (

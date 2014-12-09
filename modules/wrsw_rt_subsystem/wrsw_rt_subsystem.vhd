@@ -99,6 +99,12 @@ entity wrsw_rt_subsystem is
     sel_clk_sys_o : out std_logic;      -- system clock selection: 0 = startup
                                         -- clock, 1 = PLL clock
 
+    -- Wired to IODelay in the top module for precise 1-PPS out alignment
+    -- with clk_aux
+    ppsdel_tap_i    : in  std_logic_vector(4 downto 0) := (others=>'0');
+    ppsdel_tap_o    : out std_logic_vector(4 downto 0);
+    ppsdel_tap_wr_o : out std_logic;
+
     -- WR timebase
     tm_utc_o        : out std_logic_vector(39 downto 0);
     tm_cycles_o     : out std_logic_vector(27 downto 0);
@@ -192,6 +198,9 @@ architecture rtl of wrsw_rt_subsystem is
       clk_aux_p_o : out std_logic;
       clk_aux_n_o : out std_logic;
       clk_500_o   : out std_logic;
+      ppsdel_tap_i    : in  std_logic_vector(4 downto 0);
+      ppsdel_tap_o    : out std_logic_vector(4 downto 0);
+      ppsdel_tap_wr_o : out std_logic;
       slave_i     : in  t_wishbone_slave_in;
       slave_o     : out t_wishbone_slave_out);
   end component;
@@ -444,6 +453,9 @@ begin  -- rtl
       clk_aux_p_o => clk_aux_p_o,
       clk_aux_n_o => clk_aux_n_o,
       clk_500_o   => clk_500_o,
+      ppsdel_tap_i    => ppsdel_tap_i,
+      ppsdel_tap_o    => ppsdel_tap_o,
+      ppsdel_tap_wr_o => ppsdel_tap_wr_o,
       slave_i     => cnx_master_out(c_SLAVE_GEN10),
       slave_o     => cnx_master_in(c_SLAVE_GEN10));
 
