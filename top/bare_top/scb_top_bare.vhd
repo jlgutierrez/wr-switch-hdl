@@ -634,6 +634,7 @@ begin
           g_address_granularity => BYTE,
           g_simulation          => g_simulation,
           g_tx_force_gap_length => 0,
+          g_tx_runt_padding     => false,
           g_pcs_16bit           => true,
           g_rx_buffer_size      => 1024,
           g_with_rx_buffer      => true,
