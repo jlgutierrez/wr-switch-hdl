@@ -203,6 +203,7 @@ entity xswc_input_block is
     -- HIGH if the word data is the last of the pck
     mpm_dlast_o   : out std_logic;
     -- indicates the base address of the page curretly written to
+    -- set by RCV FSM with start_page/inter_page addresses got from allocator
     mpm_pg_addr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
     -- if HIGH, new page_addr should be provided in the next cycle
     mpm_pg_req_i  : in  std_logic;
@@ -346,6 +347,7 @@ architecture syn of xswc_input_block is
   signal pckstart_usecnt          : std_logic_vector(g_usecount_width - 1 downto 0);
   signal pckstart_page_alloc_req  : std_logic;
   signal pckstart_usecnt_req      : std_logic;
+  -- pckstart_usecnt_write set by s_page_alloc and passed to MMU as usecnt value to be stored
   signal pckstart_usecnt_write    : std_logic_vector(g_usecount_width - 1 downto 0);
   -- previously set usecnt (not necessarly the same as pckstart_usecnt !!!)
   signal pckstart_usecnt_prev     : std_logic_vector(g_usecount_width - 1 downto 0);
@@ -544,6 +546,8 @@ architecture syn of xswc_input_block is
   
   signal zeros    : std_logic_vector(g_num_ports - 1 downto 0);
   
+  constant c_zero_ll_entry : t_ll_entry :=
+    ('0', '0', (others=>'0'), '0', (others=>'0'), (others=>'0'), '0');
   constant c_wrf_status_error : t_wrf_status_reg := (
         '0', -- is_hp
         '0', -- has_smac
@@ -821,7 +825,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
             rtu_rsp_abort_o     <= '0';
 
             -- Sync with trasnfer_pck FSM and ll_write FSM: 
-            if(lw_sync_first_stage = '1' and rp_sync = '1' and tp_sync = '1') then
+            if(lw_sync_first_stage = '1' and tp_sync = '1') then
               rp_in_pck_err     <= '0';
               snk_stall_force_h <= '0';
               s_rcv_pck         <= S_READY;
@@ -1160,6 +1164,10 @@ end process p_rcv_pck_fsm;
 --================================================================================================
 -- for page allocation
 --================================================================================================
+-- indicators saying if we have start/inter page allocated and waiting to be used
+-- '1' -> when page allocation was requested and allocation is done (from MMU)
+-- '0' -> (pktstart) when we got new frame which is not being dropped
+--        (pktinter) when mpm is requesting the address of next page to be written
 p_page_if : process(clk_i, rst_n_i)
 begin
   if rising_edge(clk_i) then
@@ -1231,8 +1239,10 @@ begin
           pckstart_usecnt_req     <= '0';
 
 --------------------------------------------new crap ---------------------------------------------------
+          -- tp_need_pckstart_usecnt_set: s_transfer_pck needs to set usecnt (does this
+          --                              once, when new frame arrives
           if(tp_need_pckstart_usecnt_set = '1' and pckstart_page_in_advance = '0') then
-          
+            -- get new page and set usecnt
             s_page_alloc            <= S_PCKSTART_SET_AND_REQ;
             pckstart_usecnt_req     <= '1';
             pckstart_page_alloc_req <= '1';
@@ -1245,7 +1255,7 @@ begin
             -------------------------------------------          
 
           elsif(tp_need_pckstart_usecnt_set = '1' and pckstart_page_in_advance = '1') then
-
+            -- we already have fresh page, only update usecnt
             s_page_alloc           <= S_PCKSTART_SET_USECNT;
             pckstart_usecnt_req    <= '1';
             pckstart_usecnt_pgaddr <= current_pckstart_pageaddr;
@@ -1881,7 +1891,9 @@ begin
   if rising_edge(clk_i) then
     if(rst_n_i = '0') then
       --========================================
-      ll_wr_req                <= '0';
+      ll_wr_req    <= '0';
+      --ll_entry     <= c_zero_ll_entry;
+      --ll_entry_tmp <= c_zero_ll_entry;
       ll_entry.valid           <= '0';
       ll_entry.eof             <= '0';
       ll_entry.addr            <= (others => '0');
@@ -1900,6 +1912,7 @@ begin
 
       mpm_dlast_d0  <= '0';
       mpm_pg_req_d0 <= '0';
+      --s_ll_write  <= S_IDLE;
       --pckstart_pageaddr_clred      <= (others => '1');--make it different then the first allocated addr
       --========================================
     else
@@ -2011,6 +2024,7 @@ begin
               assert false
                 report "ll_write FSM: received mpm_pg_req on S_WRITE, it should not";
             else                        -- most commont case
+              --ll_entry <= c_zero_ll_entry;
               ll_entry.valid           <= '0';
               ll_entry.eof             <= '0';
               ll_entry.addr            <= (others => '0');
@@ -2020,7 +2034,8 @@ begin
               ll_entry.first_page_clr  <= '0';
 
               -- what happens here:
-              -- (1) we exit write process of the End of frame (ll_entry.eof = '1' and ll_entry.valid = '1' )              -- (2) it should not clear the first page but we still check(ll_entry.first_page_clr = '0' )
+              -- (1) we exit write process of the End of frame (ll_entry.eof = '1' and ll_entry.valid = '1' )
+              -- (2) it should not clear the first page but we still check(ll_entry.first_page_clr = '0' )
               -- (3) and the current first page allocated in advance has not been cleared yet 
               --     (pckstart_pg_clred = '0')
               -- so we go into S_IDLE state, in this state (by default) we wait for the first
@@ -2071,6 +2086,8 @@ begin
         when S_SOF_ON_WR =>
           --===========================================================================================
           if(ll_wr_req = '1' and ll_wr_done_i = '1') then  -- written
+            --ll_wr_req  <= '0';
+            --ll_entry   <= c_zero_ll_entry;
             ll_wr_req                <= '0';
             ll_entry.valid           <= '0';
             ll_entry.eof             <= '0';
@@ -2098,16 +2115,6 @@ begin
           ll_wr_req  <= '1';
       end case;
 
-      -- remember the page which you just cleared
-      -- it is used to sync ll_write FSM with rcv_pck FSM and also transfer_pck
---            if(ll_wr_req = '1' and ll_wr_done_i = '1' and ll_entry.first_page_clr = '1') then
---              if(ll_entry.next_page_valid = '1') then
---                pckstart_pageaddr_clred <= ll_entry.next_page;
---              else
---                pckstart_pageaddr_clred <= ll_entry.addr;
---              end if;
---            end if;
-      
     end if;
   end if;
   
@@ -2133,7 +2140,7 @@ lw_sync_2nd_stage_chk <= '1' when (page_word_cnt = to_unsigned(g_page_size - 3, 
 
 -- transfer_pck FSM sync (tp): needs to be true for rcv_pck to enter READY state
 tp_sync <= '1' when (s_transfer_pck = S_IDLE or               -- 
-                                 -- s_transfer_pck = S_DROP or  -- 
+                                  --s_transfer_pck = S_DROP or  -- 
                                   s_transfer_pck = S_TRANSFERED) else '0';
 
 -- rcv_pck FSM is sync-ed                                  
@@ -2334,9 +2341,9 @@ end process;
 ll_data_eof(c_page_size_width-1 downto 0)                                        <= ll_entry.size;
 ll_data_eof(g_page_addr_width-g_partial_select_width-1 downto c_page_size_width) <= (others => '0');
 
-ll_addr_o                                                                                                                  <= ll_entry.addr;
-ll_data_o(g_ll_data_width-0 -1)                                                                                            <= ll_entry.valid;
-ll_data_o(g_ll_data_width-1 -1)                                                                                            <= ll_entry.eof;
+ll_addr_o                         <= ll_entry.addr;
+ll_data_o(g_ll_data_width-0 -1)   <= ll_entry.valid;
+ll_data_o(g_ll_data_width-1 -1)   <= ll_entry.eof;
 
 ll_data_o(g_page_addr_width-1 downto 0) <= ll_data_eof when (ll_entry.eof = '1') else ll_entry.next_page;
 ll_next_addr_o                          <= ll_entry.next_page;
