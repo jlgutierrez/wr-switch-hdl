@@ -628,7 +628,8 @@ begin
         pad_txn_o      => gtx_txn_o(i),
         pad_txp_o      => gtx_txp_o(i),
         pad_rxn_i      => gtx_rxn_i(i),
-        pad_rxp_i      => gtx_rxp_i(i));
+        pad_rxp_i      => gtx_rxp_i(i),
+        rdy_o          => from_phys(i).rdy);
 
     from_phys(i).ref_clk <= clk_ref;
   end generate gen_phys_bufr;
@@ -658,7 +659,8 @@ begin
         pad_txn_o      => gtx_txn_o(i),
         pad_txp_o      => gtx_txp_o(i),
         pad_rxn_i      => gtx_rxn_i(i),
-        pad_rxp_i      => gtx_rxp_i(i));
+        pad_rxp_i      => gtx_rxp_i(i),
+        rdy_o          => from_phys(i).rdy);
 
     from_phys(i).ref_clk <= clk_ref;
   end generate gen_phys;

@@ -660,6 +660,7 @@ begin
           phy_rst_o          => phys_o(i).rst,
           phy_loopen_o       => phys_o(i).loopen,
           phy_enable_o       => phys_o(i).enable,
+          phy_rdy_i          => phys_i(i).rdy,
           phy_ref_clk_i      => phys_i(i).ref_clk,
           phy_tx_data_o      => ep_dbg_data_array(i), -- phys_o(i).tx_data, --
           phy_tx_k_o         => ep_dbg_k_array(i),    -- phys_o(i).tx_k,    -- 

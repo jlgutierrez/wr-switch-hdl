@@ -62,6 +62,7 @@ package wrsw_components_pkg is
     rx_k         : std_logic_vector(1 downto 0);
     rx_enc_err   : std_logic;
     rx_bitslide  : std_logic_vector(4 downto 0);
+    rdy          : std_logic;
   end record;
 
   type t_phyif_output_array is array(integer range <>) of t_phyif_output;
@@ -136,7 +137,8 @@ package wrsw_components_pkg is
       pad_txn_o      : out std_logic;
       pad_txp_o      : out std_logic;
       pad_rxn_i      : in  std_logic := '0';
-      pad_rxp_i      : in  std_logic := '0');
+      pad_rxp_i      : in  std_logic := '0';
+      rdy_o          : out std_logic);
   end component;
 
   component xwr_pps_gen
