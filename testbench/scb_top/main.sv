@@ -82,6 +82,7 @@ module main;
    CSimDrv_TXTSU txtsu;
    CSimDrv_TATSU tatsu;
    CSimDrv_HWDU hwdu;
+   EthPacket ptpAnnounce;
    
    reg [g_num_ports-1:0] ep_ctrl;
    reg [15:0]            ep_failure_type = 'h00;
@@ -246,6 +247,43 @@ module main;
    byte TEST_GEN_templ[]                  ='{'h01,'h80,'hC2,'h00,'h00,'h01, //0 - 5: dst addr
                                              'h00,'h00,'h00,'h00,'h00,'h00, //6 -11: src addr (to be filled in ?)
                                              'hDE,'hED};                    //12-13: EtherType
+
+   byte ANNOUNCE_templ[]                 ='{'h0B, // transport specific | message type
+                                            'h02, //           reserved | version type
+                                            'h40, //               message length
+                                            'h00, //               message length
+                                            'h00, //                   domain
+                                            'h00, //                  reserved
+                                            'h00, //                  flagField
+                                            'h00, //                  flagField
+                                            'h00, //               correctionField 1
+                                            'h00, //               correctionField 2
+                                            'h00, //               correctionField 3
+                                            'h00, //               correctionField 4
+                                            'h00, //               correctionField 5
+                                            'h00, //               correctionField 6
+                                            'h00, //               correctionField 7
+                                            'h00, //               correctionField 8
+                                            'h00, //                 reserved 1
+                                            'h00, //                 reserved 2
+                                            'h00, //                 reserved 3
+                                            'h00, //                 reserved 4
+                                            'h00, //               sourcPortID 1
+                                            'h00, //               sourcPortID 2
+                                            'h00, //               sourcPortID 3
+                                            'h00, //               sourcPortID 4
+                                            'h00, //               sourcPortID 5
+                                            'h00, //               sourcPortID 6
+                                            'h00, //               sourcPortID 7
+                                            'h00, //               sourcPortID 8
+                                            'h00, //               sourcPortID 9
+                                            'h00, //               sourcPortID 10
+                                            'hAB, //               seqID 1
+                                            'hCD, //               seqID 2
+                                            'h00, //             correctionField 
+                                            'h00 //             logMessageInterval
+                                            //skipp rest....
+                                            };
                                             
    integer inj_gen_frame_size            = 225;
    integer inj_gen_if_gap_size           = 10;
@@ -296,6 +334,7 @@ module main;
    int lacp_df_br_id                        = 2;
    int lacp_df_un_id                        = 1;
    int g_simple_allocator_unicast_check     = 0;
+   integer g_send_announce_from_NIC         = 0;
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -2832,7 +2871,7 @@ module main;
     * - enable FastForward for broadcast
     * - 
    **/
-///*
+/*
   initial begin
     portUnderTest        = 18'b000000000000000011;
                          // tx  ,rx ,opt
@@ -2855,6 +2894,39 @@ module main;
     g_do_vlan_config    = 2; // snake EP configuration (tagging proper VLANs on ports
     g_set_untagging     = 2; // untagging
 
+  end
+*/
+   /** ***************************   test scenario 82  ************************************* **/ 
+  /*
+    * send/receive Announce messages to NIC
+    * 
+   **/
+///*
+  initial begin
+
+    portUnderTest        = 18'b000000000000000011;
+                         // tx  ,rx ,opt
+    trans_paths[0]       = '{0  ,1 , 8};
+    trans_paths[1]       = '{1  ,0 , 8 };
+    repeat_number        = 10;
+    tries_number         = 1;
+    g_enable_pck_gaps    = 1;
+    g_min_pck_gap        = 500;
+    g_max_pck_gap        = 520;
+    g_force_payload_size = 0; //size per option
+
+
+
+    ptpAnnounce           = new(142);
+    ptpAnnounce.dst       ='{'h01, 'h1b, 'h19, 'h00, 'h00, 'h00};
+    ptpAnnounce.pcp       = 0;
+    ptpAnnounce.is_q      = 0;
+    ptpAnnounce.ethertype = 'h88f7;
+    for(int i=0;i<ANNOUNCE_templ.size();i++)
+        ptpAnnounce.payload[i] = ANNOUNCE_templ[i];
+    
+    g_send_announce_from_NIC = 10; // ten times to all ports
+    
   end
 //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -2968,14 +3040,16 @@ module main;
         tmpl.ethertype = 'h8808;  
       else if(opt == 100 ||  opt == 101 ||  opt == 102)
         tmpl.ethertype = 'hbabe;
-      else
+      else if(opt == 8) // PTP
         tmpl.ethertype = 'h88f7;
-  // 
+      else
+        tmpl.ethertype = 'h1234;
+  //  
       gen.set_randomization(EthPacketGenerator::SEQ_PAYLOAD  | EthPacketGenerator::SEQ_ID);
       gen.set_template(tmpl);
       if(g_force_payload_size >= 1520) // more than max
           gen.set_size(64, 1500);
-      else if(g_force_payload_size < 42)
+      else if(g_force_payload_size < 42 || opt == 8 /*PTP*/)
         begin
         if(opt == 101 ||  opt == 102 || opt == 900 || opt == 901)
           gen.set_size(64, 65);
@@ -2983,6 +3057,8 @@ module main;
           gen.set_size(63, 1001);
         else if(opt == 200)
           gen.set_size(1000, 1001);
+        else if(opt == 8) //ptp
+          gen.set_size(142, 143);
         else
           gen.set_size(g_payload_range_min, g_payload_range_max);
 //           gen.set_size(63, 257);
@@ -3045,7 +3121,13 @@ module main;
                 pkt.payload[18]= 'h00;
                 pkt.payload[19]= 'h14;
               end
-              
+              else if(opt == 8) // PTP over raw Ethernet
+              begin
+                // PTP 
+                pkt.set_size(142);
+                for(int i=0;i<ANNOUNCE_templ.size();i++)
+		    pkt.payload[i] = ANNOUNCE_templ[i];
+              end
               if(opt == 444)
                 pkt.src[4]    = dmac_dist++;
               
@@ -3070,7 +3152,7 @@ module main;
            tx_done = 1;
         end   // fork 1
         begin // fork 2
-        if(opt != 101 && opt != 201 && opt != 900 && opt != 901 && opt != 206 && opt != 666 && opt != 667 && g_ignore_rx_test_check == 0)
+        if(opt != 101 && opt != 201 && opt != 900 && opt != 901 && opt != 206 && opt != 666 && opt != 667 && opt!=8 && g_ignore_rx_test_check == 0)
           for(int j=0;j<n_tries;j++)
             begin
               sink.recv(pkt2);
@@ -3753,10 +3835,9 @@ module main;
       rtu.add_static_rule('{'h01, 'h80, 'hc2, 'h00, 'h00, 'h00}, (1<<18));
       rtu.add_static_rule('{'h01, 'h80, 'hc2, 'h00, 'h00, 'h01}, (1<<18));
       rtu.add_static_rule('{'h01, 'h80, 'hc2, 'h00, 'h00, 'h02}, (1<<18));
+      rtu.add_static_rule('{'h01, 'h1b, 'h19, 'h00, 'h00, 'h00}, (1<<18)); // PTP
       
       rtu.add_static_rule('{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}, 'hFFFFFFFF /*mask*/, 0 /*FID*/);
-//       rtu.add_static_rule('{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}, 'hFFFFFFFF /*mask*/, 1 /*FID*/);
-//       rtu.add_static_rule('{'hFF, 'hFF, 'hFF, 'hFF, 'hFF, 'hFF}, 'hFFFFFFFF /*mask*/, 2 /*FID*/);
       
       if(g_LACP_scenario == 2)
         begin
@@ -4551,6 +4632,28 @@ module main;
             @(posedge clk_sys);
          end
       join_none
+
+      fork // sending of PTP announce messages from NIC
+         begin
+           if(g_send_announce_from_NIC > 0)
+           begin 
+             ptpAnnounce.tx_wr_port = 0;
+             wait_cycles(400);
+             for (int i =0;i<g_send_announce_from_NIC;i++)
+             begin
+                 for(int j = 0;j<g_num_ports;j++)
+                 begin
+                    wait_cycles(400);
+                    ptpAnnounce.tx_wr_port = j;         // port to send
+                    ptpAnnounce.payload[30]=  i % 'hFF; // seqID 1
+                    ptpAnnounce.payload[31]= 'h00;      // seqID 2
+                    ports[18].send.send(ptpAnnounce); //nic
+                 end
+             end
+
+           end
+         end 
+      join_none; //
 
    end 
 

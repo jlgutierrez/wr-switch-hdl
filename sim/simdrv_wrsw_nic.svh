@@ -275,7 +275,10 @@ class CSimDrv_NIC;
       desc.length  = payload.size();
       desc.pad_e   = (desc.length < 60 ? 1 : 0);
       desc.ts_e    = (pkt.oob == TX_FID ? 1: 0);
-      desc.dpm 	   = 32'hffffffff;
+      if(pkt.tx_wr_port >=0)
+         desc.dpm        = 32'hffffffff & (1<<pkt.tx_wr_port);
+      else
+         desc.dpm 	   = 32'hffffffff;
       desc.ts_id   = tx_oob_fid++;
       desc.ready   = 1;
       desc.error   = 0;
