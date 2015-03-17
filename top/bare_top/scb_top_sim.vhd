@@ -177,6 +177,7 @@ begin  -- rtl
       g_without_network => false,
       g_with_TRU        => true,
       g_with_TATSU      => true,
+      g_with_PSU        => true,
       g_with_HWIU       => true)
     port map (
       sys_rst_n_i         => sys_rst_n_i,

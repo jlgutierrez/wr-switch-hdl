@@ -402,5 +402,35 @@ package wrsw_components_pkg is
       wb_o : out t_wishbone_slave_out);
   end component;
 
+  component xwrsw_psu
+    generic(
+      g_port_number   : integer := 18;
+      g_port_mask_bits: integer := 32);
+    port (
+      clk_sys_i : in std_logic;
+      rst_n_i   : in std_logic;
+      tx_snk_i : in  t_wrf_sink_in;
+      tx_snk_o : out t_wrf_sink_out;
+      rx_src_i : in  t_wrf_source_in;
+      rx_src_o : out t_wrf_source_out;
+      rtu_dst_port_mask_i :  in std_logic_vector(g_port_mask_bits-1 downto 0);
+      rtu_prio_i          :  in std_logic_vector(2 downto 0);
+      rtu_drop_i          :  in std_logic;
+      rtu_rsp_valid_i     :  in std_logic;
+      rtu_rsp_ack_o       : out  std_logic;
+      tx_src_i : in  t_wrf_source_in;
+      tx_src_o : out t_wrf_source_out;
+      rx_snk_i : in  t_wrf_sink_in;
+      rx_snk_o : out t_wrf_sink_out;
+      rtu_dst_port_mask_o : out std_logic_vector(g_port_mask_bits-1 downto 0);
+      rtu_prio_o          : out std_logic_vector(2 downto 0);
+      rtu_drop_o          : out std_logic;
+      rtu_rsp_valid_o     : out std_logic;
+      rtu_rsp_ack_i       : in  std_logic;
+      rx_announce_o       : out std_logic_vector(g_port_number-1 downto 0); 
+      tx_announce_i       : in  std_logic;
+      wb_i                : in  t_wishbone_slave_in;
+      wb_o                : out t_wishbone_slave_out);
+  end component;
  
 end wrsw_components_pkg;

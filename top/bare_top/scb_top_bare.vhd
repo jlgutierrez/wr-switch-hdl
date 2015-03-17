@@ -62,6 +62,7 @@ entity scb_top_bare is
     g_with_HWIU       : boolean := false;
     g_with_PSTATS     : boolean := true;
     g_with_muxed_CS   : boolean := false;
+    g_with_PSU        : boolean := false;
     g_inj_per_EP      : std_logic_vector(17 downto 0) := (others=>'0')
     );
   port (
@@ -180,7 +181,7 @@ end scb_top_bare;
 architecture rtl of scb_top_bare is
 
   constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"20_02_14_00"; --DD_MM_YY_VV
-  constant c_NUM_WB_SLAVES : integer := 13;
+  constant c_NUM_WB_SLAVES : integer := 14;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
@@ -212,11 +213,13 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_TATSU        : integer := 10;
   constant c_SLAVE_PSTATS       : integer := 11;
   constant c_SLAVE_HWIU         : integer := 12;
+  constant c_SLAVE_PSU          : integer := 13;
   --constant c_SLAVE_DUMMY        : integer := 13;
 
   constant c_cnx_base_addr : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (
       --x"00070000",                      -- Dummy counters
+      x"00070000",                      -- PSU
       x"00059000",                      -- HWIU
       x"00058000",                      -- PStats counters
       x"00057000",                      -- TATSU
@@ -234,6 +237,7 @@ architecture rtl of scb_top_bare is
 
   constant c_cnx_base_mask : t_wishbone_address_array(c_NUM_WB_SLAVES-1 downto 0) :=
     (--x"000ff000",
+     x"000ff000",
      x"000ff000",
      x"000ff000",
      x"000ff000",
@@ -451,6 +455,19 @@ architecture rtl of scb_top_bare is
   signal dbg_chps_id          : std_logic_vector(7 downto 0);
   
   signal ep_port_status        : std_logic_vector(g_num_ports-1 downto 0);
+
+  -----------------------------------------------------------------------------
+  -- PTP Support Unit
+  -----------------------------------------------------------------------------
+  signal tx_psu_src_in   : t_wrf_source_in;
+  signal tx_psu_src_out  : t_wrf_source_out;
+  signal rx_psu_snk_in   : t_wrf_sink_in;
+  signal rx_psu_snk_out  : t_wrf_sink_out;
+  signal rx_psu_port_mask: std_logic_vector(31 downto 0);
+  signal rx_psu_prio     : std_logic_vector( 2 downto 0);
+  signal rx_psu_drop     : std_logic;
+  signal rx_psu_rsp_valid: std_logic;
+  signal rx_psu_rsp_ack  : std_logic;
   
 begin
 
@@ -600,15 +617,15 @@ begin
       port map (
         clk_sys_i           => clk_sys,
         rst_n_i             => rst_n_sys,
-        snk_i               => endpoint_snk_in(c_NUM_PORTS),
-        snk_o               => endpoint_snk_out(c_NUM_PORTS),
-        src_i               => endpoint_src_in(c_NUM_PORTS),
-        src_o               => endpoint_src_out(c_NUM_PORTS),
-        rtu_dst_port_mask_o => rtu_rsp(c_NUM_PORTS).port_mask(c_NUM_PORTS downto 0),
-        rtu_prio_o          => rtu_rsp(c_NUM_PORTS).prio,
-        rtu_drop_o          => rtu_rsp(c_NUM_PORTS).drop,
-        rtu_rsp_valid_o     => rtu_rsp(c_NUM_PORTS).valid,
-        rtu_rsp_ack_i       => rtu_rsp_ack(c_NUM_PORTS),
+        snk_i               => rx_psu_snk_in , --endpoint_snk_in(c_NUM_PORTS),
+        snk_o               => rx_psu_snk_out, --endpoint_snk_out(c_NUM_PORTS),
+        src_i               => tx_psu_src_in,  -- endpoint_src_in(c_NUM_PORTS),
+        src_o               => tx_psu_src_out,  --endpoint_src_out(c_NUM_PORTS),
+        rtu_dst_port_mask_o => rx_psu_port_mask(c_NUM_PORTS downto 0), --rtu_rsp(c_NUM_PORTS).port_mask(c_NUM_PORTS downto 0),
+        rtu_prio_o          => rx_psu_prio, --rtu_rsp(c_NUM_PORTS).prio,
+        rtu_drop_o          => rx_psu_drop, --rtu_rsp(c_NUM_PORTS).drop,
+        rtu_rsp_valid_o     => rx_psu_rsp_valid , --rtu_rsp(c_NUM_PORTS).valid,
+        rtu_rsp_ack_i       => rx_psu_rsp_ack, --rtu_rsp_ack(c_NUM_PORTS),
         wb_i                => cnx_master_out(c_SLAVE_NIC),
         wb_o                => cnx_master_in(c_SLAVE_NIC));
   
@@ -946,6 +963,58 @@ begin
       shaper_drop_at_hp_ena                     <= '0';
       cnx_master_in(c_SLAVE_TATSU).ack          <= '1';
     end generate gen_no_TATSU;
+
+  -----------------------------------------------------------------------------
+  -- GW support for PTP (switchover/holdover
+  -----------------------------------------------------------------------------
+
+    gen_PSU: if(g_with_PSU = true) generate
+      U_PSU: xwrsw_psu
+        generic map(
+          g_port_number   =>c_NUM_PORTS,
+          g_port_mask_bits=>c_NUM_PORTS+1)
+        port map(
+          clk_sys_i           => clk_sys,
+          rst_n_i             => rst_n_sys,
+          -- interface with NIC
+          tx_snk_i            => tx_psu_src_out,
+          tx_snk_o            => tx_psu_src_in,
+          rx_src_i            => rx_psu_snk_out,
+          rx_src_o            => rx_psu_snk_in,
+          rtu_dst_port_mask_i => rx_psu_port_mask(c_NUM_PORTS downto 0),
+          rtu_prio_i          => rx_psu_prio,
+          rtu_drop_i          => rx_psu_drop,
+          rtu_rsp_valid_i     => rx_psu_rsp_valid,
+          rtu_rsp_ack_o       => rx_psu_rsp_ack,
+          -- interface with RTU/SWcore
+          tx_src_i            => endpoint_src_in(c_NUM_PORTS),
+          tx_src_o            => endpoint_src_out(c_NUM_PORTS),
+          rx_snk_i            => endpoint_snk_in(c_NUM_PORTS),
+          rx_snk_o            => endpoint_snk_out(c_NUM_PORTS),
+
+          rtu_dst_port_mask_o => rtu_rsp(c_NUM_PORTS).port_mask(c_NUM_PORTS downto 0),
+          rtu_prio_o          => rtu_rsp(c_NUM_PORTS).prio,
+          rtu_drop_o          => rtu_rsp(c_NUM_PORTS).drop,
+          rtu_rsp_valid_o     => rtu_rsp(c_NUM_PORTS).valid,
+          rtu_rsp_ack_i       => rtu_rsp_ack(c_NUM_PORTS),
+          rx_announce_o       => open,
+          tx_announce_i       => '0',-- TODO
+          wb_i                => cnx_master_out(c_SLAVE_PSU),
+          wb_o                => cnx_master_in(c_SLAVE_PSU));
+     end generate gen_PSU;
+
+     gen_no_PSU: if(g_with_PSU = false) generate
+        rx_psu_snk_in                <= endpoint_snk_in(c_NUM_PORTS);
+        endpoint_snk_out(c_NUM_PORTS)<= rx_psu_snk_out;
+        tx_psu_src_in                <= endpoint_src_in(c_NUM_PORTS);
+        endpoint_src_out(c_NUM_PORTS)<= tx_psu_src_out;
+
+        rtu_rsp(c_NUM_PORTS).port_mask <= rx_psu_port_mask;
+        rtu_rsp(c_NUM_PORTS).prio      <= rx_psu_prio;
+        rtu_rsp(c_NUM_PORTS).drop      <= rx_psu_drop;
+        rtu_rsp(c_NUM_PORTS).valid     <= rx_psu_rsp_valid;
+        rx_psu_rsp_ack                 <= rtu_rsp_ack(c_NUM_PORTS);
+     end generate gen_no_PSU;
 
   end generate gen_network_stuff;
 
