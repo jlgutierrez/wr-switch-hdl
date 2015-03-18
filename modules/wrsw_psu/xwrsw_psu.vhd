@@ -107,6 +107,9 @@ architecture behavioral of xwrsw_psu is
     signal tx_ram_addr            : std_logic_vector( 7 downto 0);
     signal rx_ram_data            : std_logic_vector(15 downto 0);
     signal tx_ram_data            : std_logic_vector(15 downto 0);
+    
+    signal mem_addr               : std_logic_vector(9 downto 0);
+    signal mem_data               : std_logic_vector(17 downto 0)
 begin
 
   tx_snooper: psu_announce_snooper
@@ -147,21 +150,38 @@ begin
       clock_class_valid_o   => rx_clock_class_valid,
       ignore_rx_port_id_i   => '1');
 
---   RXTX_RAM : generic_dpram
---     generic map (
---       g_data_width => 16,
---       g_size       => 256,
---       g_dual_clock => false)
---     port map (
---       rst_n_i => rst_n_i,
---       clka_i  => clk_sys_i,
---       clkb_i  => '0',
---       wea_i   => '0',
---       aa_i    => ,
---       qa_o    => ,
---       web_i   => ,
---       ab_i    => ,
---       db_i    => );
+
+  tx_pck_injector: psu_packet_injection
+    port map(
+      clk_sys_i             => clk_sys_i,
+      rst_n_i               => rst_n_i,
+      src_i                 => tx_src_i,
+      src_o                 => tx_src_o,
+      snk_i                 => tx_snk_i,
+      snk_o                 => tx_snk_o,
+      inject_req_i          => ,
+      inject_ready_o        => ,
+      inject_packet_sel_i   => ,
+      inject_user_value_i   => ,
+      inject_mode_i         => ,
+      mem_addr_o            => mem_addr,
+      mem_data_i            => mem_data);
+
+  RXTX_RAM : generic_dpram
+    generic map (
+      g_data_width          => 18,
+      g_size                => 512,
+      g_dual_clock          => false)
+    port map (
+      rst_n_i               => rst_n_i,
+      clka_i                => clk_sys_i,
+      clkb_i                => '0',
+      wea_i                 => '0',
+      aa_i                  => mem_addr,
+      qa_o                  => mem_data,
+      web_i                 => ,
+      ab_i                  => ,
+      db_i                  => );
 
 
     tx_src_o            <= tx_snk_i;

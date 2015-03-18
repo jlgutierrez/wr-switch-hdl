@@ -70,6 +70,22 @@ package psu_pkg is
       clock_class_valid_o   : out std_logic;
       ignore_rx_port_id_i   :  in std_logic);
   end component;
+  component psu_packet_injection is
+    port (
+      clk_sys_i : in std_logic;
+      rst_n_i   : in std_logic;
+      src_i : in  t_wrf_source_in;
+      src_o : out t_wrf_source_out;
+      snk_i : in  t_wrf_sink_in;
+      snk_o : out t_wrf_sink_out;
+      inject_req_i        : in  std_logic;
+      inject_ready_o      : out std_logic;
+      inject_packet_sel_i : in  std_logic_vector(2 downto 0);
+      inject_user_value_i : in  std_logic_vector(15 downto 0);
+      inject_mode_i       : in  std_logic_vector(1 downto 0);
+      mem_addr_o : out std_logic_vector(9 downto 0);
+      mem_data_i : in  std_logic_vector(17 downto 0));
+  end component;
 
 end psu_pkg;
 
