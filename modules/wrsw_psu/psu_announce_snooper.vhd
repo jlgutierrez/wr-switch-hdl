@@ -14,6 +14,29 @@
 -- and UDP) and extracts from them required info on the fly, i.e. sequence ID and
 -- clock class)
 -- useful: http://wiki.hevs.ch/uit/index.php5/Standards/Ethernet_PTP/frames
+-- 
+-- Where            | what      |  offset  16bit words   | value
+---------------------------------------------------------------------------------------------
+-- Ethernet header  | EtherType | 6 from start of header       | 0x88F7 (PTP), 0x8100 (VLAN), 0x0800 (IP), 
+-- VLAN tag         | EtherType | 2 from EtherType             | 0x88F7 (PTP), 0x0800 (IP)
+-- IP header v4     | ProtoType | 5 from EtherType raw/tagged  | ?? bits [7:0] = 0x11 (UDP) 
+-- UDP header       | DstPort   | 7 from IPv4 ProtoType        | 0x0140 (320 -> general message)
+-- PTP header       | MsgType   | 1 from EtherType raw/tagged  | [3:0]=0x2 (PTPv2) and  [11:8]=0xB (announce)
+-- PTP header       | MsgType   | 3 from EtherType UDP dstPort | [3:0]=0x2 (PTPv2) and  [11:8]=0xB (announce)
+-- PTP header       | PortID    |10 from MsgType               | 5 words to check 
+-- PTP header       | SeqID     | 1 from PortID end            | remember
+-- PTP header       | SeqID     |15 from MsgType               | remember
+-- PTP Announce     | ClkClass  | 9 from SeqID                 | remember
+-- 
+-- 
+-- TODO:
+-- - check which octect of the word is IPv4 ProtoType
+-- - check IHL options for IP
+--   http://en.wikipedia.org/wiki/IPv4#Options
+-- - check whcih octect for the word of PTP msg type
+-- - 
+-- 
+-- 
 -------------------------------------------------------------------------------
 --
 -- Copyright (c) 2015 CERN / BE-CO-HT
@@ -80,7 +103,10 @@ entity psu_announce_snooper is
 
     -- indicates the snooped clock_class (rx)
     clock_class_o         : out std_logic_vector(15 downto 0);
-    clock_class_valid_o   : out std_logic
+    clock_class_valid_o   : out std_logic;
+    
+    -- config:
+    ignore_rx_port_id_i      :  in std_logic
     );
 
 
@@ -106,6 +132,7 @@ architecture behavioral of psu_announce_snooper is
    signal data               : std_logic_vector(15 downto 0);
    signal addr               : std_logic_vector( 1 downto 0);
    signal stb                : std_logic;
+   signal oob_valid          : std_logic;
    signal data_valid         : std_logic;
    signal word_cnt           : unsigned(7 downto 0); -- just enough of cnt to detect interestng stuff
    signal next_offset        : unsigned(7 downto 0); -- just enough of cnt to detect interestng stuff
@@ -113,10 +140,12 @@ architecture behavioral of psu_announce_snooper is
    signal cyc_d              : std_logic;
    signal ptp_source_id_addr : unsigned(7  downto 0); 
    signal port_mask          : std_logic_vector(g_port_number-1 downto 0);
+   signal detect_mask        : std_logic_vector(31 downto 0); -- for port id from OOB of 5 bits
 
 begin   
    -- data stored in "data" is being acked by snk | data cnt is incremented
-   data_valid <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0') else '0';
+   data_valid <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr="00") else '0';
+   oob_valid  <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr="01") else '0';
    data       <= snk_i.dat when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0') else (others => '0');
 
    process_data: process(clk_sys_i,rst_n_i)
@@ -131,7 +160,7 @@ begin
 
         if(snk_i.cyc = '0') then
            word_cnt   <= (others =>'0');
-        elsif(snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr = "00") then
+        elsif(data_valid = '1') then
            word_cnt <= word_cnt + 1;
         end if;
 
@@ -153,7 +182,8 @@ begin
          clock_class_o        <= (others=>'0');
          clock_class_valid_o  <= '0';
          port_mask            <= (others=>'0');
-         rxtx_detected_mask_o <= (others=>'0');
+         detect_mask<= (others=>'0');
+         
          
        else
          case state is
@@ -169,7 +199,7 @@ begin
                clock_class_o        <= (others=>'0');
                clock_class_valid_o  <=  '0';
                port_mask            <= rtu_dst_port_mask_i;
-               rxtx_detected_mask_o <= (others=>'0');
+               detect_mask          <= (others=>'0');
 
              end if;
 
@@ -191,7 +221,7 @@ begin
                  next_offset      <= next_offset + 2; 
                elsif(data = x"0800") then -- IP frame
                  state          <= WAIT_UDP_PROTO;
-                 next_offset    <= next_offset + 6; 
+                 next_offset    <= next_offset + 5; 
                else
                  state          <= WAIT_SOF; -- we are done, it's not announce
                end if;
@@ -206,7 +236,7 @@ begin
                  next_offset    <= next_offset + 1;
                elsif(data = x"0800") then -- IP frame
                  state          <= WAIT_UDP_PROTO;
-                 next_offset    <= next_offset + 6;
+                 next_offset    <= next_offset + 5;
                else
                  state          <= WAIT_SOF; -- we are done, it's not announce
                end if;
@@ -217,7 +247,7 @@ begin
              if(data_valid = '1' and word_cnt = next_offset) then
                if(data(7 downto 0) = x"11") then -- 17 is the UDP protocol
                  state          <= WAIT_PTP_PORT;
-                 next_offset    <= next_offset + 15;
+                 next_offset    <= next_offset + 7;
                else
                  state <= WAIT_SOF; -- we are done, it's not announce
                end if;
@@ -226,9 +256,9 @@ begin
            when WAIT_PTP_PORT =>
 
              if(data_valid = '1' and word_cnt = next_offset) then
-               if(data = x"013F") then 
+               if(data = x"0140") then 
                  state          <= WAIT_MSG_TYPE;
-                 next_offset    <= next_offset + 4;
+                 next_offset    <= next_offset + 3;
                else
                  state          <= WAIT_SOF; -- we are done, it's not announce
                end if;
@@ -248,8 +278,7 @@ begin
            when WAIT_SOURCE_PORT_ID => 
 
              if(data_valid = '1' and word_cnt = next_offset) then
-
-               if(g_snoop_mode = TX_SEQ_ID_MODE) then
+               if(g_snoop_mode = TX_SEQ_ID_MODE or ignore_rx_port_id_i = '1') then 
                  state                 <= SEQ_ID;
                  next_offset           <= next_offset + 5;
                else
@@ -278,15 +307,15 @@ begin
            when SEQ_ID =>
 
              if(data_valid = '1' and word_cnt = next_offset) then
-               state                 <= CHECK_SOURCE_PORT_ID;
                seq_id_o              <= data;
                seq_id_valid_o        <= '1';
-               if(g_snoop_mode = TX_SEQ_ID_MODE) then
+               if(g_snoop_mode = RX_CLOCK_CLASS_MODE) then
+                 state               <= WAIT_CLOCK_CLASS;
+                 next_offset         <= next_offset + 9;
+               else
                  state               <= WAIT_SOF;
-                 rxtx_detected_mask_o<= port_mask;
-               elsif(g_snoop_mode = RX_CLOCK_CLASS_MODE) then
-                   state               <= WAIT_CLOCK_CLASS;
-                   next_offset         <= next_offset + 8;
+                 detect_mask(g_port_number-1 downto 0)             <= port_mask;
+                 detect_mask(31              downto g_port_number) <= (others =>'0');
                end if;
              end if;
 
@@ -294,14 +323,14 @@ begin
 
              if(data_valid = '1' and word_cnt = next_offset) then
                state                 <= WAIT_OOB;
-               clock_class_o         <= data(15 downto 0);
+               clock_class_o         <= data;
                clock_class_valid_o   <= '1';
              end if;
 
            when WAIT_OOB =>
 
-             if(snk_i.adr = "01" and data_valid = '1') then -- 1st OOB word
-               rxtx_detected_mask_o  <= f_onehot_decode(data(4 downto 0));
+             if(oob_valid = '1') then -- 1st OOB word
+               detect_mask           <= f_onehot_decode(data(4 downto 0));
                state                 <= WAIT_SOF;
              end if;
 
@@ -313,6 +342,6 @@ begin
    end process;
 
   ptp_source_id_addr_o <=std_logic_vector(ptp_source_id_addr);
-
+  rxtx_detected_mask_o <=detect_mask(g_port_number-1 downto 0);
 end behavioral;
 

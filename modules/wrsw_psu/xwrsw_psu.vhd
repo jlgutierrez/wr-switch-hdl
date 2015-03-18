@@ -125,7 +125,8 @@ begin
       seq_id_o              => tx_seq_id,
       seq_id_valid_o        => tx_seq_id_valid,
       clock_class_o         => open,
-      clock_class_valid_o   => open);
+      clock_class_valid_o   => open,
+      ignore_rx_port_id_i   => '1');
 
   rx_snooper: psu_announce_snooper
     generic map(
@@ -143,7 +144,8 @@ begin
       seq_id_o              => open,
       seq_id_valid_o        => open,
       clock_class_o         => rx_clock_class,
-      clock_class_valid_o   => rx_clock_class_valid);
+      clock_class_valid_o   => rx_clock_class_valid,
+      ignore_rx_port_id_i   => '1');
 
 --   RXTX_RAM : generic_dpram
 --     generic map (

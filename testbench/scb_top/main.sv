@@ -248,7 +248,8 @@ module main;
                                              'h00,'h00,'h00,'h00,'h00,'h00, //6 -11: src addr (to be filled in ?)
                                              'hDE,'hED};                    //12-13: EtherType
 
-   byte ANNOUNCE_templ[]                 ='{'h0B, // transport specific | message type
+   byte ANNOUNCE_templ[]                 ='{//PTP header
+                                            'h0B, // transport specific | message type
                                             'h02, //           reserved | version type
                                             'h40, //               message length
                                             'h00, //               message length
@@ -281,8 +282,26 @@ module main;
                                             'hAB, //               seqID 1
                                             'hCD, //               seqID 2
                                             'h00, //             correctionField 
-                                            'h00 //             logMessageInterval
-                                            //skipp rest....
+                                            'h00, //             logMessageInterval
+                                            //// PTP Announce
+                                            'h00, //             originalTimestamp 1
+                                            'h00, //             originalTimestamp 2
+                                            'h00, //             originalTimestamp 3
+                                            'h00, //             originalTimestamp 4
+                                            'h00, //             originalTimestamp 5
+                                            'h00, //             originalTimestamp 6
+                                            'h00, //             originalTimestamp 7
+                                            'h00, //             originalTimestamp 8
+                                            'h00, //             originalTimestamp 9
+                                            'h00, //             originalTimestamp 10
+                                            'h00, //             currentUtcOffset 1
+                                            'h00, //             currentUtcOffset 2
+                                            'h00, //             reserved
+                                            'h00, //             grandmasterPriorit1
+                                            'h07, //             gandmasterClockQuality 1 -> clockClass ?
+                                            'h00, //             gandmasterClockQuality 2 -> clockAccuracy
+                                            'h00, //             gandmasterClockQuality 3 -> offsetScaledLogVariance;
+                                            'h00 //             gandmasterClockQuality 4 -> offsetScaledLogVariance;
                                             };
                                             
    integer inj_gen_frame_size            = 225;

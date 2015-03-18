@@ -67,7 +67,8 @@ package psu_pkg is
       seq_id_o              : out std_logic_vector(15 downto 0);
       seq_id_valid_o        : out std_logic;
       clock_class_o         : out std_logic_vector(15 downto 0);
-      clock_class_valid_o   : out std_logic);
+      clock_class_valid_o   : out std_logic;
+      ignore_rx_port_id_i   :  in std_logic);
   end component;
 
 end psu_pkg;
