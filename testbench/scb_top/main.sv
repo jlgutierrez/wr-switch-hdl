@@ -249,40 +249,40 @@ module main;
                                              'hDE,'hED};                    //12-13: EtherType
 
    byte ANNOUNCE_templ[]                 ='{//PTP header
-                                            'h0B, // transport specific | message type
-                                            'h02, //           reserved | version type
-                                            'h40, //               message length
-                                            'h00, //               message length
-                                            'h00, //                   domain
-                                            'h00, //                  reserved
-                                            'h00, //                  flagField
-                                            'h00, //                  flagField
-                                            'h00, //               correctionField 1
-                                            'h00, //               correctionField 2
-                                            'h00, //               correctionField 3
-                                            'h00, //               correctionField 4
-                                            'h00, //               correctionField 5
-                                            'h00, //               correctionField 6
-                                            'h00, //               correctionField 7
-                                            'h00, //               correctionField 8
-                                            'h00, //                 reserved 1
-                                            'h00, //                 reserved 2
-                                            'h00, //                 reserved 3
-                                            'h00, //                 reserved 4
-                                            'h00, //               sourcPortID 1
-                                            'h00, //               sourcPortID 2
-                                            'h00, //               sourcPortID 3
-                                            'h00, //               sourcPortID 4
-                                            'h00, //               sourcPortID 5
-                                            'h00, //               sourcPortID 6
-                                            'h00, //               sourcPortID 7
-                                            'h00, //               sourcPortID 8
-                                            'h00, //               sourcPortID 9
-                                            'h00, //               sourcPortID 10
-                                            'hAB, //               seqID 1
-                                            'hCD, //               seqID 2
-                                            'h00, //             correctionField 
-                                            'h00, //             logMessageInterval
+                                            'h0B, //0 transport specific | message type
+                                            'h02, //1           reserved | version type
+                                            'h40, //2               message length
+                                            'h00, //3               message length
+                                            'h00, //4                   domain
+                                            'h00, //5                  reserved
+                                            'h00, //6                  flagField
+                                            'h00, //7                  flagField
+                                            'h00, //8               correctionField 1
+                                            'h00, //9               correctionField 2
+                                            'h00, //10               correctionField 3
+                                            'h00, //11               correctionField 4
+                                            'h00, //12               correctionField 5
+                                            'h00, //13               correctionField 6
+                                            'h00, //14               correctionField 7
+                                            'h00, //15               correctionField 8
+                                            'h00, //16                 reserved 1
+                                            'h00, //17                 reserved 2
+                                            'h00, //18                 reserved 3
+                                            'h00, //19                 reserved 4
+                                            'h01, //20               sourcPortID 1
+                                            'h02, //21               sourcPortID 2
+                                            'h03, //22               sourcPortID 3
+                                            'h04, //23               sourcPortID 4
+                                            'h05, //24               sourcPortID 5
+                                            'h06, //25               sourcPortID 6
+                                            'h07, //26               sourcPortID 7
+                                            'h09, //27               sourcPortID 8
+                                            'h00, //28               sourcPortID 9  => port number
+                                            'h00, //29               sourcPortID 10 => port number
+                                            'hAB, //30               seqID 1
+                                            'hCD, //31               seqID 2
+                                            'h00, //32             correctionField 
+                                            'h00, //33             logMessageInterval
                                             //// PTP Announce
                                             'h00, //             originalTimestamp 1
                                             'h00, //             originalTimestamp 2
@@ -354,6 +354,8 @@ module main;
    int lacp_df_un_id                        = 1;
    int g_simple_allocator_unicast_check     = 0;
    integer g_send_announce_from_NIC         = 0;
+   
+   reg [g_max_ports-1:0] announceTxVector   = 18'b111111111111111111;
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -2923,10 +2925,15 @@ module main;
 ///*
   initial begin
 
-    portUnderTest        = 18'b000000000000000011;
+//     portUnderTest        = 18'b100000000000001100;
+    portUnderTest        = 18'b000000000000000000;
+    announceTxVector     = 18'b000000000000000100;
                          // tx  ,rx ,opt
-    trans_paths[0]       = '{0  ,1 , 8};
-    trans_paths[1]       = '{1  ,0 , 8 };
+    trans_paths[2]       = '{2  ,0 , 8};
+    trans_paths[3]       = '{3  ,0 , 8 };
+
+    trans_paths[17]      = '{17  ,0 , 8 };
+
     repeat_number        = 10;
     tries_number         = 1;
     g_enable_pck_gaps    = 1;
@@ -3146,6 +3153,9 @@ module main;
                 pkt.set_size(142);
                 for(int i=0;i<ANNOUNCE_templ.size();i++)
 		    pkt.payload[i] = ANNOUNCE_templ[i];
+		 	 
+		 pkt.payload[28] = srcPort;
+		 pkt.payload[30] = i;
               end
               if(opt == 444)
                 pkt.src[4]    = dmac_dist++;
@@ -4657,16 +4667,27 @@ module main;
            if(g_send_announce_from_NIC > 0)
            begin 
              ptpAnnounce.tx_wr_port = 0;
-             wait_cycles(400);
-             for (int i =0;i<g_send_announce_from_NIC;i++)
+             wait_cycles(100);
+             for (int an_i =0;an_i<g_send_announce_from_NIC;an_i++)
              begin
-                 for(int j = 0;j<g_num_ports;j++)
+                 for(int an_j = 0;an_j<g_num_ports;an_j++)
                  begin
-                    wait_cycles(400);
-                    ptpAnnounce.tx_wr_port = j;         // port to send
-                    ptpAnnounce.payload[30]=  i % 'hFF; // seqID 1
-                    ptpAnnounce.payload[31]= 'h00;      // seqID 2
-                    ports[18].send.send(ptpAnnounce); //nic
+                    
+                    automatic int an_jj=an_j;
+                    
+                    
+                    if(announceTxVector[an_jj]) 
+                    begin
+                      wait_cycles(100);
+                      ptpAnnounce.tx_wr_port = an_jj;         // port to send
+                      ptpAnnounce.payload[28]= 'h00 ; // seqID 1
+                      ptpAnnounce.payload[29]= an_jj % 'hFF;      // seqID 2
+                      ptpAnnounce.payload[30]= 'h00; // seqID 1
+                      ptpAnnounce.payload[31]= an_i % 'hFF;      // seqID 2
+                      ports[18].send.send(ptpAnnounce); //nic
+                    end
+                    else
+                      wait_cycles(20);
                  end
              end
 

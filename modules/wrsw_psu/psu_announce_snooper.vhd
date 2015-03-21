@@ -72,41 +72,69 @@ use ieee.numeric_std.all;
 library work;
 use work.psu_pkg.all;
 use work.wr_fabric_pkg.all;
+use work.gencores_pkg.all;
 
 entity psu_announce_snooper is
   generic(
-    g_port_number   : integer := 18;
-    g_snoop_mode    : t_snoop_mode := TX_SEQ_ID_MODE);
+    g_port_number       : integer := 18;
+    g_port_number_width : integer := 5;
+    g_snoop_mode        : t_snoop_mode := TX_SEQ_ID_MODE);
   port (
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
 
     -- interface with NIC
     snk_i                 : in  t_wrf_sink_in;
+    snk_o                 : out t_wrf_sink_out;
+    
     src_i                 : in  t_wrf_source_in;
+    src_o                 : out t_wrf_source_out;
+
     rtu_dst_port_mask_i   : in  std_logic_vector(g_port_number-1 downto 0);
+    
+    -- ctrl: tell which ports to snoop, ignore others
+    snoop_ports_mask_i    : in  std_logic_vector(g_port_number-1 downto 0);
+    
+    holdover_on_i         : in std_logic;
+    -- indicates the snooped announce clock class
+    holdover_clk_class_i  : in std_logic_vector(15 downto 0);
+
     -- internal stuff
 
-    -- access to BRAM with stored sourceClockIdentity, needed for recognision if the
-    -- announce is frmo our current parent
-    ptp_source_id_addr_o  : out std_logic_vector(7  downto 0); 
-    ptp_source_id_data_i  :  in std_logic_vector(15 downto 0); 
+    -- indicates that an annouunce message was detected, all the below information about
+    -- the announce shouldb e ealuated when detect_announce pulse is high
+    detected_announce_o   : out std_logic;
 
-    -- vector which indicates that announce msg was detected, it indicates on which port
-    -- (if tx, it says to which port the frame was being sent, if rx, it says on which port
-    -- the message was received)
-    rxtx_detected_mask_o  : out std_logic_vector(g_port_number-1 downto 0);
+    -- vector which indicates what was the destination port (on tx) or source port (on rx)
+    -- of the announce
+    srcdst_port_mask_o    : out std_logic_vector(g_port_number-1 downto 0);
 
-    -- indicates the snooped announce seq_id (tx)
-    seq_id_o              : out std_logic_vector(15 downto 0);
-    seq_id_valid_o        : out std_logic;
-
-    -- indicates the snooped clock_class (rx)
-    clock_class_o         : out std_logic_vector(15 downto 0);
-    clock_class_valid_o   : out std_logic;
+    -- indicates that the sourcePortID matches the announce messages snooped previously on this
+    -- port (we learn from what is sent)
+    sourcePortID_match_o  : out std_logic;
     
-    -- config:
-    ignore_rx_port_id_i      :  in std_logic
+    -- indicates that the clock class of the message matches the one we are looking for
+    clockClass_match_o    : out std_logic;
+    
+    -- it indicats that an announce with the same sequence ID as the previous one has been 
+    -- detected
+    announce_duplicate_o  : out std_logic;
+    
+    -- it indicates that sequence number of the snooped announce is not 1 greater than the 
+    -- previous announce
+    sequenceID_wrong_o    : out std_logic;
+
+    -- access to the RAM that stores snooped announce frames and information about
+    -- portID + seqID per port.
+    wr_ram_ena_o          : out std_logic;
+    wr_ram_data_o         : out std_logic_vector(17 downto 0);
+    wr_ram_addr_o         : out std_logic_vector(9 downto 0); 
+
+    wr_ram_sel_o          : out std_logic;
+    
+    rd_ram_data_i         : in std_logic_vector(17 downto 0);
+    rd_ram_addr_o         : out std_logic_vector( 9 downto 0);    
+    rd_ram_sel_o          : out std_logic
     );
 
 
@@ -123,10 +151,12 @@ architecture behavioral of psu_announce_snooper is
     WAIT_PTP_PORT,
     WAIT_MSG_TYPE,
     WAIT_SOURCE_PORT_ID,
-    CHECK_SOURCE_PORT_ID,
+    SOURCE_CLOCK_ID,
+    SOURCE_PORT_NUMBER,
     SEQ_ID,
     WAIT_CLOCK_CLASS,
-    WAIT_OOB
+    CLOCK_CLASS,
+    WAIT_EOF
     );
 
    signal data               : std_logic_vector(15 downto 0);
@@ -135,18 +165,30 @@ architecture behavioral of psu_announce_snooper is
    signal oob_valid          : std_logic;
    signal data_valid         : std_logic;
    signal word_cnt           : unsigned(7 downto 0); -- just enough of cnt to detect interestng stuff
+   signal word_rd            : unsigned(7 downto 0);
    signal next_offset        : unsigned(7 downto 0); -- just enough of cnt to detect interestng stuff
    signal state              : t_fsm_state;
    signal cyc_d              : std_logic;
-   signal ptp_source_id_addr : unsigned(7  downto 0); 
+   signal rd_ram_addr        : unsigned(7  downto 0); 
    signal port_mask          : std_logic_vector(g_port_number-1 downto 0);
    signal detect_mask        : std_logic_vector(31 downto 0); -- for port id from OOB of 5 bits
-
+   signal wr_port_info_addr  : std_logic; 
+   signal rd_port_info_addr  : std_logic; 
+   signal wr_ram_ena         : std_logic;
+   signal sel                : std_logic; -- current wr mem bank
+   signal port_index         : std_logic_vector(g_port_number_width-1 downto 0);
+   
+   signal sourcePortIDmatch  : std_logic;
+   signal clockClassMatch    : std_logic;
+   signal duplicate          : std_logic; -- the same sequence second time
+   signal seqIdWrong         : std_logic; -- not 1 greater than previous
+   signal dropAnnounce       : std_logic;
 begin   
    -- data stored in "data" is being acked by snk | data cnt is incremented
    data_valid <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr="00") else '0';
    oob_valid  <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr="01") else '0';
-   data       <= snk_i.dat when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0') else (others => '0');
+   data       <= snk_i.dat when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0')                    else (others => '0');
+   port_index <= f_onehot_decode(port_mask,g_port_number_width);
 
    process_data: process(clk_sys_i,rst_n_i)
    begin
@@ -155,19 +197,61 @@ begin
         word_cnt   <= (others =>'0');
         cyc_d      <= '0';
       else
-
         cyc_d <= snk_i.cyc;
-
         if(snk_i.cyc = '0') then
            word_cnt   <= (others =>'0');
         elsif(data_valid = '1') then
            word_cnt <= word_cnt + 1;
         end if;
-
       end if;
     end if;
    end process;
 
+   detect_stuff: process(clk_sys_i,rst_n_i)
+   begin
+    if rising_edge(clk_sys_i) then
+      if rst_n_i = '0' then
+        sourcePortIDmatch <= '0';
+        clockClassMatch   <= '0';
+        duplicate         <= '0';
+        seqIdWrong        <= '0';
+      else
+
+        if(state = WAIT_SOURCE_PORT_ID) then
+          sourcePortIDmatch <= '1';
+        elsif(state = SOURCE_CLOCK_ID and data_valid = '1' and rd_ram_data_i(15 downto 0) ~= data) then
+          sourcePortIDmatch <= '0';
+        elsif(state = SOURCE_PORT_NUMBER and data_valid = '1' and rd_ram_data_i(15 downto 0) ~= data) then
+          sourcePortIDmatch <= '0';
+        elsif(state = WAIT_SOF) then
+          sourcePortIDmatch <= '0';
+        end if;
+        
+        if(state = CLOCK_CLASS and data_valid = '1' and data = holdover_clk_class_i) then
+          clockClassMatch <= '1';
+        elsif(state = WAIT_SOF) then
+          clockClassMatch <= '0';
+        end if;
+        
+        if(state = SEQ_ID and data_valid = '1' and std_logic_vector(to_unsigned(data)+1) = rd_ram_data_i(15 downto 0)) then
+          duplicate <= '1';
+        elsif(state = WAIT_SOF) then
+          duplicate <= '0';
+        end if;
+
+        if(state = SEQ_ID and data_valid = '1') then
+          if(data = rd_ram_data_i(15 downto 0)) then
+            seqIdWrong <= '0';
+          else
+            seqIdWrong <= '1';
+          end if;
+        elsif(state = WAIT_SOF) then
+          seqIdWrong <= '0';
+        end if;
+
+      end if;
+    end if;
+   end process;
 
    fsm: process(clk_sys_i,rst_n_i)
    begin
@@ -176,31 +260,29 @@ begin
        if rst_n_i = '0' then
          next_offset          <= (others=>'0');
          state                <= WAIT_SOF;
-         ptp_source_id_addr   <= (others=>'0');
-         seq_id_o             <= (others=>'0');
-         seq_id_valid_o       <= '0';
-         clock_class_o        <= (others=>'0');
-         clock_class_valid_o  <= '0';
+         rd_ram_addr          <= (others=>'0');
          port_mask            <= (others=>'0');
-         detect_mask<= (others=>'0');
-         
-         
+         detect_mask          <= (others=>'0');
+         sel                  <= '0';
+         rd_port_info_addr    <= '0';
+         wr_port_info_addr    <= '0';
+         detected_announce_o  <= '0';
+         dropAnnounce         <= '0';
        else
          case state is
 
            when WAIT_SOF =>
-
+             detected_announce_o  <= '0';
+             
              if(cyc_d = '0' and snk_i.cyc ='1') then
                state                <= WAIT_DATA; 
                next_offset          <= (others=>'0');
-               ptp_source_id_addr   <= (others=>'0');
-               seq_id_o             <= (others=>'0');
-               seq_id_valid_o       <=  '0';
-               clock_class_o        <= (others=>'0');
-               clock_class_valid_o  <=  '0';
+               rd_ram_addr          <= (others=>'0');
                port_mask            <= rtu_dst_port_mask_i;
                detect_mask          <= (others=>'0');
-
+               rd_port_info_addr    <= '0';
+               wr_port_info_addr    <= '0';
+               dropAnnounce         <= '0';
              end if;
 
            when WAIT_DATA =>
@@ -269,7 +351,7 @@ begin
              if(data_valid = '1' and word_cnt = next_offset) then
                if(data(11 downto 8) = x"B" and data(3 downto 0) = x"2") then --Announce of PTPv2
                  state          <= WAIT_SOURCE_PORT_ID;
-                 next_offset    <= next_offset + 10;
+                 next_offset    <= next_offset + 9;
                else 
                  state          <= WAIT_SOF; -- we are done, it's not announce
                end if;
@@ -278,60 +360,80 @@ begin
            when WAIT_SOURCE_PORT_ID => 
 
              if(data_valid = '1' and word_cnt = next_offset) then
-               if(g_snoop_mode = TX_SEQ_ID_MODE or ignore_rx_port_id_i = '1') then 
-                 state                 <= SEQ_ID;
-                 next_offset           <= next_offset + 5;
-               else
-                 state                 <= CHECK_SOURCE_PORT_ID;
-                 ptp_source_id_addr    <= ptp_source_id_addr + 1;
-                 next_offset           <= next_offset + 4;
+               state                 <= SOURCE_CLOCK_ID;
+               rd_port_info_addr    <= '0';
+               wr_port_info_addr    <= '0';
+               next_offset           <= next_offset + 4;
+             end if;
+
+           when SOURCE_CLOCK_ID =>
+
+             if(data_valid = '1') then
+               if(word_cnt = next_offset) then
+                 state               <= SOURCE_PORT_NUMBER;
+                 next_offset         <= next_offset + 1;
+                 rd_port_info_addr    <= '1';
+                 wr_port_info_addr    <= '0';
                end if;
              end if;
 
-           when CHECK_SOURCE_PORT_ID =>
+           when SOURCE_PORT_NUMBER =>
 
              if(data_valid = '1') then
-               if(ptp_source_id_data_i = data) then
-                 if(word_cnt = next_offset) then
-                   state               <= SEQ_ID;
-                   next_offset         <= next_offset + 1;
-                 else
-                   state               <= CHECK_SOURCE_PORT_ID;
-                   ptp_source_id_addr  <= ptp_source_id_addr + 1;
-                 end if;
-               else
-                 state                 <= WAIT_SOF; -- we are done, it's not announce
+               if(word_cnt = next_offset) then
+                 state               <= SEQ_ID;
+                 next_offset         <= next_offset + 1;
+                 rd_port_info_addr    <= '1';
+                 wr_port_info_addr    <= '1';
                end if;
              end if;
 
            when SEQ_ID =>
 
              if(data_valid = '1' and word_cnt = next_offset) then
-               seq_id_o              <= data;
-               seq_id_valid_o        <= '1';
-               if(g_snoop_mode = RX_CLOCK_CLASS_MODE) then
-                 state               <= WAIT_CLOCK_CLASS;
-                 next_offset         <= next_offset + 9;
-               else
-                 state               <= WAIT_SOF;
-                 detect_mask(g_port_number-1 downto 0)             <= port_mask;
-                 detect_mask(31              downto g_port_number) <= (others =>'0');
-               end if;
+               state                 <= WAIT_CLOCK_CLASS;
+               next_offset           <= next_offset + 8;
              end if;
 
            when WAIT_CLOCK_CLASS=>
 
              if(data_valid = '1' and word_cnt = next_offset) then
-               state                 <= WAIT_OOB;
-               clock_class_o         <= data;
-               clock_class_valid_o   <= '1';
+               state                 <= CLOCK_CLASS;
+               next_offset           <= next_offset + 1;
              end if;
 
-           when WAIT_OOB =>
 
-             if(oob_valid = '1') then -- 1st OOB word
-               detect_mask           <= f_onehot_decode(data(4 downto 0));
+           when CLOCK_CLASS=>
+
+             if(data_valid = '1' and word_cnt = next_offset) then
+               if(g_snoop_mode = TX_SEQ_ID_MODE) then
+                 state               <= EVALUATE_TX;
+                 detect_mask(g_port_number-1 downto 0)             <= port_mask;
+                 detect_mask(31              downto g_port_number) <= (others =>'0');
+                 detected_announce_o  <= '1';
+               else
+                 state               <= WAIT_EOF;
+               end if;
+             end if;
+
+	    when EVALUATE_TX =>
+             if(holdover_on = '1' and (clockClassMatch ='0' or duplicate '1' or seqIdWrong='1'')) then
+               state                <= WAIT_SOF;
+               dropAnnounce         <= '1'
+             else
+               state                <= WAIT_EOF;
+             end if;
+           when WAIT_EOF =>
+
+             if(oob_valid = '1' or (cyc_d = '1' and snk_i.cyc = '0' )) then -- 1st OOB word
                state                 <= WAIT_SOF;
+               if(dropAnnounce = '0') then 
+                 sel                   <= not sel;
+               end if;
+               if(oob_valid = '1'  and g_snoop_mode = RX_CLOCK_CLASS_MODE) then
+                 detect_mask         <= f_onehot_encode(data(4 downto 0));
+                 detected_announce_o   <= '1';
+               end if;
              end if;
 
            when others => null;
@@ -340,8 +442,45 @@ begin
        end if;
      end if;    
    end process;
+  word_rd                    <= word_cnt +1;
+  
+  rd_ram_addr_o              <= '1' & "000"   & port_index & rd_port_info_addr  when ((word_cnt = next_offset and state = SOURCE_CLOCK_ID) or state = SOURCE_PORT_NUMBER) else
+                                '0' &     sel & std_logic_vector(word_rd);
+  wr_ram_addr_o              <= '1' & "000"   & port_index & wr_port_info_addr  when (state = SOURCE_PORT_NUMBER or state = SEQ_ID) else
+                                '0' & not sel & std_logic_vector(word_cnt);
+  wr_ram_data_o(15 downto 0) <=  std_logic_vector(to_unsigned(data) + 1) when data_valid = '1'and state = SEQ_ID) else
+                                 data                                    when (data_valid = '1') else 
+                                 (others =>'0');
+  
+  -- start of PTP announce msg
+  wr_ram_data_o(17) <= '1' when (state             = WAIT_MSG_TYPE and 
+                                 data_valid        = '1'           and 
+                                 word_cnt          = next_offset   and
+                                 data(11 downto 8) = x"B"   and 
+                                 data(3 downto 0)  = x"2") else
+                       '0';
+  -- valid data (to somehow pass info when the frame finishes (without having to register)
+  wr_ram_data_o(16)           <= data_valid; 
+  
+  wr_ram_ena_o               <= data_valid;
 
-  ptp_source_id_addr_o <=std_logic_vector(ptp_source_id_addr);
-  rxtx_detected_mask_o <=detect_mask(g_port_number-1 downto 0);
+
+  rxtx_detected_mask_o       <= detect_mask(g_port_number-1 downto 0);
+
+  wr_ram_sel_o               <= sel;
+  rd_ram_sel_o               <= not sel;
+  
+  src_o.adr   <= snk_i.adr;
+  src_o.dat   <= snk_i.dat when (dropAnnounce = '0') else (others =>'0');
+  src_o.cyc   <= snk_i.cyc;
+  src_o.stb   <= snk_i.stb when (dropAnnounce = '0') else '0';
+  src_o.we    <= snk_i.we;
+  src_o.sel   <= snk_i.sel;
+  
+  snk_o.ack   <= src_i.ack;
+  snk_o.stall <= src_i.stall;
+  snk_o.err   <= src_i.err;
+  snk_o.rty   <= src_i.rty; 
+  
 end behavioral;
 

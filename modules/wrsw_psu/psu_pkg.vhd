@@ -50,25 +50,32 @@ use work.wr_fabric_pkg.all;
 package psu_pkg is
 
   type t_snoop_mode is (TX_SEQ_ID_MODE, RX_CLOCK_CLASS_MODE);
-  function f_onehot_decode(x : std_logic_vector) return std_logic_vector;
+  
   component psu_announce_snooper is
     generic(
       g_port_number   : integer := 18;
       g_snoop_mode    : t_snoop_mode := TX_SEQ_ID_MODE);
     port (
-      clk_sys_i : in std_logic;
-      rst_n_i   : in std_logic;
-      snk_i                 : in  t_wrf_sink_in;
-      src_i                 : in  t_wrf_source_in;
-      rtu_dst_port_mask_i   : in std_logic_vector(g_port_number-1 downto 0);
-      ptp_source_id_addr_o  : out std_logic_vector(7  downto 0); 
-      ptp_source_id_data_i  :  in std_logic_vector(15 downto 0); 
-      rxtx_detected_mask_o  : out std_logic_vector(g_port_number-1 downto 0);
-      seq_id_o              : out std_logic_vector(15 downto 0);
-      seq_id_valid_o        : out std_logic;
-      clock_class_o         : out std_logic_vector(15 downto 0);
-      clock_class_valid_o   : out std_logic;
-      ignore_rx_port_id_i   :  in std_logic);
+    clk_sys_i : in std_logic;
+    rst_n_i   : in std_logic;
+    snk_i                 : in  t_wrf_sink_in;
+    src_i                 : in  t_wrf_source_in;
+    rtu_dst_port_mask_i   : in  std_logic_vector(g_port_number-1 downto 0);
+    snoop_ports_mask_i    : in  std_logic_vector(g_port_number-1 downto 0);
+    clock_class_i         : in std_logic_vector(15 downto 0);
+    detected_announce_o   : out std_logic;
+    srcdst_port_mask_o    : out std_logic_vector(g_port_number-1 downto 0);
+    sourcePortID_match_o  : out std_logic;
+    clockClass_match_o    : out std_logic;
+    announce_duplicate_o  : out std_logic;
+    sequenceID_wrong_o    : out std_logic;
+    wr_ram_ena_o          : out std_logic;
+    wr_ram_data_o         : out std_logic_vector(17 downto 0);
+    wr_ram_addr_o         : out std_logic_vector(9 downto 0); 
+    wr_ram_sel_o          : out std_logic;
+    rd_ram_data_i         : in std_logic_vector(17 downto 0);
+    rd_ram_addr_o         : out std_logic_vector( 9 downto 0);    
+    rd_ram_sel_o          : out std_logic);
   end component;
   component psu_packet_injection is
     port (
@@ -80,25 +87,18 @@ package psu_pkg is
       snk_o : out t_wrf_sink_out;
       inject_req_i        : in  std_logic;
       inject_ready_o      : out std_logic;
-      inject_packet_sel_i : in  std_logic_vector(2 downto 0);
-      inject_user_value_i : in  std_logic_vector(15 downto 0);
-      inject_mode_i       : in  std_logic_vector(1 downto 0);
+      inject_packet_sel_i : in  std_logic;
+      inject_clockClass_i : in  std_logic_vector(15 downto 0);
+      inject_port_index_i : in  std_logic_vector( 4 downto 0);
       mem_addr_o : out std_logic_vector(9 downto 0);
-      mem_data_i : in  std_logic_vector(17 downto 0));
+      mem_data_i : in  std_logic_vector(17 downto 0);
+      mem_read_o : out std_logic);
   end component;
 
 end psu_pkg;
 
 package body psu_pkg is
 
-  function f_onehot_decode(x : std_logic_vector) return std_logic_vector is
-    variable tmp : std_logic_vector(2**x'length-1 downto 0);
-  begin
-    tmp                          := (others => '0');
-    tmp(to_integer(unsigned(x))) := '1';
-
-    return tmp;
-  end function f_onehot_decode;
 
 
 end psu_pkg;
