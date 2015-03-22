@@ -6,6 +6,7 @@
 `include "simdrv_wr_tru.svh"
 `include "simdrv_txtsu.svh"
 `include "simdrv_tatsu.svh"
+`include "simdrv_psu.svh"
 `include "simdrv_hwdu.svh"
 `include "endpoint_regs.v"
 `include "endpoint_mdio.v"
@@ -81,6 +82,7 @@ module main;
    CSimDrv_WR_TRU    tru;
    CSimDrv_TXTSU txtsu;
    CSimDrv_TATSU tatsu;
+   CSimDrv_PSU   psu;
    CSimDrv_HWDU hwdu;
    EthPacket ptpAnnounce;
    
@@ -356,6 +358,14 @@ module main;
    integer g_send_announce_from_NIC         = 0;
    
    reg [g_max_ports-1:0] announceTxVector   = 18'b111111111111111111;
+   reg [31:0]            psu_tx_mask        = 18'b000000000000001111;
+   reg [31:0]            psu_rx_mask        = 18'b000000000000001000;
+   reg [15:0]            psu_hldvr_clk_class= 7;
+   reg [ 2:0]            psu_inj_prio       = 0;
+   bit                   ignore_rx_port_id  = 0;
+   bit                   psu_enable         = 0;
+   
+   integer g_psu_test                       = 0;                        
    /** ***************************   test scenario 1  ************************************* **/ 
   /*
    * testing switch over between ports 0,1,2
@@ -2952,7 +2962,7 @@ module main;
         ptpAnnounce.payload[i] = ANNOUNCE_templ[i];
     
     g_send_announce_from_NIC = 10; // ten times to all ports
-    
+    g_psu_test               =1;
   end
 //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -3848,7 +3858,11 @@ module main;
       txtsu = new (cpu_acc, 'h51000);
       txtsu.init();
       
-      
+      $display("InitPSU");
+
+      psu = new (cpu_acc, 'h70000);
+      psu.init(psu_inj_prio,psu_hldvr_clk_class,ignore_rx_port_id, psu_rx_mask, psu_tx_mask);
+
       $display("Initialization done");
 
       rtu = new;
@@ -4695,9 +4709,25 @@ module main;
          end 
       join_none; //
 
+      fork // testing PSU 
+         begin
+           if(g_psu_test > 0)
+           begin 
+             wait_cycles(100);
+             psu.enable(1);
+             wait_cycles(1300);
+             psu.dbg_holdover(1);
+             wait_cycles(1300);
+             psu.dbg_holdover(0);
+             wait_cycles(1300);
+             psu.dbg_dump_tx_ram();
+           end
+         end 
+      join_none; //
+
    end 
 
-  /* ***************************************************************************************
+  /* **************************************************************************************
    *           Page allocator and resource manager debugging
    * ***************************************************************************************
    * this stuff is used to debug allocator and resource manager - it is very slow and has 
