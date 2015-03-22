@@ -112,7 +112,9 @@ entity wrsw_rt_subsystem is
     -- bit per rx clock, indicates whether the clocks are OK (UP) or not reliabie (DOWN)
     -- used for switchover between them
     clk_rx_status_i : in  std_logic_vector(g_num_rx_clocks-1 downto 0) :=(others=>'0'); 
-
+    selected_ref_clk_o  : out  std_logic_vector(g_num_rx_clocks-1 downto 0);
+    holdover_on_o       : out  std_logic;
+    rx_holdover_msg_i   : in std_logic;
     -- Debug
     spll_dbg_o  : out std_logic_vector(5 downto 0)
     );
@@ -154,6 +156,9 @@ architecture rtl of wrsw_rt_subsystem is
       slave_i         : in  t_wishbone_slave_in;
       slave_o         : out t_wishbone_slave_out;
       clk_rx_status_i : in  std_logic_vector(g_num_ref_inputs-1 downto 0) :=(others=>'0');
+      selected_ref_clk_o  : out  std_logic_vector(g_num_ref_inputs-1 downto 0);
+      holdover_on_o       : out  std_logic;
+      rx_holdover_msg_i   : in  std_logic;
       debug_o         : out std_logic_vector(5 downto 0);
       dbg_fifo_irq_o  : out std_logic);
   end component;
@@ -354,6 +359,9 @@ begin  -- rtl
       slave_i         => cnx_master_out(c_SLAVE_SOFTPLL),
       slave_o         => cnx_master_in(c_SLAVE_SOFTPLL),
       clk_rx_status_i => clk_rx_status_i,
+      selected_ref_clk_o => selected_ref_clk_o,
+      holdover_on_o   => holdover_on_o,
+      rx_holdover_msg_i => rx_holdover_msg_i,
       debug_o         => spll_dbg_o);
   
   U_PPS_Gen : xwr_pps_gen
