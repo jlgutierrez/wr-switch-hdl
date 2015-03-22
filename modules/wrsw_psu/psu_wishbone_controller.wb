@@ -69,6 +69,16 @@ peripheral {
 				type = BIT;
 			};	
 			field {
+				name = "Inject Packet Priority";
+				description = "The priority provided to RTU with which the injected Announce is sent (does not change priority in the Ethernet frame, might not have at all) but affects priority in output queue of SWcore";
+				prefix = "INJ_PRIO";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = SLV;
+				size = 3;
+				align= 8;
+			};
+			field {
 				name = "Holdover clockClass";
 				description = "ClockClass to be sent when HW-generating Announce and the one we detect when snooping received Announce";
 				prefix = "HOLDOVER_CLK_CLASS";
@@ -77,7 +87,8 @@ peripheral {
 				type = SLV;
 				size = 16;
 				align= 16;
-			};	
+			};
+	
 	};
 
 	reg {
@@ -116,10 +127,40 @@ peripheral {
 		description = "Some debugging and control for testing";
 		
 			field {
-				name = "Trig Annouce tx";
-				description = "Setting this bit causes PSU to generate Announces as if they were triggered by SoftPLL";
-				prefix = "TX_ANN_TRIG";
-				type = MONOSTABLE;
+				name = "Holdover ON";
+				description = "This tests holdover condition (info from SoftPLL), mainly to trigger Announce sending";
+				prefix = "DBG_HOLDOVER_ON";
+				type = BIT;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+			field {
+				name = "Tx inject/snoop RAM read enable";
+				description = "Enables reading from WB RAM used for transmission snooping and injections";
+				prefix = "TX_RAM_RD_ENA";
+				type = BIT;
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+			};
+			
+			field {
+				name = "Tx inject/snoop RAM ADR";
+				description = "Address to read from Tx inject/snoop RAM";
+				prefix = "TX_RAM_RD_ADR";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = SLV;
+				align = 4;
+				size = 10;
+			};
+			field {
+				name = "Tx inject/snoop RAM DAT";
+				description = "data to read from Tx inject/snoop RAM";
+				prefix = "TX_RAM_RD_DAT";
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+				type = SLV;
+				size = 18;
 			};
 	};
 

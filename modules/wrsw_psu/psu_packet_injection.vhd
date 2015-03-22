@@ -53,11 +53,14 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
-use work.endpoint_private_pkg.all;
+use work.psu_pkg.all;
+use work.wr_fabric_pkg.all;
+-- use work.endpoint_private_pkg.all;
 
 entity psu_packet_injection is
-
+  generic(
+    g_port_number      : integer:=18
+  );
   port
     (
       clk_sys_i : in std_logic;
@@ -70,52 +73,62 @@ entity psu_packet_injection is
       snk_i : in  t_wrf_sink_in;
       snk_o : out t_wrf_sink_out;
 
+      rtu_dst_port_mask_o : out std_logic_vector(g_port_number-1 downto 0);
+      rtu_prio_o          : out std_logic_vector(2 downto 0);
+      rtu_drop_o          : out std_logic;
+      rtu_rsp_valid_o     : out std_logic;
+      rtu_rsp_ack_i       : in  std_logic;
+
+      rtu_dst_port_mask_i : in  std_logic_vector(g_port_number-1 downto 0);
+      rtu_prio_i          : in  std_logic_vector(2 downto 0);
+      rtu_drop_i          : in  std_logic;
+      rtu_rsp_valid_i     : in  std_logic;
+      rtu_rsp_ack_o       : out std_logic;
+
       inject_req_i        : in  std_logic;
       inject_ready_o      : out std_logic;
-      inject_packet_sel_i : in  std_logic;
-      inject_clockClass_i : in  std_logic_vector(15 downto 0);
-      inject_port_index_i : in  std_logic_vector( 4 downto 0);
       
-      mem_addr_o : out std_logic_vector(9 downto 0);
-      mem_data_i : in  std_logic_vector(17 downto 0);
-      mem_read_o : out std_logic
+      -- keep valid when injecting
+      inject_clockClass_i : in  std_logic_vector(15 downto 0);
+      inject_port_mask_i  : in  std_logic_vector(g_port_number-1 downto 0);
+      inject_pck_prio_i   : in  std_logic_vector( 2 downto 0);
+      
+      rd_ram_data_i       : in  std_logic_vector(17 downto 0)
       );
 
 end psu_packet_injection;
 
 architecture rtl of psu_packet_injection is
 
-  type t_state is (WAIT_IDLE, SOF, DO_INJECT, EOF);
+  type t_state is (WAIT_IDLE, TX_STATUS, SOF, DO_INJECT, EOF);
 
-  alias validData     : std_logic is mem_data_i(16);
-  alias startOfPTP    : std_logic is mem_data_i(17);
+  alias validData     : std_logic is rd_ram_data_i(16);
+  alias clockClass    : std_logic is rd_ram_data_i(17);
 
   signal state        : t_state;
-  signal counter      : unsigned(8 downto 0);
-  signal announce_cnt : unsigned(6 downto 0);
 
   signal within_packet : std_logic;
   signal select_inject : std_logic;
 
   signal inj_src            : t_wrf_source_out;
+  signal inj_snk            : t_wrf_sink_out;
   signal inj_stb            : std_logic;
   signal inject_req_latched : std_logic;
   signal inject_done        : std_logic; -- ML: indicates that requrested injection was successful
-  
-  signal cyc_d              : std_logic;
-  signal rd_port_info_addr  : std_logic;
-  signal def_status_reg : t_wrf_status_reg;
+
+  signal def_status_reg     : t_wrf_status_reg;
+  signal def_status_word    : std_logic_vector(15 downto 0);
+
+  signal rtu_rsp_valid      : std_logic;
   
 begin  -- rtl
-
-  snk_o.stall                 <= '1' when (state = DO_INJECT)                 else src_i.stall;
-  inject_done                 <= '1' when (state = EOF and src_i.stall = '0') else '0';
-  within_packet               <= snk_i.cyc;
 
   def_status_reg.has_smac <= '1';
   def_status_reg.has_crc  <= '0';
   def_status_reg.error    <= '0';
   def_status_reg.is_hp    <= '0';
+  
+  def_status_word         <=  f_marshall_wrf_status(def_status_reg);
 
   p_injection_request_ready : process(clk_sys_i)
   begin
@@ -141,111 +154,60 @@ begin  -- rtl
       if rst_n_i = '0' then
         state             <= WAIT_IDLE;
         select_inject     <= '0';
-        no_template_error <= '0';
         inj_src.cyc       <= '0';
         inj_stb           <= '0';
         inj_src.we        <= '0'; 
+        rtu_rsp_valid     <= '0'; 
+        inj_src.adr       <= (others =>'0');
       else
         case state is
           when WAIT_IDLE =>
             inj_src.cyc       <= '0';
             inj_stb           <= '0';
             inj_src.we        <= '0';
-            no_template_error <= '0';
 
-            if(inject_req_i = '1') then --ML: we make sure that we remember the packet_sel_i 
-                                        --    only when req_i HIGH
-              counter(8)          <= inject_packet_sel_i;
-              counter(7 downto 0) <= (others => '0');
-              announce_cnt        <= (others => '0');
-            end if;
-
-            if(within_packet = '0' and inject_req_latched = '1' and no_template_error = '0') then
+            if(within_packet = '0' and inject_req_latched = '1') then
               state         <= SOF;
               select_inject <= '1';
+              inj_src.cyc   <= '1';
+              rtu_rsp_valid <= '1'; 
             else
               select_inject <= '0';
             end if;
 
+            if (rtu_rsp_valid = '1' and select_inject = '1' and rtu_rsp_ack_i = '1') then
+              rtu_rsp_valid <= '0'; 
+            end if; 
+
           when SOF =>
             if(src_i.stall = '0') then
-              inj_src.cyc <= '1';
-              state       <= TX_STATUS;
+              inj_stb        <= '1';
+              state          <= TX_STATUS;
+              inj_src.adr    <= c_WRF_STATUS;
             end if;
 
           when TX_STATUS => 
 
-            inj_src.adr     <= c_WRF_STATUS;
-            if(inj_src.stall = '0') then
-              inj_stb        <= '1';
-              state          <= DO_INJECT_HEADERS;
+            if(src_i.stall = '0') then
+              state          <= DO_INJECT;
+              inj_src.adr    <= c_WRF_DATA;
             else
               inj_stb        <= '0';
             end if;
 
-          when DO_INJECT_HEADERS =>
+         when DO_INJECT =>
 
-            if(inj_src.stall = '0') then
+            if(src_i.stall = '0') then
               inj_stb        <= '1';
-              counter        <= counter + 1;
-            else
-              inj_stb         <= '0';
-            end if;
-
-            if(first_word = '1' and template_first = '0') then -- ML: first word read
-              first_word <= '0';
-            end if;
-
-            if(validData = '1' and startOfPTP = '1') then
-              announce_cnt   <= announce_cnt + 1;
-              state          <= DO_INJECT_START_PTP
-              rd_port_info_addr  <= '1';
-            end if;
-
-         when DO_INJECT_START_PTP =>
-
-            if(inj_src.stall = '0') then
-              inj_stb        <= '1';
-              announce_cnt   <= announce_cnt + 1;
-              counter        <= counter + 1;
             else
               inj_stb        <= '0';
-            end if;
-
-            if(announce_cnt = 4) then
-              state              <=  DO_INJECT_PORT_STUFF;
-            end if;
-
-         when DO_INJECT_PORT_STUFF =>
-            
-            if(inj_src.stall = '0') then
-              inj_stb            <= '1';
-              rd_port_info_addr  <= '1';
-              announce_cnt       <= announce_cnt + 1;
-              counter            <= counter + 1;
-            else
-              inj_stb            <= '0';
-            end if;
-
-            if(announce_cnt = 6) then
-              state              <=  DO_INJECT_REST;
-            end if;
-
-         when DO_INJECT_REST =>
-
-            if(inj_src.stall = '0') then
-              inj_stb        <= '1';
-              counter        <= counter + 1;
-              announce_cnt   <= announce_cnt + 1;
-            else
-              inj_src.stb    <= '0';
             end if;
 
             if(inj_stb = '1' and validData = '0') then
               inj_stb           <= '0';
               state             <= EOF;
             end if;
-            
+
           when EOF =>
             inj_src.cyc       <= '0';
             inj_stb           <= '0';
@@ -258,19 +220,31 @@ begin  -- rtl
     end if;
   end process;
 
-  -- the last word cannot be user-defined as we use the user bit to indicate  odd size
-  inj_src.sel(1) <= '1';--template_user when (template_last = '1' and first_word = '0') else '1';
+  inj_src.sel(1) <= '1';
   inj_src.sel(0) <= '1';
-  inj_src.stb    <= inj_stb and validData;
-  inj_src.dat    <= inject_clockClass_i               when (inj_src.adr   = c_WRF_DATA   and 
-                                                            announce_cnt  = 19)           else
-                 f_marshall_wrf_status(def_status_reg)when (inj_src.adr   = c_WRF_STATUS) else
-                 mem_data_i(15 downto 0) ;
+  inj_src.stb    <= '1' when (inj_stb = '1' and validData = '1') else '0';
+  inj_src.dat    <= inject_clockClass_i when (inj_src.adr = c_WRF_DATA and clockClass = '1') else
+                    def_status_word     when (inj_src.adr = c_WRF_STATUS)                    else
+                    rd_ram_data_i(15 downto 0) ;
   
-  src_o      <= inj_src when select_inject = '1' else snk_i;
-  snk_o      <= inj_src when select_inject = '1' else src_i;
+  
+  inject_done         <= '1' when (state = EOF and src_i.stall = '0') else '0';
+  within_packet       <= snk_i.cyc;
 
-  mem_addr_o <= '1' & "000" & inject_port_index_i when (announce_cnt = 3 or announce_cnt = 4) else
-                '0' & std_logic_vector(counter);
-  mem_read_o <= '0' when (state = WAIT_IDLE) else '1';
+  inj_snk.ack         <= '0';
+  inj_snk.stall       <= '1'                 when select_inject = '1' else src_i.stall;
+  inj_snk.err         <= '0';
+  inj_snk.rty         <= '0';
+
+  src_o               <= inj_src             when select_inject = '1' else snk_i;
+  snk_o               <= inj_snk             when select_inject = '1' else src_i;
+  rtu_dst_port_mask_o <= inject_port_mask_i  when select_inject = '1' else rtu_dst_port_mask_i;
+  rtu_prio_o          <= inject_pck_prio_i   when select_inject = '1' else rtu_prio_i;
+  rtu_drop_o          <= '0'                 when select_inject = '1' else rtu_drop_i;
+  rtu_rsp_valid_o     <= rtu_rsp_valid       when select_inject = '1' else rtu_rsp_valid_i;
+  rtu_rsp_ack_o       <= rtu_rsp_ack_i;
+
+--   mem_addr_o <= '1' & "000" & inject_port_index_i when (announce_cnt = 3 or announce_cnt = 4) else
+--                 '0' & std_logic_vector(counter);
+--   mem_read_o <= '0' when (state = WAIT_IDLE) else '1';
 end rtl;

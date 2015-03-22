@@ -155,6 +155,7 @@ architecture behavioral of psu_announce_snooper is
     SOURCE_PORT_NUMBER,
     SEQ_ID,
     WAIT_CLOCK_CLASS,
+    EVALUATE_TX,
     CLOCK_CLASS,
     WAIT_EOF
     );
@@ -183,7 +184,9 @@ architecture behavioral of psu_announce_snooper is
    signal duplicate          : std_logic; -- the same sequence second time
    signal seqIdWrong         : std_logic; -- not 1 greater than previous
    signal dropAnnounce       : std_logic;
+   signal zeros              : std_logic_vector(g_port_number-1 downto 0);
 begin   
+   zeros <=(others =>'0');
    -- data stored in "data" is being acked by snk | data cnt is incremented
    data_valid <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr="00") else '0';
    oob_valid  <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr="01") else '0';
@@ -219,9 +222,9 @@ begin
 
         if(state = WAIT_SOURCE_PORT_ID) then
           sourcePortIDmatch <= '1';
-        elsif(state = SOURCE_CLOCK_ID and data_valid = '1' and rd_ram_data_i(15 downto 0) ~= data) then
+        elsif(state = SOURCE_CLOCK_ID and data_valid = '1' and rd_ram_data_i(15 downto 0) /= data) then
           sourcePortIDmatch <= '0';
-        elsif(state = SOURCE_PORT_NUMBER and data_valid = '1' and rd_ram_data_i(15 downto 0) ~= data) then
+        elsif(state = SOURCE_PORT_NUMBER and data_valid = '1' and rd_ram_data_i(15 downto 0) /= data) then
           sourcePortIDmatch <= '0';
         elsif(state = WAIT_SOF) then
           sourcePortIDmatch <= '0';
@@ -233,7 +236,7 @@ begin
           clockClassMatch <= '0';
         end if;
         
-        if(state = SEQ_ID and data_valid = '1' and std_logic_vector(to_unsigned(data)+1) = rd_ram_data_i(15 downto 0)) then
+        if(state = SEQ_ID and data_valid = '1' and std_logic_vector(unsigned(data)+1) = rd_ram_data_i(15 downto 0)) then
           duplicate <= '1';
         elsif(state = WAIT_SOF) then
           duplicate <= '0';
@@ -275,14 +278,18 @@ begin
              detected_announce_o  <= '0';
              
              if(cyc_d = '0' and snk_i.cyc ='1') then
-               state                <= WAIT_DATA; 
-               next_offset          <= (others=>'0');
-               rd_ram_addr          <= (others=>'0');
-               port_mask            <= rtu_dst_port_mask_i;
-               detect_mask          <= (others=>'0');
-               rd_port_info_addr    <= '0';
-               wr_port_info_addr    <= '0';
-               dropAnnounce         <= '0';
+               if(g_snoop_mode = TX_SEQ_ID_MODE and (snoop_ports_mask_i & rtu_dst_port_mask_i) = zeros) then
+                 state                <= WAIT_SOF;
+               else
+                 state                <= WAIT_DATA; 
+                 next_offset          <= (others=>'0');
+                 rd_ram_addr          <= (others=>'0');
+                 port_mask            <= rtu_dst_port_mask_i;
+                 detect_mask          <= (others=>'0');
+                 rd_port_info_addr    <= '0';
+                 wr_port_info_addr    <= '0';
+                 dropAnnounce         <= '0';
+               end if;
              end if;
 
            when WAIT_DATA =>
@@ -408,31 +415,30 @@ begin
              if(data_valid = '1' and word_cnt = next_offset) then
                if(g_snoop_mode = TX_SEQ_ID_MODE) then
                  state               <= EVALUATE_TX;
-                 detect_mask(g_port_number-1 downto 0)             <= port_mask;
-                 detect_mask(31              downto g_port_number) <= (others =>'0');
-                 detected_announce_o  <= '1';
                else
                  state               <= WAIT_EOF;
                end if;
              end if;
 
 	    when EVALUATE_TX =>
-             if(holdover_on = '1' and (clockClassMatch ='0' or duplicate '1' or seqIdWrong='1'')) then
-               state                <= WAIT_SOF;
-               dropAnnounce         <= '1'
-             else
-               state                <= WAIT_EOF;
+             if(holdover_on_i = '1' and (clockClassMatch ='0' or duplicate = '1' or seqIdWrong ='1')) then
+               dropAnnounce         <= '1';
              end if;
+             state                <= WAIT_EOF;
            when WAIT_EOF =>
 
              if(oob_valid = '1' or (cyc_d = '1' and snk_i.cyc = '0' )) then -- 1st OOB word
                state                 <= WAIT_SOF;
+               dropAnnounce          <= '0';
                if(dropAnnounce = '0') then 
                  sel                   <= not sel;
-               end if;
-               if(oob_valid = '1'  and g_snoop_mode = RX_CLOCK_CLASS_MODE) then
-                 detect_mask         <= f_onehot_encode(data(4 downto 0));
                  detected_announce_o   <= '1';
+                 if(oob_valid = '1'  and g_snoop_mode = RX_CLOCK_CLASS_MODE) then
+                   detect_mask           <= f_onehot_encode(data(4 downto 0));
+                 elsif(g_snoop_mode = TX_SEQ_ID_MODE) then
+                   detect_mask(g_port_number-1 downto 0)             <= port_mask;
+                   detect_mask(31              downto g_port_number) <= (others =>'0');
+                 end if;
                end if;
              end if;
 
@@ -444,28 +450,29 @@ begin
    end process;
   word_rd                    <= word_cnt +1;
   
-  rd_ram_addr_o              <= '1' & "000"   & port_index & rd_port_info_addr  when ((word_cnt = next_offset and state = SOURCE_CLOCK_ID) or state = SOURCE_PORT_NUMBER) else
+  rd_ram_addr_o              <= '1' &     sel & "00" & port_index & rd_port_info_addr  when ((word_cnt = next_offset and state = SOURCE_CLOCK_ID) or state = SOURCE_PORT_NUMBER) else
                                 '0' &     sel & std_logic_vector(word_rd);
-  wr_ram_addr_o              <= '1' & "000"   & port_index & wr_port_info_addr  when (state = SOURCE_PORT_NUMBER or state = SEQ_ID) else
+  wr_ram_addr_o              <= '1' & not sel & "00" & port_index & wr_port_info_addr  when (state = SOURCE_PORT_NUMBER or state = SEQ_ID) else
                                 '0' & not sel & std_logic_vector(word_cnt);
-  wr_ram_data_o(15 downto 0) <=  std_logic_vector(to_unsigned(data) + 1) when data_valid = '1'and state = SEQ_ID) else
-                                 data                                    when (data_valid = '1') else 
+  wr_ram_data_o(15 downto 0) <=  std_logic_vector(unsigned(data) + 1) when (data_valid = '1' and state = SEQ_ID) else
+                                 data                                 when (data_valid = '1') else 
                                  (others =>'0');
   
+  wr_ram_data_o(17) <= '1' when (state = CLOCK_CLASS) else '0';
   -- start of PTP announce msg
-  wr_ram_data_o(17) <= '1' when (state             = WAIT_MSG_TYPE and 
-                                 data_valid        = '1'           and 
-                                 word_cnt          = next_offset   and
-                                 data(11 downto 8) = x"B"   and 
-                                 data(3 downto 0)  = x"2") else
-                       '0';
+--   wr_ram_data_o(17) <= '1' when (state             = WAIT_MSG_TYPE and 
+--                                  data_valid        = '1'           and 
+--                                  word_cnt          = next_offset   and
+--                                  data(11 downto 8) = x"B"   and 
+--                                  data(3 downto 0)  = x"2") else
+--                        '0';
   -- valid data (to somehow pass info when the frame finishes (without having to register)
   wr_ram_data_o(16)           <= data_valid; 
   
-  wr_ram_ena_o               <= data_valid;
+  wr_ram_ena_o                <= data_valid;
 
 
-  rxtx_detected_mask_o       <= detect_mask(g_port_number-1 downto 0);
+  srcdst_port_mask_o       <= detect_mask(g_port_number-1 downto 0);
 
   wr_ram_sel_o               <= sel;
   rd_ram_sel_o               <= not sel;
@@ -477,7 +484,7 @@ begin
   src_o.we    <= snk_i.we;
   src_o.sel   <= snk_i.sel;
   
-  snk_o.ack   <= src_i.ack;
+  snk_o.ack   <= src_i.ack when (dropAnnounce = '0') else '1';
   snk_o.stall <= src_i.stall;
   snk_o.err   <= src_i.err;
   snk_o.rty   <= src_i.rty; 

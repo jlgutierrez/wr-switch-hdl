@@ -45,6 +45,7 @@ use ieee.math_real.log2;
 
 library work;
 use work.wr_fabric_pkg.all;
+use work.psu_wbgen2_pkg.all;
 
 
 package psu_pkg is
@@ -59,10 +60,14 @@ package psu_pkg is
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
     snk_i                 : in  t_wrf_sink_in;
+    snk_o                 : out t_wrf_sink_out;
+
     src_i                 : in  t_wrf_source_in;
+    src_o                 : out t_wrf_source_out;
     rtu_dst_port_mask_i   : in  std_logic_vector(g_port_number-1 downto 0);
     snoop_ports_mask_i    : in  std_logic_vector(g_port_number-1 downto 0);
-    clock_class_i         : in std_logic_vector(15 downto 0);
+    holdover_on_i         : in std_logic;
+    holdover_clk_class_i  : in std_logic_vector(15 downto 0);
     detected_announce_o   : out std_logic;
     srcdst_port_mask_o    : out std_logic_vector(g_port_number-1 downto 0);
     sourcePortID_match_o  : out std_logic;
@@ -78,22 +83,70 @@ package psu_pkg is
     rd_ram_sel_o          : out std_logic);
   end component;
   component psu_packet_injection is
+    generic(
+      g_port_number      : integer:=18
+    );
     port (
       clk_sys_i : in std_logic;
       rst_n_i   : in std_logic;
+
+
       src_i : in  t_wrf_source_in;
       src_o : out t_wrf_source_out;
       snk_i : in  t_wrf_sink_in;
       snk_o : out t_wrf_sink_out;
+      rtu_dst_port_mask_o : out std_logic_vector(g_port_number-1 downto 0);
+      rtu_prio_o          : out std_logic_vector(2 downto 0);
+      rtu_drop_o          : out std_logic;
+      rtu_rsp_valid_o     : out std_logic;
+      rtu_rsp_ack_i       : in  std_logic;
+      rtu_dst_port_mask_i : in  std_logic_vector(g_port_number-1 downto 0);
+      rtu_prio_i          : in  std_logic_vector(2 downto 0);
+      rtu_drop_i          : in  std_logic;
+      rtu_rsp_valid_i     : in  std_logic;
+      rtu_rsp_ack_o       : out std_logic;
       inject_req_i        : in  std_logic;
       inject_ready_o      : out std_logic;
-      inject_packet_sel_i : in  std_logic;
       inject_clockClass_i : in  std_logic_vector(15 downto 0);
-      inject_port_index_i : in  std_logic_vector( 4 downto 0);
-      mem_addr_o : out std_logic_vector(9 downto 0);
-      mem_data_i : in  std_logic_vector(17 downto 0);
-      mem_read_o : out std_logic);
+      inject_port_mask_i  : in  std_logic_vector(g_port_number-1 downto 0);
+      inject_pck_prio_i   : in  std_logic_vector( 2 downto 0);
+      
+      rd_ram_data_i       : in  std_logic_vector(17 downto 0)
+);
   end component;
+
+  component psu_tx_ctrl is
+    generic(
+      g_port_number       : integer := 18);
+    port (
+      clk_sys_i           : in std_logic;
+      rst_n_i             : in std_logic;
+      inject_req_o        : out std_logic;
+      inject_ready_i      : in  std_logic;
+      inject_port_mask_o  : out std_logic_vector(g_port_number-1 downto 0);
+      tx_port_mask_i      : in std_logic_vector(g_port_number-1 downto 0); 
+      tx_ann_detect_mask_i : in std_logic_vector(g_port_number-1 downto 0); 
+      holdover_on_i       : in  std_logic);
+   end component;
+
+
+  component psu_wishbone_controller is
+    port (
+      rst_n_i                                  : in     std_logic;
+      clk_sys_i                                : in     std_logic;
+      wb_adr_i                                 : in     std_logic_vector(1 downto 0);
+      wb_dat_i                                 : in     std_logic_vector(31 downto 0);
+      wb_dat_o                                 : out    std_logic_vector(31 downto 0);
+      wb_cyc_i                                 : in     std_logic;
+      wb_sel_i                                 : in     std_logic_vector(3 downto 0);
+      wb_stb_i                                 : in     std_logic;
+      wb_we_i                                  : in     std_logic;
+      wb_ack_o                                 : out    std_logic;
+      wb_stall_o                               : out    std_logic;
+      regs_i                                   : in     t_psu_in_registers;
+      regs_o                                   : out    t_psu_out_registers
+   );
+ end component;
 
 end psu_pkg;
 
