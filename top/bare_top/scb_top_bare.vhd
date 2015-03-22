@@ -463,12 +463,14 @@ architecture rtl of scb_top_bare is
   signal tx_psu_src_out  : t_wrf_source_out;
   signal rx_psu_snk_in   : t_wrf_sink_in;
   signal rx_psu_snk_out  : t_wrf_sink_out;
-  signal rx_psu_port_mask: std_logic_vector(31 downto 0);
-  signal rx_psu_prio     : std_logic_vector( 2 downto 0);
-  signal rx_psu_drop     : std_logic;
-  signal rx_psu_rsp_valid: std_logic;
-  signal rx_psu_rsp_ack  : std_logic;
-  
+  signal tx_psu_port_mask: std_logic_vector(31 downto 0);
+  signal tx_psu_prio     : std_logic_vector( 2 downto 0);
+  signal tx_psu_drop     : std_logic;
+  signal tx_psu_rsp_valid: std_logic;
+  signal tx_psu_rsp_ack  : std_logic;
+  signal rt_psu_sel_ref  : std_logic_vector(g_num_ports-1 downto 0);
+  signal rt_psu_holdover : std_logic;
+  signal rt_psu_rx_holdover_msg: std_logic;
 begin
 
 
@@ -591,6 +593,9 @@ begin
       pll_sync_n_o  => pll_sync_n_o,
       pll_reset_n_o => pll_reset_n_o,
       clk_rx_status_i => ep_port_status,
+      selected_ref_clk_o => rt_psu_sel_ref,
+      holdover_on_o      => rt_psu_holdover,
+      rx_holdover_msg_i  => rt_psu_rx_holdover_msg,
       spll_dbg_o    => spll_dbg_o);
 
   U_IRQ_Controller : xwb_vic
@@ -621,11 +626,11 @@ begin
         snk_o               => rx_psu_snk_out, --endpoint_snk_out(c_NUM_PORTS),
         src_i               => tx_psu_src_in,  -- endpoint_src_in(c_NUM_PORTS),
         src_o               => tx_psu_src_out,  --endpoint_src_out(c_NUM_PORTS),
-        rtu_dst_port_mask_o => rx_psu_port_mask(c_NUM_PORTS downto 0), --rtu_rsp(c_NUM_PORTS).port_mask(c_NUM_PORTS downto 0),
-        rtu_prio_o          => rx_psu_prio, --rtu_rsp(c_NUM_PORTS).prio,
-        rtu_drop_o          => rx_psu_drop, --rtu_rsp(c_NUM_PORTS).drop,
-        rtu_rsp_valid_o     => rx_psu_rsp_valid , --rtu_rsp(c_NUM_PORTS).valid,
-        rtu_rsp_ack_i       => rx_psu_rsp_ack, --rtu_rsp_ack(c_NUM_PORTS),
+        rtu_dst_port_mask_o => tx_psu_port_mask(c_NUM_PORTS downto 0), --rtu_rsp(c_NUM_PORTS).port_mask(c_NUM_PORTS downto 0),
+        rtu_prio_o          => tx_psu_prio, --rtu_rsp(c_NUM_PORTS).prio,
+        rtu_drop_o          => tx_psu_drop, --rtu_rsp(c_NUM_PORTS).drop,
+        rtu_rsp_valid_o     => tx_psu_rsp_valid , --rtu_rsp(c_NUM_PORTS).valid,
+        rtu_rsp_ack_i       => tx_psu_rsp_ack, --rtu_rsp_ack(c_NUM_PORTS),
         wb_i                => cnx_master_out(c_SLAVE_NIC),
         wb_o                => cnx_master_in(c_SLAVE_NIC));
   
@@ -971,36 +976,46 @@ begin
     gen_PSU: if(g_with_PSU = true) generate
       U_PSU: xwrsw_psu
         generic map(
-          g_port_number   =>c_NUM_PORTS,
-          g_port_mask_bits=>c_NUM_PORTS+1)
+          g_port_number          =>c_NUM_PORTS,
+          g_port_mask_bits       =>c_NUM_PORTS+1)
         port map(
-          clk_sys_i           => clk_sys,
-          rst_n_i             => rst_n_sys,
-          -- interface with NIC
-          tx_snk_i            => tx_psu_src_out,
-          tx_snk_o            => tx_psu_src_in,
-          rx_src_i            => rx_psu_snk_out,
-          rx_src_o            => rx_psu_snk_in,
-          rtu_dst_port_mask_i => rx_psu_port_mask(c_NUM_PORTS downto 0),
-          rtu_prio_i          => rx_psu_prio,
-          rtu_drop_i          => rx_psu_drop,
-          rtu_rsp_valid_i     => rx_psu_rsp_valid,
-          rtu_rsp_ack_o       => rx_psu_rsp_ack,
-          -- interface with RTU/SWcore
-          tx_src_i            => endpoint_src_in(c_NUM_PORTS),
-          tx_src_o            => endpoint_src_out(c_NUM_PORTS),
-          rx_snk_i            => endpoint_snk_in(c_NUM_PORTS),
-          rx_snk_o            => endpoint_snk_out(c_NUM_PORTS),
+          clk_sys_i              => clk_sys,
+          rst_n_i                => rst_n_sys,
 
-          rtu_dst_port_mask_o => rtu_rsp(c_NUM_PORTS).port_mask(c_NUM_PORTS downto 0),
-          rtu_prio_o          => rtu_rsp(c_NUM_PORTS).prio,
-          rtu_drop_o          => rtu_rsp(c_NUM_PORTS).drop,
-          rtu_rsp_valid_o     => rtu_rsp(c_NUM_PORTS).valid,
-          rtu_rsp_ack_i       => rtu_rsp_ack(c_NUM_PORTS),
-          rx_announce_o       => open,
-          tx_announce_i       => '0',-- TODO
-          wb_i                => cnx_master_out(c_SLAVE_PSU),
-          wb_o                => cnx_master_in(c_SLAVE_PSU));
+          -- interface with NIC: tx path
+          tx_snk_i               => tx_psu_src_out,
+          tx_snk_o               => tx_psu_src_in,
+          tx_rtu_dst_port_mask_i => tx_psu_port_mask(c_NUM_PORTS downto 0),
+          tx_rtu_prio_i          => tx_psu_prio,
+          tx_rtu_drop_i          => tx_psu_drop,
+          tx_rtu_rsp_valid_i     => tx_psu_rsp_valid,
+          tx_rtu_rsp_ack_o       => tx_psu_rsp_ack,
+
+          -- interface with NIC: rx path
+          rx_src_i               => rx_psu_snk_out,
+          rx_src_o               => rx_psu_snk_in,
+
+          -- interface with RTU/SWcore: tx path
+          tx_src_i               => endpoint_src_in(c_NUM_PORTS),
+          tx_src_o               => endpoint_src_out(c_NUM_PORTS),
+          tx_rtu_dst_port_mask_o => rtu_rsp(c_NUM_PORTS).port_mask(c_NUM_PORTS downto 0),
+          tx_rtu_prio_o          => rtu_rsp(c_NUM_PORTS).prio,
+          tx_rtu_drop_o          => rtu_rsp(c_NUM_PORTS).drop,
+          tx_rtu_rsp_valid_o     => rtu_rsp(c_NUM_PORTS).valid,
+          tx_rtu_rsp_ack_i       => rtu_rsp_ack(c_NUM_PORTS),
+
+          -- interface with SWcore: rx path
+          rx_snk_i               => endpoint_snk_in(c_NUM_PORTS),
+          rx_snk_o               => endpoint_snk_out(c_NUM_PORTS),
+
+          -- interfac with rt_subsystem
+          selected_ref_clk_i     => rt_psu_sel_ref,
+          holdover_on_i          => rt_psu_holdover,
+          rx_holdover_msg_o      => rt_psu_rx_holdover_msg,
+
+          -- config via WB
+          wb_i                   => cnx_master_out(c_SLAVE_PSU),
+          wb_o                   => cnx_master_in(c_SLAVE_PSU));
      end generate gen_PSU;
 
      gen_no_PSU: if(g_with_PSU = false) generate
@@ -1009,11 +1024,11 @@ begin
         tx_psu_src_in                <= endpoint_src_in(c_NUM_PORTS);
         endpoint_src_out(c_NUM_PORTS)<= tx_psu_src_out;
 
-        rtu_rsp(c_NUM_PORTS).port_mask <= rx_psu_port_mask;
-        rtu_rsp(c_NUM_PORTS).prio      <= rx_psu_prio;
-        rtu_rsp(c_NUM_PORTS).drop      <= rx_psu_drop;
-        rtu_rsp(c_NUM_PORTS).valid     <= rx_psu_rsp_valid;
-        rx_psu_rsp_ack                 <= rtu_rsp_ack(c_NUM_PORTS);
+        rtu_rsp(c_NUM_PORTS).port_mask <= tx_psu_port_mask;
+        rtu_rsp(c_NUM_PORTS).prio      <= tx_psu_prio;
+        rtu_rsp(c_NUM_PORTS).drop      <= tx_psu_drop;
+        rtu_rsp(c_NUM_PORTS).valid     <= tx_psu_rsp_valid;
+        tx_psu_rsp_ack                 <= rtu_rsp_ack(c_NUM_PORTS);
      end generate gen_no_PSU;
 
   end generate gen_network_stuff;
