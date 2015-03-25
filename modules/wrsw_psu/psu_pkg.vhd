@@ -58,7 +58,7 @@ package psu_pkg is
     clkCl_mismatch_det  : std_logic;
     prtID_mismatch_det  : std_logic;
 
-    holdover_clk_class   : std_logic_vector(15 downto 0);
+    holdover_clk_class   : std_logic_vector(7 downto 0);
     snoop_ports_mask     : std_logic_vector(31 downto 0);
   end record;
 
@@ -87,6 +87,7 @@ package psu_pkg is
     wr_ram_addr_o         : out std_logic_vector(9 downto 0); 
 
     rd_ram_data_i         : in std_logic_vector(17 downto 0);
+    rd_ram_ena_o          : out std_logic;
     rd_ram_addr_o         : out std_logic_vector( 9 downto 0);    
     config_i              : in t_snooper_config);
   end component;
@@ -115,7 +116,7 @@ package psu_pkg is
       rtu_rsp_ack_o       : out std_logic;
       inject_req_i        : in  std_logic;
       inject_ready_o      : out std_logic;
-      inject_clockClass_i : in  std_logic_vector(15 downto 0);
+      inject_clockClass_i : in  std_logic_vector(7 downto 0);
       inject_port_mask_i  : in  std_logic_vector(g_port_number-1 downto 0);
       inject_pck_prio_i   : in  std_logic_vector( 2 downto 0);
       

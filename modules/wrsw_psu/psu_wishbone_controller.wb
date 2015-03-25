@@ -61,6 +61,14 @@ peripheral {
 				type = BIT;
 			};
 			field {
+				name = "Clear Rx Msg";
+				description = "Clear the register that indicates Announce with holdover clockClass has been received";
+				prefix = "PSU_CLR_TX_MSG";
+				access_bus = WRITE_ONLY;
+				access_dev = READ_ONLY;
+				type = MONOSTABLE;
+			};
+			field {
 				name = "Inject Packet Priority";
 				description = "The priority provided to RTU with which the injected Announce is sent (does not change priority in the Ethernet frame, might not have at all) but affects priority in output queue of SWcore";
 				prefix = "INJ_PRIO";
@@ -77,22 +85,66 @@ peripheral {
 				access_bus = READ_WRITE;
 				access_dev = READ_ONLY;
 				type = SLV;
-				size = 16;
+				size = 8;
 				align= 16;
 			};
 	
 	};
 
 	reg {
+		name = "PSU Status";
+		prefix = "PSR";
+		description = "Status bits of the PSU operation";
+		
+			field {
+				name = "Holdover ON";
+				description = "Indicates that PSU is working in >holdover mode";
+				prefix = "HOLDOVER_ON";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Announce Holdover Msg Received";
+				description = "Indicates that Announce message with holdover ClockClass\
+                              was received on a port. This is the same bit which goes to SoftPLL, it is\
+                              cleared by SoftPLL when read out.";
+				prefix = "HD_MSG_RX";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Holdover info from SoftPLL";
+				description = "Indicates information provided by SoftPLL about holdover on.";
+				prefix = "HD_ON_SPLL";
+				type = BIT;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			};
+			field {
+				name = "Active reference from SoftPLl";
+				description = "Active reference number - information from SoftPLL";
+				prefix = "ACTIVE_REF_SPLL";
+				type = SLV;
+				size = 24;
+				align = 8;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
+			 };
+
+	};
+
+	reg {
 		name = "PSU Tx Control Register";
 		prefix = "PTCR";
 		description = "PSU Control register for tranmission, it defines drop-conditions\
-		for transmitted Announce and applies only when in holdover. This means that ";
+		for transmitted Announce and applies ONLY when in holdover. This means that ";
 		
 			field {
-				name = "Do not drop Announce with duplicate sequence Number";
-                              description = "Default=0 means that duplicates are dropped, 1: means that they are not";
-				prefix = "SEQID_DUP_NDROP";
+				name = "Drop Announce with duplicate sequence Number";
+                              description = "Default=0 means that duplicates are not dropped, 1: means that they are dropped (when holdover)";
+				prefix = "SEQID_DUP_DROP";
 				access_bus = READ_WRITE;
 				access_dev = READ_ONLY;
 				type = BIT;
@@ -101,7 +153,8 @@ peripheral {
 				name = "Drop Announce with wrong sequence Number";
 				description = "Default=0 means that\
                               the announce with wrong sequence number are not dropped, except when\
-                              duplicate, depending o the duplicate setting";
+                              duplicate, depending o the duplicate setting.\
+                              1: announce msgs with wrong sequence ID are dropped (when holdover)";
 				prefix = "SEQID_WRG_DROP";
 				access_bus = READ_WRITE;
 				access_dev = READ_ONLY;
@@ -110,7 +163,8 @@ peripheral {
 			field {
 				name = "Drop Announce with mismatched ClockClass";
 				description = "Default=0 means that\
-				the announce with non-holdover clockClass are not dropped";
+				the announce with non-holdover clockClass are not dropped.\
+				1: the announce msgs with non-holdoverClass are dropped (when holdover)";
 				prefix = "CLKCL_WRG_DROP";
 				access_bus = READ_WRITE;
 				access_dev = READ_ONLY;
@@ -119,8 +173,9 @@ peripheral {
 			field {
 				name = "Drop Announce with mismatched PortIdentity";
 				description = "Default=0 means\
-                              that the announce with PortIdenity different than the previously sent\
-                              announce are not dropped";
+                              that the announce with PortIdenity different then the previously sent\
+                              announce are not dropped.\
+                              1: announce msgs with PortId different then previously sent are dropped (when holdover).";
 				prefix = "PRTID_WRG_DROP";
 				access_bus = READ_WRITE;
 				access_dev = READ_ONLY;
@@ -203,12 +258,12 @@ peripheral {
 				access_dev = READ_ONLY;
 			};
 			field {
-				name = "Tx inject/snoop RAM read enable";
-				description = "Enables reading from WB RAM used for transmission snooping and injections";
-				prefix = "TX_RAM_RD_ENA";
+				name = "Tx inject/snoop RAM read valid";
+				description = "Indicates whether the data read out is valid";
+				prefix = "TX_RAM_DAT_VALID";
 				type = BIT;
-				access_bus = READ_WRITE;
-				access_dev = READ_ONLY;
+				access_bus = READ_ONLY;
+				access_dev = WRITE_ONLY;
 			};
 			
 			field {

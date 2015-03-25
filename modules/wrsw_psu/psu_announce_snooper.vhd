@@ -108,8 +108,9 @@ entity psu_announce_snooper is
     wr_ram_data_o         : out std_logic_vector(17 downto 0);
     wr_ram_addr_o         : out std_logic_vector(9 downto 0); 
 
-    rd_ram_data_i         : in std_logic_vector(17 downto 0);
-    rd_ram_addr_o         : out std_logic_vector( 9 downto 0);    
+    rd_ram_data_i         : in  std_logic_vector(17 downto 0);
+    rd_ram_ena_o          : out std_logic;
+    rd_ram_addr_o         : out std_logic_vector( 9 downto 0);
 
     config_i              : in t_snooper_config
     );
@@ -168,6 +169,8 @@ architecture behavioral of psu_announce_snooper is
    
 begin   
    zeros <=(others =>'0');
+
+   rd_ram_ena_o <= cyc_d;
    -- data stored in "data" is being acked by snk | data cnt is incremented
    data_valid <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr="00") else '0';
    oob_valid  <= '1'       when (snk_i.cyc = '1' and snk_i.stb = '1' and src_i.stall = '0' and snk_i.adr="01") else '0';
@@ -215,7 +218,7 @@ begin
 
         if(config_i.clkCl_mismatch_det = '0') then
           clockClassMatch <= '1';
-        elsif(state = CLOCK_CLASS and data_valid = '1' and data = config_i.holdover_clk_class) then
+        elsif(state = CLOCK_CLASS and data_valid = '1' and data(15 downto 8) = config_i.holdover_clk_class) then
           clockClassMatch <= '1';
         elsif(state = WAIT_SOF) then
           clockClassMatch <= '0';

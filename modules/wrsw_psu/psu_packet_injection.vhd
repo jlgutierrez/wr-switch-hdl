@@ -89,7 +89,7 @@ entity psu_packet_injection is
       inject_ready_o      : out std_logic;
       
       -- keep valid when injecting
-      inject_clockClass_i : in  std_logic_vector(15 downto 0);
+      inject_clockClass_i : in  std_logic_vector(7 downto 0);
       inject_port_mask_i  : in  std_logic_vector(g_port_number-1 downto 0);
       inject_pck_prio_i   : in  std_logic_vector( 2 downto 0);
       
@@ -120,7 +120,7 @@ architecture rtl of psu_packet_injection is
   signal def_status_word    : std_logic_vector(15 downto 0);
 
   signal rtu_rsp_valid      : std_logic;
-  
+  signal inj_val            : std_logic_vector(15 downto 0);
 begin  -- rtl
 
   def_status_reg.has_smac <= '1';
@@ -225,11 +225,12 @@ begin  -- rtl
     end if;
   end process;
 
+  inj_val        <= inject_clockClass_i &  rd_ram_data_i(7 downto 0);
   inj_src.sel(1) <= '1';
   inj_src.sel(0) <= '1';
-  inj_src.stb    <= '1' when (inj_stb = '1' and validData = '1') else '0';
-  inj_src.dat    <= inject_clockClass_i when (inj_src.adr = c_WRF_DATA and clockClass = '1') else
-                    def_status_word     when (inj_src.adr = c_WRF_STATUS)                    else
+  inj_src.stb    <= '1'             when (inj_stb = '1' and validData = '1') else '0';
+  inj_src.dat    <= inj_val         when (inj_src.adr = c_WRF_DATA and clockClass = '1') else
+                    def_status_word when (inj_src.adr = c_WRF_STATUS)                    else
                     rd_ram_data_i(15 downto 0) ;
   
   
