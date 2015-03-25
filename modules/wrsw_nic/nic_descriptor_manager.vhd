@@ -137,7 +137,7 @@ begin  -- behavioral
     --  variable l:line ;
   begin
     if rising_edge(clk_sys_i) then
-      if(rst_n_i = '0') then
+      if(rst_n_i = '0' or enable_i = '0') then
         desc_write_done_o <= '0';
         desc_grant_o      <= '0';
         state             <= ARB_START_SCAN;
