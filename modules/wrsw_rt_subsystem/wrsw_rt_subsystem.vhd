@@ -115,6 +115,7 @@ entity wrsw_rt_subsystem is
     selected_ref_clk_o  : out  std_logic_vector(g_num_rx_clocks-1 downto 0);
     holdover_on_o       : out  std_logic;
     rx_holdover_msg_i   : in std_logic;
+    rx_holdover_clr_o  : out std_logic;
     -- Debug
     spll_dbg_o  : out std_logic_vector(5 downto 0)
     );
@@ -159,6 +160,7 @@ architecture rtl of wrsw_rt_subsystem is
       selected_ref_clk_o  : out  std_logic_vector(g_num_ref_inputs-1 downto 0);
       holdover_on_o       : out  std_logic;
       rx_holdover_msg_i   : in  std_logic;
+      rx_holdover_clr_o  : out std_logic;
       debug_o         : out std_logic_vector(5 downto 0);
       dbg_fifo_irq_o  : out std_logic);
   end component;
@@ -362,6 +364,7 @@ begin  -- rtl
       selected_ref_clk_o => selected_ref_clk_o,
       holdover_on_o   => holdover_on_o,
       rx_holdover_msg_i => rx_holdover_msg_i,
+      rx_holdover_clr_o => rx_holdover_clr_o ,
       debug_o         => spll_dbg_o);
   
   U_PPS_Gen : xwr_pps_gen

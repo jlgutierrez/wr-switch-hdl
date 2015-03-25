@@ -180,7 +180,7 @@ end scb_top_bare;
 
 architecture rtl of scb_top_bare is
 
-  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"20_02_14_00"; --DD_MM_YY_VV
+  constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"24_03_15_00"; --DD_MM_YY_VV
   constant c_NUM_WB_SLAVES : integer := 14;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
@@ -471,6 +471,7 @@ architecture rtl of scb_top_bare is
   signal rt_psu_sel_ref  : std_logic_vector(g_num_ports-1 downto 0);
   signal rt_psu_holdover : std_logic;
   signal rt_psu_rx_holdover_msg: std_logic;
+  signal rt_psu_rx_holdover_clr: std_logic;
 begin
 
 
@@ -596,6 +597,7 @@ begin
       selected_ref_clk_o => rt_psu_sel_ref,
       holdover_on_o      => rt_psu_holdover,
       rx_holdover_msg_i  => rt_psu_rx_holdover_msg,
+      rx_holdover_clr_o  => rt_psu_rx_holdover_clr,
       spll_dbg_o    => spll_dbg_o);
 
   U_IRQ_Controller : xwb_vic
@@ -1012,6 +1014,7 @@ begin
           selected_ref_clk_i     => rt_psu_sel_ref,
           holdover_on_i          => rt_psu_holdover,
           rx_holdover_msg_o      => rt_psu_rx_holdover_msg,
+          rx_holdover_clr_i      => rt_psu_rx_holdover_clr,
 
           -- config via WB
           wb_i                   => cnx_master_out(c_SLAVE_PSU),

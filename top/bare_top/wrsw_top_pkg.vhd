@@ -238,6 +238,7 @@ package wrsw_top_pkg is
       selected_ref_clk_o  : out  std_logic_vector(g_num_rx_clocks-1 downto 0);
       holdover_on_o       : out  std_logic;
       rx_holdover_msg_i   : in std_logic;
+      rx_holdover_clr_o   : out std_logic;
       spll_dbg_o          : out std_logic_vector(5 downto 0));
   end component;
   
@@ -495,6 +496,7 @@ package wrsw_top_pkg is
       selected_ref_clk_i  : in  std_logic_vector(g_port_number-1 downto 0); 
       holdover_on_i       : in  std_logic;
       rx_holdover_msg_o   : out  std_logic;
+      rx_holdover_clr_i   : in std_logic;
       wb_i                : in  t_wishbone_slave_in;
       wb_o                : out t_wishbone_slave_out);
   end component;
