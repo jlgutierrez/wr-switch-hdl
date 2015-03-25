@@ -61,14 +61,6 @@ peripheral {
 				type = BIT;
 			};
 			field {
-				name = "Ignore rx clockIdentity";
-				description = "Ignore rx sourceClockIdentity of received announces";
-				prefix = "IGNORE_RX_PID";
-				access_bus = READ_WRITE;
-				access_dev = READ_ONLY;
-				type = BIT;
-			};	
-			field {
 				name = "Inject Packet Priority";
 				description = "The priority provided to RTU with which the injected Announce is sent (does not change priority in the Ethernet frame, might not have at all) but affects priority in output queue of SWcore";
 				prefix = "INJ_PRIO";
@@ -91,6 +83,82 @@ peripheral {
 	
 	};
 
+	reg {
+		name = "PSU Tx Control Register";
+		prefix = "PTCR";
+		description = "PSU Control register for tranmission, it defines drop-conditions\
+		for transmitted Announce and applies only when in holdover. This means that ";
+		
+			field {
+				name = "Do not drop Announce with duplicate sequence Number";
+                              description = "Default=0 means that duplicates are dropped, 1: means that they are not";
+				prefix = "SEQID_DUP_NDROP";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = BIT;
+			};
+			field {
+				name = "Drop Announce with wrong sequence Number";
+				description = "Default=0 means that\
+                              the announce with wrong sequence number are not dropped, except when\
+                              duplicate, depending o the duplicate setting";
+				prefix = "SEQID_WRG_DROP";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = BIT;
+			};	
+			field {
+				name = "Drop Announce with mismatched ClockClass";
+				description = "Default=0 means that\
+				the announce with non-holdover clockClass are not dropped";
+				prefix = "CLKCL_WRG_DROP";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = BIT;
+			};
+			field {
+				name = "Drop Announce with mismatched PortIdentity";
+				description = "Default=0 means\
+                              that the announce with PortIdenity different than the previously sent\
+                              announce are not dropped";
+				prefix = "PRTID_WRG_DROP";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = BIT;
+			};
+	};
+	reg {
+		name = "PSU Rx Control Register";
+		prefix = "PRCR";
+		description = "PSU Control register for reception - it defines the detect-conditions \
+		for received Announce (i.e. what information, additionally clockClass, should be considered\
+		when validating the received Announce message)";
+		
+			field {
+				name = "Detect duplicate sequence number in Announce ";
+				description = "The announce msg is considered only if it is not a duplicated";
+				prefix = "SEQID_DUP_DET";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = BIT;
+			};
+			field {
+				name = "Detect wrong sequence number in Announce ";
+				description = "The announce msg is considered only if sequence number is as expected";
+				prefix = "SEQID_WRG_DET";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = BIT;
+			};	
+			field {
+				name = "Detect mismatched PortIdentity in Announce messages";
+				description = "The announce msg is considered only if PortIdentity matches the previous";
+				prefix = "PRTID_WRG_DET";
+				access_bus = READ_WRITE;
+				access_dev = READ_ONLY;
+				type = BIT;
+			};
+	};
 	reg {
 		name = "Rx port mask";
 		description = "Mask which indicates which ports should be snooped at reception, i.e. Announces received on which ports can trigger SoftPLL event"; 

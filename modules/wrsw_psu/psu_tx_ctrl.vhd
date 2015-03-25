@@ -61,9 +61,10 @@ entity psu_tx_ctrl is
     inject_req_o        : out std_logic;
     inject_ready_i      : in  std_logic;
     inject_port_mask_o  : out std_logic_vector(g_port_number-1 downto 0);
-    tx_port_mask_i      : in std_logic_vector(g_port_number-1 downto 0); 
-    tx_ann_detect_mask_i : in std_logic_vector(g_port_number-1 downto 0); 
-    holdover_on_i       : in  std_logic
+    tx_port_mask_i      : in  std_logic_vector(g_port_number-1 downto 0); 
+    tx_ann_detect_mask_i: in  std_logic_vector(g_port_number-1 downto 0); 
+    holdover_on_i       : in  std_logic;
+    holdover_on_o       : out std_logic
 
     );
 
@@ -91,6 +92,7 @@ begin
         state                 <= WAIT_HOLDOVER;
         holdover_on_d         <= '0';
         inject_req            <= '0';
+        holdover_on_o         <= '0';
         tx_port_mask_d        <= (others =>'0');
         tx_snooped_ports      <= (others =>'0');
       else
@@ -102,6 +104,7 @@ begin
 
         case state is
           when WAIT_HOLDOVER  =>
+            holdover_on_o     <= '0';
             inject_req        <= '0';
             if(holdover_on_i = '1' and holdover_on_d = '0') then
               state           <= WAIT_INJ_READY;
@@ -110,6 +113,7 @@ begin
           when WAIT_INJ_READY =>
             if(inject_ready_i = '1') then
               inject_req      <= '1';
+              holdover_on_o   <= '1';
               state           <= DO_INJ;
             end if;
           when DO_INJ         => 

@@ -92,6 +92,7 @@ entity xwrsw_psu is
     selected_ref_clk_i  : in  std_logic_vector(g_port_number-1 downto 0); 
     holdover_on_i       : in  std_logic;
     rx_holdover_msg_o   : out  std_logic;
+    rx_holdover_clr_i   : in std_logic;
     -- config via WB
     wb_i                : in  t_wishbone_slave_in;
     wb_o                : out t_wishbone_slave_out
@@ -109,6 +110,8 @@ architecture behavioral of xwrsw_psu is
 
     signal tx_detected_mask       : std_logic_vector(g_port_number-1 downto 0);
     signal rx_detected_mask       : std_logic_vector(g_port_number-1 downto 0);
+    signal tx_detected_announce   : std_logic;
+    signal rx_detected_announce   : std_logic;
 
     signal tx_snoop_ports_mask       : std_logic_vector(g_port_number-1 downto 0);
     signal rx_snoop_ports_mask       : std_logic_vector(g_port_number-1 downto 0);
@@ -120,7 +123,6 @@ architecture behavioral of xwrsw_psu is
     signal tx_rd_ram_data         : std_logic_vector(17 downto 0);
     signal tx_snoop_ram_addr      : std_logic_vector( 9 downto 0);
     signal tx_snoop_ram_data      : std_logic_vector(17 downto 0);
-    signal tx_snp_ram_data        : std_logic_vector(17 downto 0);
     signal tx_rd_ram_sel          : std_logic;
 
     signal rx_wr_ram_addr         : std_logic_vector( 9 downto 0);
@@ -129,9 +131,6 @@ architecture behavioral of xwrsw_psu is
     signal rx_rd_ram_addr         : std_logic_vector( 9 downto 0);
     signal rx_rd_ram_data         : std_logic_vector(17 downto 0);
 
-    signal tx_inj_ram_addr        : std_logic_vector(9 downto 0);
-    signal tx_inj_ram_read        : std_logic;
-
     signal tx_src_in              : t_wrf_source_in;
     signal tx_src_out             : t_wrf_source_out;
     
@@ -139,8 +138,16 @@ architecture behavioral of xwrsw_psu is
     signal inject_ready           : std_logic;
     signal inject_port_mask       : std_logic_vector(g_port_number-1 downto 0);
 
-    signal holdover_on            : std_logic;
+    -- notification about holdover from external source (i.e. rt_subsystem)
+    signal holdover_on_ext        : std_logic;
+    signal holdover_on_int        : std_logic;
+
+    -- internal holdover info,i.e. it is HIGH only after acknowledging the holdover by u_tx_ctrl
+    signal hodlover_on_int        : std_logic;
     signal tx_rtu_dst_port_mask   : std_logic_vector(g_port_number-1 downto 0);
+    
+    signal tx_snoop_config        : t_snooper_config;
+    signal rx_snoop_config        : t_snooper_config;
 begin
 
   U_TX_CTRL: psu_tx_ctrl
@@ -152,16 +159,14 @@ begin
       inject_req_o          => inject_req,
       inject_ready_i        => inject_ready,
       inject_port_mask_o    => inject_port_mask,
-      tx_port_mask_i        => tx_snoop_ports_mask,
+      tx_port_mask_i        => tx_snoop_config.snoop_ports_mask(g_port_number-1 downto 0),
       tx_ann_detect_mask_i  => tx_detected_mask,
-      holdover_on_i         => holdover_on
+      holdover_on_i         => holdover_on_ext,
+      holdover_on_o         => holdover_on_int
     );
 
-  holdover_on <= '1' when( s_regs_fromwb.ptd_dbg_holdover_on_o = '1' or holdover_on_i ='1') else 
+  holdover_on_ext <= '1' when( s_regs_fromwb.ptd_dbg_holdover_on_o = '1' or holdover_on_i ='1') else 
                  '0' ;
-  -- disable when dumping RAM
-  tx_snoop_ports_mask <=   (others => '0') when (s_regs_fromwb.ptd_tx_ram_rd_ena_o= '1') else
-                           s_regs_fromwb.txpm_port_mask_o(g_port_number-1 downto 0);
 
   U_TX_SNOOPER: psu_announce_snooper
     generic map(
@@ -177,23 +182,28 @@ begin
       src_o                 => tx_src_o,
 
       rtu_dst_port_mask_i   => tx_rtu_dst_port_mask,
-      snoop_ports_mask_i    => tx_snoop_ports_mask,
-      holdover_on_i         => holdover_on, -- todo : need internal signal
-      holdover_clk_class_i  => s_regs_fromwb.pcr_holdover_clk_class_o, 
+      holdover_on_i         => holdover_on_int,
 
-      detected_announce_o   => open,
-      srcdst_port_mask_o    => tx_detected_mask,
-      sourcePortID_match_o  => open,
-      clockClass_match_o    => open,
-      announce_duplicate_o  => open,
-      sequenceID_wrong_o    => open,
+      detected_announce_o   => tx_detected_announce,
+      detected_port_mask_o  => tx_detected_mask,
+
       wr_ram_ena_o          => tx_wr_ram_ena,
       wr_ram_data_o         => tx_wr_ram_data,
       wr_ram_addr_o         => tx_wr_ram_addr,
-      wr_ram_sel_o          => open,
+
       rd_ram_data_i         => tx_snoop_ram_data,
       rd_ram_addr_o         => tx_snoop_ram_addr,
-      rd_ram_sel_o          => open);
+      config_i              => tx_snoop_config);
+
+  tx_snoop_config.seqID_duplicate_det     <= not s_regs_fromwb.ptcr_seqid_dup_ndrop_o;
+  tx_snoop_config.seqID_wrong_det         <= s_regs_fromwb.ptcr_seqid_wrg_drop_o;
+  tx_snoop_config.clkCl_mismatch_det      <= s_regs_fromwb.ptcr_clkcl_wrg_drop_o;
+  tx_snoop_config.prtID_mismatch_det      <= s_regs_fromwb.ptcr_prtid_wrg_drop_o;
+  tx_snoop_config.holdover_clk_class      <= s_regs_fromwb.pcr_holdover_clk_class_o;
+
+  -- disable when dumping RAM
+  tx_snoop_config.snoop_ports_mask    <= (others => '0') when (s_regs_fromwb.ptd_tx_ram_rd_ena_o= '1') else
+                                         s_regs_fromwb.txpm_port_mask_o;
 
   U_TX_INJECTOR: psu_packet_injection
     generic map (
@@ -252,7 +262,6 @@ begin
   tx_snoop_ram_data               <= tx_rd_ram_data;
   s_regs_towb.ptd_tx_ram_rd_dat_i <= tx_rd_ram_data;
 
-  rx_snoop_ports_mask  <= s_regs_fromwb.rxpm_port_mask_o(g_port_number-1 downto 0); -- and selected_ref_clk_i;
 
   U_RX_SNOOPER: psu_announce_snooper
     generic map(
@@ -269,22 +278,27 @@ begin
       src_o                 => rx_src_o,
 
       rtu_dst_port_mask_i   => (others => '0'),
-      snoop_ports_mask_i    => rx_snoop_ports_mask,
-      holdover_on_i         => holdover_on, -- TODO
-      holdover_clk_class_i  => s_regs_fromwb.pcr_holdover_clk_class_o,
-      detected_announce_o   => open,
-      srcdst_port_mask_o    => open,
-      sourcePortID_match_o  => open,
-      clockClass_match_o    => open,
-      announce_duplicate_o  => open,
-      sequenceID_wrong_o    => open,
+      holdover_on_i         => holdover_on_int, 
+      detected_announce_o   => rx_detected_announce,
+      detected_port_mask_o  => rx_detected_mask,
+
       wr_ram_ena_o          => rx_wr_ram_ena,
       wr_ram_data_o         => rx_wr_ram_data,
       wr_ram_addr_o         => rx_wr_ram_addr,
-      wr_ram_sel_o          => open,
+
       rd_ram_data_i         => (others =>'0'),
       rd_ram_addr_o         => open,
-      rd_ram_sel_o          => open);
+      
+      config_i              => rx_snoop_config
+      );
+
+  rx_snoop_config.seqID_duplicate_det <= s_regs_fromwb.prcr_seqid_dup_det_o;
+  rx_snoop_config.seqID_wrong_det     <= s_regs_fromwb.prcr_seqid_wrg_det_o;
+  rx_snoop_config.clkCl_mismatch_det  <= '0';
+  rx_snoop_config.prtID_mismatch_det  <= s_regs_fromwb.prcr_prtid_wrg_det_o;
+  rx_snoop_config.holdover_clk_class  <= s_regs_fromwb.pcr_holdover_clk_class_o;
+  rx_snoop_config.snoop_ports_mask    <= s_regs_fromwb.rxpm_port_mask_o;
+
 
   U_RX_RAM : generic_dpram
     generic map (
@@ -322,7 +336,7 @@ begin
     port map(
       rst_n_i          => rst_n_i,
       clk_sys_i        => clk_sys_i,
-      wb_adr_i         => wb_in.adr(1 downto 0),
+      wb_adr_i         => wb_in.adr(2 downto 0),
       wb_dat_i         => wb_in.dat,
       wb_dat_o         => wb_out.dat,
       wb_cyc_i         => wb_in.cyc,
@@ -334,6 +348,21 @@ begin
       regs_i           => s_regs_towb,
       regs_o           => s_regs_fromwb
   );
+
+  p_rx_ctr : process(clk_sys_i)
+  begin
+    if rising_edge(clk_sys_i) then
+      if rst_n_i = '0' then
+        rx_holdover_msg_o <= '0';
+      else
+        if(rx_holdover_clr_i = '1') then
+          rx_holdover_msg_o <= '0';
+        elsif(rx_detected_announce = '1') then
+          rx_holdover_msg_o <= '1';
+        end if;
+      end if;
+    end if;
+  end process;
 
 
 end behavioral;

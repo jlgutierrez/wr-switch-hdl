@@ -51,7 +51,17 @@ use work.psu_wbgen2_pkg.all;
 package psu_pkg is
 
   type t_snoop_mode is (TX_SEQ_ID_MODE, RX_CLOCK_CLASS_MODE);
-  
+
+  type t_snooper_config is record
+    seqID_duplicate_det : std_logic;
+    seqID_wrong_det     : std_logic;
+    clkCl_mismatch_det  : std_logic;
+    prtID_mismatch_det  : std_logic;
+
+    holdover_clk_class   : std_logic_vector(15 downto 0);
+    snoop_ports_mask     : std_logic_vector(31 downto 0);
+  end record;
+
   component psu_announce_snooper is
     generic(
       g_port_number   : integer := 18;
@@ -59,28 +69,26 @@ package psu_pkg is
     port (
     clk_sys_i : in std_logic;
     rst_n_i   : in std_logic;
+
     snk_i                 : in  t_wrf_sink_in;
     snk_o                 : out t_wrf_sink_out;
 
     src_i                 : in  t_wrf_source_in;
     src_o                 : out t_wrf_source_out;
+
     rtu_dst_port_mask_i   : in  std_logic_vector(g_port_number-1 downto 0);
-    snoop_ports_mask_i    : in  std_logic_vector(g_port_number-1 downto 0);
     holdover_on_i         : in std_logic;
-    holdover_clk_class_i  : in std_logic_vector(15 downto 0);
+
     detected_announce_o   : out std_logic;
-    srcdst_port_mask_o    : out std_logic_vector(g_port_number-1 downto 0);
-    sourcePortID_match_o  : out std_logic;
-    clockClass_match_o    : out std_logic;
-    announce_duplicate_o  : out std_logic;
-    sequenceID_wrong_o    : out std_logic;
+    detected_port_mask_o  : out std_logic_vector(g_port_number-1 downto 0);
+
     wr_ram_ena_o          : out std_logic;
     wr_ram_data_o         : out std_logic_vector(17 downto 0);
     wr_ram_addr_o         : out std_logic_vector(9 downto 0); 
-    wr_ram_sel_o          : out std_logic;
+
     rd_ram_data_i         : in std_logic_vector(17 downto 0);
     rd_ram_addr_o         : out std_logic_vector( 9 downto 0);    
-    rd_ram_sel_o          : out std_logic);
+    config_i              : in t_snooper_config);
   end component;
   component psu_packet_injection is
     generic(
@@ -126,7 +134,8 @@ package psu_pkg is
       inject_port_mask_o  : out std_logic_vector(g_port_number-1 downto 0);
       tx_port_mask_i      : in std_logic_vector(g_port_number-1 downto 0); 
       tx_ann_detect_mask_i : in std_logic_vector(g_port_number-1 downto 0); 
-      holdover_on_i       : in  std_logic);
+      holdover_on_i       : in  std_logic;
+      holdover_on_o       : out std_logic);
    end component;
 
 
@@ -134,7 +143,7 @@ package psu_pkg is
     port (
       rst_n_i                                  : in     std_logic;
       clk_sys_i                                : in     std_logic;
-      wb_adr_i                                 : in     std_logic_vector(1 downto 0);
+      wb_adr_i                                 : in     std_logic_vector(2 downto 0);
       wb_dat_i                                 : in     std_logic_vector(31 downto 0);
       wb_dat_o                                 : out    std_logic_vector(31 downto 0);
       wb_cyc_i                                 : in     std_logic;

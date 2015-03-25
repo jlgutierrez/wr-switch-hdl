@@ -160,7 +160,15 @@ begin  -- rtl
         rtu_rsp_valid     <= '0'; 
         inj_src.adr       <= (others =>'0');
       else
+
+          if(state = WAIT_IDLE and within_packet = '0' and inject_req_latched = '1') then
+            rtu_rsp_valid <= '1'; 
+          elsif (rtu_rsp_valid = '1' and select_inject = '1' and rtu_rsp_ack_i = '1') then
+              rtu_rsp_valid <= '0'; 
+          end if; 
+
         case state is
+
           when WAIT_IDLE =>
             inj_src.cyc       <= '0';
             inj_stb           <= '0';
@@ -170,14 +178,10 @@ begin  -- rtl
               state         <= SOF;
               select_inject <= '1';
               inj_src.cyc   <= '1';
-              rtu_rsp_valid <= '1'; 
+              inj_src.we    <= '1';
             else
               select_inject <= '0';
             end if;
-
-            if (rtu_rsp_valid = '1' and select_inject = '1' and rtu_rsp_ack_i = '1') then
-              rtu_rsp_valid <= '0'; 
-            end if; 
 
           when SOF =>
             if(src_i.stall = '0') then
@@ -210,6 +214,7 @@ begin  -- rtl
 
           when EOF =>
             inj_src.cyc       <= '0';
+            inj_src.we        <= '0';
             inj_stb           <= '0';
             if(src_i.stall = '0') then
               state           <= WAIT_IDLE;
