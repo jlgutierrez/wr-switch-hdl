@@ -161,6 +161,7 @@ architecture behavioral of nic_tx_fsm is
 
   signal ack_count : unsigned(3 downto 0);
 	signal src_stb_int	:	std_logic;
+  signal src_cyc_int          :  std_logic;
 
 begin  -- behavioral
 
@@ -180,6 +181,7 @@ begin  -- behavioral
 
   txdesc_new_o <= cur_tx_desc;
   src_o.stb 	 <= src_stb_int;
+  src_o.cyc     <= src_cyc_int;
 	--because it's validated with rtu_rsp_valid_o and sw_core stores it to internal register on rtu_rsp_valid strobe
   rtu_dst_port_mask_o <= cur_tx_desc.dpm(g_port_mask_bits-1 downto 0);
   rtu_prio_o          <= (others => '0');
@@ -188,7 +190,7 @@ begin  -- behavioral
   count_acks: process(clk_sys_i)
   begin
     if rising_edge(clk_sys_i) then
-      if(rst_n_i='0') then
+      if(rst_n_i='0' or src_cyc_int = '0') then
         ack_count <= (others=>'0');
       elsif(src_stb_int = '1' and src_i.stall = '0' and src_i.ack = '0') then
         ack_count <= ack_count + 1;
@@ -242,7 +244,7 @@ begin  -- behavioral
         txdesc_write_o          <= '0';
         txdesc_reload_current_o <= '0';
 
-        src_o.cyc   <= '0';
+        src_cyc_int   <= '0';
         src_stb_int <= '0';
         src_o.we  	<= '1';
         src_o.adr 	<= (others => '0');
@@ -302,7 +304,7 @@ begin  -- behavioral
             if( ( (src_i.stall = '0' and g_cyc_on_stall = false) or g_cyc_on_stall = true)
                 and buf_grant_i = '0') then
 
-              src_o.cyc <= '1';
+              src_cyc_int <= '1';
               tx_buf_addr        <= tx_buf_addr + 1;
               state              <= TX_STATUS;
               tx_data_reg <= f_buf_swap_endian_32(buf_data_i);
@@ -451,7 +453,7 @@ begin  -- behavioral
             end if;
 
           when TX_UPDATE_DESCRIPTOR =>
-            src_o.cyc 							<= '0';
+            src_cyc_int 							<= '0';
             txdesc_write_o          <= '1';
             txdesc_reload_current_o <= cur_tx_desc.error;
             cur_tx_desc.ready       <= '0';
