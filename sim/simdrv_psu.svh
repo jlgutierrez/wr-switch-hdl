@@ -17,7 +17,7 @@ class CSimDrv_PSU;
       m_base        = base;
    endfunction // new
 
-   task init(bit[2:0] inj_prio, bit[15:0] holdover_clk_class, bit ignore_rx_port_id,
+   task init(bit[2:0] inj_prio, bit[7:0] holdover_clk_class, bit ignore_rx_port_id,
                  bit[31:0] rx_mask, bit[31:0] tx_mask );
 
       m_acc.write(m_base + `ADDR_PSU_PCR,
@@ -66,19 +66,36 @@ class CSimDrv_PSU;
    endtask;
 
    task dbg_dump_tx_ram();
-      uint64_t i;
+      int i=0;
+      int word_addr=0;
+      int bank=0;
       uint64_t tmp;
       uint64_t dat;
-      for(i=0;i<1024;i++)
+      while(i<550)
       begin
+
         m_acc.write(m_base + `ADDR_PSU_PTD,
-                                                            `PSU_PTD_TX_RAM_RD_ENA |
                      (i << `PSU_PTD_TX_RAM_RD_ADR_OFFSET) & `PSU_PTD_TX_RAM_RD_ADR);
         m_acc.read(m_base + `ADDR_PSU_PTD, tmp, 4);
-        dat = (tmp & `PSU_PTD_TX_RAM_RD_DAT) >> `PSU_PTD_TX_RAM_RD_DAT_OFFSET;
-        if((dat >> 17) & 'h1) $display("%2d: 0x4%x",i, dat);
+        if(tmp & `PSU_PTD_TX_RAM_DAT_VALID) //is the data valid, otherwise retry
+        begin 
+	    dat = (tmp & `PSU_PTD_TX_RAM_RD_DAT) >> `PSU_PTD_TX_RAM_RD_DAT_OFFSET;
+           if(i==0)    $display("[PSU-dump] === Bank 1 === \n" );
+           if(i==256)  $display("[PSU-dump] === Bank 2 === \n" );
+           if(i==512)  $display("[PSU-dump] == perport === \n" );
+           if(i <335)  $display("addr = %2d bank=%d word=%2d : 0x4%x",i, bank,word_addr, 'hFFFFF & dat);
+           else        $display("addr = %2d port=%d word=%2d : 0x4%x",i, bank,word_addr, 'hFFFFF & dat);
+           i++;
+           if     (i== 80) bank++;
+           else if(i==335) bank=0;
+           else if(i >355 && i%word_addr==0) bank++; 
+           if(i>335 && i%word_addr==0) word_addr=0;
+           else                        word_addr++;
+
+           if(i== 80) begin i = 256; word_addr=0; bank++; end
+           if(i==335) begin i = 512; word_addr=0; bank=0; end 
+        end
       end
-        m_acc.write(m_base + `ADDR_PSU_PTD, 'h0000);
    endtask;
 
 endclass // CSimDrv_PSU

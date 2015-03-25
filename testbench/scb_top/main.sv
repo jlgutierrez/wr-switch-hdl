@@ -286,22 +286,22 @@ module main;
                                             'h00, //32             correctionField 
                                             'h00, //33             logMessageInterval
                                             //// PTP Announce
-                                            'h00, //             originalTimestamp 1
-                                            'h00, //             originalTimestamp 2
-                                            'h00, //             originalTimestamp 3
-                                            'h00, //             originalTimestamp 4
-                                            'h00, //             originalTimestamp 5
-                                            'h00, //             originalTimestamp 6
-                                            'h00, //             originalTimestamp 7
-                                            'h00, //             originalTimestamp 8
-                                            'h00, //             originalTimestamp 9
-                                            'h00, //             originalTimestamp 10
-                                            'h00, //             currentUtcOffset 1
-                                            'h00, //             currentUtcOffset 2
-                                            'h00, //             reserved
-                                            'h00, //             grandmasterPriorit1
-                                            'h07, //             gandmasterClockQuality 1 -> clockClass ?
-                                            'h00, //             gandmasterClockQuality 2 -> clockAccuracy
+                                            'h00, //34             originalTimestamp 1
+                                            'h00, //35             originalTimestamp 2
+                                            'h00, //36             originalTimestamp 3
+                                            'h00, //37             originalTimestamp 4
+                                            'h00, //38             originalTimestamp 5
+                                            'h00, //39             originalTimestamp 6
+                                            'h00, //40             originalTimestamp 7
+                                            'h00, //41             originalTimestamp 8
+                                            'h00, //42             originalTimestamp 9
+                                            'h00, //43             originalTimestamp 10
+                                            'h00, //44             currentUtcOffset 1
+                                            'h00, //45             currentUtcOffset 2
+                                            'h00, //46             reserved
+                                            'h00, //47             grandmasterPriorit1
+                                            'h07, //48             gandmasterClockQuality 1 -> clockClass ?
+                                            'h00, //49             gandmasterClockQuality 2 -> clockAccuracy
                                             'h00, //             gandmasterClockQuality 3 -> offsetScaledLogVariance;
                                             'h00 //             gandmasterClockQuality 4 -> offsetScaledLogVariance;
                                             };
@@ -357,9 +357,9 @@ module main;
    int g_simple_allocator_unicast_check     = 0;
    integer g_send_announce_from_NIC         = 0;
    
-   reg [g_max_ports-1:0] announceTxVector   = 18'b111111111111111111;
+   reg [g_max_ports-1:0] announceTxVector   = 18'b000000000000000000;
    reg [31:0]            psu_tx_mask        = 18'b000000000000001111;
-   reg [31:0]            psu_rx_mask        = 18'b000000000000001000;
+   reg [31:0]            psu_rx_mask        = 18'b100000000000000000;
    reg [15:0]            psu_hldvr_clk_class= 7;
    reg [ 2:0]            psu_inj_prio       = 0;
    bit                   ignore_rx_port_id  = 0;
@@ -2936,19 +2936,23 @@ module main;
   initial begin
 
 //     portUnderTest        = 18'b100000000000001100;
+//     portUnderTest        = 18'b100000000000001000;
     portUnderTest        = 18'b000000000000000000;
-    announceTxVector     = 18'b000000000000000100;
+    announceTxVector     = 18'b001000000100000100;
+    psu_tx_mask          = 18'b001000000000001111;
+    g_psu_test           = 1;
                          // tx  ,rx ,opt
     trans_paths[2]       = '{2  ,0 , 8};
     trans_paths[3]       = '{3  ,0 , 8 };
+//     trans_paths[11]      = '{11 ,6 , 0 };
 
     trans_paths[17]      = '{17  ,0 , 8 };
 
-    repeat_number        = 10;
+    repeat_number        = 15;
     tries_number         = 1;
     g_enable_pck_gaps    = 1;
-    g_min_pck_gap        = 500;
-    g_max_pck_gap        = 520;
+    g_min_pck_gap        = 1000;
+    g_max_pck_gap        = 1200;
     g_force_payload_size = 0; //size per option
 
 
@@ -2961,8 +2965,8 @@ module main;
     for(int i=0;i<ANNOUNCE_templ.size();i++)
         ptpAnnounce.payload[i] = ANNOUNCE_templ[i];
     
-    g_send_announce_from_NIC = 10; // ten times to all ports
-    g_psu_test               =1;
+    g_send_announce_from_NIC = 4; // ten times to all ports
+    g_psu_test               = 0;
   end
 //*/
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -3164,8 +3168,9 @@ module main;
                 for(int i=0;i<ANNOUNCE_templ.size();i++)
 		    pkt.payload[i] = ANNOUNCE_templ[i];
 		 	 
-		 pkt.payload[28] = srcPort;
-		 pkt.payload[30] = i;
+		 pkt.payload[29] = srcPort;
+		 pkt.payload[31] = i;
+		 pkt.payload[48] = 5+i%3;
               end
               if(opt == 444)
                 pkt.src[4]    = dmac_dist++;
@@ -4680,28 +4685,27 @@ module main;
          begin
            if(g_send_announce_from_NIC > 0)
            begin 
+             automatic int an_i = 0;
+             automatic int an_j = 0;
+
              ptpAnnounce.tx_wr_port = 0;
              wait_cycles(100);
-             for (int an_i =0;an_i<g_send_announce_from_NIC;an_i++)
+             for (an_i =0;an_i<g_send_announce_from_NIC;an_i++)
              begin
-                 for(int an_j = 0;an_j<g_num_ports;an_j++)
+                 for(an_j = 0;an_j<g_num_ports;an_j++)
                  begin
-                    
-                    automatic int an_jj=an_j;
-                    
-                    
-                    if(announceTxVector[an_jj]) 
+                    if(announceTxVector[an_j]) 
                     begin
-                      wait_cycles(100);
-                      ptpAnnounce.tx_wr_port = an_jj;         // port to send
-                      ptpAnnounce.payload[28]= 'h00 ; // seqID 1
-                      ptpAnnounce.payload[29]= an_jj % 'hFF;      // seqID 2
-                      ptpAnnounce.payload[30]= 'h00; // seqID 1
-                      ptpAnnounce.payload[31]= an_i % 'hFF;      // seqID 2
+                      ptpAnnounce.tx_wr_port = an_j;         // port to send
+                      ptpAnnounce.payload[28]= 'h00 ;             // Port number
+                      ptpAnnounce.payload[29]= an_j % 'hFF;       // Port number
+                      ptpAnnounce.payload[30]= 'h00;              // seqID 1
+                      ptpAnnounce.payload[31]= an_i % 'hFF;       // seqID 2
+                      $display("NIC: tx-ing PTP announce: port = %2d | ID= %2d", an_j,an_i);
+//                       while(nic.tx_irq_enabled) wait_cycles(100);
                       ports[18].send.send(ptpAnnounce); //nic
+                      wait_cycles(800);
                     end
-                    else
-                      wait_cycles(20);
                  end
              end
 
@@ -4711,15 +4715,15 @@ module main;
 
       fork // testing PSU 
          begin
-           if(g_psu_test > 0)
+//            if(g_psu_test > 0)
            begin 
              wait_cycles(100);
              psu.enable(1);
-             wait_cycles(1300);
+             wait_cycles(600);
              psu.dbg_holdover(1);
-             wait_cycles(1300);
+             wait_cycles(1700);
              psu.dbg_holdover(0);
-             wait_cycles(1300);
+             wait_cycles(10000);
              psu.dbg_dump_tx_ram();
            end
          end 
