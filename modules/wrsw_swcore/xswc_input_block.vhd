@@ -510,6 +510,11 @@ architecture syn of xswc_input_block is
   -- if HIGH, it means that we are receiving/writting the first page of the pck
   signal rp_rcv_first_page : std_logic;
 
+  signal rp_drop_no_ff  : std_logic;  -- RCV goes to drop, but does not assert force free,
+                  -- so TP won't wait for force free to be done. E.g. when memory is full
+                  -- and we don't have allocated pages -> RCV drops, but no pages used so
+                  -- no force free.
+
   -- Signals written by rcv_pck FSM and used by ll_write FSM, sync by rtu_rsp_ack
   signal rp_ll_entry_addr     : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal rp_ll_entry_size     : std_logic_vector(c_page_size_width - 1 downto 0);
@@ -823,6 +828,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
             in_pck_dvalid_d0  <= '0';
             in_pck_dat_d0     <= (others => '0');
             rtu_rsp_abort_o   <= '0';
+            rp_drop_no_ff     <= '0';
 
             -- Sync with trasnfer_pck FSM and ll_write FSM: 
             if(lw_sync_first_stage = '1' and tp_sync = '1') then
@@ -872,6 +878,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
               
               if(tp_drop = '1') then
                 s_rcv_pck         <= S_DROP;
+                rp_drop_no_ff     <= '1';
                 snk_stall_force_l <= '0';
               else
                 current_pckstart_pageaddr <= pckstart_pageaddr;
@@ -1860,6 +1867,10 @@ begin
           -- for global sync
           elsif(mmu_force_free_req = '1' and mmu_force_free_done_i = '1') then
             s_transfer_pck <= S_IDLE;  
+          -- we got here when RCV FSM did not use any page (memory was full), so we don't wait
+          -- for  force_free_done, because it will never happen.
+          elsif(rp_drop_no_ff = '1') then
+            s_transfer_pck <= S_IDLE;
           end if;
 
           --===========================================================================================
