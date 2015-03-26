@@ -822,7 +822,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
             snk_stall_force_l <= '1';
             in_pck_dvalid_d0  <= '0';
             in_pck_dat_d0     <= (others => '0');
-            rtu_rsp_abort_o     <= '0';
+            rtu_rsp_abort_o   <= '0';
 
             -- Sync with trasnfer_pck FSM and ll_write FSM: 
             if(lw_sync_first_stage = '1' and tp_sync = '1') then
@@ -836,6 +836,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
               -- in such case, we will get tp_drop before getting tp_sync, but we will
               -- still have tp_drop when finally tp_sync is HIGH, so this is why the order of if's
             elsif(tp_drop            = '1'   and  -- transfer_pck state indicates the drop decision
+                  s_transfer_pck /= S_DROP   and
                   mmu_force_free_req = '0') then  -- the pck is not being freed yet
               
               mmu_force_free_addr <= current_pckstart_pageaddr;
