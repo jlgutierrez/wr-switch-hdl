@@ -1192,7 +1192,7 @@ begin
         pckstart_page_in_advance <= '1';
       end if;
 
-      if(mpm_pg_req_i = '1' and mpm_dlast = '0') then
+      if(mpm_pg_req_i = '1' and mpm_dlast = '0' and tp_drop = '0') then
         pckinter_page_in_advance <= '0';
       elsif(mmu_page_alloc_done_i = '1' and pckinter_page_alloc_req = '1') then
         pckinter_page_in_advance <= '1';
