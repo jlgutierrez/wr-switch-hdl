@@ -273,6 +273,7 @@ architecture syn of swc_page_allocator_new is
   signal res_almost_full         : std_logic_vector(g_resource_num      -1 downto 0);
   -----------------------------
   
+  signal pg_adv_valid : std_logic;
 
   type t_alloc_req is record
     alloc                 : std_logic;
@@ -339,6 +340,19 @@ begin  -- syn
     end if;  
   
   end process;
+
+  -- keeping the information if free page read from memory was already allocated
+  -- to any of the ports
+  process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if (rst_n_i = '0' or alloc_req_in.alloc = '1') then
+        pg_adv_valid <= '0';
+      elsif(out_nomem_d1 = '0') then
+        pg_adv_valid <= '1';
+      end if;
+    end if;
+  end process;
   
   -- write queue when freeing and not initializing (because when initializing we use other
   -- port of this memory)
@@ -356,7 +370,7 @@ begin  -- syn
   -- nomem_d0  : _______|-------
   -- alloc_d0  " _______|-|____  <= this need to be handled
   -- nomem_d1  : ________|-------
-  q_read_p0  <= '1' when (alloc_req_d0.alloc = '1') and (out_nomem_d1 = '0') else '0'; 
+  q_read_p0 <= '1' when (pg_adv_valid = '0' and out_nomem_d1 = '0') else '0';
   
   -- address of page stored in the memory (queue)
   q_input_addr_p1 <= std_logic_vector(wr_ptr_p1) when initializing = '1' else alloc_req_d1.pgaddr_free;
