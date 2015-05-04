@@ -666,6 +666,10 @@ constant c_force_usecnt             : boolean :=  TRUE;
   signal tp_transfer_rtu_valid      : std_logic;
   signal tp_transfer_wait_sof       : std_logic;
   signal tp_transfer_set_usecnt     : std_logic;
+
+  signal ll_pckstart_stored         : std_logic;
+  signal rcv_pckstart_new           : std_logic;
+  signal ffree_mask                 : std_logic;
   
   signal dbg_dropped_on_res_full    : std_logic;
 
@@ -809,6 +813,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
         rp_rcv_first_page    <= '0';
         rtu_rsp_abort_o      <= '0';
         --========================================
+        rcv_pckstart_new <= '0';
       else
 
         -- default values:
@@ -881,6 +886,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
                 rp_drop_no_ff     <= '1';
                 snk_stall_force_l <= '0';
               else
+                rcv_pckstart_new          <= '1';
                 current_pckstart_pageaddr <= pckstart_pageaddr;
                 current_pckstart_usecnt   <= pckstart_usecnt;
                 mpm_pg_addr               <= pckstart_pageaddr;
@@ -898,6 +904,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
             --===========================================================================================
           when S_RCV_DATA =>
             --===========================================================================================
+            rcv_pckstart_new <= '0';
             -- to extend the span of new_pck_first_page into s_ll_write = S_IDLE, when there is S_SOF
             if(s_ll_write = S_SOF_ON_WR and new_pck_first_page = '1') then
               new_pck_first_page <='1';
@@ -2213,6 +2220,53 @@ tp_transfer_set_usecnt<= '1' when ( s_transfer_pck        = S_SET_USECNT        
 -- rcv_pck FSM indicates that there is or was error on the received pck
 rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
 
+  process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if (rst_n_i = '0') then
+        ll_pckstart_stored <= '0';
+        ffree_mask <= '1';
+      elsif(ffree_mask = '1' and rcv_pckstart_new = '1' and mmu_force_free_req = '1') or
+        -- if there is an ongoing FF req, then we cannot clear the mask because
+        -- it won't be done, never.. However, we remember the
+        -- rcv_pckstart_new='1' by setting ll_pckstart_stored to '0'.
+           (ffree_mask = '1' and rcv_pckstart_new = '1' and s_ll_write = S_SOF_ON_WR) then
+        -- if we get rcv_pckstart_new while we're in SOF_ON_WR, this means we
+        -- have a new frame, but the previous one might still need to be
+        -- force-freed. That's why we postpone driving ffree_mask to '0'.
+        ffree_mask <= '1';
+        ll_pckstart_stored <= '0';
+      elsif(ffree_mask = '1' and rcv_pckstart_new = '1') then
+        -- that is the most "clean" situation, there is no FF request and we're
+        -- receiving new frame, therefore we clear ffree_mask and
+        -- ll_pckstart_stored.
+        ffree_mask <= '0';
+        ll_pckstart_stored <= '0';
+      elsif(ffree_mask = '1' and ll_pckstart_stored = '0' and mmu_force_free_req = '0' and s_ll_write /= S_SOF_ON_WR) then
+        -- in case the first condition took place, (and in the meantime the
+        -- start page was not saved to linked list) clear the ffree_mask when
+        -- FF req is no more active.
+        ffree_mask <= '0';
+
+      elsif(ffree_mask = '0' and ll_entry.addr = current_pckstart_pageaddr and ll_wr_done_i = '1') then
+        -- if we get ll_wr_done_i while LL FSM is in EOF_ON_WR, that means start
+        -- page will be written one more time to LL but this time with EOF bit
+        -- set. We have to wait for another ll_wr_done, therefore in that case
+        -- we don't yet set ffree_mask to '1', but only remember the situation
+        -- by setting ll_pckstart_stored to '1'.
+        ll_pckstart_stored <= '1';
+        if(s_ll_write /= S_EOF_ON_WR) then
+          ffree_mask <= '1';
+        end if;
+      elsif(ffree_mask = '0' and ll_pckstart_stored='1' and ll_wr_done_i='1') then
+        -- here is the continuation of the above condition. When we detect
+        -- second write after EOF_ON_WR we set ffree_mask to '1' marking that
+        -- the start page was stored to LL.
+        ffree_mask <= '1';
+      end if;
+
+    end if;
+  end process;
 
 --================================================================================================
 --------------------------------------------------------------------------------------------------
@@ -2309,7 +2363,7 @@ mmu_usecnt_set_o     <= pckstart_usecnt_write;
 mmu_usecnt_alloc_o   <= pckstart_usecnt_write;--std_logic_vector(to_unsigned(1,g_usecount_width));
 mmu_page_alloc_req_o <= pckinter_page_alloc_req or pckstart_page_alloc_req;
 
-mmu_force_free_o      <= mmu_force_free_req;
+mmu_force_free_o      <= mmu_force_free_req and ffree_mask;
 mmu_force_free_addr_o <= mmu_force_free_addr;
 ---
 mmu_pageaddr_o        <= pckstart_usecnt_pgaddr;
