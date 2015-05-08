@@ -817,12 +817,20 @@ begin  --archS_PCKSTART_SET_AND_REQ
       else
 
         -- default values:
-        mpm_dlast           <= '0';
+        if(mpm_dlast = '1' and s_ll_write = S_SOF_ON_WR) then
+          mpm_dlast           <= '1';
+        else
+          mpm_dlast           <= '0';
+        end if;
         mpm_dvalid          <= '0';
         in_pck_eof_on_pause <= '0';
-        --if(s_ll_write = S_WRITE) then
-          new_pck_first_page  <= '0';
-        --end if;
+        if(new_pck_first_page = '1' and s_ll_write = S_SOF_ON_WR) then
+          -- in case LL FSM is in S_SOF_ON_WR, we need to keep
+          -- new_pck_first_page signal longer, otherwise we lose it..
+          new_pck_first_page <= '1';
+        else
+          new_pck_first_page <= '0';
+        end if;
 
         case s_rcv_pck is
           --===========================================================================================
@@ -906,9 +914,6 @@ begin  --archS_PCKSTART_SET_AND_REQ
             --===========================================================================================
             rcv_pckstart_new <= '0';
             -- to extend the span of new_pck_first_page into s_ll_write = S_IDLE, when there is S_SOF
-            if(s_ll_write = S_SOF_ON_WR and new_pck_first_page = '1') then
-              new_pck_first_page <='1';
-            end if;
             if(in_pck_dvalid = '1') then
               in_pck_dvalid_d0 <= in_pck_dvalid;
               in_pck_dat_d0    <= in_pck_dat;
@@ -1151,7 +1156,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
   -- requestd, but the request takes time (more then 1 cycle). so we delay setting of 
   -- *rp_rcv_first_page* to be able to copie the addr to be clearted (in ll_write FSM) from 
   -- current_pckstart_pageaddr in case *rp_rcv_first_page* is asserted
-  if(new_pck_first_page = '1' and rp_rcv_first_page = '0') then
+  if(new_pck_first_page = '1' and rp_rcv_first_page = '0' and mpm_dlast = '0') then
     rp_rcv_first_page <= '1';
   elsif((mpm_pg_req_i = '1' or mpm_dlast = '1') and rp_rcv_first_page = '1') then
     rp_rcv_first_page <= '0';
@@ -1951,25 +1956,35 @@ begin
           --     indication
           if(pckstart_page_in_advance = '1' or new_pck_first_page = '1') then
             ll_wr_req      <= '1';
-            ll_entry.valid <= '0';
-            ll_entry.eof   <= '0';
-
-            -- if we've already started sending new pck, then new page already can be allocated
-            -- (this is because we trigger allocation of new pckstart_pageaddr as soon as
-            -- we use it at the beginning of RCV_DATA)
-            -- but we need to clear previously allocated pckstart_pageaddr (this was stored
-            -- in current_pckstart_pageaddr).
-            -- such situation can happen only within the first page, if pckstart_pageaddr
-            -- is not allocated by the end of first page,  we PAUSE..
-            if(rp_rcv_first_page = '1') then
-              ll_entry.addr <= current_pckstart_pageaddr;
+            -- it may happen that LL FSM goes from SOF_ON_WR to IDLE and we
+            -- managed to write only one word to the start page before deciding
+            -- we drop the rest of the frame. Hence the conditional below:
+            if(mpm_dlast_d0 = '1') then
+              ll_entry.valid <= '1';
+              ll_entry.eof   <= '1';
+              ll_entry.size  <= rp_ll_entry_size;
+              ll_entry.addr  <= rp_ll_entry_addr;
+              ll_entry.first_page_clr  <= '0';
             else
-              ll_entry.addr <= pckstart_pageaddr;
+              ll_entry.valid <= '0';
+              ll_entry.eof   <= '0';
+              ll_entry.size  <= (others => '0');
+              ll_entry.first_page_clr  <= '1';
+              -- if we've already started sending new pck, then new page already can be allocated
+              -- (this is because we trigger allocation of new pckstart_pageaddr as soon as
+              -- we use it at the beginning of RCV_DATA)
+              -- but we need to clear previously allocated pckstart_pageaddr (this was stored
+              -- in current_pckstart_pageaddr).
+              -- such situation can happen only within the first page, if pckstart_pageaddr
+              -- is not allocated by the end of first page,  we PAUSE..
+              if(rp_rcv_first_page = '1') then
+                ll_entry.addr <= current_pckstart_pageaddr;
+              else
+                ll_entry.addr <= pckstart_pageaddr;
+              end if;
             end if;
-            ll_entry.size            <= (others => '0');
             ll_entry.next_page       <= (others => '0');
             ll_entry.next_page_valid <= '0';
-            ll_entry.first_page_clr  <= '1';
             s_ll_write               <= S_WRITE;
           end if;
 
