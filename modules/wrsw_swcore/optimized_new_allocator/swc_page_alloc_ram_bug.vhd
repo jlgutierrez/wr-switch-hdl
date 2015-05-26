@@ -350,7 +350,7 @@ begin  -- syn
         pg_adv_valid <= '0';
       elsif(out_nomem_d0 = '0') then
         pg_adv_valid <= '1';
-      elsif(alloc_req_in.alloc = '1') then
+      elsif(alloc_req_d0.alloc = '1') then
         pg_adv_valid <= '0';
       end if;
     end if;
