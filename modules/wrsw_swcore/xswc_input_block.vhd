@@ -921,11 +921,29 @@ begin  --archS_PCKSTART_SET_AND_REQ
 
             --dlast_o needs to go along with dvalid HIGH, for eof we are sure dvalid is always OK
             --for the special cases, we validate any data
-            if(finish_rcv_pck = '1') then
+            if(mpm_dlast = '0' and finish_rcv_pck = '1') then
+              -- we must set mpm_dlast<='1' only for one cycle. If in_pck_eof
+              -- happens right after in_pck_err, then finish_rcv_pck is high for
+              -- 2 cycles. When (as a result) mpm_dlast is high for 2 cycles, we
+              -- go to unnecessary S_EOF_ON_WR in LL_FSM (on first mpm_dlast_d0
+              -- LL FSM goes to S_WRITE and if ll_wr_done_i does not come
+              -- immediately after, we go to EOF_ON_WR).
               mpm_dlast <= '1';
             end if;
 
-            if(in_pck_err = '1' and tp_drop = '0') then
+            if(rp_in_pck_err = '1') then
+              -- if we got an error in received frame, RCV FSM stays in
+              -- S_RCV_DATA for 2 last clock cycles and it was writing twice the
+              -- last word into the MPM. This becomes a problem when ERR occurs
+              -- at the edge of two pages. Then last word is written as 64-th
+              -- word, then MPM requests next page, but does not get it and the
+              -- same word is written to 1st position of the same page. The size
+              -- for EOF is 64, and we end up having status word with error in
+              -- the middle of our frame for Output Block. Thus we don't
+              -- validate MPM write when we're for the 2nd time in S_RCV_DATA on
+              -- pck_error.
+              mpm_dvalid <= '0';
+            elsif(in_pck_err = '1' and tp_drop = '0') then
               -- write the error status to the memory (so it's properly sent -- with error)
               -- and indicate that the error needs to be handled in the next cycle            
               rp_in_pck_err   <= '1';
