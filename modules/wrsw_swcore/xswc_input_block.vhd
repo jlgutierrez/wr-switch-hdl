@@ -421,6 +421,7 @@ architecture syn of xswc_input_block is
   signal in_pck_dvalid       : std_logic;
   signal in_pck_dat          : std_logic_vector(g_mpm_data_width - 1 downto 0);
   signal in_pck_sof          : std_logic;  -- start of frame
+  signal in_pck_sof_d0       : std_logic;
   signal in_pck_eof          : std_logic;  -- end of frame
   signal in_pck_err          : std_logic;  -- error
   signal in_pck_eod          : std_logic;  -- end of data
@@ -824,9 +825,12 @@ begin  --archS_PCKSTART_SET_AND_REQ
         end if;
         mpm_dvalid          <= '0';
         in_pck_eof_on_pause <= '0';
-        if(new_pck_first_page = '1' and s_ll_write = S_SOF_ON_WR) then
+        if(new_pck_first_page = '1' and (s_ll_write = S_SOF_ON_WR or s_ll_write = S_WRITE)) then
           -- in case LL FSM is in S_SOF_ON_WR, we need to keep
           -- new_pck_first_page signal longer, otherwise we lose it..
+          -- The same applies for LL FSM in S_WRITE, when SOF was one cycle
+          -- before S_WRITE and LL FSM will enter S_SOF_ON_WR as a result
+          -- of in_pck_sof_d0.
           new_pck_first_page <= '1';
         else
           new_pck_first_page <= '0';
@@ -1954,6 +1958,7 @@ begin
 
       mpm_dlast_d0  <= '0';
       mpm_pg_req_d0 <= '0';
+      in_pck_sof_d0 <= '0';
       --s_ll_write  <= S_IDLE;
       --pckstart_pageaddr_clred      <= (others => '1');--make it different then the first allocated addr
       --========================================
@@ -1961,6 +1966,7 @@ begin
       
       mpm_dlast_d0  <= mpm_dlast;
       mpm_pg_req_d0 <= mpm_pg_req_i;
+      in_pck_sof_d0 <= in_pck_sof;
 
       case s_ll_write is
         --===========================================================================================
@@ -2108,7 +2114,9 @@ begin
 
             if(mpm_dlast_d0 = '1') then
               s_ll_write <= S_EOF_ON_WR;
-            elsif(in_pck_sof = '1') then
+            elsif(in_pck_sof = '1' or in_pck_sof_d0 = '1') then
+              -- in_pck_sof_d0 triggers this condition when in_pck_sof was high
+              -- one cycle before LL FSM got to S_WRITE.
               s_ll_write <= S_SOF_ON_WR;
             end if;
 
