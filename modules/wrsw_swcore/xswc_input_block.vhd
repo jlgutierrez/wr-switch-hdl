@@ -421,7 +421,8 @@ architecture syn of xswc_input_block is
   signal in_pck_dvalid       : std_logic;
   signal in_pck_dat          : std_logic_vector(g_mpm_data_width - 1 downto 0);
   signal in_pck_sof          : std_logic;  -- start of frame
-  signal in_pck_sof_d0       : std_logic;
+  signal in_pck_sof_reg      : std_logic;
+  signal in_pck_sof_reg_ack  : std_logic;
   signal in_pck_eof          : std_logic;  -- end of frame
   signal in_pck_err          : std_logic;  -- error
   signal in_pck_eod          : std_logic;  -- end of data
@@ -456,6 +457,8 @@ architecture syn of xswc_input_block is
 
   -- used in rcv_pck FSM
   signal new_pck_first_page : std_logic;
+  signal new_pck_first_page_ack : std_logic;
+  signal new_pck_first_page_p1 : std_logic;
   -------------------------------------------------------------------------------
   -- signals used to store information for and interface with Linked List
   -------------------------------------------------------------------------------
@@ -770,6 +773,22 @@ begin  --archS_PCKSTART_SET_AND_REQ
     end if;  --rising_edge(clk_i) then
   end process rcv_pck_helper;
 
+  -- we need to keep the information that SOF was there if in the meantime LL FSM
+  -- was busy with something else (e.g. still writing the last page of previous a
+  -- frame)
+  process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i = '0') then
+        in_pck_sof_reg <= '0';
+      elsif(in_pck_sof = '1') then -- and (s_ll_write = S_EOF_ON_WR or s_ll_write = S_WRITE)) then
+        in_pck_sof_reg <= in_pck_sof;
+      elsif(in_pck_sof_reg_ack = '1') then
+        in_pck_sof_reg <= '0';
+      end if;
+    end if;
+  end process;
+
   --==================================================================================================
   -- FSM to receive pcks, it translates pWB I/F into MPM I/F
   --==================================================================================================
@@ -804,6 +823,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
         current_pckstart_usecnt   <= (others => '0');
 
         new_pck_first_page   <= '0';
+        new_pck_first_page_p1<= '0';
         -- used in other FSM 
         rp_ll_entry_addr     <= (others => '0');
         rp_ll_entry_size     <= (others => '0');
@@ -825,16 +845,18 @@ begin  --archS_PCKSTART_SET_AND_REQ
         end if;
         mpm_dvalid          <= '0';
         in_pck_eof_on_pause <= '0';
-        if(new_pck_first_page = '1' and (s_ll_write = S_SOF_ON_WR or s_ll_write = S_WRITE)) then
+        if(new_pck_first_page = '1' and new_pck_first_page_ack = '0' and
+          (s_ll_write = S_SOF_ON_WR or s_ll_write = S_EOF_ON_WR or s_ll_write = S_WRITE)) then
           -- in case LL FSM is in S_SOF_ON_WR, we need to keep
           -- new_pck_first_page signal longer, otherwise we lose it..
           -- The same applies for LL FSM in S_WRITE, when SOF was one cycle
-          -- before S_WRITE and LL FSM will enter S_SOF_ON_WR as a result
-          -- of in_pck_sof_d0.
+          -- before S_WRITE
+          -- We may also get SOF while being in S_EOF_ON_WR
           new_pck_first_page <= '1';
         else
           new_pck_first_page <= '0';
         end if;
+        new_pck_first_page_p1<= '0';
 
         case s_rcv_pck is
           --===========================================================================================
@@ -904,6 +926,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
                 mpm_pg_addr               <= pckstart_pageaddr;
                 s_rcv_pck                 <= S_RCV_DATA;
                 new_pck_first_page        <= '1';
+                new_pck_first_page_p1     <= '1';
 
                 page_word_cnt <= (others => '0');
                 if(in_pck_dvalid = '1') then
@@ -1178,7 +1201,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
   -- requestd, but the request takes time (more then 1 cycle). so we delay setting of 
   -- *rp_rcv_first_page* to be able to copie the addr to be clearted (in ll_write FSM) from 
   -- current_pckstart_pageaddr in case *rp_rcv_first_page* is asserted
-  if(new_pck_first_page = '1' and rp_rcv_first_page = '0' and mpm_dlast = '0') then
+  if(new_pck_first_page_p1 = '1' and rp_rcv_first_page = '0' and mpm_dlast = '0') then
     rp_rcv_first_page <= '1';
   elsif((mpm_pg_req_i = '1' or mpm_dlast = '1') and rp_rcv_first_page = '1') then
     rp_rcv_first_page <= '0';
@@ -1958,7 +1981,6 @@ begin
 
       mpm_dlast_d0  <= '0';
       mpm_pg_req_d0 <= '0';
-      in_pck_sof_d0 <= '0';
       --s_ll_write  <= S_IDLE;
       --pckstart_pageaddr_clred      <= (others => '1');--make it different then the first allocated addr
       --========================================
@@ -1966,19 +1988,21 @@ begin
       
       mpm_dlast_d0  <= mpm_dlast;
       mpm_pg_req_d0 <= mpm_pg_req_i;
-      in_pck_sof_d0 <= in_pck_sof;
 
       case s_ll_write is
         --===========================================================================================
         when S_IDLE =>
           --===========================================================================================  
 
+          in_pck_sof_reg_ack <= '0';
+          new_pck_first_page_ack <= '0';
           -- clear the first page of the pck:
           -- (1) as soon as the first page is allocated, or
           -- (2) in case the WRITE state is quite long and it spans from the previous pck
           --     to the new one and into RCV_PCK state of rcv_pck FSM, we use the first page
           --     indication
-          if(pckstart_page_in_advance = '1' or new_pck_first_page = '1') then
+          if(pckstart_page_in_advance = '1' or (new_pck_first_page = '1' and new_pck_first_page_ack ='0')
+              or in_pck_sof_reg = '1') then
             ll_wr_req      <= '1';
             -- it may happen that LL FSM goes from SOF_ON_WR to IDLE and we
             -- managed to write only one word to the start page before deciding
@@ -2026,6 +2050,7 @@ begin
             ll_entry.next_page_valid <= '0';
             ll_entry.first_page_clr  <= '0';
             s_ll_write               <= S_WRITE;
+            in_pck_sof_reg_ack       <= '0';
           elsif(mpm_pg_req_d0 = '1') then
             ll_wr_req                <= '1';
             ll_entry.valid           <= '1';
@@ -2037,6 +2062,9 @@ begin
             ll_entry.next_page_valid <= '1';
             ll_entry.first_page_clr  <= '0';
             s_ll_write               <= S_WRITE;
+            in_pck_sof_reg_ack       <= '0';
+          else
+            in_pck_sof_reg_ack       <= '1';
           end if;
           --===========================================================================================
         when S_READY_FOR_DLAST_ONLY =>
@@ -2054,11 +2082,15 @@ begin
             ll_entry.first_page_clr  <= '0';
 
             s_ll_write        <= S_WRITE;
+            in_pck_sof_reg_ack<= '0';
           elsif(mpm_pg_req_d0 = '1') then
             assert false
               report "ll_write FSM: received mpm_pg_req on S_READY_FOR_DLAST_ONLY, it should not";
           elsif(pckinter_page_in_advance = '1' and pckstart_page_in_advance = '1') then
             s_ll_write <= S_READY_FOR_PGR_AND_DLAST;
+            in_pck_sof_reg_ack <= '0';
+          else
+            in_pck_sof_reg_ack <= '1';
           end if;
           --===========================================================================================
         when S_WRITE =>
@@ -2102,6 +2134,7 @@ begin
                  pckstart_pg_clred = '0') then 
                 -- finished writing end-of-frame page addr without cleaning pckstart_addr
                 ll_wr_req  <= '0';
+                new_pck_first_page_ack <= '1';
                 s_ll_write <= S_IDLE;  -- here it will be waiting for pckstart_page
 
               elsif(pckinter_page_in_advance = '1' and pckstart_page_in_advance = '1') then
@@ -2114,8 +2147,8 @@ begin
 
             if(mpm_dlast_d0 = '1') then
               s_ll_write <= S_EOF_ON_WR;
-            elsif(in_pck_sof = '1' or in_pck_sof_d0 = '1') then
-              -- in_pck_sof_d0 triggers this condition when in_pck_sof was high
+            elsif(in_pck_sof = '1' or in_pck_sof_reg = '1') then
+              -- in_pck_sof_reg triggers this condition when in_pck_sof was high
               -- one cycle before LL FSM got to S_WRITE.
               s_ll_write <= S_SOF_ON_WR;
             end if;
@@ -2141,31 +2174,61 @@ begin
             ll_entry.next_page_valid <= '0';
             ll_entry.first_page_clr  <= '0';
             s_ll_write               <= S_WRITE;
+            if(ll_entry_tmp.addr = current_pckstart_pageaddr) then
+              -- this means we're already serving a new frame, which had SOF
+              -- and EOF/ERR soon after it
+              new_pck_first_page_ack <= '1';
+            end if;
           end if;
           --===========================================================================================
         when S_SOF_ON_WR =>
           --===========================================================================================
+          in_pck_sof_reg_ack <= '1';
           if(ll_wr_req = '1' and ll_wr_done_i = '1') then  -- written
             --ll_wr_req  <= '0';
             --ll_entry   <= c_zero_ll_entry;
-            ll_wr_req                <= '0';
-            ll_entry.valid           <= '0';
-            ll_entry.eof             <= '0';
-            ll_entry.addr            <= (others => '0');
-            ll_entry.size            <= (others => '0');
-            ll_entry.next_page       <= (others => '0');
-            ll_entry.next_page_valid <= '0';
-            ll_entry.first_page_clr  <= '0';
-
-            if(ll_entry.first_page_clr = '1') then
-              if(pckinter_page_in_advance = '1' and pckstart_page_in_advance = '1') then
-                s_ll_write <= S_READY_FOR_PGR_AND_DLAST;
-              else
-                s_ll_write <= S_READY_FOR_DLAST_ONLY;
-              end if;
+            if(mpm_dlast_d0 = '1') then
+              -- after adding in_pck_sof_reg, LL FSM can go to SOF_ON_WR also
+              -- when start page is already being written (cleared). Therefore
+              -- also here we need to check if we don't have mpm_dlast_d0.
+              -- mpm_dlast_d0 = '1' when we got sof and frame gets dropped after
+              -- only first word is written to the MPM.
+              ll_wr_req <= '0';
+              ll_wr_req                <= '1';
+              ll_entry.valid           <= '1';
+              ll_entry.eof             <= '1';
+              ll_entry.addr            <= rp_ll_entry_addr;
+              ll_entry.size            <= rp_ll_entry_size;
+              ll_entry.next_page       <= (others => '0');
+              ll_entry.next_page_valid <= '0';
+              ll_entry.first_page_clr  <= '0';
+              s_ll_write <= S_WRITE;
             else
-              s_ll_write <= S_IDLE;
+              ll_wr_req                <= '0';
+              ll_entry.valid           <= '0';
+              ll_entry.eof             <= '0';
+              ll_entry.addr            <= (others => '0');
+              ll_entry.size            <= (others => '0');
+              ll_entry.next_page       <= (others => '0');
+              ll_entry.next_page_valid <= '0';
+              ll_entry.first_page_clr  <= '0';
+
+              if(ll_entry.first_page_clr = '1') then
+                if(pckinter_page_in_advance = '1' and pckstart_page_in_advance = '1') then
+                  s_ll_write <= S_READY_FOR_PGR_AND_DLAST;
+                else
+                  s_ll_write <= S_READY_FOR_DLAST_ONLY;
+                end if;
+              else
+                s_ll_write <= S_IDLE;
+              end if;
             end if;
+          elsif(mpm_dlast_d0 = '1') then
+            ll_entry_tmp.valid    <= '1';
+            ll_entry_tmp.eof      <= mpm_dlast_d0;
+            ll_entry_tmp.addr     <= rp_ll_entry_addr;
+            ll_entry_tmp.size     <= rp_ll_entry_size;
+            s_ll_write <= S_EOF_ON_WR;
           end if;
 
           --===========================================================================================
