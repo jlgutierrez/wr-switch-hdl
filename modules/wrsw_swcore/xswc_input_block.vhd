@@ -2367,12 +2367,15 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
         -- FF req is no more active.
         ffree_mask <= '0';
 
-      elsif(ffree_mask = '0' and ll_entry.addr = current_pckstart_pageaddr and ll_wr_done_i = '1') then
+      elsif(ffree_mask = '0' and ll_entry.addr = current_pckstart_pageaddr and ll_wr_done_i = '1' and
+            ll_entry.valid='1' and (ll_entry.next_page_valid='1' or ll_entry.eof='1')) then
         -- if we get ll_wr_done_i while LL FSM is in EOF_ON_WR, that means start
         -- page will be written one more time to LL but this time with EOF bit
         -- set. We have to wait for another ll_wr_done, therefore in that case
         -- we don't yet set ffree_mask to '1', but only remember the situation
         -- by setting ll_pckstart_stored to '1'.
+        -- Allow Force Free requests only if valid start page is written to LL.
+        -- Valid means either with next page pointer or EOF.
         ll_pckstart_stored <= '1';
         if(s_ll_write /= S_EOF_ON_WR) then
           ffree_mask <= '1';
