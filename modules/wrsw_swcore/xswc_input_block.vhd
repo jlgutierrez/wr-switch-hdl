@@ -391,7 +391,7 @@ architecture syn of xswc_input_block is
   signal mpm_pg_addr   : std_logic_vector(g_page_addr_width - 1 downto 0);
   signal mpm_dlast     : std_logic;
   -- we need to have single stage history 
-  signal mpm_dlast_d0  : std_logic;
+  signal mpm_dlast_reg : std_logic;
   signal mpm_pg_req_d0 : std_logic;
 
   -- pWB interface (i/o singals)
@@ -952,7 +952,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
               -- we must set mpm_dlast<='1' only for one cycle. If in_pck_eof
               -- happens right after in_pck_err, then finish_rcv_pck is high for
               -- 2 cycles. When (as a result) mpm_dlast is high for 2 cycles, we
-              -- go to unnecessary S_EOF_ON_WR in LL_FSM (on first mpm_dlast_d0
+              -- go to unnecessary S_EOF_ON_WR in LL_FSM (on first mpm_dlast_reg
               -- LL FSM goes to S_WRITE and if ll_wr_done_i does not come
               -- immediately after, we go to EOF_ON_WR).
               mpm_dlast <= '1';
@@ -1063,6 +1063,12 @@ begin  --archS_PCKSTART_SET_AND_REQ
               snk_stall_force_h <= '0';
               snk_stall_force_l <= '1';
               s_rcv_pck         <= S_IDLE;
+
+              -- it also happens that we have mpm_pg_req in the same cycle
+              -- as in_pck_eof
+              if(mpm_pg_req_i = '1') then
+                mpm_pg_addr <= pckinter_pageaddr;
+              end if;
 
               -- we always have in this memoment new pckinter_pageaddr allocated because
               -- we check we have it in advance with the next 'elsif' and if we don't have
@@ -1979,14 +1985,16 @@ begin
       ll_entry_tmp.next_page_valid <= '0';
       ll_entry_tmp.first_page_clr  <= '0';
 
-      mpm_dlast_d0  <= '0';
+      mpm_dlast_reg <= '0';
       mpm_pg_req_d0 <= '0';
       --s_ll_write  <= S_IDLE;
       --pckstart_pageaddr_clred      <= (others => '1');--make it different then the first allocated addr
       --========================================
     else
       
-      mpm_dlast_d0  <= mpm_dlast;
+      if(mpm_dlast_reg = '0' and mpm_dlast = '1') then
+        mpm_dlast_reg <= '1';
+      end if;
       mpm_pg_req_d0 <= mpm_pg_req_i;
 
       case s_ll_write is
@@ -2007,7 +2015,8 @@ begin
             -- it may happen that LL FSM goes from SOF_ON_WR to IDLE and we
             -- managed to write only one word to the start page before deciding
             -- we drop the rest of the frame. Hence the conditional below:
-            if(mpm_dlast_d0 = '1') then
+            if(mpm_dlast_reg = '1') then
+              mpm_dlast_reg  <= '0';
               ll_entry.valid <= '1';
               ll_entry.eof   <= '1';
               ll_entry.size  <= rp_ll_entry_size;
@@ -2039,7 +2048,8 @@ begin
           --===========================================================================================
         when S_READY_FOR_PGR_AND_DLAST =>
           --===========================================================================================
-          if(mpm_dlast_d0 = '1') then
+          if(mpm_dlast_reg = '1') then
+            mpm_dlast_reg   <= '0';
             ll_wr_req                <= '1';
             ll_entry.valid           <= '1';
             ll_entry.eof             <= '1';
@@ -2069,7 +2079,8 @@ begin
           --===========================================================================================
         when S_READY_FOR_DLAST_ONLY =>
           --===========================================================================================
-          if(mpm_dlast_d0 = '1') then
+          if(mpm_dlast_reg = '1') then
+            mpm_dlast_reg  <= '0';
             ll_wr_req      <= '1';
             ll_entry.valid <= '1';
             ll_entry.eof   <= '1';
@@ -2098,7 +2109,8 @@ begin
           if(ll_wr_req = '1' and ll_wr_done_i = '1') then  -- written
             ll_wr_req <= '0';
 
-            if(mpm_dlast_d0 = '1') then
+            if(mpm_dlast_reg = '1') then
+              mpm_dlast_reg <= '0';
               ll_wr_req                <= '1';
               ll_entry.valid           <= '1';
               ll_entry.eof             <= '1';
@@ -2145,7 +2157,8 @@ begin
             end if;
           else  -- if(ll_wr_req = '1' and ll_wr_done_i = '1)
 
-            if(mpm_dlast_d0 = '1') then
+            if(mpm_dlast_reg = '1') then
+              mpm_dlast_reg <= '0';
               s_ll_write <= S_EOF_ON_WR;
             elsif(in_pck_sof = '1' or in_pck_sof_reg = '1') then
               -- in_pck_sof_reg triggers this condition when in_pck_sof was high
@@ -2153,9 +2166,9 @@ begin
               s_ll_write <= S_SOF_ON_WR;
             end if;
 
-            if(mpm_pg_req_d0 = '1' or mpm_dlast_d0 = '1') then
+            if(mpm_pg_req_d0 = '1' or mpm_dlast_reg = '1') then
               ll_entry_tmp.valid    <= '1';
-              ll_entry_tmp.eof      <= mpm_dlast_d0;
+              ll_entry_tmp.eof      <= mpm_dlast_reg;
               ll_entry_tmp.addr     <= rp_ll_entry_addr;
               ll_entry_tmp.size     <= rp_ll_entry_size;
             end if;
@@ -2187,12 +2200,13 @@ begin
           if(ll_wr_req = '1' and ll_wr_done_i = '1') then  -- written
             --ll_wr_req  <= '0';
             --ll_entry   <= c_zero_ll_entry;
-            if(mpm_dlast_d0 = '1') then
+            if(mpm_dlast_reg = '1') then
               -- after adding in_pck_sof_reg, LL FSM can go to SOF_ON_WR also
               -- when start page is already being written (cleared). Therefore
-              -- also here we need to check if we don't have mpm_dlast_d0.
-              -- mpm_dlast_d0 = '1' when we got sof and frame gets dropped after
+              -- also here we need to check if we don't have mpm_dlast_reg.
+              -- mpm_dlast_reg = '1' when we got sof and frame gets dropped after
               -- only first word is written to the MPM.
+              mpm_dlast_reg <= '0';
               ll_wr_req <= '0';
               ll_wr_req                <= '1';
               ll_entry.valid           <= '1';
@@ -2223,9 +2237,10 @@ begin
                 s_ll_write <= S_IDLE;
               end if;
             end if;
-          elsif(mpm_dlast_d0 = '1') then
+          elsif(mpm_dlast_reg = '1') then
+            mpm_dlast_reg <= '0';
             ll_entry_tmp.valid    <= '1';
-            ll_entry_tmp.eof      <= mpm_dlast_d0;
+            ll_entry_tmp.eof      <= mpm_dlast_reg;
             ll_entry_tmp.addr     <= rp_ll_entry_addr;
             ll_entry_tmp.size     <= rp_ll_entry_size;
             s_ll_write <= S_EOF_ON_WR;
