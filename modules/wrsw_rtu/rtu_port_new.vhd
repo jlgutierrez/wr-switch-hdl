@@ -186,6 +186,9 @@ architecture behavioral of rtu_port_new is
   signal full_match_aboard           : std_logic;
   signal full_match_aboard_d         : std_logic;
   signal aboard_possible      : std_logic;
+  signal fast_valid_reg              : std_logic;
+  signal full_valid_reg              : std_logic;
+  signal new_full_on_final_msk       : std_logic;
   -- VHDL -- lovn' it
   signal zeros                       : std_logic_vector(47 downto 0);
   signal dbg_force_fast_match_only   : std_logic; 
@@ -433,7 +436,7 @@ begin
         
         if(full_match_aboard = '1') then
           full_match_aboard_d    <= '1';
-        elsif(rsp.valid = '1' and rtu_rsp_ack_i ='1') then
+        elsif(port_state = S_RESPONSE) then
           full_match_aboard_d    <= '0';
         end if;
         
@@ -451,7 +454,7 @@ begin
         elsif(full_match_valid = '1' ) then 
           full_match_req_in_progress <= '0';
           full_match                 <= full_match_in;
-        elsif(port_state = S_FINAL_MASK) then 
+        elsif(port_state = S_FINAL_MASK and new_full_on_final_msk='0') then 
           full_match_req_in_progress <= '0';
         end if;
       end if;
@@ -477,6 +480,17 @@ begin
     end if;
   end process p_rq_rsp_cnt;
 
+  process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if(rst_n_i='0' or full_match_valid='1') then
+        new_full_on_final_msk <= '0';
+      elsif(full_match_wr_req='1' and rsp.valid='1' and port_state=S_FINAL_MASK) then
+        new_full_on_final_msk <= '1';
+      end if;
+    end if;
+  end process;
+
   -------------------------------------------------------------------------------------------------------------------------
   --| 
   --| (state transitions)       
@@ -491,6 +505,8 @@ begin
         port_state                <= S_IDLE;
         rsp                       <= c_rtu_rsp_zero;
         delayed_full_match_wr_req <= '0';
+        fast_valid_reg            <= '0';
+        full_valid_reg            <= '0';
         ------------------------------------------------------------------------------------------------------------     
       else
         -- FSM
@@ -499,7 +515,9 @@ begin
           --| IDLE: waiting for the request from a port
           ------------------------------------------------------------------------------------------------------------ 
           when S_IDLE =>
-            
+            fast_valid_reg <= '0';
+            full_valid_reg <= '0';
+
             if(fast_match_wr_req = '1' or 
                new_req_at_full_match_rsp_d = '1') then -- should not be used, but just in case
               port_state          <= S_FAST_MATCH;
@@ -523,21 +541,29 @@ begin
                 -- full request now, if yes, go for it
                 delayed_full_match_wr_req <= '1';
               end if;            
-            elsif(fast_match_rd_valid = '1' and fast_match_wr_req_d = '1') then
+            elsif((fast_match_rd_valid = '1' and fast_match_wr_req_d = '1') or fast_valid_reg='1') then
+              fast_valid_reg <= '0';
               -- response the current fast_match request, registered
              -- fast_match            <= fast_match_rd_data_i;
               if(dbg_force_fast_match_only = '1') then
                 port_state          <= S_FINAL_MASK;             
-              elsif(fast_match_rd_data_i.nf   = '1' or     -- non-forward (link-limited) e.g.: BPDU
+              elsif(fast_match_rd_valid = '1' and
+                    (fast_match_rd_data_i.nf   = '1' or     -- non-forward (link-limited) e.g.: BPDU
                     fast_match_rd_data_i.ff   = '1' or     -- fast forward recongized
                     fast_match_rd_data_i.drop = '1' or     -- no point in further work (drop due to VLAN)
-                    full_match_aboard         = '1') then   -- aboard because next frame received
+                    full_match_aboard         = '1')) then   -- aboard because next frame received
                       -- if we recognizd special traffic or aboard request , we don't need full match
+                port_state          <= S_FINAL_MASK;
+              elsif(fast_valid_reg='1' and
+                    (fast_match.nf   = '1' or fast_match.ff   = '1' or
+                     fast_match.drop = '1' or full_match_aboard = '1')) then
+                    -- the situation when we got here from FINAL_MASK
                 port_state          <= S_FINAL_MASK;
               else
                 -- go for full match (can be abanoned any time)
                 port_state          <= S_FULL_MATCH;
-                if(full_match_req_in_progress = '0' and full_match_wr_full_i = '0' and rq_rsp_cnt =  0) then 
+                if(full_match_req_in_progress = '0' and full_match_wr_full_i = '0' and
+                    rq_rsp_cnt =  0 and full_valid_reg='0') then 
                   -- if full_match was not requested at the very beginning (directly from input requests)
                   -- it means that at that time old full_request was handled, check whether we can do 
                   -- full request now, if yes, go for it
@@ -562,16 +588,18 @@ begin
             if(rtu_rq_abort_i = '1' or rtu_rsp_abort_i = '1') then
               port_state                <= S_IDLE;
               delayed_full_match_wr_req <= '0';
-            elsif(full_match_aboard = '0'  and full_match_req_in_progress = '0' and full_match_wr_full_i = '0' and rq_rsp_cnt =  0) then 
+            elsif(full_match_aboard = '0'  and full_match_req_in_progress = '0' and
+                  full_match_wr_full_i = '0' and rq_rsp_cnt =  0 and full_valid_reg='0') then 
               -- request full match access
               delayed_full_match_wr_req <= '1';
             else
               delayed_full_match_wr_req <= '0';
             end if;            
 
-            if(full_match_valid = '1') then -- 
+            if(full_match_valid = '1' or full_valid_reg = '1') then -- 
               -- full match done (input data registered in separate process)
               port_state          <= S_FINAL_MASK; 
+              full_valid_reg      <= '0';
             elsif(full_match_aboard = '1' and fast_match.valid = '1') then
               -- aboard waiting for full match
               port_state          <= S_FINAL_MASK;
@@ -633,7 +661,14 @@ begin
               end if;
             
               port_state          <= S_RESPONSE;
-             end if;
+            end if;
+
+            if(fast_match_rd_valid = '1') then
+              fast_valid_reg <= '1';
+            end if;
+            if(full_match_valid = '1') then
+              full_valid_reg <= '1';
+            end if;
           ------------------------------------------------------------------------------------------------------------ 
           --| in this state the answer is made available on the output (rtu_rsp_o). it is available until
           --| the reception is acked by SWcore. However, new request from Endpoint can be handled in this time.
@@ -641,7 +676,8 @@ begin
           ------------------------------------------------------------------------------------------------------------             
           when S_RESPONSE =>
               
-            if((full_match_aboard_d = '1' or new_req_at_full_match_rsp_d = '1' or fast_match_wr_req = '1') and match_required ='1') then
+            if((full_match_aboard_d = '1' or new_req_at_full_match_rsp_d = '1' or fast_match_wr_req = '1')
+                 and match_required ='1') then
               -- if we are in this state because we received abanddon request  and match is 
               -- required (RTU enabled/no mirroring), we go straight to FAST_MATCH
               port_state      <= S_FAST_MATCH;
@@ -652,6 +688,13 @@ begin
             else
               -- go and wait for new requests
               port_state      <= S_IDLE;
+            end if;
+
+            if(fast_match_rd_valid = '1') then
+              fast_valid_reg <= '1';
+            end if;
+            if(full_match_valid = '1') then
+              full_valid_reg <= '1';
             end if;
           ------------------------------------------------------------------------------------------------------------ 
           --| OTHER: 
