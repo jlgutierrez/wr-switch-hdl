@@ -375,6 +375,8 @@ architecture syn of xswc_input_block is
   signal current_pckstart_pageaddr : std_logic_vector(g_page_addr_width - 1 downto 0);
   -- we remember what was it's usecant at the time
   signal current_pckstart_usecnt   : std_logic_vector(g_usecount_width - 1 downto 0);
+  -- last pckstart stored in the LL
+  signal current_pckstart_ll_stored : std_logic_vector(g_page_addr_width - 1 downto 0);
 
   -- signals sent to Pck Transfer Unit  
   signal pta_transfer_pck : std_logic;
@@ -672,9 +674,11 @@ constant c_force_usecnt             : boolean :=  TRUE;
   signal tp_transfer_wait_sof       : std_logic;
   signal tp_transfer_set_usecnt     : std_logic;
 
-  signal ll_pckstart_stored         : std_logic;
+  signal ll_stored_eof              : std_logic;
   signal rcv_pckstart_new           : std_logic;
+  signal pcknew_reg                 : std_logic;
   signal ffree_mask                 : std_logic;
+  signal ffree_pre_mask             : std_logic;
   
   signal dbg_dropped_on_res_full    : std_logic;
 
@@ -2116,6 +2120,11 @@ begin
           if(ll_wr_req = '1' and ll_wr_done_i = '1') then  -- written
             ll_wr_req <= '0';
 
+            -- remember the last startpage stored to the LL
+            if(current_pckstart_pageaddr = ll_entry.addr and ll_entry.valid='1') then
+              current_pckstart_ll_stored <= current_pckstart_pageaddr;
+            end if;
+
             if(mpm_dlast_reg = '1') then
               mpm_dlast_reg <= '0';
               ll_wr_req                <= '1';
@@ -2187,6 +2196,10 @@ begin
           --===========================================================================================
           -- if (EOF or error or drop decision) happens on writing
           if(ll_wr_req = '1' and ll_wr_done_i = '1') then  -- written
+            -- remember the last startpage stored to the LL
+            if(current_pckstart_pageaddr = ll_entry.addr and ll_entry.valid='1') then
+              current_pckstart_ll_stored <= current_pckstart_pageaddr;
+            end if;
             ll_wr_req                <= '1';
             ll_entry                 <= ll_entry_tmp;
             --- not used because we write size and stuff
@@ -2205,6 +2218,10 @@ begin
           --===========================================================================================
           in_pck_sof_reg_ack <= '1';
           if(ll_wr_req = '1' and ll_wr_done_i = '1') then  -- written
+            -- remember the last startpage stored to the LL
+            if(current_pckstart_pageaddr = ll_entry.addr and ll_entry.valid='1') then
+              current_pckstart_ll_stored <= current_pckstart_pageaddr;
+            end if;
             --ll_wr_req  <= '0';
             --ll_entry   <= c_zero_ll_entry;
             if(mpm_dlast_reg = '1') then
@@ -2350,52 +2367,54 @@ rp_in_pck_error <= '1' when (rp_in_pck_err = '1' or in_pck_err = '1') else '0';
   begin
     if rising_edge(clk_i) then
       if (rst_n_i = '0') then
-        ll_pckstart_stored <= '0';
-        ffree_mask <= '1';
-      elsif(ffree_mask = '1' and rcv_pckstart_new = '1' and mmu_force_free_req = '1') or
-        -- if there is an ongoing FF req, then we cannot clear the mask because
-        -- it won't be done, never.. However, we remember the
-        -- rcv_pckstart_new='1' by setting ll_pckstart_stored to '0'.
-           (ffree_mask = '1' and rcv_pckstart_new = '1' and s_ll_write = S_SOF_ON_WR) then
-        -- if we get rcv_pckstart_new while we're in SOF_ON_WR, this means we
-        -- have a new frame, but the previous one might still need to be
-        -- force-freed. That's why we postpone driving ffree_mask to '0'.
-        ffree_mask <= '1';
-        ll_pckstart_stored <= '0';
-      elsif(ffree_mask = '1' and rcv_pckstart_new = '1') then
-        -- that is the most "clean" situation, there is no FF request and we're
-        -- receiving new frame, therefore we clear ffree_mask and
-        -- ll_pckstart_stored.
+        ll_stored_eof <= '0';
         ffree_mask <= '0';
-        ll_pckstart_stored <= '0';
-      elsif(ffree_mask = '1' and ll_pckstart_stored = '0' and mmu_force_free_req = '0' and s_ll_write /= S_SOF_ON_WR) then
-        -- in case the first condition took place, (and in the meantime the
-        -- start page was not saved to linked list) clear the ffree_mask when
-        -- FF req is no more active.
-        ffree_mask <= '0';
-
-      elsif(ffree_mask = '0' and ll_entry.addr = current_pckstart_pageaddr and ll_wr_done_i = '1' and
-            ll_entry.valid='1' and (ll_entry.next_page_valid='1' or ll_entry.eof='1')) then
-        -- if we get ll_wr_done_i while LL FSM is in EOF_ON_WR, that means start
-        -- page will be written one more time to LL but this time with EOF bit
-        -- set. We have to wait for another ll_wr_done, therefore in that case
-        -- we don't yet set ffree_mask to '1', but only remember the situation
-        -- by setting ll_pckstart_stored to '1'.
-        -- Allow Force Free requests only if valid start page is written to LL.
-        -- Valid means either with next page pointer or EOF.
-        ll_pckstart_stored <= '1';
-        if(s_ll_write /= S_EOF_ON_WR) then
-          ffree_mask <= '1';
+        ffree_pre_mask <= '0';
+        pcknew_reg <= '0';
+      else
+        if(rcv_pckstart_new='1' and ll_wr_req='1' and ll_entry.valid='1') then
+          pcknew_reg <= '1';
         end if;
-      elsif(ffree_mask = '0' and ll_pckstart_stored='1' and ll_wr_done_i='1') then
-        -- here is the continuation of the above condition. When we detect
-        -- second write after EOF_ON_WR we set ffree_mask to '1' marking that
-        -- the start page was stored to LL.
-        ffree_mask <= '1';
-      end if;
 
+        if(ffree_pre_mask='1' and (rcv_pckstart_new='1' or pcknew_reg='1') and mmu_force_free_req = '1') then-- or
+          -- if there is an ongoing FF req, then we cannot clear the mask because
+          -- it won't be done, never.. However, we remember the
+          -- rcv_pckstart_new='1' by setting ll_stored_eof to '0'.
+          ffree_pre_mask <= '1';
+          ll_stored_eof  <= '0';
+          pcknew_reg <= '0';
+        elsif(ffree_pre_mask='1' and (rcv_pckstart_new='1' or pcknew_reg='1')) then
+          -- that is the most "clean" situation, there is no FF request and we're
+          -- receiving new frame, therefore we clear ffree_mask and ll_stored_eof.
+          ffree_pre_mask <= '0';
+          ll_stored_eof  <= '0';
+          pcknew_reg <= '0';
+        elsif(ffree_pre_mask = '1' and ll_stored_eof = '0' and mmu_force_free_req = '0' and
+              (ll_wr_done_i='0' or ll_entry.valid='0' or ll_entry.eof='0')) then
+          -- in case the first condition took place, (and in the meantime the
+          -- start page was not saved to linked list) clear the ffree_mask when
+          -- FF req is no more active.
+          ffree_pre_mask <= '0';
+
+        elsif(ffree_pre_mask = '0' and ll_wr_done_i = '1' and ll_entry.valid='1' and ll_entry.eof='1') then
+          -- we allow force-free only if everything for the
+          -- frame is stored in the LL. Otherwise (and I've seen this for 18p
+          -- snake test) we have a race condition.
+          ll_stored_eof  <= '1';
+          ffree_pre_mask <= '1';
+        end if;
+
+        if (ffree_pre_mask='1' and mmu_force_free_req='1' and
+            (mmu_force_free_addr=current_pckstart_ll_stored or (mmu_force_free_addr=ll_entry.addr and ll_wr_done_i='1'))) then
+          ffree_mask <= '1';
+        elsif(ffree_pre_mask='0' or rcv_pckstart_new='1' or pcknew_reg='1' or
+              (ll_stored_eof='0' and mmu_force_free_req='0' and (ll_wr_done_i='0' or ll_entry.valid='0' or ll_entry.eof='0'))) then
+          ffree_mask <= '0';
+        end if;
+      end if;
     end if;
   end process;
+
 
 --================================================================================================
 --------------------------------------------------------------------------------------------------
