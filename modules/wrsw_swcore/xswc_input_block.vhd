@@ -534,7 +534,7 @@ architecture syn of xswc_input_block is
   signal tp_drop                     : std_logic;
   signal tp_stuck                    : std_logic;
   signal tp_transfer_valid           : std_logic;
-
+  signal tp_ff_done_reg              :  std_logic;
 
 
   -- used by rcv_pck FSM to sync with ll_write. checked by rcv_pck on entering READY
@@ -1727,6 +1727,7 @@ begin
       pta_resource     <= (others => '0');
       pta_hp           <= '0';
       pta_prio         <= (others => '0');
+      tp_ff_done_reg   <= '0';
       --========================================
     else
 
@@ -1888,8 +1889,17 @@ begin
               end if;
             end if;
           end if;
+          
+          -- in case setting the usecnt takes some longer time, it may happen that
+          -- RCV_FSM requests force_free and force_free will be done before TP_FSM
+          -- goes to S_DROP. In that case we need to register the
+          -- mmu_force_free_done_i signal.
+          if(mmu_force_free_done_i = '1') then
+            tp_ff_done_reg <= '1';
+          end if;
           --===========================================================================================
         when S_TRANSFER =>
+          tp_ff_done_reg <= '0';
           --===========================================================================================
           -- TODO: think about enabling reception of new pck when still waiting for the transfer
           if(pta_transfer_ack_i = '1') then
@@ -1904,6 +1914,7 @@ begin
           --===========================================================================================
         when S_WAIT_WITH_TRANSFER =>  -- waits for ll_write to clear the first page
           --===========================================================================================            
+          tp_ff_done_reg  <= '0';
           if(lw_pckstart_pg_clred = '1') then
             s_transfer_pck   <= S_TRANSFER;
             pta_transfer_pck <= '1';
@@ -1939,7 +1950,8 @@ begin
           -- this is to prevent trashing of the drop process (it happened that force_free was
           -- re-done many times by rcv_pck FSM when transfer_pck FSM stayed in DROP state waiting
           -- for global sync
-          elsif(mmu_force_free_req = '1' and mmu_force_free_done_i = '1') then
+          elsif((mmu_force_free_req = '1' and mmu_force_free_done_i = '1') or tp_ff_done_reg='1') then
+            tp_ff_done_reg <= '0';
             s_transfer_pck <= S_IDLE;  
           -- we got here when RCV FSM did not use any page (memory was full), so we don't wait
           -- for  force_free_done, because it will never happen.
