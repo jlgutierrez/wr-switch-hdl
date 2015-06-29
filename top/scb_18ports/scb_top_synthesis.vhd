@@ -302,6 +302,7 @@ architecture Behavioral of scb_top_synthesis is
       g_with_HWIU       : boolean;
       g_with_PSTATS     : boolean;
       g_with_muxed_CS   : boolean;
+      g_with_watchdog   : boolean;
       g_inj_per_EP      : std_logic_vector(17 downto 0));
     port (
       sys_rst_n_i         : in  std_logic;
@@ -689,6 +690,7 @@ begin
       g_with_HWIU       => true,
       g_with_PSTATS     => true,
       g_with_muxed_CS   => false,
+      g_with_watchdog   => true,
       g_inj_per_EP      => "00" & x"0000")
     port map (
       sys_rst_n_i         => sys_rst_n_i,

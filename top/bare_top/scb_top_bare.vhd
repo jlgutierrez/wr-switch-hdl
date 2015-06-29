@@ -63,6 +63,7 @@ entity scb_top_bare is
     g_with_HWIU       : boolean := false;
     g_with_PSTATS     : boolean := true;
     g_with_muxed_CS   : boolean := false;
+    g_with_watchdog   : boolean := false;
     g_inj_per_EP      : std_logic_vector(17 downto 0) := (others=>'0')
     );
   port (
@@ -198,7 +199,7 @@ architecture rtl of scb_top_bare is
   constant c_TRU_EVENTS    : integer := 1;
   constant c_ALL_EVENTS    : integer := c_TRU_EVENTS + c_RTU_EVENTS + c_epevents_sz;
   constant c_DUMMY_RMON    : boolean := false; -- define TRUE to enable dummy_rmon module for debugging PSTAT
-  constant c_NUM_GPIO_PINS : integer := 1;
+  constant c_NUM_GPIO_PINS : integer := 2;
   constant c_NUM_IRQS      : integer := 4;
 --   constant c_epevents_sz   : integer := 15;
 -------------------------------------------------------------------------------
@@ -269,6 +270,9 @@ architecture rtl of scb_top_bare is
   signal endpoint_snk_out : t_wrf_sink_out_array(c_NUM_PORTS downto 0);
   signal endpoint_snk_in  : t_wrf_sink_in_array(c_NUM_PORTS downto 0);
 
+  signal wrfreg_src_out : t_wrf_source_out_array(c_NUM_PORTS downto 0);
+  signal wrfreg_src_in  : t_wrf_source_in_array(c_NUM_PORTS downto 0);
+
   signal swc_src_out : t_wrf_source_out_array(c_NUM_PORTS downto 0);
   signal swc_src_in  : t_wrf_source_in_array(c_NUM_PORTS downto 0);
   signal swc_snk_out : t_wrf_sink_out_array(c_NUM_PORTS downto 0);
@@ -282,6 +286,7 @@ architecture rtl of scb_top_bare is
   signal rtu_req                            : t_rtu_request_array(c_NUM_PORTS downto 0);
   signal rtu_rsp                            : t_rtu_response_array(c_NUM_PORTS downto 0);
   signal rtu_req_ack, rtu_full, rtu_rsp_ack, rtu_rq_abort, rtu_rsp_abort: std_logic_vector(c_NUM_PORTS downto 0);
+  signal swc_rtu_ack  : std_logic_vector(c_NUM_PORTS downto 0);
 
 -- System clock selection: 0 = startup clock, 1 = PLL clock
   signal sel_clk_sys, sel_clk_sys_int : std_logic;
@@ -314,6 +319,8 @@ architecture rtl of scb_top_bare is
   signal t0, t1, t2, t3             : std_logic_vector(31 downto 0);
   signal rst_n_periph               : std_logic;
   signal link_kill                  : std_logic_vector(c_NUM_PORTS-1 downto 0);
+  signal rst_n_swc  : std_logic;
+  signal swc_nomem  : std_logic;
 
  
 
@@ -646,7 +653,8 @@ begin
           g_with_dmtd           => false,
           g_with_packet_injection => f_logic2bool(g_inj_per_EP(i)),
           g_use_new_rxcrc       => true,
-          g_use_new_txcrc       => false)
+          g_use_new_txcrc       => false,
+          g_with_stop_traffic   => g_with_watchdog)
         port map (
           clk_ref_i  => clk_ref_i,
           clk_sys_i  => clk_sys,
@@ -717,7 +725,8 @@ begin
           rmon_events_o => ep_events((i+1)*c_epevents_sz-1 downto i*c_epevents_sz),
 
           led_link_o => led_link_o(i),
-          led_act_o  => led_act_o(i)
+          led_act_o  => led_act_o(i),
+          stop_traffic_i => ep_stop_traffic,
           );
 
           phys_o(i).tx_data <= ep_dbg_data_array(i);
@@ -748,8 +757,8 @@ begin
           clk_i   => clk_sys,
           snk_i   => endpoint_src_out(i),
           snk_o   => endpoint_src_in(i),
-          src_o   => swc_snk_in(i),
-          src_i   => swc_snk_out(i));
+          src_o   => wrfreg_src_out(i),
+          src_i   => wrfreg_src_in(i));
 
       U_WRF_TXREG_X: xwrf_reg
         port map(
@@ -803,7 +812,7 @@ begin
       port map (
         clk_i          => clk_sys,
         clk_mpm_core_i => clk_aux_i,
-        rst_n_i        => rst_n_periph,
+        rst_n_i        => rst_n_swc,
 
         src_i => swc_src_in,
         src_o => swc_src_out,
@@ -819,7 +828,7 @@ begin
         dbg_o     => dbg_n_regs(32+c_DBG_V_SWCORE-1 downto 32), 
         
         rtu_rsp_i       => rtu_rsp,
-        rtu_ack_o       => rtu_rsp_ack,
+        rtu_ack_o       => swc_rtu_ack,
         rtu_abort_o     =>rtu_rsp_abort-- open --rtu_rsp_abort
         );
      
@@ -1111,6 +1120,41 @@ begin
   clk_sel_o         <= '0';
   clk_dmtd_divsel_o <= '1';             -- choose 62.5 MHz DDMTD clock
   clk_sys_o         <= clk_sys;
+
+-------------------------------------------------------------------------------
+-- Reset of the SW-Core in case something goes horribly wrong
+-------------------------------------------------------------------------------
+  GEN_SWC_RST: if(g_with_watchdog) generate
+    WDOG: xwrsw_watchdog
+      generic map(
+        g_num_ports => g_num_ports+1)
+      port map(
+        rst_n_i => rst_n_periph,
+        clk_i   => clk_sys,
+        force_rst_i => gpio_out(1),
+        swc_nomem_i => swc_nomem,
+
+        restart_cnt_o => open,
+        
+        swcrst_n_o  => rst_n_swc,
+        epstop_o   => ep_stop_traffic,
+
+        rtu_ack_i  => swc_rtu_ack,
+        rtu_ack_o  => rtu_rsp_ack,
+
+        snk_i => wrfreg_src_out,
+        snk_o => wrfreg_src_in,
+        src_o => swc_snk_in,
+        src_i => swc_snk_out);
+  end generate;
+
+  GEN_NO_SWC_RST: if(not g_with_watchdog) generate
+    ep_stop_traffic <= '0';
+    rst_n_swc     <= rst_n_periph;
+    rtu_rsp_ack   <= swc_rtu_ack;
+    wrfreg_src_in <= swc_snk_out;
+    swc_snk_in    <= wrfreg_src_out;
+  end generate;
 
   gen_muxed_CS: if g_with_muxed_CS = true generate
     CS_ICON : chipscope_icon
