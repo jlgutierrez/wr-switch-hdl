@@ -180,7 +180,8 @@ begin  -- rtl
       g_without_network => false,
       g_with_TRU        => g_with_TRU,
       g_with_TATSU      => g_with_TATSU,
-      g_with_HWIU       => g_with_HWIU),
+      g_with_HWIU       => g_with_HWIU,
+      g_with_watchdog   => true)
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_startup_i,
