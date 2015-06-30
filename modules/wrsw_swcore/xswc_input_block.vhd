@@ -98,6 +98,7 @@ library work;
 use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
 use work.wr_fabric_pkg.all;
+use work.wrsw_shared_types_pkg.all;
 
 entity xswc_input_block is
   generic (
@@ -256,8 +257,7 @@ entity xswc_input_block is
 
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
-    dbg_hwdu_o  : out std_logic_vector(15 downto 0);
-
+    wdog_o    : out t_swc_fsms;
     tap_out_o: out std_logic_vector(49 + 62 downto 0);
     
     dbg_pckstart_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
@@ -551,7 +551,7 @@ architecture syn of xswc_input_block is
   signal lw_pckstart_pg_clred : std_logic;
   signal pckstart_pg_clred    : std_logic;
 
-  signal alloc_FSM : std_logic_vector(2  downto 0);
+  signal alloc_FSM : std_logic_vector(3  downto 0);
   signal trans_FSM : std_logic_vector(3  downto 0);
   signal rcv_p_FSM : std_logic_vector(3  downto 0);
   signal linkl_FSM : std_logic_vector(3  downto 0);
@@ -806,7 +806,7 @@ begin  --archS_PCKSTART_SET_AND_REQ
       if(rst_n_i = '0') then
         --========================================
         s_rcv_pck         <= S_IDLE;
-        snk_stall_force_h <= '1';
+        snk_stall_force_h <= '0'; --for watchdog
         snk_stall_force_l <= '1';
         snk_sel_d0        <= (others => '0');
         page_word_cnt     <= (others => '0');
@@ -2010,7 +2010,7 @@ begin
 
       mpm_dlast_reg <= '0';
       mpm_pg_req_d0 <= '0';
-      --s_ll_write  <= S_IDLE;
+      s_ll_write  <= S_IDLE;
       --pckstart_pageaddr_clred      <= (others => '1');--make it different then the first allocated addr
       --========================================
     else
@@ -2576,12 +2576,12 @@ ll_next_addr_o                          <= ll_entry.next_page;
 ll_next_addr_valid_o                    <= ll_entry.next_page_valid;
 ll_wr_req_o                             <= ll_wr_req;
 
-alloc_FSM <= "000" when (s_page_alloc = S_IDLE) else
-             "001" when (s_page_alloc = S_PCKSTART_SET_USECNT) else
-             "010" when (s_page_alloc = S_PCKSTART_PAGE_REQ) else
-             "011" when (s_page_alloc = S_PCKINTER_PAGE_REQ) else
-             "100" when (s_page_alloc = S_PCKSTART_SET_AND_REQ) else
-             "101" ;
+alloc_FSM <= x"0" when (s_page_alloc = S_IDLE) else
+             x"1" when (s_page_alloc = S_PCKSTART_SET_USECNT) else
+             x"2" when (s_page_alloc = S_PCKSTART_PAGE_REQ) else
+             x"3" when (s_page_alloc = S_PCKINTER_PAGE_REQ) else
+             x"4" when (s_page_alloc = S_PCKSTART_SET_AND_REQ) else
+             x"5" ;
 trans_FSM <= x"0" when (s_transfer_pck = S_IDLE) else
              x"1" when (s_transfer_pck = S_READY) else
              x"2" when (s_transfer_pck = S_WAIT_RTU_VALID) else
@@ -2611,7 +2611,10 @@ linkl_FSM <= x"0" when (s_ll_write = S_IDLE) else
              x"5" when (s_ll_write = S_SOF_ON_WR) else
              x"6";
 
-dbg_hwdu_o <= rtu_rsp_valid_i & alloc_FSM & trans_FSM & rcv_p_FSM & linkl_FSM;
+wdog_o(c_ALLOC_FSM_IDX) <= alloc_FSM;
+wdog_o(c_TRANS_FSM_IDX) <= trans_FSM;
+wdog_o(c_RCV_FSM_IDX)   <= rcv_p_FSM;
+wdog_o(c_LL_FSM_IDX)    <= linkl_FSM;
 
 dbg_dropped_on_res_full <= pckstart_usecnt_req and mmu_set_usecnt_done_i and (not mmu_set_usecnt_succeeded_i);
 

@@ -77,7 +77,7 @@ entity xswc_core is
     g_mpm_fetch_next_pg_in_advance     : boolean ;
     g_drop_outqueue_head_on_full       : boolean ;
     g_num_global_pause                 : integer := 2;
-    g_num_dbg_vector_width             : integer := 8
+    g_num_dbg_vector_width             : integer := 32 
     );
   port (
     clk_i          : in std_logic;
@@ -124,9 +124,13 @@ entity xswc_core is
     
     rtu_rsp_i                 : in t_rtu_response_array(g_num_ports  - 1 downto 0);
     rtu_ack_o                 : out std_logic_vector(g_num_ports  - 1 downto 0);
-    rtu_abort_o               : out std_logic_vector(g_num_ports  - 1 downto 0)
+    rtu_abort_o               : out std_logic_vector(g_num_ports  - 1 downto 0);
 
-    );
+-------------------------------------------------------------------------------
+-- Watchdog outputs
+-------------------------------------------------------------------------------      
+    wdog_o  : out t_swc_fsms_array(g_num_ports-1 downto 0);
+    nomem_o : out std_logic);
 end xswc_core;
 
 architecture rtl of xswc_core is
@@ -151,9 +155,7 @@ architecture rtl of xswc_core is
    constant c_res_mmu_resource_num            : integer := 3;   -- (1) unknown; (2) special; (3) normal
    constant c_res_mmu_resource_num_width      : integer := 2;
    ----------------------------------------------
-   constant c_hwdu_input_block_width          : integer := 16;
    constant c_hwdu_mmu_width                  : integer := 10*3;
-   constant c_hwdu_output_block_width         : integer := 8;
 
    ----------------------------------------------------------------------------------------------------
    -- signals connecting >>Input Block<< with >>Memory Management Unit<<
@@ -352,12 +354,10 @@ architecture rtl of xswc_core is
    signal mmu2ib_res_almost_full      : std_logic_vector(g_num_ports*c_res_mmu_resource_num         -1 downto 0);
    signal mmu2ib_set_usecnt_succeeded : std_logic_vector(g_num_ports                                -1 downto 0);
    
-   type t_hwdu_input_block_array is array(0 to g_num_ports-1) of std_logic_vector(c_hwdu_input_block_width-1 downto 0);
-   type t_hwdu_output_block_array is array(0 to g_num_ports-1) of std_logic_vector(c_hwdu_output_block_width-1 downto 0);
-   
-   signal hwdu_input_block            : t_hwdu_input_block_array;
-   signal hwdu_output_block           : t_hwdu_output_block_array;
-   signal hwdu_mmu                    : std_logic_vector(c_hwdu_mmu_width                           -1 downto 0);
+   signal wdog_ib   : t_swc_fsms_array(g_num_ports-1 downto 0);
+   signal wdog_ob   : t_swc_fsms_array(g_num_ports-1 downto 0);
+   signal wdog_free : t_swc_fsms_array(g_num_ports-1 downto 0);
+   signal hwdu_mmu : std_logic_vector(c_hwdu_mmu_width -1 downto 0);
    
    signal dbg_pckstart_pageaddr : std_logic_vector(g_num_ports*c_mpm_page_addr_width - 1 downto 0);
    signal dbg_pckinter_pageaddr : std_logic_vector(g_num_ports*c_mpm_page_addr_width - 1 downto 0);
@@ -376,6 +376,8 @@ architecture rtl of xswc_core is
   --    TRIG1   => tap(63 downto 32),
   --    TRIG2   => tap(95 downto 64),
   --    TRIG3   => tap(127 downto 96));
+
+  nomem_o <= mmu_nomem;
 
   tap <= tap_alloc & tap_ob(2);
     
@@ -485,7 +487,7 @@ architecture rtl of xswc_core is
 --         pta_pck_size_o           => ib_pck_size       ((i + 1) * c_max_pck_size_width -1 downto i * c_max_pck_size_width),
 --         pta_resource_o           => open,
         pta_hp_o                 => ib_hp (i),
-        dbg_hwdu_o               => hwdu_input_block(i),
+        wdog_o                   => wdog_ib(i),
         tap_out_o                => tap_ib(i),
         
         dbg_pckstart_pageaddr_o  => dbg_pckstart_pageaddr((i+1)*c_mpm_page_addr_width-1 downto i*c_mpm_page_addr_width),
@@ -562,10 +564,9 @@ architecture rtl of xswc_core is
 
         src_i                    => src_i(i),
         src_o                    => src_o(i),
-        dbg_hwdu_o               => hwdu_output_block(i),
+        wdog_o                   => wdog_ob(i),
         tap_out_o                => tap_ob(i)
       );        
-        
   end generate gen_blocks;
 
   OUTPUT_TRAFFIC_SHAPER: swc_output_traffic_shaper
@@ -621,7 +622,9 @@ architecture rtl of xswc_core is
       mmu_free_pgaddr_o               => ppfm_free_pgaddr,
       mmu_free_last_usecnt_i          => mmu2ppfm_free_last_usecnt,
       mmu_force_free_resource_o       => ppfm2mmu_force_free_resource,
-      mmu_force_free_resource_valid_o => ppfm2mmu_force_free_resource_valid
+      mmu_force_free_resource_valid_o => ppfm2mmu_force_free_resource_valid,
+
+      wdog_o  => wdog_free
 
       );
 
@@ -801,12 +804,14 @@ architecture rtl of xswc_core is
 
   dbg_o(31 downto 0) <= "00" & hwdu_mmu;
 
-  hwdu_gen: for i in 0 to (g_num_ports-1) generate --19 ports for 18-port switch
-    dbg_o((i+1)*c_hwdu_input_block_width+32-1 downto 
-              i*c_hwdu_input_block_width+32)          <= hwdu_input_block(i);
-
-    dbg_o((i+1)*c_hwdu_output_block_width+(g_num_ports*c_hwdu_input_block_width)+32-1 downto
-              i*c_hwdu_output_block_width+(g_num_ports*c_hwdu_input_block_width)+32) <= hwdu_output_block(i);
-  end generate hwdu_gen;
+  WDOG_GEN: for I in 0 to g_num_ports-1 generate
+    wdog_o(I)(c_ALLOC_FSM_IDX) <= wdog_ib(I)(c_ALLOC_FSM_IDX);
+    wdog_o(I)(c_TRANS_FSM_IDX) <= wdog_ib(I)(c_TRANS_FSM_IDX);
+    wdog_o(I)(c_RCV_FSM_IDX)   <= wdog_ib(I)(c_RCV_FSM_IDX);
+    wdog_o(I)(c_LL_FSM_IDX)    <= wdog_ib(I)(c_LL_FSM_IDX);
+    wdog_o(I)(c_PREP_FSM_IDX)  <= wdog_ib(I)(c_PREP_FSM_IDX);
+    wdog_o(I)(c_SEND_FSM_IDX)  <= wdog_ib(I)(c_SEND_FSM_IDX);
+    wdog_o(I)(c_FREE_FSM_IDX)  <= wdog_free(I)(c_FREE_FSM_IDX);
+  end generate;
 
 end rtl;

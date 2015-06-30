@@ -50,6 +50,7 @@ use ieee.numeric_std.all;
 library work;
 --use work.swc_swcore_pkg.all;
 use work.genram_pkg.all;
+use work.wrsw_shared_types_pkg.all;
 
 entity swc_pck_pg_free_module is
   generic( 
@@ -88,8 +89,9 @@ entity swc_pck_pg_free_module is
     mmu_force_free_done_i           : in  std_logic;
     mmu_force_free_pgaddr_o         : out std_logic_vector(g_page_addr_width -1 downto 0);
     mmu_force_free_resource_o       : out std_logic_vector(g_resource_num_width -1 downto 0);
-    mmu_force_free_resource_valid_o : out std_logic
+    mmu_force_free_resource_valid_o : out std_logic;
 
+    wdog_o : out t_swc_fsms
        
     );
 
@@ -108,6 +110,7 @@ architecture syn of swc_pck_pg_free_module is
                    );              
   
   signal state       : t_state;
+  signal free_FSM    : std_logic_vector(3 downto 0);
   
   signal ib_force_free_done : std_logic;
   signal ob_free_done       : std_logic;
@@ -408,5 +411,13 @@ fsm_force_free : process(clk_i, rst_n_i)
  mmu_force_free_resource_o       <= force_free_resource;
  mmu_force_free_resource_valid_o <= force_free_resource_valid;
 
+ free_FSM <= x"0" when state = S_IDLE else
+             x"1" when state = S_REQ_READ_FIFO else
+             x"2" when state = S_READ_FIFO else
+             x"3" when state = S_READ_NEXT_PAGE_ADDR else
+             x"4" when state = S_FREE_CURRENT_PAGE_ADDR else
+             x"5" when state = S_FORCE_FREE_CURRENT_PAGE_ADDR else
+             x"7";
+ wdog_o(c_FREE_FSM_IDX) <= free_FSM;
  
 end syn;

@@ -187,19 +187,17 @@ end scb_top_bare;
 architecture rtl of scb_top_bare is
 
   constant c_GW_VERSION    : std_logic_vector(31 downto 0) := x"20_02_14_00"; --DD_MM_YY_VV
-  constant c_NUM_WB_SLAVES : integer := 13;
+  constant c_NUM_WB_SLAVES : integer := 14;
   constant c_NUM_PORTS     : integer := g_num_ports;
   constant c_MAX_PORTS     : integer := 18;
   constant c_NUM_GL_PAUSE  : integer := 2; -- number of output global PAUSE sources for SWcore
   constant c_RTU_EVENTS    : integer := 9; -- number of RMON events per port
-  constant c_DBG_V_SWCORE  : integer := (3*10) + 2 +         -- 3 resources, each has with of CNT of 10 bits +2 to make it 32
-                                        (g_num_ports+1)*16  + -- states of input blocks (including NIC)
-                                        (g_num_ports+1)*8;   -- states of output blocks (including NIC)
+  constant c_DBG_V_SWCORE  : integer := (3*10) + 2;         -- 3 resources, each has with of CNT of 10 bits +2 to make it 32
   constant c_DBG_N_REGS    : integer := 1 + integer(ceil(real(c_DBG_V_SWCORE)/real(32))); -- 32-bits debug registers which go to HWIU
   constant c_TRU_EVENTS    : integer := 1;
   constant c_ALL_EVENTS    : integer := c_TRU_EVENTS + c_RTU_EVENTS + c_epevents_sz;
   constant c_DUMMY_RMON    : boolean := false; -- define TRUE to enable dummy_rmon module for debugging PSTAT
-  constant c_NUM_GPIO_PINS : integer := 2;
+  constant c_NUM_GPIO_PINS : integer := 1;
   constant c_NUM_IRQS      : integer := 4;
 --   constant c_epevents_sz   : integer := 15;
 -------------------------------------------------------------------------------
@@ -219,6 +217,7 @@ architecture rtl of scb_top_bare is
   constant c_SLAVE_TATSU        : integer := 10;
   constant c_SLAVE_PSTATS       : integer := 11;
   constant c_SLAVE_HWIU         : integer := 12;
+  constant c_SLAVE_WDOG         : integer := 13;
   --constant c_SLAVE_DUMMY        : integer := 13;
 
 
@@ -321,6 +320,8 @@ architecture rtl of scb_top_bare is
   signal link_kill                  : std_logic_vector(c_NUM_PORTS-1 downto 0);
   signal rst_n_swc  : std_logic;
   signal swc_nomem  : std_logic;
+  signal swc_wdog_out : t_swc_fsms_array(c_NUM_PORTS downto 0);
+  signal ep_stop_traffic : std_logic;
 
  
 
@@ -829,7 +830,8 @@ begin
         
         rtu_rsp_i       => rtu_rsp,
         rtu_ack_o       => swc_rtu_ack,
-        rtu_abort_o     =>rtu_rsp_abort-- open --rtu_rsp_abort
+        rtu_abort_o     =>rtu_rsp_abort,-- open --rtu_rsp_abort
+        wdog_o    => swc_wdog_out
         );
      
     -- SWcore global pause nr=0 assigned to TRU
@@ -1131,11 +1133,9 @@ begin
       port map(
         rst_n_i => rst_n_periph,
         clk_i   => clk_sys,
-        force_rst_i => gpio_out(1),
         swc_nomem_i => swc_nomem,
+        swc_fsms_i  => swc_wdog_out,
 
-        restart_cnt_o => open,
-        
         swcrst_n_o  => rst_n_swc,
         epstop_o   => ep_stop_traffic,
 
@@ -1145,7 +1145,9 @@ begin
         snk_i => wrfreg_src_out,
         snk_o => wrfreg_src_in,
         src_o => swc_snk_in,
-        src_i => swc_snk_out);
+        src_i => swc_snk_out,
+        wb_i  => cnx_master_out(c_SLAVE_WDOG),
+        wb_o  => cnx_master_in(c_SLAVE_WDOG));
   end generate;
 
   GEN_NO_SWC_RST: if(not g_with_watchdog) generate

@@ -204,6 +204,22 @@ package wrs_sdb_pkg is
         date      => x"20141120",
         name      => "WRSW GEN 10MHz     ")));
 
+  constant c_xwrsw_watchdog_sdb: t_sdb_device := (
+    abi_class     => x"0000",
+    abi_ver_major => x"01",
+    abi_ver_minor => x"01",
+    wbd_endian    => c_sdb_endian_big,
+    wbd_width     => x"7",
+    sdb_component => (
+      addr_first  => x"0000000000000000",
+      addr_last   => x"00000000000000ff",
+      product     => (
+        vendor_id => x"000000000000CE42",  -- CERN
+        device_id => x"d1dedca6",          -- echo -n "xwrsw_watchdog" | md5sum - | cut -c1-8
+        version   => x"00000001",
+        date      => x"20150630",
+        name      => "WRSW WATCHDOG      ")));
+
   -- RT subsystem crossbar
   constant c_rtbar_layout : t_sdb_record_array(7 downto 0) :=
     (0 => f_sdb_embed_device(f_xwb_dpram(16384),   x"00000000"),
@@ -243,7 +259,7 @@ package wrs_sdb_pkg is
     f_xwb_bridge_layout_sdb(true, c_epbar_layout, c_epbar_sdb_address);
 
   -- WRS main crossbar
-  constant c_layout : t_sdb_record_array(12+4 downto 0) :=
+  constant c_layout : t_sdb_record_array(13+4 downto 0) :=
     (0  => f_sdb_embed_bridge(c_rtbar_bridge_sdb,   x"00000000"), --RT subsystem
      1  => f_sdb_embed_device(c_xwrsw_nic_sdb,      x"00020000"), --NIC
      2  => f_sdb_embed_bridge(c_epbar_bridge_sdb,   x"00030000"), --Endpoints
@@ -257,10 +273,11 @@ package wrs_sdb_pkg is
      10 => f_sdb_embed_device(c_xwrsw_tatsu_sdb,    x"00057000"), --TATSU
      11 => f_sdb_embed_device(c_xwrsw_pstats_sdb,   x"00058000"), --PSTATS
      12 => f_sdb_embed_device(c_xwrsw_hwiu_sdb,     x"00059000"), --HWIU
-     13 => f_sdb_embed_repo_url(c_sdb_repo_url),
-     14 => f_sdb_embed_synthesis(c_sdb_top_syn_info),
-     15 => f_sdb_embed_synthesis(c_sdb_general_cores_syn_info),
-     16 => f_sdb_embed_synthesis(c_sdb_wr_cores_syn_info));
+     13 => f_sdb_embed_device(c_xwrsw_watchdog_sdb, x"0005a000"), --Watchdog
+     14 => f_sdb_embed_repo_url(c_sdb_repo_url),
+     15 => f_sdb_embed_synthesis(c_sdb_top_syn_info),
+     16 => f_sdb_embed_synthesis(c_sdb_general_cores_syn_info),
+     17 => f_sdb_embed_synthesis(c_sdb_wr_cores_syn_info));
   constant c_sdb_address  : t_wishbone_address := x"00070000";
 
 end wrs_sdb_pkg;

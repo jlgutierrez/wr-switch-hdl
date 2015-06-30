@@ -45,6 +45,7 @@ use ieee.numeric_std.all;
 
 library work;
 use work.swc_swcore_pkg.all;
+use work.wrsw_shared_types_pkg.all;
 
 
 
@@ -87,7 +88,9 @@ entity swc_multiport_pck_pg_free_module is
     mmu_force_free_done_i           : in  std_logic_vector(g_num_ports-1 downto 0);
     mmu_force_free_pgaddr_o         : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
     mmu_force_free_resource_o       : out std_logic_vector(g_num_ports * g_resource_num_width -1 downto 0);
-    mmu_force_free_resource_valid_o : out std_logic_vector(g_num_ports-1 downto 0)
+    mmu_force_free_resource_valid_o : out std_logic_vector(g_num_ports-1 downto 0);
+
+    wdog_o      : out t_swc_fsms_array(g_num_ports-1 downto 0)
     );
 
 end swc_multiport_pck_pg_free_module;
@@ -138,7 +141,9 @@ begin  -- syn
       mmu_force_free_done_i           => mmu_force_free_done_i(i),
       mmu_force_free_pgaddr_o         => mmu_force_free_pgaddr_o((i+1)*g_page_addr_width - 1 downto i * g_page_addr_width), 
       mmu_force_free_resource_o       => mmu_force_free_resource_o((i+1)*g_resource_num_width -1 downto i *g_resource_num_width),
-      mmu_force_free_resource_valid_o => mmu_force_free_resource_valid_o(i)
+      mmu_force_free_resource_valid_o => mmu_force_free_resource_valid_o(i),
+
+      wdog_o => wdog_o(i)
       );
 
   end generate lpd_gen;

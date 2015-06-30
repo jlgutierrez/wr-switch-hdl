@@ -1,0 +1,131 @@
+-- -*- Mode: LUA; tab-width: 2 -*-
+-- White-Rabbit Watchdog Module
+-- author: Grzegorz Daniluk <grzegorz.daniluk@cern.ch>
+--
+-- Use wbgen2 to generate code, documentation and more.
+-- wbgen2 is available at:
+-- http://www.ohwr.org/projects/wishbone-gen
+--
+peripheral {
+  name = "WR Watchdog module";
+  description = "The module monitors the Switching Core and performs a reset when swcore is stuck";
+  hdl_entity = "wdog_wishbone_slave";
+  prefix = "wdog";
+
+  reg {
+    name = "Restart counter";
+    description = "Counts how many times watchdog had to restart the swcore";
+    prefix = "RST_CNT";
+    field {
+      name = "counter value";
+      size = 32;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+  };
+
+  reg {
+    name = "Control Register";
+    prefix = "CR";
+    field {
+      name = "Port select";
+      prefix = "PORT";
+      size = 8;
+      type = SLV;
+      access_dev = READ_WRITE;
+      access_bus = READ_WRITE;
+      load = LOAD_EXT;
+    };
+    field {
+      name = "Force reset";
+      prefix = "RST";
+      size = 1;
+      align = 31;
+      type = MONOSTABLE;
+      access_dev = READ_ONLY;
+      access_bus = WRITE_ONLY;
+    };
+  };
+
+  reg {
+    name = "Port FSM activity register";
+    prefix = "ACT";
+    field {
+      name = "bit-per-fsm activity since the last readout";
+      size = 7;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+  };
+
+  reg {
+    name = "Port FSM register";
+    prefix = "FSM";
+    field {
+      name = "IB alloc FSM state";
+      prefix = "IB_ALLOC";
+      size = 4;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+    field {
+      name = "IB transfer FSM state";
+      prefix = "IB_TRANS";
+      size = 4;
+      align = 4;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+    field {
+      name = "IB receive FSM state";
+      prefix = "IB_RCV";
+      size = 4;
+      align = 8;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+    field {
+      name = "IB LL FSM state";
+      prefix = "IB_LL";
+      size = 4;
+      align = 12;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+
+    field {
+      name = "OB prepare FSM state";
+      prefix = "OB_PREP";
+      size = 4;
+      align = 16;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+    field {
+      name = "OB send FSM state";
+      prefix = "OB_SEND";
+      size = 4;
+      align = 20;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+
+    field {
+      name = "FREE FSM state";
+      prefix = "FREE";
+      size = 4;
+      align = 24;
+      type = SLV;
+      access_dev = WRITE_ONLY;
+      access_bus = READ_ONLY;
+    };
+  };
+};

@@ -277,8 +277,7 @@ package swc_swcore_pkg is
     pta_hp_o : out std_logic;
     pta_prio_o : out std_logic_vector(g_prio_width - 1 downto 0);
 
-    dbg_hwdu_o  : out std_logic_vector(15 downto 0);
-
+    wdog_o    : out t_swc_fsms;
     tap_out_o : out std_logic_vector(49+62 downto 0);
         
     dbg_pckstart_pageaddr_o : out std_logic_vector(g_page_addr_width - 1 downto 0);
@@ -501,7 +500,6 @@ package swc_swcore_pkg is
       g_mpm_partial_select_width         : integer ;
       g_mpm_fetch_next_pg_in_advance     : boolean := false;
       g_mmu_resource_num_width           : integer;
-      g_hwdu_output_block_width          : integer :=8;      
       g_wb_data_width                    : integer ;
       g_wb_addr_width                    : integer ;
       g_wb_sel_width                     : integer ;
@@ -533,10 +531,8 @@ package swc_swcore_pkg is
       ots_output_drop_at_rx_hp_i : in std_logic;      
       src_i : in  t_wrf_source_in;
       src_o : out t_wrf_source_out;
-      dbg_hwdu_o : out std_logic_vector(g_hwdu_output_block_width -1 downto 0);            
-      tap_out_o : out std_logic_vector(15 downto 0)
-
-      );
+      wdog_o    : out t_swc_fsms;
+      tap_out_o : out std_logic_vector(15 downto 0));
   end component;
 
 component  swc_multiport_pck_pg_free_module is
@@ -578,7 +574,9 @@ component  swc_multiport_pck_pg_free_module is
     mmu_force_free_done_i           : in  std_logic_vector(g_num_ports-1 downto 0);
     mmu_force_free_pgaddr_o         : out std_logic_vector(g_num_ports * g_page_addr_width -1 downto 0);
     mmu_force_free_resource_o       : out std_logic_vector(g_num_ports * g_resource_num_width -1 downto 0);
-    mmu_force_free_resource_valid_o : out std_logic_vector(g_num_ports-1 downto 0)
+    mmu_force_free_resource_valid_o : out std_logic_vector(g_num_ports-1 downto 0);
+    
+    wdog_o      : out t_swc_fsms_array(g_num_ports-1 downto 0)
     );
   end component;
 
@@ -619,7 +617,9 @@ component  swc_multiport_pck_pg_free_module is
       mmu_force_free_done_i           : in  std_logic;
       mmu_force_free_pgaddr_o         : out std_logic_vector(g_page_addr_width -1 downto 0);
       mmu_force_free_resource_o       : out std_logic_vector(g_resource_num_width -1 downto 0);
-      mmu_force_free_resource_valid_o : out std_logic
+      mmu_force_free_resource_valid_o : out std_logic;
+      
+      wdog_o : out t_swc_fsms
       );
   end component;
   
@@ -666,6 +666,7 @@ component  swc_multiport_pck_pg_free_module is
       rtu_rsp_i      : in t_rtu_response_array(g_num_ports  - 1 downto 0);
       rtu_ack_o      : out std_logic_vector(g_num_ports  - 1 downto 0);
    
+      nomem_o        : out std_logic;
 
       dbg_o               : out std_logic_vector(g_num_dbg_vector_width  -1 downto 0);
       shaper_drop_at_hp_ena_i : in std_logic

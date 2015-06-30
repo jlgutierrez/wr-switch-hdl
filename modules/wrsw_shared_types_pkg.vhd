@@ -149,4 +149,14 @@ package wrsw_shared_types_pkg is
   type t_pause_request_array        is array(integer range <>) of t_pause_request;  
   type t_global_pause_request_array is array(integer range <>) of t_global_pause_request;  
 
+  type t_swc_fsms is array(integer range <>) of std_logic_vector(3 downto 0);
+  type t_swc_fsms_array is array(integer range <>) of t_swc_fsms(6 downto 0);
+  constant c_ALLOC_FSM_IDX : integer := 0;
+  constant c_TRANS_FSM_IDX : integer := 1;
+  constant c_RCV_FSM_IDX   : integer := 2;
+  constant c_LL_FSM_IDX    : integer := 3;
+  constant c_PREP_FSM_IDX  : integer := 4;
+  constant c_SEND_FSM_IDX  : integer := 5;
+  constant c_FREE_FSM_IDX  : integer := 6;
+
 end wrsw_shared_types_pkg;
