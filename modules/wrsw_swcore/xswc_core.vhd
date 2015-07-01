@@ -809,8 +809,8 @@ architecture rtl of xswc_core is
     wdog_o(I)(c_TRANS_FSM_IDX) <= wdog_ib(I)(c_TRANS_FSM_IDX);
     wdog_o(I)(c_RCV_FSM_IDX)   <= wdog_ib(I)(c_RCV_FSM_IDX);
     wdog_o(I)(c_LL_FSM_IDX)    <= wdog_ib(I)(c_LL_FSM_IDX);
-    wdog_o(I)(c_PREP_FSM_IDX)  <= wdog_ib(I)(c_PREP_FSM_IDX);
-    wdog_o(I)(c_SEND_FSM_IDX)  <= wdog_ib(I)(c_SEND_FSM_IDX);
+    wdog_o(I)(c_PREP_FSM_IDX)  <= wdog_ob(I)(c_PREP_FSM_IDX);
+    wdog_o(I)(c_SEND_FSM_IDX)  <= wdog_ob(I)(c_SEND_FSM_IDX);
     wdog_o(I)(c_FREE_FSM_IDX)  <= wdog_free(I)(c_FREE_FSM_IDX);
   end generate;
 
