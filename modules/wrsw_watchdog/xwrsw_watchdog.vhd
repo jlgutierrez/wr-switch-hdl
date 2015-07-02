@@ -56,7 +56,7 @@ architecture behav of xwrsw_watchdog is
   
   type t_act_array is array(integer range <>) of std_logic_vector(6 downto 0);
 
-  constant c_RST_TIME    : integer := 128;
+  constant c_RST_TIME    : integer := 16384;
   constant c_SWCRST_TIME : integer := 8;
   constant c_NOMEM_THR   : integer := 10000; --62500000;
   constant c_SWC_FSMS_ZERO : t_swc_fsms :=
@@ -72,7 +72,7 @@ architecture behav of xwrsw_watchdog is
 
   signal nomem_cnt  : unsigned(25 downto 0);
   signal nomem_trig : std_logic;
-  signal rst_cnt  : unsigned(7 downto 0);
+  signal rst_cnt  : unsigned(15 downto 0);
   signal watchdog_cnt  : unsigned(31 downto 0);
   signal rst_trig : std_logic;
   signal rst_trig_d0 : std_logic;
