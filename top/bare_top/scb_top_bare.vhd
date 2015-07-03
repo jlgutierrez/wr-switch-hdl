@@ -727,7 +727,7 @@ begin
 
           led_link_o => led_link_o(i),
           led_act_o  => led_act_o(i),
-          stop_traffic_i => ep_stop_traffic,
+          stop_traffic_i => ep_stop_traffic
           );
 
           phys_o(i).tx_data <= ep_dbg_data_array(i);
