@@ -44,8 +44,10 @@ use work.disparity_gen_pkg.all;
 
 entity scb_top_sim is
   generic(
-    g_num_ports : integer := 6
-    );
+    g_num_ports : integer := 6;
+    g_with_TRU  : boolean := true;
+    g_with_TATSU: boolean := true;
+    g_with_HWIU : boolean := true);
   port (
 
     sys_rst_n_i : in std_logic;         -- global reset
@@ -123,6 +125,7 @@ entity scb_top_sim is
     td_o    : out std_logic_vector(18 * g_num_ports-1 downto 0);
     rd_i    : in  std_logic_vector(18 * g_num_ports-1 downto 0);
     rbclk_i : in  std_logic_vector(g_num_ports-1 downto 0);
+    phys_rdy_i : in std_logic_vector(g_num_ports-1 downto 0);
 
 
     led_link_o : out std_logic_vector(g_num_ports-1 downto 0);
@@ -175,9 +178,9 @@ begin  -- rtl
       g_num_ports  => g_num_ports,
       g_simulation => true,
       g_without_network => false,
-      g_with_TRU        => true,
-      g_with_TATSU      => true,
-      g_with_HWIU       => true)
+      g_with_TRU        => g_with_TRU,
+      g_with_TATSU      => g_with_TATSU,
+      g_with_HWIU       => g_with_HWIU),
     port map (
       sys_rst_n_i         => sys_rst_n_i,
       clk_startup_i       => clk_startup_i,
@@ -185,6 +188,7 @@ begin  -- rtl
       clk_dmtd_i          => clk_dmtd_i,
 --      clk_sys_i           => clk_sys_i,
       clk_aux_i           => clk_aux_i,
+      clk_ext_mul_i       => '0',
       cpu_wb_i            => cpu_wb_in,
       cpu_wb_o            => cpu_wb_out,
       cpu_irq_n_o         => cpu_irq_n,
@@ -231,6 +235,7 @@ begin  -- rtl
     phys_in(i).rx_clk     <= rbclk_i(i);
     phys_in(i).tx_enc_err <= '0';
     phys_in(i).rx_enc_err <= '0';
+    phys_in(i).rdy        <= phys_rdy_i(i);
 
 
     p_gen_tx_disparity : process(clk_ref_i)
