@@ -703,7 +703,7 @@ begin
       g_with_HWIU       => true,
       g_with_PSTATS     => true,
       g_with_muxed_CS   => false,
-      g_inj_per_EP      => "00" & x"0003"  --only first two ports have injection engine
+      g_inj_per_EP      => "00" & x"0000"
     )
     port map (
       sys_rst_n_i         => sys_rst_n_i,
