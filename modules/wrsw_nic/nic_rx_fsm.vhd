@@ -49,15 +49,12 @@ use work.nic_descriptors_pkg.all;
 
 use work.wr_fabric_pkg.all;
 use work.nic_wbgen2_pkg.all;
-use work.endpoint_private_pkg.all;
+use work.endpoint_pkg.all;
 
 
 entity nic_rx_fsm is
-
-  generic(
-        g_untagging : boolean := false
-      );
-  port (clk_sys_i : in std_logic;
+  port (
+        clk_sys_i : in std_logic;
         rst_n_i   : in std_logic;
 
 -------------------------------------------------------------------------------
@@ -148,8 +145,8 @@ architecture behavioral of NIC_RX_FSM is
 
   signal increase_addr : std_logic;
 
-  signal fab_vlan_in, fab_in     : t_ep_internal_fabric;
-  signal fab_dreq, fab_vlan_dreq : std_logic;
+  signal fab_in     : t_ep_internal_fabric;
+  signal fab_dreq   : std_logic;
   
 begin
 
@@ -161,30 +158,8 @@ begin
       rst_n_i   => rst_n_i,
       snk_i     => snk_i,
       snk_o     => snk_o,
-      fab_o     => fab_vlan_in,
-      dreq_i    => fab_vlan_dreq);
-
-  gen_with_vlan: if g_untagging = true generate
-    U_Vlan : ep_tx_vlan_unit
-      port map(
-        clk_sys_i  => clk_sys_i,
-        rst_n_i    => rst_n_i,
-        snk_fab_i  => fab_vlan_in,
-        snk_dreq_o => fab_vlan_dreq,
-        src_fab_o  => fab_in,
-        src_dreq_i => fab_dreq,
-        inject_mem_addr_i => (others=>'0'),
-        inject_mem_data_o => open,
-        uram_offset_wr_i  => regs_i.vcr1_offset_wr_o,
-        uram_offset_i     => regs_i.vcr1_offset_o,
-        uram_data_i       => regs_i.vcr1_data_o);
-  end generate;
-
-  gen_no_vlan: if g_untagging = false generate
-    fab_in        <= fab_vlan_in;
-    fab_vlan_dreq <= fab_dreq;
-  end generate;
-
+      fab_o     => fab_in,
+      dreq_i    => fab_dreq);
 
   -- stupid VHDL type conversions
   buf_addr_o <= std_logic_vector(rx_buf_addr);
