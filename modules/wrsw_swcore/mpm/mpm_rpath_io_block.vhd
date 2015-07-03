@@ -283,8 +283,6 @@ begin  -- behavioral
         end if;
         -----
         words_xmitted   <= to_unsigned(1, words_xmitted'length);
-        -- ML
-        -- last_int      <= '0'; 
         d_counter_equal <= '0';
       else
         if(df_rd_int = '1') then
@@ -292,8 +290,6 @@ begin  -- behavioral
         end if;
 
         if(fetch_ack = '1' and pre_fetch = '0') then
-        --if(fetch_valid = '1') then
-          --if(fetch_first = '1') then -- ML : prefetching
           if(fetch_first = '1' ) then
             words_total      <= resize(fetch_pg_words, words_total'length);
           else
@@ -301,10 +297,7 @@ begin  -- behavioral
           end if;
         end if;
 
-        -- ML:
-        -- last_int      <= counters_equal;
         d_counter_equal    <= counters_equal;
-        ---------        
       end if;
     end if;
   end process;
@@ -390,22 +383,6 @@ begin  -- behavioral
     end if;  
   end process;
   
---   p_delay_pg_req : process(clk_io_i)
---   begin
---     if rising_edge(clk_io_i) then
---       if rst_n_io_i = '0'  then
---         allow_rport_pg_req <= '0';
---       else
---         if(words_xmitted >= last_pg_start_ptr	) then
---           allow_rport_pg_req <='1';
---         elsif(page_state = NEXT_LINK ) then
---           allow_rport_pg_req <='0';
---         end if;
--- 
---       end if;
---     end if;  
---   end process;
-
   p_page_fsm : process(clk_io_i)
   begin
     if rising_edge(clk_io_i) then
@@ -498,10 +475,11 @@ begin  -- behavioral
 
           when WAIT_ACK =>
             if(fetch_ack = '1') then
-              --ll_req_int    <= '1';
               fetch_first <= '0';
               fvalid_int  <= '0';
               if(pre_fetch = '1' and last_int = '0') then
+                -- this is the situation when we passed first page to FBM, but
+                -- the previous frame is still being transmitted to OB
                 ll_req_int    <= '0';
                 page_state     <= NASTY_WAIT;
               else
@@ -512,12 +490,6 @@ begin  -- behavioral
 
           when WAIT_LAST_ACK =>
             if(fetch_ack = '1') then
---               if(words_xmitted >= last_pg_start_ptr) then -- ML: to delay req -- only during last page
---                 rport_pg_req <= '1';
---               else
---                 rport_pg_req <= '0';
---               end if;
-              
               fetch_first    <= '0';
               fvalid_int     <= '0';
               page_state     <= FIRST_PAGE;

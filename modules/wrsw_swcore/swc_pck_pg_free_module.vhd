@@ -274,10 +274,10 @@ fsm_force_free : process(clk_i, rst_n_i)
             freeing_mode <= fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width);
             current_page <= fifo_data_out(g_page_addr_width - 1 downto 0);
             
-            if(fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width) =  b"01") then -- standard free
+            if(fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width) =  b"01") then -- force free
               state          <= S_FORCE_FREE_CURRENT_PAGE_ADDR;
               mmu_force_free <= '1';
-            elsif(fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width) =  b"10") then -- forced free
+            elsif(fifo_data_out(g_page_addr_width + 2 - 1 downto g_page_addr_width) =  b"10") then -- standard free
               state          <= S_FREE_CURRENT_PAGE_ADDR;
               mmu_free       <= '1';            
             else
