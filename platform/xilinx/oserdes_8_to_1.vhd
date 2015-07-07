@@ -144,7 +144,7 @@ begin
     -- Instantiate a buffer for every bit of the data bus
      obufds_inst : OBUFDS
        generic map (
-         IOSTANDARD => "LVDS_25")
+         IOSTANDARD => "LVPECL_25")
        port map (
          O          => DATA_OUT_TO_PINS_P  (pin_count),
          OB         => DATA_OUT_TO_PINS_N  (pin_count),
