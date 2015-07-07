@@ -133,6 +133,7 @@ architecture behav of xwrsw_gen_10mhz is
   signal clk_fb     : std_logic;
   signal clk_fb_buf : std_logic;
   signal rst        : std_logic;
+  signal rst_oserdes : std_logic;
   signal pll_locked : std_logic;
   signal sd_out_p   : std_logic_vector(0 downto 0);
   signal sd_out_n   : std_logic_vector(0 downto 0);
@@ -215,6 +216,7 @@ begin
   end process;
 
   rst <= not rst_n_i;
+  rst_oserdes <= not pll_locked;
 
   U_PLL_500: pll_62_5_500mhz
   port map (
@@ -253,7 +255,7 @@ begin
     REF_CLOCK            => clk_i,
     CLK_IN               => clk_500_buf,
     CLK_DIV_IN           => clk_i,
-    IO_RESET             => rst);
+    IO_RESET             => rst_oserdes);
 
   clk_aux_p_o  <= sd_out_p(0);
   clk_aux_n_o  <= sd_out_n(0);
