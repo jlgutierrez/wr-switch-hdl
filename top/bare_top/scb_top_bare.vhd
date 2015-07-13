@@ -1064,7 +1064,7 @@ begin
         g_address_granularity => BYTE,
         g_ndbg_regs => c_DBG_N_REGS,
         g_ver_major => 4,
-        g_ver_minor => 0,
+        g_ver_minor => 2,
         g_build     => 1)
       port map(
         rst_n_i       => rst_n_periph,
