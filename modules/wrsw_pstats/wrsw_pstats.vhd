@@ -187,7 +187,7 @@ architecture behav of wrsw_pstats is
   signal wb_regs_out : t_pstats_out_registers;
 
   --for wb_gen wishbone interface
-  signal rd_port : std_logic_vector(c_adr_psel_sz-1 downto 0);
+  signal rd_port : unsigned(c_adr_psel_sz-1 downto 0);
   signal rd_val  : std_logic_vector(31 downto 0);
   signal rd_en   : std_logic;
 
@@ -282,7 +282,7 @@ begin
   wb_regs_in.cr_rd_en_i   <= rd_en;
   wb_regs_in.l1_cnt_val_i <= rd_val;
   wb_regs_in.l2_cnt_val_i <= L2_rd_val;
-  rd_port                 <= wb_regs_out.cr_port_o(c_adr_psel_sz-1 downto 0);
+  rd_port                 <= unsigned(wb_regs_out.cr_port_o(c_adr_psel_sz-1 downto 0));
 
 
   -------------------------------------------------------------
@@ -341,7 +341,7 @@ begin
       --dbg_evt_ov_o => wb_regs_in.dbg_l2_evt_ov_i,
       --clr_flags_i  => wb_regs_out.dbg_l2_clr_o);
 
-  L2_adr <= std_logic_vector(to_unsigned(to_integer(unsigned(rd_port))*c_portirq_sz +
+  L2_adr <= std_logic_vector(to_unsigned(to_integer(rd_port)*c_portirq_sz +
                         to_integer(unsigned(wb_regs_out.cr_addr_o(c_adr_mem_sz-1 downto 0))),
                         c_L2_adr_mem_sz));
 
@@ -389,7 +389,7 @@ begin
   -------------------------------------------------------------
   -------------------------------------------------------------
   --rd_port translated into the address in IRQ mem, based on g_cnt_pp
-  IRQ_port_adr <= to_unsigned(to_integer(unsigned(rd_port))*((g_cnt_pp+c_IRQ_pw-1)/c_IRQ_pw), c_IRQ_adr_mem_sz);
+  IRQ_port_adr <= to_unsigned(to_integer(rd_port)*((g_cnt_pp+c_IRQ_pw-1)/c_IRQ_pw), c_IRQ_adr_mem_sz);
   process(clk_i)
   begin
     if rising_edge(clk_i) then
@@ -446,7 +446,7 @@ begin
             rd_en   <= '0';
             IRQ_adr <= std_logic_vector(IRQ_port_adr);
             if(rd_irq = '0') then
-              rd_val    <= p_dat_out(to_integer(unsigned(rd_port)));
+              rd_val    <= p_dat_out(to_integer(rd_port));
               L2_rd_val <= L2_dat_out;
               rd_state  <= IDLE;
             elsif(rd_irq = '1' and g_cnt_pp > c_IRQ_pw) then
