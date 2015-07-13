@@ -175,8 +175,13 @@ architecture behav of wrsw_pstats is
   constant c_adr_mem_sz     : integer := f_log2_size((g_cnt_pp+g_cnt_pw-1)/g_cnt_pw);
   constant c_adr_psel_sz    : integer := f_log2_size(g_nports);
   constant c_portirq_sz     : integer := (g_cnt_pp+g_cnt_pw-1)/g_cnt_pw;
+  
+  constant c_L2_num         : integer := 2;
   constant c_L2_event_sz    : integer := c_portirq_sz*g_cnt_pw;
-  constant c_L2_adr_mem_sz  : integer := f_log2_size((g_nports*g_cnt_pp+g_L2_cnt_pw-1)/g_L2_cnt_pw);
+  constant c_L2_adr_sz_d    : integer := f_log2_size((g_nports*g_cnt_pp/2+g_L2_cnt_pw-1)/g_L2_cnt_pw);
+  constant c_L2_adr_sz_s    : integer := f_log2_size((g_nports*g_cnt_pp+g_L2_cnt_pw-1)/g_L2_cnt_pw);
+  constant c_L2_cnt_pp_d    : integer := g_nports*c_L2_event_sz/2;
+
   constant c_IRQ_pw         : integer := 32;
   constant c_IRQ_adr_mem_sz : integer := f_log2_size(g_nports*((g_cnt_pp+c_IRQ_pw-1)/c_IRQ_pw));
 
@@ -204,8 +209,10 @@ architecture behav of wrsw_pstats is
 
   --Layer 2
   signal L2_events  : std_logic_vector(g_nports*c_L2_event_sz-1 downto 0);
-  signal L2_adr     : std_logic_vector(c_L2_adr_mem_sz-1 downto 0);
-  signal L2_dat_out : std_logic_vector(31 downto 0);
+  type t_l2_adr_array is array(natural range <>) of std_logic_vector(c_L2_adr_sz_s-1 downto 0);
+  signal L2_adr     : t_l2_adr_array(1 downto 0);
+  signal L2_adr_u   : unsigned(c_L2_adr_sz_s-1 downto 0);
+  signal L2_dat_out : t_ext_dat_array(c_L2_num-1 downto 0);
   signal L2_rd_val  : std_logic_vector(31 downto 0);
 
   --Layer 3 (a.k.a. IRQ)
@@ -322,28 +329,55 @@ begin
   -------------------------------------------------------------
   -- LAYER 2
   -------------------------------------------------------------
+  L2_adr_u  <= to_unsigned(to_integer(rd_port) * c_portirq_sz, c_L2_adr_sz_s) + unsigned(wb_regs_out.cr_addr_o);
+  L2_adr(0) <= std_logic_vector(L2_adr_u);
 
-  L2_CNT : port_cntr
-    generic map(
-      g_cnt_pp  => g_nports*c_L2_event_sz,
-      g_cnt_pw  => g_L2_cnt_pw,
-      g_keep_ov => 0)
-    port map(
-      rst_n_i => rst_n_i,
-      clk_i   => clk_i,
+  -- without doing much maths for L2 flexibility, this one is for peopl who want
+  -- to use pstats for simple counting e.g. in WRPC
+  GEN_L2_SINGLE: if (g_nports mod 2) = 1 generate
+    L2_CNT : port_cntr
+      generic map(
+        g_cnt_pp  => g_nports*c_L2_event_sz,
+        g_cnt_pw  => g_L2_cnt_pw,
+        g_keep_ov => 0)
+      port map(
+        rst_n_i => rst_n_i,
+        clk_i   => clk_i,
 
-      events_i => L2_events,
+        events_i => L2_events,
 
-      ext_adr_i => L2_adr,
-      ext_dat_o => L2_dat_out,
+        ext_adr_i => L2_adr(0),
+        ext_dat_o => L2_dat_out(0),
 
-      ov_cnt_o     => L3_events);
-      --dbg_evt_ov_o => wb_regs_in.dbg_l2_evt_ov_i,
-      --clr_flags_i  => wb_regs_out.dbg_l2_clr_o);
+        ov_cnt_o     => L3_events);
 
-  L2_adr <= std_logic_vector(to_unsigned(to_integer(rd_port)*c_portirq_sz +
-                        to_integer(unsigned(wb_regs_out.cr_addr_o(c_adr_mem_sz-1 downto 0))),
-                        c_L2_adr_mem_sz));
+    L2_dat_out(1) <= L2_dat_out(0);
+  end generate;
+
+  -- this one is to improve timing closure for WRS, when lots of events are
+  -- counted on 18 ports
+  GEN_L2_DOUBLE: if (g_nports mod 2) = 0 generate
+
+    GEN_L2: for i in 0 to c_L2_num-1 generate
+      L2_CNT : port_cntr
+        generic map(
+          g_cnt_pp  => c_L2_cnt_pp_d,
+          g_cnt_pw  => g_L2_cnt_pw,
+          g_keep_ov => 0)
+        port map(
+          rst_n_i   => rst_n_i,
+          clk_i     => clk_i,
+          events_i  => L2_events((i+1)*c_L2_cnt_pp_d-1 downto i*c_L2_cnt_pp_d),
+          ext_adr_i => L2_adr(i)(c_L2_adr_sz_d-1 downto 0),
+          ext_dat_o => L2_dat_out(i),
+          ov_cnt_o  => L3_events((i+1)*c_L2_cnt_pp_d-1 downto i*c_L2_cnt_pp_d));
+    end generate;
+
+    L2_adr(1) <= std_logic_vector(L2_adr(0)) when (to_integer(L2_adr_u) < g_nports/2*c_portirq_sz) else
+                 std_logic_vector(to_unsigned(to_integer(L2_adr_u) -
+                 (g_nports/2)*c_portirq_sz, c_L2_adr_sz_s));
+  end generate;
+
 
   -------------------------------------------------------------
   -------------------------------------------------------------
@@ -447,7 +481,11 @@ begin
             IRQ_adr <= std_logic_vector(IRQ_port_adr);
             if(rd_irq = '0') then
               rd_val    <= p_dat_out(to_integer(rd_port));
-              L2_rd_val <= L2_dat_out;
+              if(rd_port < g_nports/2) then
+                L2_rd_val <= L2_dat_out(0);
+              else
+                L2_rd_val <= L2_dat_out(1);
+              end if;
               rd_state  <= IDLE;
             elsif(rd_irq = '1' and g_cnt_pp > c_IRQ_pw) then
               L2_rd_val <= IRQ_dat_out;
