@@ -206,6 +206,8 @@ package wrsw_components_pkg is
       clk_dmtd_i          : in  std_logic;
       clk_rx_i            : in  std_logic_vector(g_num_rx_clocks-1 downto 0);
       clk_aux_i           : in  std_logic;
+      clk_ext_mul_i       : in  std_logic;
+      clk_ext_mul_locked_i: in  std_logic;
       clk_aux_p_o         : out std_logic;
       clk_aux_n_o         : out std_logic;
       clk_500_o           : out std_logic;

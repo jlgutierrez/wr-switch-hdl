@@ -83,6 +83,7 @@ entity scb_top_bare is
     clk_aux_i : in std_logic;
 
 		clk_ext_mul_i	:	in std_logic;
+		clk_ext_mul_locked_i	:	in std_logic;
 
     clk_aux_p_o  : out std_logic; -- going to CLK2 SMC on the front pannel, by
     clk_aux_n_o  : out std_logic; -- default it's 10MHz, but is configurable
@@ -513,6 +514,7 @@ begin
       clk_rx_i            => clk_rx_vec,
       clk_ext_i           => pll_status_i,  -- FIXME: UGLY HACK
 			clk_ext_mul_i				=> clk_ext_mul_i,
+      clk_ext_mul_locked_i  => clk_ext_mul_locked_i,
       clk_aux_p_o         => clk_aux_p_o,
       clk_aux_n_o         => clk_aux_n_o,
       clk_500_o           => clk_500_o,

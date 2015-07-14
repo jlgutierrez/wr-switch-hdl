@@ -208,16 +208,18 @@ architecture Behavioral of scb_top_synthesis is
 
   component ext_pll_10_to_100 is
   port (
-    clk_ext_i           : in  std_logic;
-    clk_ext_100_o       : out std_logic;
-    rst_a_i             : in  std_logic);
+    clk_ext_i     : in  std_logic;
+    clk_ext_100_o : out std_logic;
+    rst_a_i       : in  std_logic;
+    locked_o      : out std_logic);
   end component;
 
   component ext_pll_100_to_62m is
   port(
     clk_ext_100_i : in  std_logic;
     clk_ext_mul_o : out std_logic;
-    rst_a_i       : in  std_logic);
+    rst_a_i       : in  std_logic;
+    locked_o      : out std_logic);
   end component;
 
 
@@ -300,6 +302,8 @@ architecture Behavioral of scb_top_synthesis is
 	signal local_reset, ext_pll_reset : std_logic;
 	signal clk_ext, clk_ext_mul	:	 std_logic;
   signal clk_ext_100 : std_logic;
+  signal ext_pll_100_locked, ext_pll_62_locked : std_logic;
+  signal clk_ext_mul_locked : std_logic;
 
   component scb_top_bare
     generic (
@@ -320,6 +324,7 @@ architecture Behavioral of scb_top_synthesis is
       clk_dmtd_i          : in  std_logic;
       clk_aux_i           : in  std_logic;
 			clk_ext_mul_i				:	in	std_logic;
+			clk_ext_mul_locked_i:	in	std_logic;
       clk_aux_p_o         : out std_logic;
       clk_aux_n_o         : out std_logic;
       clk_500_o           : out std_logic;
@@ -536,16 +541,19 @@ begin
 
   U_Ext_PLL1: ext_pll_10_to_100
     port map(
-      clk_ext_i => clk_ext,
+      clk_ext_i     => clk_ext,
       clk_ext_100_o => clk_ext_100,
-      rst_a_i   => ext_pll_reset);
+      rst_a_i       => ext_pll_reset,
+      locked_o      => ext_pll_100_locked);
 
   U_Ext_PLL2: ext_pll_100_to_62m
     port map(
       clk_ext_100_i => clk_ext_100,
       clk_ext_mul_o => clk_ext_mul,
-      rst_a_i => ext_pll_reset);
+      rst_a_i       => ext_pll_reset,
+      locked_o      => ext_pll_62_locked);
 
+  clk_ext_mul_locked <= ext_pll_100_locked and ext_pll_62_locked;
 	dbg_clk_ext_o	<= clk_ext_mul;
 
 	local_reset <= not sys_rst_n_i;
@@ -715,6 +723,7 @@ begin
       clk_sys_o           => clk_sys,
       clk_aux_i           => clk_aux,
 			clk_ext_mul_i				=> clk_ext_mul,
+      clk_ext_mul_locked_i=> clk_ext_mul_locked,
       clk_aux_p_o         => clk_aux_p_o,
       clk_aux_n_o         => clk_aux_n_o,
       clk_500_o           => clk_500_o,
