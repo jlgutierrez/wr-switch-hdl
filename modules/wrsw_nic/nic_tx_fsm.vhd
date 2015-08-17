@@ -161,6 +161,7 @@ architecture behavioral of nic_tx_fsm is
 
   signal ack_count : unsigned(3 downto 0);
 	signal src_stb_int	:	std_logic;
+  signal ackcnt_nrst : std_logic;
 
 begin  -- behavioral
 
@@ -188,7 +189,7 @@ begin  -- behavioral
   count_acks: process(clk_sys_i)
   begin
     if rising_edge(clk_sys_i) then
-      if(rst_n_i='0') then
+      if(rst_n_i='0' or ackcnt_nrst='0') then
         ack_count <= (others=>'0');
       elsif(src_stb_int = '1' and src_i.stall = '0' and src_i.ack = '0') then
         ack_count <= ack_count + 1;
@@ -260,6 +261,7 @@ begin  -- behavioral
             regs_o.sr_tx_error_i  <= '0';
             irq_txerr_o           <= '0';
             txdesc_request_next_o <= '0';
+            ackcnt_nrst <= '0';
 
             if(regs_i.cr_tx_en_o = '1') then
               state <= TX_REQUEST_DESCRIPTOR;
@@ -268,6 +270,7 @@ begin  -- behavioral
           when TX_REQUEST_DESCRIPTOR =>
             tx_done               <= '0';
             txdesc_request_next_o <= '1';
+            ackcnt_nrst <= '0';
 
             if(txdesc_grant_i = '1') then
               cur_tx_desc           <= txdesc_current_i;
@@ -281,6 +284,7 @@ begin  -- behavioral
             -- read from the buffer
           when TX_MEM_FETCH =>
             txdesc_request_next_o <= '0';
+            ackcnt_nrst <= '0';
             if(txdesc_current_i.len(0) = '1') then
               tx_remaining <= tx_remaining + 1;
             end if;
@@ -289,6 +293,7 @@ begin  -- behavioral
             
           when TX_START_PACKET =>
             regs_o.sr_tx_error_i <= '0';
+            ackcnt_nrst <= '0';
 
             rtu_valid_int       <= '1';
             ignore_first_hword <= '1';
@@ -309,6 +314,7 @@ begin  -- behavioral
             end if;
 
           when TX_STATUS =>
+            ackcnt_nrst <= '1';
             src_o.adr  	<= c_WRF_STATUS;
             src_o.sel  	<= "11";
             src_o.dat  	<= f_marshall_wrf_status(default_status_reg);
@@ -448,6 +454,7 @@ begin  -- behavioral
 
             if( src_i.stall='0' and ack_count = 0) then
               state     <= TX_UPDATE_DESCRIPTOR;
+              ackcnt_nrst <= '0';
             end if;
 
           when TX_UPDATE_DESCRIPTOR =>
