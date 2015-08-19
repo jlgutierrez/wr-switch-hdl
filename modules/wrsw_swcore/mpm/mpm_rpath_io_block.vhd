@@ -215,6 +215,9 @@ architecture behavioral of mpm_rpath_io_block is
                                          -- (2 + wait_at_abort) cycles
                                          -- the number (2) was derived experimentally (lowest 
                                          -- working)
+  signal fetch_pg_words_new : std_logic;
+  signal fetch_pg_words_used : std_logic;
+
 begin  -- behavioral
   
   -- process to generate long abort signal. it is needed to make sure
@@ -275,9 +278,11 @@ begin  -- behavioral
     if rising_edge(clk_io_i) then
       if rst_n_io_i = '0' or (last_int = '1' and d_valid_int = '1') 
                                  or long_rst_at_abort = '1' then  -- ML: abort by reset
+        fetch_pg_words_used <= '0';
         -- ML : pre-fetching
-        if(pre_fetch = '1') then
+        if(pre_fetch = '1' and fetch_pg_words_new='1') then
           words_total      <= resize(fetch_pg_words, words_total'length);
+          fetch_pg_words_used <= '1';
         else
           words_total     <= (others => '0');
         end if;
@@ -285,6 +290,7 @@ begin  -- behavioral
         words_xmitted   <= to_unsigned(1, words_xmitted'length);
         d_counter_equal <= '0';
       else
+        fetch_pg_words_used <= '0';
         if(df_rd_int = '1') then
           words_xmitted <= words_xmitted + 1;
         end if;
@@ -292,8 +298,10 @@ begin  -- behavioral
         if(fetch_ack = '1' and pre_fetch = '0') then
           if(fetch_first = '1' ) then
             words_total      <= resize(fetch_pg_words, words_total'length);
+            fetch_pg_words_used <= '1';
           else
             words_total      <= words_total      + fetch_pg_words;
+            fetch_pg_words_used <= '1';
           end if;
         end if;
 
@@ -398,6 +406,7 @@ begin  -- behavioral
         fetch_first     <= '0';
         last_pg_start_ptr <= (others => '0');
         fetch_last     <= '0';
+        fetch_pg_words_new <= '0';
       else
 
         ll_grant_d0 <= ll_grant_i;
@@ -407,6 +416,10 @@ begin  -- behavioral
           wait_first_fetched <='0';
         elsif(fetch_first = '1' and (df_empty_i = '0' or min_pck_size_reached = '0') and  pre_fetch = '0') then
           wait_first_fetched <='1';
+        end if;
+
+        if(fetch_pg_words_used = '1') then
+          fetch_pg_words_new <= '0';
         end if;
 
         case page_state is
@@ -439,6 +452,7 @@ begin  -- behavioral
               if(cur_ll.eof = '1') then
                 page_state     <= WAIT_LAST_ACK;
                 fetch_pg_words <= unsigned(cur_ll.size);
+                fetch_pg_words_new <= '1';
                 fetch_pg_lines <= f_fast_div_pagesize(unsigned(cur_ll.size), g_ratio);
                 fetch_pg_addr  <= cur_page;
                 fvalid_int     <= '1';
@@ -458,6 +472,7 @@ begin  -- behavioral
                 page_state <= WAIT_ACK;
                 
                 fetch_pg_words <= to_unsigned(g_page_size, fetch_pg_words'length);
+                fetch_pg_words_new <= '1';
                 fetch_pg_lines <= to_unsigned(c_lines_per_page, fetch_pg_lines'length);
                 fetch_pg_addr  <= cur_page;
                 fetch_pg_addr  <= cur_page;
