@@ -281,6 +281,7 @@ package wrsw_top_pkg is
       clk_dmtd_i          : in  std_logic;
       clk_aux_i           : in  std_logic;
       clk_ext_mul_i       : in  std_logic;
+		  clk_ext_mul_locked_i:	in std_logic;
       clk_sys_o           : out std_logic;
       cpu_wb_i            : in  t_wishbone_slave_in;
       cpu_wb_o            : out t_wishbone_slave_out;

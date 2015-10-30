@@ -190,6 +190,7 @@ begin  -- rtl
 --      clk_sys_i           => clk_sys_i,
       clk_aux_i           => clk_aux_i,
       clk_ext_mul_i       => '0',
+      clk_ext_mul_locked_i=> '1',
       cpu_wb_i            => cpu_wb_in,
       cpu_wb_o            => cpu_wb_out,
       cpu_irq_n_o         => cpu_irq_n,
