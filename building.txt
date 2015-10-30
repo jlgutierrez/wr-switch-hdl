@@ -7,11 +7,11 @@ Disclaimer: this readme assumes that you know the basic UNIX commands.
 
 1. Environment setup:
   1a. Make sure you have git & make installed.
-  1b. Make sure you have Xilinx ISE installed (64-bit version ONLY, version 14.1 or above). 
+  1b. Make sure you have Xilinx ISE installed (64-bit version ONLY, version 14.5 or above). 
   1c. Check ISE-related environment variables:
     - Xilinx binaries (xst, map, par) must be in PATH environmental variable.
     - XILINX environmental variable must be correctly set (for example: 
-      XILINX=/opt/Xilinx/14.1/ISE_DS for ISE suite installed in /opt/Xilinx)
+      XILINX=/opt/Xilinx/14.5/ISE_DS for ISE suite installed in /opt/Xilinx)
 
 2. Install and build hdlmake ("isyp" branch)
   2a. Download the sources and build hdlmake
@@ -25,22 +25,26 @@ Disclaimer: this readme assumes that you know the basic UNIX commands.
 3. Download WR Switch HDL sources
   $ git clone --recursive git://ohwr.org/white-rabbit/wr-switch-hdl.git
   $ cd wr-switch-hdl
-  $ git checkout wr-switch-sw-v3.3
+  $ git checkout wr-switch-sw-v4.2
   $ git submodule update
 
-4. Build it
-  4a. Generate the Makefiles
-    $ cd syn/scb_18ports
+4. Generate SDB Metadata package with synthesis information
+  $ cd top/bare_top
+  $ ./gen_sdbsyn.py --user <your name> --project WRS_18p --ver <ISE version>
+
+5. Build it
+  5a. Generate the Makefiles
+    $ cd ../../syn/scb_18ports
     $ hdlmake --ise-proj --make-ise
-  4b. Synthesize:
+  5b. Synthesize:
     $ make
 
-5. Deploy the firmware
+6. Deploy the firmware
   Copy the freshly build firmware to the switch filesystem:
-  scp scb_top_synthesis.bin root@<your_switch_ip_address>:/wr/lib/firmware/18ports_mb.bin.
+  scp scb_top_synthesis.bin root@<your_switch_ip_address>:/wr/lib/firmware/18p_mb-LX240T.bin
   Reboot the switch.
 
-6. Good luck!
+7. Good luck!
 
 Frequently Asked Questions
 --------------------------
