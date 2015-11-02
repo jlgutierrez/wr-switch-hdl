@@ -94,7 +94,8 @@ def git_username():
   uname = ""
   for n in user[:-1]:
     uname = uname + n[0]
-  uname = uname + user[-1]
+  if len(user):
+    uname = uname + user[-1]
   return uname
 
 def main():
