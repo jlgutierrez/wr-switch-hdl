@@ -10,7 +10,24 @@
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
--- Description:
+-- Description: This is a simple Finite State Machine that controls the operation
+-- of transmitting PTP Announce messages. It looks at the vector (config reg) of
+-- PTP master ports and uses the psu_packet_injection module to inject PTP
+-- Announces to each port, starting with the port that is at the least significant
+-- position in the config reg vector (simple prio_encoder is used). 
+-- this module also creates an interfame gap/spacing between frames.
+-- Once the injection operation is strated, it blocks all the traffic from the NIC
+-- (stall) and cannot be stopped untill Announces on all PTP Master ports (configured
+-- to be) are sent. 
+-- Once finished, FSM goes into IN_HOLDOVER state and cannot be re-triggered until 
+-- back in IDLE. It goes into idle when leaving holdover (falling edge) is detected.
+-- This means that 
+-- * the injection of frames is triggered only when entering holdover (rising edge of 
+--   holdover input)
+-- * the FSM is reseted when exiting holdover
+
+-- TODO: consider possibility of retrigerring/resending frames 
+
 -------------------------------------------------------------------------------
 
 -- Copyright (c) 2015 CERN / BE-CO-HT

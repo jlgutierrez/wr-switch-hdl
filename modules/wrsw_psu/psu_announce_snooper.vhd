@@ -10,9 +10,9 @@
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
--- Description: this module recognizes PTP Announce messages (over 802.3 Ethernet
--- and UDP) and extracts from them required info on the fly, i.e. sequence ID and
--- clock class)
+-- Description: this module recognizes PTP Announce messages (over 802.1D and Q Ethernet
+-- and UDP) and extracts from them required info on the fly, i.e. sequence ID, sourcePortID 
+-- and clock class)
 -- useful: http://wiki.hevs.ch/uit/index.php5/Standards/Ethernet_PTP/frames
 -- 
 -- Where            | what      |  offset  16bit words   | value

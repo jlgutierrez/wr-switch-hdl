@@ -10,8 +10,72 @@
 -- Platform   : FPGA-generic
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
--- Description: This unit supports ultra-fast tx and rx of Announce messages
--- with informatin about holdover
+-- Description: This is a top entity of a PTP Support Unit (PSU) 
+-- 
+-- This module was developed to speed up the propagation of information to the downstream
+-- PTP nodes about the holdover. This is done by speaking directly to rt_subsystem
+-- (SoftPLL) and doing two things:
+-- 1. injecting Announce with the holdover clockClass, as soon as SoftPLL goes into holdover 
+-- 2. recognizing Announce messages wiht holdover clockClass, this information is provided
+--    directly to SoftPLL, the PLL then switches to backup, if available. otherwise, the 
+--    injection is repeated 
+-- 
+-- This unit provides
+-- * snooping of transmitted frames, recognition of PTP Announce frames, remembering of
+--   announce frames and dumping of Announce frames with preconfigured params detected
+-- * ultra-fast transmission of Announce messages with configured ClockClass
+--   to configured ports (PTP Masters) by injecting a remebered Announce
+-- * snooping of received frames, recognition of Announce messages with configured 
+--   ClockClass and other characteristics and providing informaiton about the recognized
+--   Announces
+-- * interface with rt_subsystem, the communication includes
+--   -> rt_subsystem to PSU
+--      1. information about holdover
+--      2. informaiton about current active port
+--      3. command to clear the high bit about detection of preconfigured Announce message
+--   -> PSU to rt_subsystem
+--      1. information that a preconfigured Announce was detected
+
+-- Transmission of Announce messages:
+-- - The module snoops all transmitted frames and recognizes PTP announce messages,
+--   it is possible to recognize Announce send over 
+--   1) raw Ethernet frames (802.1) with and without VLAN TAG
+--   2) IPv4-UDP
+-- - it remembers the frame in the RAM (assuming that the only difference
+--   between Annonce messages sent to different port are:
+--   1) sequence number
+--   2) port number
+--   the above are stored per-port in RAM, the rest of the frame is stored 
+--   for all frames. the RAM memory is devided into 3 parts:
+--   * bank 1
+--   * bank 2
+--   * per-port info
+--   Always, one bank is the one being read, the second is the one being written.
+--   When the frame is validated (rendered OK), two things happen:
+--   1. banks are swapped
+--   2. the sequence ID is written to the "per-port info" addres
+-- - the transmitted Announce message can be configured to be dumped if some
+--   of the following is wrong (this is evaluated only if in Holdover):
+--   1. the message is duplicate, so the sequence number is the same as of the
+--      previous Anounce on that port
+--   2. sequence number is wrong, i.e.different than: current = previous+1
+--   3. sourcePortID does not match the previous Announce
+--   4. clock class is not equal to the holdover ClockClass, configured
+--
+--
+-- Reception of Announce messaeges
+-- - The module snoops all received frames and recognizes PTP announce messages,
+--   it is possible to recognize Announce send over 
+--   1) raw Ethernet frames (802.1) with and without VLAN TAG
+--   2) IPv4-UDP
+-- - [not implemented but prepared for] the sourcePortID is remembered
+-- - preconfigured announce messages are recognized, in particular the module looks for
+--   Announce messages with configured ClockClass (the same config as transmission). 
+--   additionally, it can check whether the SourcePort of the announce message with 
+--   configured ClockClass has the same sourcePort as the previous one [if support implemented].
+--   The sequence number can be checked as well.
+--
+-- NOTE: RAM is shared between psu_anounce_snooper and 
 -------------------------------------------------------------------------------
 
 -- Copyright (c) 2015 CERN / BE-CO-HT
