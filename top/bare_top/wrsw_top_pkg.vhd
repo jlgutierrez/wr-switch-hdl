@@ -500,5 +500,24 @@ package wrsw_top_pkg is
       wb_i                : in  t_wishbone_slave_in;
       wb_o                : out t_wishbone_slave_out);
   end component;
+  
+  component xwrsw_hsr_lre
+    generic(
+		g_adr_width : integer := 2;
+		g_dat_width : integer :=16;
+		g_num_ports : integer);
+    port (
+		rst_n_i : in  std_logic;
+		clk_i   : in  std_logic;
+
+		ep_snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
+		ep_snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
+		ep_src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
+		ep_src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
+		swc_snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
+		swc_snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
+		swc_src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
+		swc_src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0));
+  end component;
 
 end wrsw_top_pkg;

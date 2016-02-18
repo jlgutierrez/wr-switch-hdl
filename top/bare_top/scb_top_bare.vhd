@@ -317,6 +317,12 @@ architecture rtl of scb_top_bare is
   signal swc_src_in  : t_wrf_source_in_array(c_NUM_PORTS downto 0);
   signal swc_snk_out : t_wrf_sink_out_array(c_NUM_PORTS downto 0);
   signal swc_snk_in  : t_wrf_sink_in_array(c_NUM_PORTS downto 0);
+  
+  -- ENDPOINT <---> HSR LRE signals
+  signal hsr_lre_src_out	: t_wrf_source_out_array(c_NUM_PORTS downto 0);
+  signal hsr_lre_src_in		: t_wrf_source_in_array(c_NUM_PORTS downto 0);
+  signal hsr_lre_snk_out	: t_wrf_sink_out_array(c_NUM_PORTS downto 0);
+  signal hsr_lre_snk_in		: t_wrf_sink_in_array(c_NUM_PORTS downto 0);
 
   signal dummy_snk_in  : t_wrf_sink_in_array(c_NUM_PORTS downto 0);
   signal dummy_src_in  : t_wrf_source_in_array(c_NUM_PORTS downto 0);
@@ -777,15 +783,19 @@ begin
           clk_i   => clk_sys,
           snk_i   => endpoint_src_out(i),
           snk_o   => endpoint_src_in(i),
-          src_o   => swc_snk_in(i),
-          src_i   => swc_snk_out(i));
+          --src_o   => swc_snk_in(i),
+          --src_i   => swc_snk_out(i));
+          src_o	  => hsr_lre_snk_in(i), --jlgutierrez
+          src_i   => hsr_lre_snk_out(i)); --jlgutierrez
 
       U_WRF_TXREG_X: xwrf_reg
         port map(
           rst_n_i => rst_n_periph,
           clk_i   => clk_sys,
-          snk_i   => swc_src_out(i),
-          snk_o   => swc_src_in(i),
+          --snk_i   => swc_src_out(i),
+          --snk_o   => swc_src_in(i),
+          snk_i   => hsr_lre_src_out(i), -- jlgutierrez
+          snk_o   => hsr_lre_src_in(i), -- jlgutierrez
           src_o   => endpoint_snk_in(i),
           src_i   => endpoint_snk_out(i));
     end generate;
@@ -807,6 +817,25 @@ begin
 --       trig2(2) <= vic_irqs(2);
 --     end generate gen_txtsu_debug;
 
+	U_HSR_LRE : xwrsw_hsr_lre
+	  generic map (
+		g_num_ports	=> g_num_ports+1)
+	  port map (
+		rst_n_i => rst_n_periph,
+		clk_i   => clk_sys,
+        
+        ep_snk_o   => hsr_lre_snk_out,
+        ep_snk_i   => hsr_lre_snk_in,
+        ep_src_i   => hsr_lre_src_in,
+        ep_src_o   => hsr_lre_src_out,
+        
+        swc_snk_o   => swc_snk_out,
+        swc_snk_i   => swc_snk_in,
+        swc_src_i   => swc_src_in,
+        swc_src_o   => swc_src_out
+      );
+        
+        
     U_Swcore : xswc_core
       generic map (
         g_prio_num                        => 8,
@@ -834,10 +863,10 @@ begin
         clk_mpm_core_i => clk_aux_i,
         rst_n_i        => rst_n_periph,
 
-        src_i => swc_src_in,
-        src_o => swc_src_out,
-        snk_i => swc_snk_in,
-        snk_o => swc_snk_out,
+        src_i => swc_snk_out,
+        src_o => swc_snk_in,
+        snk_i => swc_src_out,
+        snk_o => swc_src_in,
 
         shaper_drop_at_hp_ena_i   => shaper_drop_at_hp_ena,
         
