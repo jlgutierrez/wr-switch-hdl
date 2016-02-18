@@ -70,22 +70,6 @@ entity xhsr_tagger is
 
     src_i : in  t_wrf_source_in;
     src_o : out  t_wrf_source_out;
-    
-   --- copied from ep_rx_vlan_unit.vhd
-   snk_fab_i  : in  t_ep_internal_fabric;
-   snk_dreq_o : out std_logic;
-
-   src_fab_o  : out t_ep_internal_fabric;
-   src_dreq_i : in  std_logic;
-
-   tclass_o   : out std_logic_vector(2 downto 0);
-   vid_o      : out std_logic_vector(11 downto 0);
-   tag_done_o : out std_logic;
-   is_tagged_o: out std_logic;
-
-   regs_i : in    t_ep_out_registers;
-   regs_o : out   t_ep_in_registers
-   
 
     );
 end xhsr_tagger;
