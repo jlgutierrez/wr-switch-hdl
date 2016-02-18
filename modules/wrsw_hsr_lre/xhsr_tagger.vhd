@@ -69,7 +69,7 @@ entity xhsr_tagger is
 -------------------------------------------------------------------------------  
 
     src_i : in  t_wrf_source_in;
-    src_o : out  t_wrf_source_out;
+    src_o : out  t_wrf_source_out
 
     );
 end xhsr_tagger;
