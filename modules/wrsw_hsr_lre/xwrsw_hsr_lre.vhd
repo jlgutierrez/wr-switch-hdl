@@ -126,27 +126,20 @@ architecture behavioral of xwrsw_hsr_lre is
       -- first try
       --ep_snk_o <= swc_src_i;
       ep_src_o <= swc_snk_i;
-      
+
       swc_snk_o <= ep_src_i;
       --swc_src_o <= ep_snk_i;
       -- end first try
-      
-      --ep_snk_o <= tagger_snk_out;
-      --ep_src_o <= tagger_src_out;
-      
-      --swc_snk_o <= tagger_src_in;
-      --swc_src_o <= tagger_snk_in;
-      
-    --end if;
-  end process;
-	  
-	--ep_snk_o <= tagger_snk_out;
-	--ep_src_o <= tagger_src_out;
 
-	--swc_snk_o <= tagger_src_in;
-	--swc_src_o <= tagger_snk_in;
-  
-  GEN_TAGGERS: for I in 0 to C_NUM_PORTS generate
+      BYPASS_NON_HSR: for J in 2 to C_NUM_PORTS loop
+        ep_snk_o(j)		<= swc_src_i(j);
+        swc_src_o(j)	<= ep_snk_i(j);
+      end loop;
+
+    --end if;
+  end process;	
+
+  GEN_TAGGERS: for I in 0 to 2 generate
       -- Insert HSR tag
       U_XHSR_TAGGER: xhsr_tagger
         port map (
