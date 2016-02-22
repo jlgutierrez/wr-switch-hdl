@@ -80,7 +80,7 @@ end wrsw_hsr_junction;
 
 architecture behavioral of wrsw_hsr_junction is
 
-  constant c_NUM_PORTS     : integer := 8; --GUTI: to be fix
+  constant c_NUM_PORTS     : integer := 8; 
   
   component chipscope_icon
     port (
@@ -96,7 +96,7 @@ architecture behavioral of wrsw_hsr_junction is
       TRIG3   : in    std_logic_vector(31 downto 0));
   end component;
   
-  component manage_from_taggers
+  component wrsw_hsr_arbfromtaggers
 	port(
 		rst_n_i			: in	std_logic;
 		clk_i				: in	std_logic;
@@ -122,16 +122,15 @@ architecture behavioral of wrsw_hsr_junction is
 
   begin --rtl
 	
-	tagger_snk_in <= tagger_snk_i;
-	ep_src_in	  <= ep_src_i;
-
-	process(clk_i)
-	begin
-		if(rising_edge(clk_i)) then
-			ep_src_o 		<= tagger_snk_in;
-			tagger_snk_o   <= ep_src_in;
-		end if;
-	end process;
+	U_from_taggers : wrsw_hsr_arbfromtaggers
+	port map(
+		rst_n_i  		=> rst_n_i,
+		clk_i				=> clk_i,
+		ep_src_o 		=> ep_src_o,
+		ep_src_i 		=> ep_src_i,
+		tagger_snk_i 	=> tagger_snk_i,
+		tagger_snk_o 	=> tagger_snk_o
+	);
 
 
 end behavioral;
