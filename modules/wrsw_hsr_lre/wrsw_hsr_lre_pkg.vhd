@@ -59,5 +59,26 @@ package wrsw_hsr_lre_pkg is
     src_i 	: in  t_wrf_source_in;
     src_o 	: out  t_wrf_source_out);
   end component;
+  
+  
+  
+  component wrsw_hsr_junction
+	generic(
+		g_adr_width : integer := 2;
+		g_dat_width : integer := 16
+		);
+	port(
+		rst_n_i			: in	std_logic;
+		clk_i				: in	std_logic;
+		
+		ep_src_o		: out	t_wrf_source_out_array(1 downto 0);
+		ep_src_i		: in	t_wrf_source_in_array(1 downto 0);
+
+		tagger_snk_i	: in	t_wrf_sink_in_array(1 downto 0);
+		tagger_snk_o	: out t_wrf_sink_out_array(1 downto 0);
+		
+		fwd_snk_i	: in	t_wrf_sink_in_array(1 downto 0);
+		fwd_snk_o	: out t_wrf_sink_out_array(1 downto 0));
+	end component;
 
 end wrsw_hsr_lre_pkg;

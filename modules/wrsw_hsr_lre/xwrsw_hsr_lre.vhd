@@ -125,9 +125,9 @@ architecture behavioral of xwrsw_hsr_lre is
       
       -- first try
       --ep_snk_o <= swc_src_i;
-      ep_src_o <= swc_snk_i;
+      --ep_src_o <= swc_snk_i;
 
-      swc_snk_o <= ep_src_i;
+      --swc_snk_o <= ep_src_i;
       --swc_src_o <= ep_snk_i;
       -- end first try
 
@@ -139,16 +139,28 @@ architecture behavioral of xwrsw_hsr_lre is
     --end if;
   end process;	
 
-  GEN_TAGGERS: for I in 0 to 2 generate
+  GEN_TAGGERS: for I in 0 to 1 generate
       -- Insert HSR tag
       U_XHSR_TAGGER: xhsr_tagger
         port map (
           rst_n_i => rst_n_i,
           clk_i   => clk_i,
-          snk_i   => ep_snk_i(i),
-          snk_o   => ep_snk_o(i),
-          src_o	  => swc_src_o(i),
+          snk_i   => tagger_snk_in(i),
+          snk_o   => tagger_snk_out(i),
+          src_o	=> swc_src_o(i),
           src_i   => swc_src_i(i));
     end generate;
+	 
+	U_junction : wrsw_hsr_junction
+		port map(
+			rst_n_i			=> rst_n_i,
+			clk_i				=> clk_i,
+			ep_src_o			=> ep_src_o(1 downto 0),
+			ep_src_i			=> ep_src_i(1 downto 0),
+			tagger_snk_i 	=> tagger_snk_in(1 downto 0),
+			tagger_snk_o 	=> tagger_snk_out(1 downto 0),
+			fwd_snk_i(0) 	=> c_dummy_snk_in,
+			fwd_snk_i(1)	=> c_dummy_snk_in,
+			fwd_snk_o		=> open);
 
 end behavioral;
