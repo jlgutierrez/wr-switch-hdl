@@ -60,6 +60,7 @@ entity xhsr_tagger is
 -------------------------------------------------------------------------------
 -- pWB  : output (comes from SWCORE)
 -------------------------------------------------------------------------------
+-- joselj 2016-02-25: input comes
 
     snk_i : in  t_wrf_sink_in;
     snk_o : out  t_wrf_sink_out;
@@ -67,6 +68,7 @@ entity xhsr_tagger is
 -------------------------------------------------------------------------------
 -- pWB : input (goes to ENDPOINT)
 -------------------------------------------------------------------------------  
+-- joselj 2016-02-25: output goes
 
     src_i : in  t_wrf_source_in;
     src_o : out  t_wrf_source_out
@@ -94,14 +96,14 @@ architecture behavoural of xhsr_tagger is
 
   begin
 
-  process(clk_i)
-  begin
+--  process(clk_i)
+--  begin
     --if rising_edge(clk_i) then	  
       
       snk_o <= src_i;
       src_o <= snk_i;
       
     --end if;
-  end process;
+--  end process;
 
 end behavoural;

@@ -110,7 +110,15 @@ architecture behavioral of xwrsw_hsr_lre is
       TRIG3   : in    std_logic_vector(31 downto 0));
   end component;
 
+
   signal CONTROL0 : std_logic_vector(35 downto 0);
+  signal TRIG0		: std_logic_vector(31 downto 0);
+  signal TRIG1		: std_logic_vector(31 downto 0);
+  signal TRIG2		: std_logic_vector(31 downto 0);
+  signal TRIG3		: std_logic_vector(31 downto 0);
+  
+
+
   
   signal tagger_src_out	: t_wrf_source_out_array(C_NUM_PORTS downto 0);
   signal tagger_src_in	: t_wrf_source_in_array(C_NUM_PORTS downto 0);
@@ -119,48 +127,114 @@ architecture behavioral of xwrsw_hsr_lre is
 
   begin --rtl
 
-   process(clk_i)
-     begin
-    --if rising_edge(clk_i) then	  
-      
-      -- first try
-      --ep_snk_o <= swc_src_i;
-      --ep_src_o <= swc_snk_i;
+--   process(clk_i)
+--     begin
+--    if rising_edge(clk_i) then
 
-      --swc_snk_o <= ep_src_i;
-      --swc_src_o <= ep_snk_i;
-      -- end first try
+--		  ep_snk_o <= swc_src_i;
+--      ep_src_o <= swc_snk_i;
+--
+--      swc_snk_o <= ep_src_i;
+--      swc_src_o <= ep_snk_i;
+--      
 
-      BYPASS_NON_HSR: for J in 2 to C_NUM_PORTS loop
-        ep_snk_o(j)		<= swc_src_i(j);
-        swc_src_o(j)	<= ep_snk_i(j);
-      end loop;
+--
+----		BYPASS_HSR: for J in 0 to 1 loop
+------			ep_src_o(j) <= tagger_src_out(j);
+------			tagger_src_in(j)	<= ep_src_i(j);
+----			
+----			swc_src_o(j) <= ep_snk_i(j);
+----			ep_snk_o(j) <= swc_src_i(j);
+----		end loop;
+----
+--      BYPASS_NON_HSR: for J in 2 to 4 loop
+--        ep_snk_o(j)		<= swc_src_i(j);
+--        swc_src_o(j)	<= ep_snk_i(j);
+--		  ep_src_o(j) <= swc_snk_i(j);
+--		  swc_snk_o(j) <= ep_src_i(j);
+--      end loop;
+		
+--		BYPASS_NON_HSR_onemoretime: for J in 6 to c_NUM_PORTS loop
+--        ep_snk_o(j)		<= swc_src_i(j);
+--        swc_src_o(j)	<= ep_snk_i(j);
+--		  ep_src_o(j) <= swc_snk_i(j);
+--		  swc_snk_o(j) <= ep_src_i(j);
+--      end loop;
 
-    --end if;
-  end process;	
+		
+		
+--
+--    end if;
+--  end process;
+  
+      ep_snk_o(c_NUM_PORTS downto 3) <= swc_src_i(c_NUM_PORTS downto 3);
+      ep_src_o(c_NUM_PORTS downto 3)<= swc_snk_i(c_NUM_PORTS downto 3);
 
-  GEN_TAGGERS: for I in 0 to 1 generate
+      swc_snk_o(c_NUM_PORTS downto 3) <= ep_src_i(c_NUM_PORTS downto 3);
+      swc_src_o(c_NUM_PORTS downto 3) <= ep_snk_i(c_NUM_PORTS downto 3);
+		
+      ep_snk_o(0) <= swc_src_i(0);
+      ep_src_o(0)<= swc_snk_i(0);
+
+      swc_snk_o(0) <= ep_src_i(0);
+      swc_src_o(0) <= ep_snk_i(0);		
+		
+		-- HSR-PORT INCOMING TRAFFIC TEMPORARILY BYPASSED
+		-- AS THERE IS NO LRE FOR CHECKING DUPES YET:
+		ep_snk_o(2 downto 1) <= swc_src_i(2 downto 1);
+		swc_src_o(2 downto 1) <= ep_snk_i(2 downto 1);
+		
+
+  GEN_TAGGERS: for I in 1 to 2 generate
       -- Insert HSR tag
       U_XHSR_TAGGER: xhsr_tagger
         port map (
           rst_n_i => rst_n_i,
           clk_i   => clk_i,
-          snk_i   => tagger_snk_in(i),
-          snk_o   => tagger_snk_out(i),
-          src_o	=> swc_src_o(i),
-          src_i   => swc_src_i(i));
+          snk_i   => swc_snk_i(i),
+          snk_o   => swc_snk_o(i),
+          src_o	=> tagger_src_out(i),
+          src_i   => tagger_src_in(i));
     end generate;
+
+
+
 	 
 	U_junction : wrsw_hsr_junction
 		port map(
 			rst_n_i			=> rst_n_i,
 			clk_i				=> clk_i,
-			ep_src_o			=> ep_src_o(1 downto 0),
-			ep_src_i			=> ep_src_i(1 downto 0),
-			tagger_snk_i 	=> tagger_snk_in(1 downto 0),
-			tagger_snk_o 	=> tagger_snk_out(1 downto 0),
+			ep_src_o			=> ep_src_o(2 downto 1),
+			ep_src_i			=> ep_src_i(2 downto 1),
+			tagger_snk_i 	=> tagger_src_out(2 downto 1),
+			tagger_snk_o 	=> tagger_src_in(2 downto 1),
 			fwd_snk_i(0) 	=> c_dummy_snk_in,
 			fwd_snk_i(1)	=> c_dummy_snk_in,
 			fwd_snk_o		=> open);
+
+	-- DEBUG --
+--	cs_icon : chipscope_icon
+--	port map(
+--		CONTROL0	=> CONTROL0
+--	);
+--	cs_ila : chipscope_ila
+--	port map(
+--		CLK		=> clk_i,
+--		CONTROL	=> CONTROL0,
+--		TRIG0		=> TRIG0,
+--		TRIG1		=> TRIG1,
+--		TRIG2		=> TRIG2,
+--		TRIG3		=> TRIG3
+--	);
+--	
+--trig0(1 downto 0) <= ep_snk_i(0).adr;
+--trig0(17 downto 2) <= ep_snk_i(0).dat;
+--trig0(18) <= ep_snk_i(0).cyc;
+--trig0(19) <= ep_snk_i(0).stb;
+--
+--trig1(1 downto 0) <= ep_snk_i(1).adr;
+--trig1(17 downto 2) <= ep_snk_i(1).dat;
+--trig1(18) <= ep_snk_i(1).cyc;
+--trig1(19) <= ep_snk_i(1).stb;
 
 end behavioral;
