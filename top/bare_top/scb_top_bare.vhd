@@ -901,15 +901,15 @@ begin
 		rst_n_i => rst_n_periph,
 		clk_i   => clk_sys,
         
-        ep_snk_o   => hsr_lre_snk_out,
-        ep_snk_i   => hsr_lre_snk_in,
-        ep_src_i   => hsr_lre_src_in,
-        ep_src_o   => hsr_lre_src_out,
+        ep_snk_o   => hsr_lre_snk_out, -- rx
+        ep_snk_i   => hsr_lre_snk_in,  -- rx
+        ep_src_i   => hsr_lre_src_in,  -- tx
+        ep_src_o   => hsr_lre_src_out, -- tx
         
-        swc_snk_o   => swc_snk_out,
-        swc_snk_i   => swc_snk_in,
-        swc_src_i   => swc_src_in,
-        swc_src_o   => swc_src_out
+        swc_snk_o   => swc_snk_out, -- tx
+        swc_snk_i   => swc_snk_in,  -- tx
+        swc_src_i   => swc_src_in,  -- rx
+        swc_src_o   => swc_src_out  -- rx
       );
 	
 --	hsr_lre_snk_in <= endpoint_src_out;
@@ -946,10 +946,10 @@ begin
         clk_mpm_core_i => clk_aux_i,
         rst_n_i        => rst_n_periph,
 
-        src_i => swc_snk_out,
-        src_o => swc_snk_in,
-        snk_i => swc_src_out,
-        snk_o => swc_src_in,
+        src_i => swc_snk_out, -- tx
+        src_o => swc_snk_in,  -- tx
+        snk_i => swc_src_out, -- rx
+        snk_o => swc_src_in,  -- rx
 
         shaper_drop_at_hp_ena_i   => shaper_drop_at_hp_ena,
         

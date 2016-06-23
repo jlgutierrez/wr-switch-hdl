@@ -108,7 +108,7 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
   signal TRIG1		: std_logic_vector(31 downto 0);
   signal TRIG2		: std_logic_vector(31 downto 0);
   signal TRIG3		: std_logic_vector(31 downto 0);
-  signal senaldebug0,senaldebug1 : std_logic_vector(7 downto 0) := (others => '0');
+  signal senaldebug0,senaldebug1,senaldebug2 : std_logic_vector(7 downto 0) := (others => '0');
   
   signal tagger_snk_in		: t_wrf_source_out_array(1 downto 0);
   signal ep_src_in			: t_wrf_source_in_array(1 downto 0);
@@ -291,6 +291,8 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 				case wr_state is
 					
 					when S_IDLE =>
+					
+						senaldebug0 <= x"D1";
 						
 						word_count	<= (others => '0');
 						write_a		<= '0';
@@ -298,6 +300,7 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 						
 							if(slot0.available = '1' or debug) then -- IF LEV 2
 							
+								senaldebug0 <= x"01";
 								addr_a 			<= c_slot0_base;
 								din_a 			<= snk_valid(0) & c_sig_sof;
 								write_a 			<= '1';
@@ -308,7 +311,6 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 								wr_state 		<= S_WRITING;
 								stall(1)			<= '1';
 								wr_offset		<= to_unsigned(1, wr_offset'length);
-								senaldebug0 <= x"01";
 								
 							elsif(slot1.available = '1') then
 							
@@ -374,6 +376,8 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 					
 					when S_WRITING =>
 					
+						senaldebug0 <= x"d0";
+					
 						if(slot0.writing = '1') then -- IF LEV 1
 						
 							wr_offset	<= unsigned(wr_offset) + 1;
@@ -382,6 +386,7 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 							senaldebug0 <= x"07";
 							if( (snk_valid(0) = '1' and tagger_snk_i(0).adr = c_WRF_DATA) or (snk_valid(1) = '1' and tagger_snk_i(1).adr = c_WRF_DATA) ) then
 								word_count <= std_logic_vector(unsigned(word_count) + 1);
+								senaldebug0 <= x"08";
 							end if;
 							
 
@@ -395,18 +400,22 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 										slot0.is_hsr <= '1';
 										slot0.is_ptp <= '1';
 										slot0.written <= '1';
+										senaldebug0 <= x"09";
 									else
 										slot0.is_hsr <= '0';
 										slot0.is_ptp <= '0';
+										senaldebug0 <= x"0A";
 									end if;
 								elsif(slot0.source = '1') then
 									if( tagger_snk_i(1).dat = x"892f" or tagger_snk_i(1).dat = x"88f7") then
 										slot0.is_hsr <= '1';
 										slot0.is_ptp <= '1';
 										slot0.written <= '1';
+										senaldebug0 <= x"0B";
 									else
 										slot0.is_hsr <= '0';
 										slot0.is_ptp <= '0';
+										senaldebug0 <= x"0C";
 									end if;
 								end if;
 							end if;
@@ -429,29 +438,30 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 							if(slot0.source = '0') then -- IF LEV 2
 								
 								din_a <= snk_valid(0) & tagger_snk_i(0).adr & tagger_snk_i(0).sel & tagger_snk_i(0).dat;
+								senaldebug0 <= x"0D";
 								if(eof(0) = '1') then -- IF LEV 3
 									
 									din_a <= snk_valid(0) & c_sig_eof;
 									wr_state <= S_EOF;
 									slot0.writing <= '0';
 									-- slot0.written <= '1';
-									senaldebug0 <= x"08";
+									senaldebug0 <= x"0E";
 									
 								end if;  -- ENDIF LEV 3
 								
 							elsif(slot0.source = '1') then
 							
 								din_a <= snk_valid(1) & tagger_snk_i(1).adr & tagger_snk_i(0).sel & tagger_snk_i(1).dat;
+								senaldebug0 <= x"0F";
 								if(eof(1) = '1') then -- IF LEV 3
 									
 									din_a <= snk_valid(1) & c_sig_eof;
 									wr_state <= S_EOF;
 									slot0.writing <= '0';
 									-- slot0.written <= '1';
-									senaldebug0 <= x"0A";
+									senaldebug0 <= x"10";
 									
 								end if; -- ENDIF LEV 3
-								senaldebug0 <= x"0B";
 							
 							end if; -- ENDIF LEV 2
 							
@@ -460,7 +470,7 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 							wr_offset	<= unsigned(wr_offset) + 1;
 							addr_a 		<= std_logic_vector( unsigned(c_slot1_base) + unsigned(wr_offset) );
 							write_a		<= '1';
-							senaldebug0 <= x"0C";
+							senaldebug0 <= x"11";
 							if(snk_valid(0) = '1' or snk_valid(1) = '1') then
 								word_count <= std_logic_vector(unsigned(word_count) + 1);
 							end if;
@@ -476,22 +486,22 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 										slot1.is_hsr <= '1';
 										slot1.is_ptp <= '1';
 										slot1.written <= '1';
-										senaldebug0 <= x"16";
+										senaldebug0 <= x"12";
 									else
 										slot1.is_hsr <= '0';
 										slot1.is_ptp <= '0';
 										slot1.written <= '1';
-										senaldebug0 <= x"17";
+										senaldebug0 <= x"13";
 									end if;
 								elsif(slot1.source = '1') then
 									if( tagger_snk_i(1).dat = x"892f" or tagger_snk_i(1).dat = x"88f7") then
 										slot1.is_hsr <= '1';
 										slot1.is_ptp <= '1';
-										senaldebug0 <= x"18";
+										senaldebug0 <= x"14";
 									else
 										slot1.is_hsr <= '0';
 										slot1.is_ptp <= '0';
-										senaldebug0 <= x"19";
+										senaldebug0 <= x"15";
 									end if;
 								end if;
 							end if;
@@ -514,19 +524,22 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 							if(slot1.source = '0') then -- IF LEV 2
 								
 								din_a <= snk_valid(0) & tagger_snk_i(0).adr & tagger_snk_i(0).sel & tagger_snk_i(0).dat;
+								senaldebug0 <= x"16";
+
 								if(eof(0) = '1') then -- IF LEV 3
 									
 									din_a <= snk_valid(0) & c_sig_eof;
 									wr_state <= S_EOF;
 									slot1.writing <= '0';
 									-- slot1.written <= '1';
-									senaldebug0 <= x"0D";
+									senaldebug0 <= x"17";
 									
 								end if; -- ENDIF LEV 3
-								senaldebug0 <= x"0E";
 								
 							elsif(slot1.source = '1') then 
-							
+								
+								senaldebug0 <= x"18";
+
 								din_a <= snk_valid(1) & tagger_snk_i(1).adr & tagger_snk_i(0).sel & tagger_snk_i(1).dat;
 								if(eof(1) = '1') then  -- IF LEV 3
 									
@@ -534,10 +547,9 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 									wr_state <= S_EOF;
 									slot1.writing <= '0';
 									-- slot1.written <= '1';
-									senaldebug0 <= x"0F";
+									senaldebug0 <= x"19";
 									
 								end if;  -- ENDIF LEV 3
-								senaldebug0 <= x"10";
 								
 							end if; -- ENDIF LEV 2
 							
@@ -554,13 +566,13 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 							
 							wr_state 	<= S_FULL;
 							stall 		<= (others => '1');
-							senaldebug0 <= x"11";
+							senaldebug0 <= x"1A";
 							
 						else
 						
 							wr_state 	<= S_IDLE;
 							stall			<= (others => '0');
-							senaldebug0 <= x"12";
+							senaldebug0 <= x"1B";
 						
 						end if;
 						if(debug) then
@@ -571,13 +583,13 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 						
 						write_a	<= '0';
 						stall	<= (others => '1');
-						senaldebug0 <= x"13";
+						senaldebug0 <= x"1C";
 						
 						if(slot0.available = '1' or slot1.available = '1') then
 							
 							stall 		<= (others => '0');
 							wr_state 	<= S_IDLE;
-							senaldebug0 <= x"14";
+							senaldebug0 <= x"1D";
 						
 						end if;
 						
@@ -637,16 +649,17 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 							rd_state0			<= READING;
 							slot0.reading_0	<= '1';
 							addr					:= c_slot0_base;
+							senaldebug1 <= x"04";
 							if(slot0.source = '1' and slot0.is_ptp = '1') then
 								rd_state0			<= FINISH_CYCLE;
 								slot0.reading_0	<= '0';
 								slot0.finished_0	<= '1';
 								senaldebug1			<= x"0D";
 							end if;
-							senaldebug1 <= x"04";
 						elsif((slot1.written = '1') and (snk_dreq(0) = '1')) then
 							rd_state0			<= READING;
 							slot1.reading_0	<= '1';
+							senaldebug1 <= x"05";
 							addr					:= c_slot1_base;
 							if(slot1.source = '1' and slot1.is_ptp = '1') then
 								rd_state0			<= FINISH_CYCLE;
@@ -654,13 +667,14 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 								slot1.finished_0	<= '1';
 								senaldebug1			<= x"0E";
 							end if;
-							senaldebug1 <= x"05";
+							
 						end if;
 						
 						addr_b <= std_logic_vector( unsigned(addr) + unsigned(rd_offset_b) );
 					
 					when READING =>
-					
+						
+						senaldebug1 <= x"D0";
 						if(snk_dreq(0) = '1') then
 							
 							addr_b <= std_logic_vector( unsigned(addr) + unsigned(rd_offset_b) );
@@ -710,6 +724,7 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 						snk_fab_0.sof <= '0';
 						snk_fab_0.eof <= '0';
 						rd_state0	  <= IDLE;
+						senaldebug1 <= x"10";
 					
 					when others =>
 					
@@ -732,55 +747,67 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 				
 				slot1.reading_1	<= '0';
 				slot1.finished_1  <= '0';
-				
+				senaldebug2 <= x"01";
 			else
 			
 				write_c		<= '0';
+				senaldebug2 <= x"02";
 				case rd_state1 is
 					
 					when IDLE =>
-					
+						
+						senaldebug2 <= x"D1";
 						rd_offset_c 		<= (others => '0');
 					
 						if(slot0.available = '1' and slot0.finished_0 = '1' and slot0.finished_1 = '1') then
 							slot0.finished_1 <= '0';
+							senaldebug2 <= x"03";
 						end if;
 						
 						if(slot1.available = '1' and slot1.finished_0 = '1' and slot1.finished_1 = '1') then
 							slot1.finished_1 <= '0';
+							senaldebug2 <= x"04";
 						end if;
 						
 						if((slot0.written = '1') and (snk_dreq(1) = '1')) then
 							rd_state1			<= READING;
 							slot0.reading_1	<= '1';
 							addr					:= c_slot0_base;
+							senaldebug2 <= x"05";
 							if(slot0.source = '0' and slot0.is_ptp = '1') then
 								rd_state1			<= FINISH_CYCLE;
 								slot0.reading_1	<= '0';
 								slot0.finished_1	<= '1';
+								senaldebug2 <= x"06";
 							end if;							
 						elsif((slot1.written = '1') and (snk_dreq(1) = '1')) then
 							rd_state1			<= READING;
 							slot1.reading_1	<= '1';
 							addr					:= c_slot1_base;
+							senaldebug2 <= x"07";
 							if(slot1.source = '0' and slot1.is_ptp = '1') then
 								rd_state1			<= FINISH_CYCLE;
 								slot1.reading_1	<= '0';
 								slot1.finished_1	<= '1';
-							end if;							
+								senaldebug2 <= x"08";
+							end if;
 						end if;
 					
 					when READING =>
 					
+						senaldebug2 <= x"D0";
+					
 						if(snk_dreq(1) = '1') then
 							
 							addr_c <= std_logic_vector( unsigned(addr) + unsigned(rd_offset_c) );
+							senaldebug2 <= x"09";
 							
 							if(dout_c(19 downto 18) = "11" and dout_c(7 downto 0) = x"FF") then
 							-- SOF
 								snk_fab_1.sof		<= '1';
 								snk_fab_1.eof		<= '0';
 								snk_fab_1.bytesel	<= '0';
+								senaldebug2 <= x"0A";
 							elsif(dout_c(19 downto 18) = "11" and dout_c(7 downto 0) = x"AA") then
 							-- EOF
 								addr_c <= addr;
@@ -788,11 +815,13 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 								snk_fab_1.eof		<= '1';
 								snk_fab_1.bytesel	<= '0';
 								if(slot0.reading_1 = '1') then
+									senaldebug2 <= x"0B";
 									slot0.reading_1	<= '0';
 									slot0.finished_1	<= '1';
 								elsif(slot1.reading_1 = '1') then
 									slot1.reading_1	<= '0';
 									slot1.finished_1 	<= '1';
+									senaldebug2 <= x"0C";
 								end if;
 								rd_state1 			<= FINISH_CYCLE;
 							else
@@ -802,6 +831,7 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 								snk_fab_1.data		<= dout_c(15 downto 0);
 								snk_fab_1.addr		<= dout_c(19 downto 18);
 								snk_fab_1.dvalid	<= dout_c(20);
+								senaldebug2 <= x"0D";
 							
 							end if;
 							
@@ -811,6 +841,7 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 					
 					when FINISH_CYCLE =>
 						
+						senaldebug2 <= x"0E";
 						snk_fab_1.sof <= '0';
 						snk_fab_1.eof <= '0';
 						snk_fab_1.dvalid <= '0';
@@ -871,19 +902,19 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 --	tagger_snk_o <= ep_src_i;
 	
 	-- DEBUG --
---	cs_icon : chipscope_icon
---	port map(
---		CONTROL0	=> CONTROL0
---	);
---	cs_ila : chipscope_ila
---	port map(
---		CLK		=> clk_i,
---		CONTROL	=> CONTROL0,
---		TRIG0		=> TRIG0,
---		TRIG1		=> TRIG1,
---		TRIG2		=> TRIG2,
---		TRIG3		=> TRIG3
---	);
+	cs_icon : chipscope_icon
+	port map(
+		CONTROL0	=> CONTROL0
+	);
+	cs_ila : chipscope_ila
+	port map(
+		CLK		=> clk_i,
+		CONTROL	=> CONTROL0,
+		TRIG0		=> TRIG0,
+		TRIG1		=> TRIG1,
+		TRIG2		=> TRIG2,
+		TRIG3		=> TRIG3
+	);
 --	
 --	trig0(15 downto 0)	<= tagger_snk_i(0).dat;
 --	trig0(16)				<= tagger_snk_i(0).cyc;
@@ -1111,21 +1142,25 @@ architecture behavioral of wrsw_hsr_arbfromtaggers is
 	
 -- 2016 03 29:
 
-	trig0(7 downto 0) <= senaldebug0;
-	trig0(8)				<= snk_fab_1.sof;
-	trig0(9)				<= snk_fab_1.eof;
-	trig0(11 downto 10)	<= snk_fab_1.addr;
-	trig0(27 downto 12)	<= snk_fab_1.data;
-	trig0(28)			<= snk_fab_1.dvalid;
-	
-	trig1(1 downto 0) <= sof;
-	trig1(3 downto 2) <= eof;
-	trig1(4)				<= write_a;
-	trig1(14 downto 5) 			<= addr_a(9 downto 0);
-	trig1(24 downto 15)			<= addr_c(9 downto 0);
-	
-	trig2(20 downto 0) <= din_a;
-	trig3(20 downto 0) <= dout_c;
+--	trig0(7 downto 0) <= senaldebug0;
+--	trig0(8)				<= snk_fab_1.sof;
+--	trig0(9)				<= snk_fab_1.eof;
+--	trig0(11 downto 10)	<= snk_fab_1.addr;
+--	trig0(27 downto 12)	<= snk_fab_1.data;
+--	trig0(28)			<= snk_fab_1.dvalid;
+--	
+--	trig1(1 downto 0) <= sof;
+--	trig1(3 downto 2) <= eof;
+--	trig1(4)				<= write_a;
+--	trig1(14 downto 5) 			<= addr_a(9 downto 0);
+--	trig1(24 downto 15)			<= addr_c(9 downto 0);
+--	
+--	trig2(20 downto 0) <= din_a;
+--	trig3(20 downto 0) <= dout_c;
+
+	TRIG0(7 DOWNTO 0) <= senaldebug0;
+	trig0(15 downto 8) <= senaldebug1;
+	trig0(23 downto 16) <= senaldebug2;
 
 	
 	

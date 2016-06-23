@@ -63,30 +63,30 @@ entity xwrsw_hsr_lre is
 -- pWB  : input (comes from the Endpoint)
 -------------------------------------------------------------------------------
 
-    ep_snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);
-    ep_src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
+    ep_snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0);   -- rx
+    ep_src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0); -- tx
   
 
 -------------------------------------------------------------------------------
 -- pWB : output (goes to the Endpoint)
 -------------------------------------------------------------------------------  
 
-    ep_snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
-    ep_src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
+    ep_snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);   -- rx
+    ep_src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0); -- tx
     
 -------------------------------------------------------------------------------
 -- pWB  : output (goes from SWCORE)
 -------------------------------------------------------------------------------
 
-    swc_src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0);
-    swc_snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);
+    swc_src_o : out t_wrf_source_out_array(g_num_ports-1 downto 0); -- rx
+    swc_snk_o : out t_wrf_sink_out_array(g_num_ports-1 downto 0);   -- tx
 
 -------------------------------------------------------------------------------
 -- pWB : input (comes from SWCORE)
 -------------------------------------------------------------------------------  
 
-    swc_src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);
-    swc_snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0)
+    swc_src_i : in  t_wrf_source_in_array(g_num_ports-1 downto 0);  -- rx
+    swc_snk_i : in  t_wrf_sink_in_array(g_num_ports-1 downto 0)     -- tx
    
 
     );
@@ -167,6 +167,8 @@ architecture behavioral of xwrsw_hsr_lre is
 --    end if;
 --  end process;
   
+      -- Endpoints 0, 3, 4, 5, 6 and 7 do not support HSR.
+	
       ep_snk_o(c_NUM_PORTS downto 3) <= swc_src_i(c_NUM_PORTS downto 3);
       ep_src_o(c_NUM_PORTS downto 3)<= swc_snk_i(c_NUM_PORTS downto 3);
 
@@ -179,14 +181,16 @@ architecture behavioral of xwrsw_hsr_lre is
       swc_snk_o(0) <= ep_src_i(0);
       swc_src_o(0) <= ep_snk_i(0);		
 		
-		-- HSR-PORT INCOMING TRAFFIC TEMPORARILY BYPASSED
-		-- AS THERE IS NO LRE FOR CHECKING DUPES YET:
+		
+		-- HSR-PORT INCOMING TRAFFIC BYPASSED
+		-- AS THERE IS NO LRE FOR CHECKING DUPLICATES YET:
 		ep_snk_o(2 downto 1) <= swc_src_i(2 downto 1);
 		swc_src_o(2 downto 1) <= ep_snk_i(2 downto 1);
 		
 
   GEN_TAGGERS: for I in 1 to 2 generate
-      -- Insert HSR tag
+      -- Inserts HSR tag
+		-- Not implemented yet.
       U_XHSR_TAGGER: xhsr_tagger
         port map (
           rst_n_i => rst_n_i,

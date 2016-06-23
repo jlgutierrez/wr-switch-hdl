@@ -310,7 +310,7 @@ architecture Behavioral of scb_top_synthesis is
       g_with_HWIU       : boolean;
       g_with_PSTATS     : boolean;
       g_with_muxed_CS   : boolean;
-      g_with_PSU        : boolean := false;
+      g_with_PSU        : boolean := true;
       g_inj_per_EP      : std_logic_vector(17 downto 0));
     port (
       sys_rst_n_i         : in  std_logic;
